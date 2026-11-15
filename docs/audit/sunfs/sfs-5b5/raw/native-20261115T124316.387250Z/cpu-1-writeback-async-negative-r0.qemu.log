@@ -1,0 +1,25 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=1 ns=11943922045775 thread=main stage=MAPPING_ACQUIRED iter=0 bytes=0 extra=16
+SFS5B5 seq=2 ns=11943922054147 thread=main stage=REQUEST_FETCHED iter=0 bytes=0 extra=0
+SFS5B5 seq=3 ns=11943922253162 thread=worker stage=ACCESS_ENTERED iter=0 bytes=0 extra=16
+SFS5B5 seq=4 ns=11943922273674 thread=main stage=ACCESS_ACTIVE iter=88 bytes=1408 extra=87
+SFS5B4 seq=1 ns=11943922276935 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=2 ns=11943922278408 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B5 held head=0 mode=async-negative worker=started backend=not-submitted used=not-published
+SFS5B5 seq=5 ns=11944170545324 thread=main stage=RESET_ENTERED iter=10264759 bytes=164236144 extra=0
+SFS5B5 seq=6 ns=11944170562636 thread=worker stage=ACCESS_OBSERVED_RESET_ACTIVE iter=10264760 bytes=164236160 extra=10264760
+SFS5B5 seq=7 ns=11944170714781 thread=main stage=ACCESS_ACTIVE_DURING_RESET iter=10268563 bytes=164297008 extra=3804
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=8 ns=11944170783554 thread=main stage=RESET_ACKNOWLEDGED iter=10270011 bytes=164320176 extra=0
+SFS5B5 seq=9 ns=11944170791042 thread=worker stage=NEGATIVE_POST_ACK_ACCESS iter=10270012 bytes=164320192 extra=10270012
+SFS5B5 seq=10 ns=11944370813206 thread=worker stage=ACCESS_EXITED iter=17284136 bytes=276546176 extra=17284136
+SFS5B5 seq=11 ns=11944370863775 thread=main stage=NEGATIVE_WORKER_JOINED iter=17284136 bytes=276546176 extra=0
+SFS5B5 seq=12 ns=11944370889944 thread=main stage=MAPPING_RELEASED iter=17284136 bytes=276546176 extra=0
+SFS5B5 seq=13 ns=11944370895765 thread=main stage=OLD_EPOCH_QUIESCED iter=17284136 bytes=276546176 extra=0
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)

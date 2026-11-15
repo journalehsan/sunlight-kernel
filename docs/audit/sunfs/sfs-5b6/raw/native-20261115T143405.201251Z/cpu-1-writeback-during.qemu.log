@@ -1,0 +1,21 @@
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 SUBMIT req=0x7f2ab82a7b70 head=0 sector=63 bytes=512
+SFS5B6 BACKEND_ADMITTED opaque=0x7f2ab82a7b70 acb=0x7f2ab82a7cb0 inflight=1
+SFS5B6 GUEST_HANDSHAKE req=0x7f2ab82a7b70 status=254
+SFS5B6 DRAIN_BEGIN req=0x7f2ab82a7b70 terminal=0
+SFS5B6 BACKEND_DRAIN_ENTER inflight=1
+SFS5B6 BACKEND_RELEASE opaque=0x7f2ab82a7b70 inflight=1
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B6 DRAIN_END req=0x7f2ab82a7b70 terminal=0
+qemu-system-x86_64: ../sfs5b6-qemu-src/hw/block/virtio-blk.c:1241: sfs5b6_reset: Assertion `sfs5b6_terminal' failed.

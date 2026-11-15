@@ -1,0 +1,33 @@
+{
+  "milestone": "SFS-5B.3",
+  "status": "PARTIAL",
+  "complete": false,
+  "scope": "native SunlightOS in isolated QEMU11.1.2 legacy PCI TCG; partial real write-payload consumption before backend",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PARTIAL",
+    "G4": "PARTIAL",
+    "G5": "PARTIAL",
+    "G6": "UNQUALIFIED",
+    "G7": "PASS",
+    "G8": "PARTIAL",
+    "G9": "PARTIAL",
+    "G10": "PASS"
+  },
+  "gate_limits": {
+    "G3": "independent real DMA reads witnessed; active DMA during reset absent; original mapped-range guard only",
+    "G4": "real outstanding request reset; required native fault races and H4 missing",
+    "G5": "normative conforming-device boundary plus narrow QEMU cancellation; general reuse not qualified",
+    "G6": "zero guest DMA resources reclaimed",
+    "G7": "bounded terminal fail-stop only, not recovery/reinitialization",
+    "G8": "post-AP timer progress, no scheduler-ready contention",
+    "G9": "available regressions pass; mandatory full native matrix incomplete"
+  },
+  "active_dma_reset": "UNQUALIFIED",
+  "dma_retirement": "UNQUALIFIED",
+  "physical_fencing": "UNQUALIFIED",
+  "native_writable_sunfs": "BLOCKED",
+  "commit": false,
+  "push": false
+}

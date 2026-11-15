@@ -1,0 +1,7 @@
+{"case":"parent","crc_resealed":true,"selected":3,"status":"PASS"}
+{"case":"nlink","crc_resealed":true,"selected":3,"status":"PASS"}
+{"case":"cycle","crc_resealed":true,"selected":3,"status":"PASS"}
+{"case":"duplicate-name","crc_resealed":true,"selected":3,"status":"PASS"}
+{"case":"orphan-future","crc_resealed":true,"selected":3,"status":"PASS"}
+{"case":"orphan-incarnation","crc_resealed":true,"selected":3,"status":"PASS"}
+{"case":"orphan-wrong-node","crc_resealed":true,"selected":3,"status":"PASS"}

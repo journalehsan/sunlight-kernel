@@ -1,0 +1,23 @@
+{
+  "version": "11.1.2",
+  "archive": "https://download.qemu.org/qemu-11.1.2.tar.xz",
+  "archive_local": "/tmp/sfs5b3-qemu-11.1.2.tar.xz",
+  "archive_sha256": "731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016",
+  "patch_sha256": "fbccdf17f13c8306104084a30e11038af2bca2a77e0667fcda45f84ce8135af1",
+  "source_manifest": "raw/qemu-source-manifest.json",
+  "source_manifest_sha256": "6224a9801cabfeec111a1b627470cf4133c13722cf4a0ddb026fe2e634803527",
+  "build_dir": "/tmp/sfs5b3-qemu-build",
+  "configure_log": "raw/qemu-configure.log",
+  "build_log": "raw/qemu-build.log",
+  "build_command": [
+    "ninja",
+    "-C",
+    "/tmp/sfs5b3-qemu-build",
+    "-j",
+    "6",
+    "qemu-system-x86_64"
+  ],
+  "system_qemu_modified": false,
+  "binary_sha256": "661aec4436c9416a2d1f204e216c2dbfc4b519b73116e4b078b207c9a14015c8",
+  "binary_version": "11.1.2"
+}

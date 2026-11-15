@@ -1,0 +1,14 @@
+{
+  "status": "UNQUALIFIED",
+  "old_epoch": 1,
+  "new_epoch": "NOT_RUN",
+  "fresh_post_reset_io": "NOT_RUN",
+  "admission": "terminally closed; no reset recovery/free API",
+  "late_completion": "staged host tests retain timeout owner and refuse late ring; native completion-vs-reset race NOT_RUN",
+  "threat_limit": "legacy wire used head/status cannot authenticate perfectly forged identical completions; software RequestId does not fix this",
+  "mitigations": [
+    "retain old resources while unresolved",
+    "fresh queue memory only after defensible old-epoch retirement/isolation",
+    "explicit trusted-device assumptions"
+  ]
+}

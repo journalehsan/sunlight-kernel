@@ -1,0 +1,49 @@
+{
+  "status": "PASS",
+  "model": "ADVERSARIAL_NEGATIVE: acknowledgment published while the worker still reads",
+  "cases": [
+    {
+      "tag": "cpu-1-writeback-async-negative-r0",
+      "detected": true,
+      "quiescence_violated": true,
+      "graph_cycle": true
+    },
+    {
+      "tag": "cpu-1-none-async-negative-r0",
+      "detected": true,
+      "quiescence_violated": true,
+      "graph_cycle": true
+    },
+    {
+      "tag": "cpu-2-writeback-async-negative-r0",
+      "detected": true,
+      "quiescence_violated": true,
+      "graph_cycle": true
+    },
+    {
+      "tag": "cpu-2-none-async-negative-r0",
+      "detected": true,
+      "quiescence_violated": true,
+      "graph_cycle": true
+    },
+    {
+      "tag": "cpu-4-writeback-async-negative-r0",
+      "detected": true,
+      "quiescence_violated": true,
+      "graph_cycle": true
+    },
+    {
+      "tag": "cpu-4-none-async-negative-r0",
+      "detected": true,
+      "quiescence_violated": true,
+      "graph_cycle": true
+    }
+  ],
+  "host_model_controls": [
+    "nc1_use_after_release_detected",
+    "nc2_callback_after_teardown_refused",
+    "nc3_stale_queue_access_refused",
+    "nc4_delayed_write_after_quiescence_refused"
+  ],
+  "note": "the broken model is never installed in the production guest; detection is by the independent event-order observer"
+}

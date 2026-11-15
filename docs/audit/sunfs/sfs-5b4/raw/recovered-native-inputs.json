@@ -1,0 +1,9 @@
+{
+  "iso_sha256": "ae0679781767fbe96dec7229b82294dfb898fc527f553f75f6977aa72ada0470",
+  "iso_copy": "recovered-native.iso.gz",
+  "elf_sha256": "879ea1d4326c157df8434e9b313b82883d663bfc97ef304ce1e1670665ca683d",
+  "elf_copy": "embedded-recovery-20261115T102807.072409Z/recovered-guest.elf.gz",
+  "qemu_sha256": "1abc7e5ab87b2e8965f258b9d31cfe42bae22d5b75be7c08ad61a71c386d2f29",
+  "patch_sha256": "10e8e5ad93be11f99f3a3e6685a86371e31e19cfb578fc59e7bed0dcfa57bbca",
+  "invocation": "native-20261115T103331.975665Z/cpu-1-writeback-hold.invocation.json"
+}

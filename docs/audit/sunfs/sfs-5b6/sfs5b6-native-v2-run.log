@@ -1,0 +1,53 @@
+cpu-1-writeback-during True 15.436
+cpu-1-writeback-before True 12.425
+cpu-1-writeback-cancel True 11.63
+cpu-1-writeback-error True 12.423
+cpu-1-writeback-control True 11.822
+cpu-1-none-during True 11.43
+cpu-1-none-before True 12.447
+cpu-1-none-cancel True 12.248
+cpu-1-none-error True 9.622
+cpu-1-none-control True 11.223
+cpu-2-writeback-during True 11.431
+cpu-2-writeback-before True 12.636
+cpu-2-writeback-cancel True 11.029
+cpu-2-writeback-error True 13.233
+cpu-2-writeback-control True 14.037
+cpu-2-none-during True 12.636
+cpu-2-none-before True 13.233
+cpu-2-none-cancel True 27.324
+cpu-2-none-error True 18.443
+cpu-2-none-control True 19.647
+cpu-4-writeback-during True 23.421
+cpu-4-writeback-before True 17.547
+cpu-4-writeback-cancel True 16.195
+cpu-4-writeback-error True 16.475
+cpu-4-writeback-control True 20.068
+cpu-4-none-during True 12.526
+cpu-4-none-before True 11.341
+cpu-4-none-cancel True 10.823
+cpu-4-none-error True 10.433
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b6_validate.py", line 101, in <module>
+    for test_case in os.getenv('SFS5B6_CASES', 'during,before,cancel,error,control').split(','):
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b5_validate.py", line 89, in run_qemu
+    put(raw / (tag + '.invocation.json'), dict(
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        argv=argv, seed=SEED,
+        ^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        patch_sha256=sha(OUT / 'qemu-async-worker.patch'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        initial_image_sha256=sha(image), repeat=repeat))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b5_validate.py", line 33, in put
+    Path(p).write_text(json.dumps(value, indent=2) + '\n')
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 809, in write_text
+    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 28] No space left on device: '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b6/raw/native-20261115T143701.541627Z/cpu-4-none-control.invocation.json'

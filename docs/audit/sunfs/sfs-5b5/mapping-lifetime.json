@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "model": "sunlight-block/src/quiesce.rs MappingRecord + FenceGate",
+  "qemu_authority": "address_space_map takes memory_region_ref; address_space_unmap takes memory_region_unref (system/physmem.c)",
+  "order": {
+    "MAPPING_ACQUIRED": 1,
+    "ACCESS_ENTERED": 2,
+    "ACCESS_EXITED": 3,
+    "CALLBACK_QUIESCED": 4,
+    "WORKER_JOINED": 5,
+    "MAPPING_RELEASED": 6,
+    "RESET_ACKNOWLEDGED": 7
+  },
+  "properties": {
+    "acquisition_precedes_use": "MAPPING_ACQUIRED before ACCESS_ENTERED in every case",
+    "authority_spans_use": "mapping users >= 1 for the whole access loop",
+    "users_release_before_retirement": "MAPPING_RELEASED after WORKER_JOINED",
+    "reset_does_not_implicitly_revoke": "m4_reset_does_not_implicitly_revoke_mapping",
+    "release_exactly_once": "m5_release_exactly_once",
+    "stale_cannot_reacquire": "m6_stale_callback_cannot_reacquire",
+    "new_epoch_no_alias": "m7_new_epoch_cannot_alias_unretired_mapping",
+    "post_fence_detected": "m8_access_after_fence_refused + async-negative"
+  },
+  "distinctions": {
+    "cpu_page_protection": "not used as a DMA fence",
+    "emulator_address_space": "address_space_read/map translation only",
+    "dma_mapping_revocation": "MappingRecord retire, host-side only",
+    "device_reset_semantics": "normative VirtIO status-zero contract, conditional",
+    "hardware_iommu": "UNQUALIFIED, not exercised"
+  }
+}

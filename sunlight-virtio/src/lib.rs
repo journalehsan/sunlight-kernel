@@ -7,7 +7,7 @@ pub mod pci;
 pub mod svga;
 pub mod svga_regs;
 
-pub use blk::{BlkError, VirtioBlk, QUEUE_PAGES};
+pub use blk::{BlkError, ResetObservation, ResetState, VirtioBlk, QUEUE_PAGES, RESET_READ_BUDGET};
 pub use gpu::{VirtioGpu, VirtioGpuMemEntry};
 pub use pci::{
     find_virtio_blk, find_virtio_gpu, find_virtio_net, find_virtio_rng, find_vmware_svga,

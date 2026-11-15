@@ -1,0 +1,14 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PARTIAL",
+  "before_timeout": "one Submitted token; 5 pinned pages",
+  "after_timeout": "same active token, Quarantined; first uncertain receipt retained",
+  "after_ack": "same active token and Quarantined; VerifiedRetained; 5 pinned pages",
+  "fenced_release_count": 0,
+  "remaining_uncertain_requests_hosted": 1,
+  "remaining_uncertain_requests_native_idle_reset": 0,
+  "outstanding_native_reset": "None (all four preceding requests completed)",
+  "pressure": "1024 further submissions/reset initiations refused/idempotent without changing ring or request bytes; no growth, no quarantine eviction",
+  "accounting_scope": "per attachment, not sum across separate VMs; pages from PMM allocation source, not an independent PMM instrumentation witness"
+}

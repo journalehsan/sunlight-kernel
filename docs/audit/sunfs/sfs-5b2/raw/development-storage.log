@@ -1,0 +1,28 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-virtio v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_virtio-dda8c280486cb50a)
+
+running 15 tests
+test blk::ownership_tests::queue_allocation_bounds ... ok
+test blk::ownership_tests::t16_descriptor_ownership_and_bad_status ... ok
+test blk::ownership_tests::duplicate_before_submission_freezes_before_buffer_copy ... ok
+test blk::ownership_tests::ring_index_wrap_is_separate_from_generation_exhaustion ... ok
+test blk::ownership_tests::t5_legacy_length_not_authoritative ... ok
+test blk::ownership_tests::late_completion_must_not_authorize_new_request ... ok
+test blk::ownership_tests::t15_invalid_used_head_and_index ... ok
+test blk::ownership_tests::reused_wire_head_has_no_generation_echo_demonstrated_limit ... ok
+test blk::ownership_tests::t10_uncertain_flush_quarantines ... ok
+test blk::ownership_tests::t6_failed_write_and_read_do_not_invent_prefix ... ok
+test blk::ownership_tests::t7_uncertain_write_and_retention ... ok
+test blk::ownership_tests::t8_unsupported_flush_not_submitted ... ok
+test blk::ownership_tests::t9_failed_flush_preserves_write_uncertainty ... ok
+test blk::ownership_tests::timeout_must_not_reuse_dma_page_or_descriptors ... ok
+test blk::ownership_tests::valid_completion_and_flush_provenance ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

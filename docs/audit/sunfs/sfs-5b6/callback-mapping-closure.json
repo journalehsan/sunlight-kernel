@@ -1,0 +1,27 @@
+{
+  "status": "PARTIAL",
+  "backend_callback_closure": true,
+  "mapping_release_after_drain": true,
+  "private_worker_control_separate": true,
+  "retirement_prerequisites": {
+    "backend_terminal": "PASS for the 30 scoped runs; NOT_ESTABLISHED for indefinitely held request",
+    "private_callbacks_terminal": "PASS for scoped private-reader join, not removal or arbitrary callbacks",
+    "mapping_users_closed": "device users closed; guest MappingRecord retirement remains unqualified",
+    "reset_fence": "legacy status-zero reset observed; no guest allocator retirement permit",
+    "guest_request_reconciled": "NOT_RUN: timeout ownership remains terminal quarantine",
+    "descriptor_dma_retirement_authority": "NOT_RUN: guest pages remain pinned"
+  },
+  "combined_private_cases": [
+    "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log",
+    "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log",
+    "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log",
+    "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log",
+    "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log",
+    "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+  ],
+  "unqualified": [
+    "device removal",
+    "guest DMA retirement",
+    "full cross-layer guest ownership reconciliation"
+  ]
+}

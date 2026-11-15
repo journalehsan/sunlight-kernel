@@ -1,0 +1,23 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "status": "PARTIAL",
+  "waits": "VirtIO50,000,000 poll iterations; tests16. Finite work, not wall-clock deadline or scheduler progress proof. Initialization capacity sampler8 tries.",
+  "lock_scope": "VIRTIO_BLK mutex held while polling; VFS/lifecycle may retain KERNEL_VFS outer lock; boot fixture executes before AP startup. No scheduler/PMM lock acquired by submit.",
+  "contention": "queue contention serializes via existing mutex; native fairness/progress under contention NOT_RUN",
+  "quarantine_pressure": "one device retains4 queue+1 bounce pages (20KiB); never freed/retried/reset by this API. PMM allocation failures remain visible existing panic/refusal; no capacity inflation.",
+  "allocator": "no per-I/O allocation; timeout cannot create hidden allocations or retries",
+  "security": "no new capability grants/ABI/device access; untrusted used heads never used as host addresses; validate exact-next used index, head0, descriptor addr/len/direction/links and status before success/retirement",
+  "remaining": [
+    "no IOMMU isolation claim",
+    "device may DMA despite software generation",
+    "legacy same-head forgery after reuse cannot be distinguished",
+    "attachment removal/shutdown concurrency not implemented",
+    "outer VFS typed uncertainty remains incomplete"
+  ],
+  "changes": "no scheduler, IPC, retirement primitives or allocator policy edits"
+}

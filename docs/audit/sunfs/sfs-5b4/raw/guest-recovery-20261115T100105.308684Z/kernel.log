@@ -1,0 +1,533 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling bitflags v1.3.2
+   Compiling byteorder v1.5.0
+   Compiling hash32 v0.3.1
+   Compiling sunlight-block v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling bit_field v0.10.3
+   Compiling stable_deref_trait v1.2.1
+   Compiling heapless v0.8.0
+   Compiling spin v0.9.8
+   Compiling bitflags v2.13.0
+   Compiling sunlight-tui v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tui)
+   Compiling raw-cpuid v10.7.0
+   Compiling managed v0.8.0
+   Compiling volatile v0.4.6
+   Compiling cfg-if v1.0.4
+   Compiling smoltcp v0.11.0
+warning: sunlight-net@0.2.7279-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+   Compiling x86_64 v0.15.4
+   Compiling x86 v0.52.0
+   Compiling sunlight-mm v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-mm)
+   Compiling sunlight-fat v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+   Compiling sunlight-virtio v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+   Compiling spinning_top v0.2.5
+   Compiling log v0.4.33
+   Compiling sunlight-ipc v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+   Compiling sunlight-kernel v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-init for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-timer-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-swapd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-kbd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-mouse for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-usb-mouse for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-deviced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-networkd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-powerd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-thermald for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-thermald for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-vfs-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tty-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-net-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary timezone_service for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-timed for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tz for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlightd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary rand_service for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary secret_store_test for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunshell for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-net-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-top for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary memoryctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-fetch for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlightctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary mezzoctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-deviced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-deviced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-networkd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-powerd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-niced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-gcd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-kv for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-kvctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary wiseowl-memory for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary wiseowl-memory for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-account-broker for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tls for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary certificatectl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-uac for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sessiond for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sessionctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-startup-fixture for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-startup-fixture for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sm for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-solar for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sunsay for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-zoxide for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-dict for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-hangman for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-runner for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sun-exec for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sun-open for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-terminal for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-chronos for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tasks for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-bench for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-calculator for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-welcome for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-widget-gallery for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-calendar for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-reminders for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-devices for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-api-lab for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-light-lens for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-voice-recorder for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary melody-mina for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary mezzo for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-thumbd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary cpu-utils for kernel
+   Compiling sunlight-net v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-net)
+   Compiling linked_list_allocator v0.10.6
+   Compiling sunlight-fs v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+   Compiling uart_16550 v0.3.2
+   Compiling sunlight-compat-linux v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/compat-linux)
+   Compiling sunlight-smbios v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-smbios)
+   Compiling lz4_flex v0.11.6
+   Compiling sunlight-elf v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-elf)
+   Compiling sunlight-sensors v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sensors)
+   Compiling limine v0.6.3
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/pty_server`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+103 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/pty_server");
+    |     ------------------------------------------------------------------------------ in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/resolved`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+201 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/resolved");
+    |     ---------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/resolvectl`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+203 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/resolvectl");
+    |     ------------------------------------------------------------------------------ in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/audiod`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+211 | static AUDIOD_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/audiod");
+    |                                  -------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/audioctl`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+213 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/audioctl");
+    |     ---------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/nicectl`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+217 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/nicectl");
+    |     --------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/capabilityctl`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+271 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
+    |     --------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/runas`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+272 | static RUNAS_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/runas");
+    |                                 ------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-linux-musl/release/helios-note`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+316 |     embedded_service_bytes!("../../target/x86_64-unknown-linux-musl/release/helios-note");
+    |     ------------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/sunlight-display`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+326 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
+    |     ------------------------------------------------------------------------------------ in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/eyes`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+328 | static EYES_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/eyes");
+    |                                ------------------------------------------------------------------------ in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/silicon-echoes`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+364 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/silicon-echoes");
+    |     ---------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/sunlight-edit`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+380 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-edit");
+    |     --------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/sunlight-writer`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+383 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-writer");
+    |     ----------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/sunlight-clipd`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+427 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipd");
+    |     ---------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/sunlight-clip`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+429 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-clip");
+    |     --------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/wiseowl-memorydb`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+437 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydb");
+    |     ------------------------------------------------------------------------------------ in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/wiseowl-memorydbctl`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+439 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydbctl");
+    |     --------------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/wiseowl-indexd`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+442 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexd");
+    |     ---------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/wiseowl-indexctl`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+444 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexctl");
+    |     ------------------------------------------------------------------------------------ in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/wiseowl`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+452 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl");
+    |     --------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/sunlight-clipman`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+454 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
+    |     ------------------------------------------------------------------------------------ in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: couldn't read `kernel/src/../../target/x86_64-unknown-none/release/sunlight-emoji-picker`: No such file or directory (os error 2)
+   --> kernel/src/main.rs:72:26
+    |
+ 72 |     ($path:literal) => { include_bytes!($path) };
+    |                          ^^^^^^^^^^^^^^^^^^^^^
+...
+456 |     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-emoji-picker");
+    |     ----------------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `embedded_service_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-init for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-timer-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-swapd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-kbd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-mouse for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-usb-mouse for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-deviced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-networkd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-powerd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-thermald for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-thermald for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-vfs-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tty-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-net-server for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary timezone_service for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-timed for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tz for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlightd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary rand_service for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary secret_store_test for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunshell for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-net-utils for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-top for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary memoryctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-fetch for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlightctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary mezzoctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-deviced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-deviced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-networkd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-powerd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-niced for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-gcd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-kv for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-kvctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary wiseowl-memory for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary wiseowl-memory for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-account-broker for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tls for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary certificatectl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-uac for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sessiond for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sessionctl for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-startup-fixture for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-startup-fixture for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sm for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-solar for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-sunsay for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-zoxide for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-dict for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-hangman for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-runner for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sun-exec for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sun-open for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-terminal for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-chronos for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-tasks for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-bench for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-calculator for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-welcome for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-widget-gallery for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-calendar for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-reminders for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-devices for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-api-lab for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-light-lens for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-voice-recorder for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary melody-mina for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary mezzo for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary sunlight-thumbd for kernel
+warning: sunlight-kernel@0.2.7279-alpha.2: prebuilding embedded binary cpu-utils for kernel
+error: could not compile `sunlight-kernel` (bin "sunlight-kernel") due to 23 previous errors

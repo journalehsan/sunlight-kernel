@@ -1,0 +1,16 @@
+{
+  "status": "PARTIAL",
+  "blockers": [
+    "No native memory-copy instruction or asynchronous DMA worker active concurrently with reset (H4).",
+    "Post-fence original-mapping protection is demonstrated, but aliases/remapping and asynchronous DMA worker coverage remain unqualified.",
+    "No qualified guest DMA retirement, frame ownership release or allocator reuse; all five pages stay pinned.",
+    "No queue reinitialization/new epoch or post-reset fresh I/O.",
+    "No native delayed/withheld reset, late completion, unplug, malformed completion or required racing schedules.",
+    "AP timer progress is established; scheduler-ready progress and S1-S8 contention remain NOT_RUN.",
+    "No global quarantine capacity/attachment-retry policy or native allocator-pressure test.",
+    "Adversarial indistinguishable forged completions remain unauthenticatable on this wire protocol.",
+    "Typed USB/cache/partition/FAT/VFS propagation, authoritative short transfers and physical durability remain separate gates."
+  ],
+  "recommended": "SFS-5B.4: asynchronous DMA-access guard and post-scheduler reset coordinator qualification before retirement/new-epoch work",
+  "native_writable_sunfs": "BLOCKED"
+}

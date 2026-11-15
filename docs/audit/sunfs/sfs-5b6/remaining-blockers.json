@@ -1,0 +1,13 @@
+{
+  "status": "PARTIAL",
+  "blockers": [
+    "full deterministic drain/cancellation matrix incomplete; cancellation-wins unsupported by this AIOCB",
+    "full cross-layer guest callback/mapping retirement conjunction not qualified",
+    "completion/reset/removal/retry/resource-pressure native race matrix incomplete",
+    "fresh guest allocation provenance, fencing, retirement and controlled reuse unproven",
+    "new epoch forbidden; historical five pages retained",
+    "allocator retirement/replacement happens-before edges remain unexecuted"
+  ],
+  "recovered_environment": "ENOSPC attempts retained; disk space recovered by user; final kernel builds and profiles re-evaluated",
+  "recommended_next": "SFS-5B.6 continuation: guest ownership reconciliation and allocation receipts before fencing/retirement/reuse"
+}

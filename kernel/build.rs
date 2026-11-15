@@ -19,6 +19,26 @@ fn main() {
         // guest.py explicitly builds the fixture's two support services.
         return;
     }
+    if env::var_os("CARGO_FEATURE_SFS5B4_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let input = root.join("tools/helios-probes/sfs5b4-probe.S");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed={}", input.display());
+        assert!(Command::new("as")
+            .args(["--64", "-o"])
+            .arg(out.join("sfs5b4-probe.o"))
+            .arg(input)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("sfs5b4-probe.elf"))
+            .arg(out.join("sfs5b4-probe.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
     if env::var_os("CARGO_FEATURE_NATIVE_DOORBELL_TEST").is_some() {
         let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
         let input = root.join("tools/helios-probes/doorbell-probe.S");

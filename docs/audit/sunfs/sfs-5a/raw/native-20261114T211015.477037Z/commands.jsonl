@@ -1,0 +1,3 @@
+{"argv": ["cargo", "build", "-p", "sunlight-kernel", "--offline", "--locked", "--features", "sfs5a-test"], "returncode": 0, "log": "raw/native-20261114T211015.477037Z/build-guest.log", "seconds": 24.421068986004684}
+{"argv": ["bash", "tools/make_hybrid_iso.sh", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5a/native-20261114T211015.477037Z/sunlight-kernel.elf", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5a/native-20261114T211015.477037Z/sfs5a.iso"], "returncode": 0, "log": "raw/native-20261114T211015.477037Z/build-iso.log", "seconds": 0.8594341560383327}
+{"argv": ["qemu-system-x86_64", "--version"], "returncode": 0, "log": "raw/native-20261114T211015.477037Z/qemu-version.log", "seconds": 0.08911517099477351}

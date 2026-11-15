@@ -1,0 +1,175 @@
+{
+  "status": "PARTIAL",
+  "cases": {
+    "D1": {
+      "status": "PASS",
+      "fixture": "before",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-before.qemu.log"
+      ]
+    },
+    "D2": {
+      "status": "PASS",
+      "fixture": "during",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "D3": {
+      "status": "PASS",
+      "fixture": "during",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "D4": {
+      "status": "PASS",
+      "fixture": "during",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "D5": {
+      "status": "PASS",
+      "fixture": "cancel",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-cancel.qemu.log"
+      ]
+    },
+    "D6": {
+      "status": "NOT_RUN",
+      "fixture": null,
+      "reason": "emulated AIOCB has no cancel_async implementation; cancellation-wins unavailable",
+      "evidence": []
+    },
+    "D7": {
+      "status": "NOT_RUN",
+      "fixture": null,
+      "reason": "emulated AIOCB has no cancel_async implementation; cancellation-wins unavailable",
+      "evidence": []
+    },
+    "D8": {
+      "status": "PARTIAL",
+      "fixture": "cancel",
+      "reason": "completion wins after no-op cancel; separate post-terminal cancellation cut not executed",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-cancel.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-cancel.qemu.log"
+      ]
+    },
+    "D9": {
+      "status": "PASS",
+      "fixture": "error",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-error.qemu.log"
+      ]
+    },
+    "D10": {
+      "status": "PASS",
+      "fixture": "indefinite",
+      "reason": "expected process-supervisor termination; no drain return or guest retirement claimed",
+      "evidence": [
+        "raw/native-20261115T145612.276073Z/cpu-1-writeback-indefinite.qemu.log"
+      ]
+    },
+    "D11": {
+      "status": "PASS",
+      "fixture": "private",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+      ]
+    },
+    "D12": {
+      "status": "PARTIAL",
+      "fixture": "during",
+      "reason": "reset owns drain on main AioContext; no competing reset/drain coordinator overlap",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "D13": {
+      "status": "NOT_RUN",
+      "fixture": null,
+      "reason": "required teardown, multiple-request or retry native cut not implemented",
+      "evidence": []
+    },
+    "D14": {
+      "status": "NOT_RUN",
+      "fixture": null,
+      "reason": "required teardown, multiple-request or retry native cut not implemented",
+      "evidence": []
+    },
+    "D15": {
+      "status": "PASS",
+      "fixture": "private",
+      "reason": "identity-bound admitted operation and callback/mapping events; six CPU/cache profiles",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+      ]
+    },
+    "D16": {
+      "status": "NOT_RUN",
+      "fixture": null,
+      "reason": "required teardown, multiple-request or retry native cut not implemented",
+      "evidence": []
+    }
+  },
+  "cancellation": "emulated AIOCB has no cancel_async hook; normal completion wins",
+  "bound": "45 second process supervisor; expiry preserves absence of drain/retirement proof"
+}

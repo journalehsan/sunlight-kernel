@@ -1,0 +1,14 @@
+{
+  "checked": 414227,
+  "changed": [
+    "kernel/Cargo.toml",
+    "kernel/build.rs",
+    "kernel/src/arch/x86_64/interrupts.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "kernel/src/main.rs",
+    "sunlight-virtio/src/blk.rs"
+  ],
+  "missing": [],
+  "seconds": 88.66201091802213,
+  "scope": "interim preservation audit; final seal independently repeats this comparison"
+}

@@ -1,0 +1,113 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T223558.731841Z/hosted-debug.log",
+    "seconds": 631.1448216700228,
+    "tests_passed": 54
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--release"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T223558.731841Z/hosted-release.log",
+    "seconds": 418.6780585880042,
+    "tests_passed": 54
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-fat",
+      "-p",
+      "sunlight-fs",
+      "-p",
+      "sunlight-virtio",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T223558.731841Z/storage.log",
+    "seconds": 0.17983104899758473
+  },
+  {
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-virtio",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T223558.731841Z/no-std.log",
+    "seconds": 0.13095009402604774
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-kernel",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T223558.731841Z/kernel-lifecycle.log",
+    "seconds": 0.3760299819987267
+  },
+  {
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--offline",
+      "--locked"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T223558.731841Z/kernel-default-build.log",
+    "seconds": 0.3256365980487317
+  }
+]

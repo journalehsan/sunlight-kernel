@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "model": "ADVERSARIAL_NEGATIVE",
+  "cases": 6,
+  "mechanism": "post-claimed-fence successful 1-byte pipe-copy of still-pinned original payload mapping, before PROT_NONE",
+  "detector": "device-event-graph.json violations scan on actual memory-operation events",
+  "protected_negative": "five original host mappings protected; kernel pipe-copy returns EFAULT per page; positive control recorded before claimed acknowledgment and mprotect",
+  "limits": "Host virtual CPU mappings, not IOMMU/physical DMA, aliases, hostile remapping or perfectly forged completions",
+  "production_control": false,
+  "native": "raw/native-20261115T103331.975665Z/native-result.json"
+}

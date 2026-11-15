@@ -1,0 +1,25 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=1 ns=11769131926427 thread=main stage=MAPPING_ACQUIRED iter=0 bytes=0 extra=16
+SFS5B5 seq=2 ns=11769131935932 thread=main stage=REQUEST_FETCHED iter=0 bytes=0 extra=0
+SFS5B5 seq=3 ns=11769132226356 thread=worker stage=ACCESS_ENTERED iter=0 bytes=0 extra=16
+SFS5B5 seq=4 ns=11769132257977 thread=main stage=ACCESS_ACTIVE iter=88 bytes=1408 extra=87
+SFS5B4 seq=1 ns=11769132263711 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=2 ns=11769132266378 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B5 held head=0 mode=async-negative worker=started backend=not-submitted used=not-published
+SFS5B5 seq=5 ns=11769377894602 thread=main stage=RESET_ENTERED iter=6824680 bytes=109194880 extra=0
+SFS5B5 seq=6 ns=11769377932174 thread=worker stage=ACCESS_OBSERVED_RESET_ACTIVE iter=6824681 bytes=109194896 extra=6824681
+SFS5B5 seq=7 ns=11769377967804 thread=main stage=ACCESS_ACTIVE_DURING_RESET iter=6824776 bytes=109196416 extra=96
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=8 ns=11769378021131 thread=main stage=RESET_ACKNOWLEDGED iter=6825286 bytes=109204576 extra=0
+SFS5B5 seq=9 ns=11769378033199 thread=worker stage=NEGATIVE_POST_ACK_ACCESS iter=6825287 bytes=109204592 extra=6825287
+SFS5B5 seq=10 ns=11769578120155 thread=worker stage=ACCESS_EXITED iter=12210406 bytes=195366496 extra=12210406
+SFS5B5 seq=11 ns=11769578227992 thread=main stage=NEGATIVE_WORKER_JOINED iter=12210406 bytes=195366496 extra=0
+SFS5B5 seq=12 ns=11769578251920 thread=main stage=MAPPING_RELEASED iter=12210406 bytes=195366496 extra=0
+SFS5B5 seq=13 ns=11769578256416 thread=main stage=OLD_EPOCH_QUIESCED iter=12210406 bytes=195366496 extra=0
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)

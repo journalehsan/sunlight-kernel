@@ -1,0 +1,25 @@
+rustc-version.log 0
+cargo-version.log 0
+build-guest.log 0
+build-iso.log 0
+qemu-version.log 0
+1 writeback initial PASS
+1 writeback restart PASS
+2 writeback initial PASS
+2 writeback restart PASS
+4 writeback initial PASS
+4 writeback restart PASS
+1 none initial PASS
+1 none restart PASS
+2 none initial PASS
+2 none restart PASS
+4 none initial PASS
+4 none restart PASS
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py", line 204, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py", line 199, in main
+    assert not changed, changed
+           ^^^^^^^^^^^
+AssertionError: ['sunlight-virtio/src/blk.rs']

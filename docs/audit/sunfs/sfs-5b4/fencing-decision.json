@@ -1,0 +1,76 @@
+{
+  "status": "UNQUALIFIED",
+  "decision": "FENCE_UNQUALIFIED; terminal quarantine",
+  "properties": [
+    {
+      "property": "reset acknowledgment",
+      "status": "PARTIAL",
+      "evidence": "real native status-zero readback, instrumented handler/guard completion",
+      "models": [
+        "NATIVE_OBSERVED",
+        "INSTRUMENTED_QEMU"
+      ],
+      "normative": "conditional compliant-device contract only; no observed fence authorization"
+    },
+    {
+      "property": "old-epoch access termination",
+      "status": "PARTIAL",
+      "evidence": "BQL scoped hook cancellation; no async engine",
+      "models": [
+        "NATIVE_OBSERVED",
+        "INSTRUMENTED_QEMU"
+      ],
+      "normative": "conditional compliant-device contract only; no observed fence authorization"
+    },
+    {
+      "property": "pending callbacks",
+      "status": "PARTIAL",
+      "evidence": "timer canceled, scalar observer only; arbitrary backend not qualified",
+      "models": [
+        "NATIVE_OBSERVED",
+        "INSTRUMENTED_QEMU"
+      ],
+      "normative": "conditional compliant-device contract only; no observed fence authorization"
+    },
+    {
+      "property": "platform mapping lifetime",
+      "status": "UNQUALIFIED",
+      "evidence": "original host mappings only; no allocator reuse proof",
+      "models": [
+        "UNQUALIFIED"
+      ],
+      "normative": "conditional compliant-device contract only; no observed fence authorization"
+    },
+    {
+      "property": "queue ownership",
+      "status": "PASS",
+      "evidence": "terminal admission and old ring retention",
+      "models": [
+        "NATIVE_OBSERVED",
+        "INSTRUMENTED_QEMU"
+      ],
+      "normative": "conditional compliant-device contract only; no observed fence authorization"
+    },
+    {
+      "property": "request/descriptor retirement",
+      "status": "UNQUALIFIED",
+      "evidence": "no retirement authority or reuse",
+      "models": [
+        "UNQUALIFIED"
+      ],
+      "normative": "conditional compliant-device contract only; no observed fence authorization"
+    },
+    {
+      "property": "persistence",
+      "status": "UNQUALIFIED",
+      "evidence": "write/flush uncertainty unaffected",
+      "models": [
+        "UNQUALIFIED"
+      ],
+      "normative": "conditional compliant-device contract only; no observed fence authorization"
+    }
+  ],
+  "model_A": "NORMATIVE conforming-device queue interaction boundary; conditional platform assumptions",
+  "model_B": "scoped serialized cancellation observed; no stronger asynchronous or platform retirement implication",
+  "model_C": "negative post-fence access detected; broken model not safe"
+}

@@ -267,6 +267,14 @@ static LEDGER: spin::Mutex<Ledger> = spin::Mutex::new(Ledger {
     bytes: 0,
 });
 
+#[cfg(test)]
+pub(super) static TEST_LEDGER_LOCK: spin::Mutex<()> = spin::Mutex::new(());
+
+#[cfg(test)]
+pub(super) fn charged_bytes() -> usize {
+    LEDGER.lock().bytes
+}
+
 /// Non-cloneable reservation, acquired before buffer allocation or reference
 /// cloning. One request reserves two object-reference slots and two buffers.
 struct Charge {
@@ -518,6 +526,7 @@ mod tests {
 
     #[test]
     fn retained_resources_authentication_accounting_and_cleanup() {
+        let _serial = TEST_LEDGER_LOCK.lock();
         let id = identity();
         let root = Directory::new(id.registration, 7, 8, 9).unwrap();
         let dir = Directory::new(id.registration, 7, 8, 10).unwrap();

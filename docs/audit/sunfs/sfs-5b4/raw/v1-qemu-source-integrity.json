@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "version": "11.1.2",
+  "source_revision": "official release archive, no .git revision",
+  "archive": "/tmp/sfs5b3-qemu-11.1.2.tar.xz",
+  "archive_sha256": "731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016",
+  "patch": "qemu-async-access.patch",
+  "patch_sha256": "3449d2b758c9fa0ca9ac11f5678eb951017d9617cd9ce0c12301cd930d748805",
+  "source_manifest": "raw/qemu-source-manifest.json",
+  "source_manifest_sha256": "a9541300987ca7cd52d9c7a6709fad81a001492dada770936066a0cfe6e9f3cb",
+  "binary": "/tmp/sfs5b4-qemu-build/qemu-system-x86_64",
+  "binary_sha256": "4e029a082e43eb9ec63efd31ac9d20f009c3a07be50429a82a8954118cf167ed",
+  "omitted_absolute_symlinks": [
+    "qemu-11.1.2/roms/edk2/EmulatorPkg/Unix/Host/X11IncludeHack"
+  ],
+  "configure_log": "raw/qemu-configure-2.log",
+  "build_log": "raw/qemu-build-2.log",
+  "build_command": [
+    "ninja",
+    "-j",
+    "6",
+    "qemu-system-x86_64"
+  ],
+  "system_emulator_changed": false,
+  "prior_qemu_untouched": true
+}

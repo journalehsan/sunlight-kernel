@@ -1,0 +1,148 @@
+{
+  "status": "PASS",
+  "scope": "test-only modified QEMU 11.1.2 x86_64 TCG, main AioContext, BQL, ioeventfd=off, no IOThread",
+  "guard": "PROT_NONE old four-page queue and one-page request mappings after generic reset; nonblocking pipe copy returns EFAULT on all five pages after a successful payload probe before protection",
+  "design": "Split actual 512-byte sector63 OUT payload consumption at 256 bytes; hold real virtqueue element before backend; timer release consumes rest and submits same data; reset cancels timer and detaches element",
+  "source": "qemu-source-identity.json",
+  "patch": "qemu-active-io.patch",
+  "rebuild": "rebuild-qemu.sh",
+  "timer_only_completion_delay": false,
+  "system_installation_modified": false,
+  "stages": {
+    "accepted": "virtqueue_pop trace",
+    "fetched": "handle_write and test fetched event",
+    "dma_read": "real qemu_iovec_to_buf of guest data mapping",
+    "backend_pending": "absent in held case, submitted/completed in release control",
+    "completion_prepared": "normal req_complete trace in control only",
+    "used_published": "virtqueue_fill/flush in controls only",
+    "interrupt": "normal virtio_notify source path; delivery not independently instrumented"
+  },
+  "features": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "hold",
+      "offered": "0x71006ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "release",
+      "offered": "0x71006ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "offered": "0x71006ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "hold",
+      "offered": "0x71006ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "release",
+      "offered": "0x71006ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "unmodified",
+      "offered": "0x71006ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "hold",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "release",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "hold",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "release",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "unmodified",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "hold",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "release",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "hold",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "release",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "unmodified",
+      "offered": "0x71007ed4",
+      "accepted": "0x240"
+    }
+  ]
+}

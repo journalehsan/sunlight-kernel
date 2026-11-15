@@ -1,0 +1,15 @@
+{
+  "status": "PARTIAL",
+  "production": [
+    "sunlight-virtio/src/blk.rs: staged bounded write submit/poll/timeout and explicit terminal quarantine; synchronous methods share the same validation/completion logic"
+  ],
+  "diagnostic": [
+    "kernel/src/sfs_reset.rs",
+    "kernel/src/sfs5b4_test.rs",
+    "tools/helios-probes/sfs5b4-probe.S",
+    "sfs5b4-test feature, build, syscall and timer hooks"
+  ],
+  "default_transport": "legacy split queue unchanged; no free/reinit/IOMMU path",
+  "claimed_deadlock_repair": false,
+  "preserved": "all incoming source outside declared edits and all earlier SFS evidence verified separately by seal"
+}

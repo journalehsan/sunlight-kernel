@@ -1,0 +1,16 @@
+{
+  "status": "PARTIAL",
+  "blockers": [
+    "earlier cpu-2 unmodified-QEMU early boot stall remains unexplained; see raw/early-boot-stall.json",
+    "safe true async guest-memory access/reset overlap absent under BQL model",
+    "arbitrary block-backend callback/drain quiescence not qualified",
+    "platform mapping and allocator reuse proof missing",
+    "S1/S2/S3/S7 native cuts absent; S5/S6/S9 partial",
+    "involuntary reset worker exit/cancellation reaper integration absent",
+    "native reset withholding/removal/late wire completions incomplete",
+    "native failed/uncertain flush reset cut missing",
+    "conditional retirement and new epoch intentionally NOT_RUN",
+    "physical DMA fencing and hardware durability unqualified; native writable SunFS remains blocked"
+  ],
+  "recommended_next": "SFS-5B.5: reviewed AioContext/block-filter access lifetime backend and native completion/IRQ race cuts; retain quarantine until mapping/retirement proof"
+}

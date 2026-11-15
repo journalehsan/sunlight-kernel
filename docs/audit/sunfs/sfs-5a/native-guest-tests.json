@@ -1,0 +1,230 @@
+{
+  "status": "PARTIAL",
+  "attempt": "raw/native-20261114T211015.477037Z",
+  "cases": {
+    "B1": {
+      "status": "PARTIAL",
+      "scope": "native capacity/flush/write flags and 512-byte transfers executed; physical/logical topology/full capability API missing"
+    },
+    "B2": {
+      "status": "PASS",
+      "scope": "one aligned sector write/read exact"
+    },
+    "B3": {
+      "status": "PARTIAL",
+      "scope": "eight sequential 512-byte sector transfers exact; no single multi-sector command API"
+    },
+    "B4": {
+      "status": "PARTIAL",
+      "scope": "completed writes followed by real acknowledged flush; no failed/uncertain flush injection"
+    },
+    "B5": {
+      "status": "NOT_RUN",
+      "scope": "no native flush-feature suppression schedule; static Unsupported forwarding only"
+    },
+    "B6": {
+      "status": "PARTIAL",
+      "scope": "bounds rejection leaves output unchanged; device IOERR/UNSUPP injection NOT_RUN"
+    },
+    "B7": {
+      "status": "NOT_RUN",
+      "scope": "native device timeout injection NOT_RUN; fake-ring host timeout reproduction separate"
+    },
+    "B8": {
+      "status": "NOT_RUN",
+      "scope": "native late DMA/completion NOT_RUN; fake-ring host late used entry separate"
+    },
+    "B9": {
+      "status": "PARTIAL",
+      "scope": "normal descriptor-head reuse in sequential cycles; no ring wrap/reuse fault native schedule"
+    },
+    "B10": {
+      "status": "UNQUALIFIED",
+      "scope": "no runtime reset/fence operation"
+    },
+    "B11": {
+      "status": "NOT_RUN",
+      "scope": "no native removal injection or supported hotplug incarnation"
+    },
+    "B12": {
+      "status": "PASS",
+      "scope": "16 bounded write/flush/read cycles per initial boot"
+    },
+    "B13": {
+      "status": "PASS",
+      "scope": "SIGKILL after final flush; exact host image then cold guest readback; acknowledged final cut only"
+    },
+    "B14": {
+      "status": "PARTIAL",
+      "scope": "successful D/P/R/R0-shaped byte barriers only; no per-cut crash/failed flush, no real SunFS checkpoint"
+    }
+  },
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-1-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-1-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-2-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-2-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-4-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-4-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-1-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-1-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-2-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-2-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-4-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T211015.477037Z/cpu-4-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    }
+  ],
+  "executed_boots": 12,
+  "cpu_scope": "1/2/4 configured QEMU vCPUs; fixture runs on BSP before start_aps; no AP concurrency evidence",
+  "cache_modes": [
+    "writeback",
+    "none"
+  ],
+  "backend": "QEMU legacy virtio-blk-pci default queue; coherent x86_64 TCG",
+  "device_identity": {
+    "marker": "SFS5A-ONLY-7b93143a-disposable-v1!",
+    "capacity_sectors": 8192,
+    "serial_configured": "SFS5A-7b93143a",
+    "hardware_serial_queried": false
+  },
+  "test_only_controls": [
+    "ISO boot, no boot data disk",
+    "fresh exclusive 4MiB regular image per CPU/cache pair",
+    "only one virtio block device attached",
+    "full host image exact check guards all other bytes",
+    "stop before FAT/VFS mount and AP start"
+  ],
+  "fault_schedule": {
+    "executed": "SIGKILL after READY-FOR-HOST-KILL and all flush acknowledgments; cold restart same image",
+    "not_run": [
+      "pre-D/P/R/R0 cuts",
+      "torn device writes",
+      "flush IOERR/timeout",
+      "device late DMA",
+      "malformed/duplicate real completion",
+      "queue reset",
+      "device removal"
+    ]
+  },
+  "failed_attempt": "raw/native-20261114T210549.135486Z + raw/native-runner.log",
+  "physical_device_access": false
+}

@@ -1,0 +1,833 @@
+{
+  "status": "PASS",
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": true,
+      "device_detach_observed": true,
+      "reset_exit_observed": true,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          2515,
+          0,
+          0,
+          0
+        ],
+        [
+          2516,
+          0,
+          0,
+          0
+        ],
+        [
+          2516,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-writeback-hold.serial.log",
+      "trace": "cpu-1-writeback-hold.trace.log",
+      "device_log": "cpu-1-writeback-hold.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-writeback-release.serial.log",
+      "trace": "cpu-1-writeback-release.trace.log",
+      "device_log": "cpu-1-writeback-release.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": false,
+      "real_request_held": false,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-writeback-unmodified.serial.log",
+      "trace": "cpu-1-writeback-unmodified.trace.log",
+      "device_log": "cpu-1-writeback-unmodified.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": true,
+      "device_detach_observed": true,
+      "reset_exit_observed": true,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1956,
+          0,
+          0,
+          0
+        ],
+        [
+          1956,
+          0,
+          0,
+          0
+        ],
+        [
+          1956,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-none-hold.serial.log",
+      "trace": "cpu-1-none-hold.trace.log",
+      "device_log": "cpu-1-none-hold.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "release",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-none-release.serial.log",
+      "trace": "cpu-1-none-release.trace.log",
+      "device_log": "cpu-1-none-release.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "unmodified",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": false,
+      "real_request_held": false,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-none-unmodified.serial.log",
+      "trace": "cpu-1-none-unmodified.trace.log",
+      "device_log": "cpu-1-none-unmodified.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": true,
+      "device_detach_observed": true,
+      "reset_exit_observed": true,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          2217,
+          2217,
+          0,
+          0
+        ],
+        [
+          2218,
+          2217,
+          0,
+          0
+        ],
+        [
+          2218,
+          2218,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-2-writeback-hold.serial.log",
+      "trace": "cpu-2-writeback-hold.trace.log",
+      "device_log": "cpu-2-writeback-hold.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          3,
+          7,
+          0,
+          0
+        ],
+        [
+          5,
+          8,
+          0,
+          0
+        ],
+        [
+          7,
+          14,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-2-writeback-release.serial.log",
+      "trace": "cpu-2-writeback-release.trace.log",
+      "device_log": "cpu-2-writeback-release.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": false,
+      "real_request_held": false,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          4,
+          3,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-2-writeback-unmodified.serial.log",
+      "trace": "cpu-2-writeback-unmodified.trace.log",
+      "device_log": "cpu-2-writeback-unmodified.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": true,
+      "device_detach_observed": true,
+      "reset_exit_observed": true,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          3,
+          3,
+          0,
+          0
+        ],
+        [
+          2418,
+          2422,
+          0,
+          0
+        ],
+        [
+          2419,
+          2423,
+          0,
+          0
+        ],
+        [
+          2420,
+          2424,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-2-none-hold.serial.log",
+      "trace": "cpu-2-none-hold.trace.log",
+      "device_log": "cpu-2-none-hold.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "release",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          3,
+          3,
+          0,
+          0
+        ],
+        [
+          5,
+          5,
+          0,
+          0
+        ],
+        [
+          6,
+          7,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-2-none-release.serial.log",
+      "trace": "cpu-2-none-release.trace.log",
+      "device_log": "cpu-2-none-release.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "unmodified",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": false,
+      "real_request_held": false,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          4,
+          4,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-2-none-unmodified.serial.log",
+      "trace": "cpu-2-none-unmodified.trace.log",
+      "device_log": "cpu-2-none-unmodified.qemu.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": true,
+      "device_detach_observed": true,
+      "reset_exit_observed": true,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          3473,
+          3665,
+          3664,
+          3657
+        ],
+        [
+          3474,
+          3668,
+          3667,
+          3659
+        ],
+        [
+          3474,
+          3669,
+          3667,
+          3660
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-4-writeback-hold.serial.log",
+      "trace": "cpu-4-writeback-hold.trace.log",
+      "device_log": "cpu-4-writeback-hold.qemu.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          4,
+          7,
+          6,
+          6
+        ],
+        [
+          6,
+          9,
+          8,
+          7
+        ],
+        [
+          8,
+          11,
+          10,
+          9
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-4-writeback-release.serial.log",
+      "trace": "cpu-4-writeback-release.trace.log",
+      "device_log": "cpu-4-writeback-release.qemu.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": false,
+      "real_request_held": false,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          4,
+          7,
+          5,
+          4
+        ],
+        [
+          7,
+          9,
+          7,
+          7
+        ],
+        [
+          8,
+          12,
+          11,
+          10
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-4-writeback-unmodified.serial.log",
+      "trace": "cpu-4-writeback-unmodified.trace.log",
+      "device_log": "cpu-4-writeback-unmodified.qemu.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": true,
+      "device_detach_observed": true,
+      "reset_exit_observed": true,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          2,
+          1,
+          1
+        ],
+        [
+          2944,
+          2954,
+          2960,
+          2965
+        ],
+        [
+          2945,
+          2955,
+          2961,
+          2966
+        ],
+        [
+          2945,
+          2955,
+          2962,
+          2966
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-4-none-hold.serial.log",
+      "trace": "cpu-4-none-hold.trace.log",
+      "device_log": "cpu-4-none-hold.qemu.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "release",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          2,
+          2,
+          1
+        ],
+        [
+          4,
+          4,
+          4,
+          3
+        ],
+        [
+          5,
+          5,
+          5,
+          4
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-4-none-release.serial.log",
+      "trace": "cpu-4-none-release.trace.log",
+      "device_log": "cpu-4-none-release.qemu.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "unmodified",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": false,
+      "real_request_held": false,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          4,
+          6,
+          5,
+          3
+        ],
+        [
+          5,
+          7,
+          6,
+          5
+        ],
+        [
+          7,
+          9,
+          8,
+          7
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-4-none-unmodified.serial.log",
+      "trace": "cpu-4-none-unmodified.trace.log",
+      "device_log": "cpu-4-none-unmodified.qemu.log"
+    }
+  ]
+}

@@ -1,0 +1,439 @@
+{
+  "status": "PARTIAL",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json",
+  "cases": [
+    {
+      "case": "N1",
+      "title": "Baseline read/write/flush",
+      "status": "PASS",
+      "expected_interleaving": "Baseline read/write/flush",
+      "observed_interleaving": "real sector62 write/flush/readback and disposable release/unmodified controls",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N2",
+      "title": "Active request held",
+      "status": "PASS",
+      "expected_interleaving": "Active request held",
+      "observed_interleaving": "real 256-byte copy then outstanding used entry withheld",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N3",
+      "title": "Payload access overlaps reset entry",
+      "status": "UNQUALIFIED",
+      "expected_interleaving": "Payload access overlaps reset entry",
+      "observed_interleaving": "reset-read copies inside serialized handler; no simultaneously active memory instruction",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N4",
+      "title": "Reset waits for active access",
+      "status": "UNQUALIFIED",
+      "expected_interleaving": "Reset waits for active access",
+      "observed_interleaving": "no asynchronous access operation to wait for",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N5",
+      "title": "Acknowledgment after quiescence",
+      "status": "PARTIAL",
+      "expected_interleaving": "Acknowledgment after quiescence",
+      "observed_interleaving": "scoped cancellation and queue clearing only",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N6",
+      "title": "Negative post-fence detector",
+      "status": "PASS",
+      "expected_interleaving": "Negative post-fence detector",
+      "observed_interleaving": "deliberate mapped CPU memory violation detected; not physical DMA",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N7",
+      "title": "Reset timeout outstanding",
+      "status": "NOT_RUN",
+      "expected_interleaving": "Reset timeout outstanding",
+      "observed_interleaving": "64-read withholding fixtures HOST_MODEL only",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N8",
+      "title": "Late device callback",
+      "status": "PARTIAL",
+      "expected_interleaving": "Late device callback",
+      "observed_interleaving": "scalar late observer; no original backend completion",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N9",
+      "title": "Late completion after timeout",
+      "status": "NOT_RUN",
+      "expected_interleaving": "Late completion after timeout",
+      "observed_interleaving": "late ring HOST_MODEL only",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N10",
+      "title": "Reset racing completion",
+      "status": "NOT_RUN",
+      "expected_interleaving": "Reset racing completion",
+      "observed_interleaving": "no native completion/reset race cut",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N11",
+      "title": "Concurrent reset requests",
+      "status": "PASS",
+      "expected_interleaving": "Concurrent reset requests",
+      "observed_interleaving": "live owner and competing task/CPU Closed receipt",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N12",
+      "title": "Admission racing terminal state",
+      "status": "PARTIAL",
+      "expected_interleaving": "Admission racing terminal state",
+      "observed_interleaving": "closed-admission probe observed; exact close/admit cut not forced",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N13",
+      "title": "Quarantine after failed fence",
+      "status": "PASS",
+      "expected_interleaving": "Quarantine after failed fence",
+      "observed_interleaving": "all unqualified outcomes retain five pages",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N14",
+      "title": "Conditional safe retirement",
+      "status": "UNQUALIFIED",
+      "expected_interleaving": "Conditional safe retirement",
+      "observed_interleaving": "fence not qualified; no resources released",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N15",
+      "title": "Repeated reset under pressure",
+      "status": "PARTIAL",
+      "expected_interleaving": "Repeated reset under pressure",
+      "observed_interleaving": "repeated begin/poll host fixtures; no native pressure sweep",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N16",
+      "title": "New epoch",
+      "status": "NOT_RUN",
+      "expected_interleaving": "New epoch",
+      "observed_interleaving": "old ownership unresolved",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N17",
+      "title": "Fresh new-epoch I/O",
+      "status": "NOT_RUN",
+      "expected_interleaving": "Fresh new-epoch I/O",
+      "observed_interleaving": "no new epoch",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N18",
+      "title": "Failed write provenance",
+      "status": "PARTIAL",
+      "expected_interleaving": "Failed write provenance",
+      "observed_interleaving": "native timed-out write uncertainty; failed-status provenance HOST_MODEL only",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N19",
+      "title": "Uncertain flush provenance",
+      "status": "PARTIAL",
+      "expected_interleaving": "Uncertain flush provenance",
+      "observed_interleaving": "flush uncertainty HOST_MODEL only",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N20",
+      "title": "Callback teardown",
+      "status": "PARTIAL",
+      "expected_interleaving": "Callback teardown",
+      "observed_interleaving": "held timer detach plus scalar late observer; arbitrary backend teardown unqualified",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N21",
+      "title": "Device disappearance",
+      "status": "NOT_RUN",
+      "expected_interleaving": "Device disappearance",
+      "observed_interleaving": "not supported by current disposable harness",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N22",
+      "title": "2CPU progress",
+      "status": "PARTIAL",
+      "expected_interleaving": "2CPU progress",
+      "observed_interleaving": "actual pinned CPU workers and reset contender; missing S1/S2/S3/S7 cuts",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N23",
+      "title": "4CPU progress",
+      "status": "PARTIAL",
+      "expected_interleaving": "4CPU progress",
+      "observed_interleaving": "actual four-CPU workers and timer progress; incomplete race matrix",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    },
+    {
+      "case": "N24",
+      "title": "Independent witness agreement",
+      "status": "PASS",
+      "expected_interleaving": "Independent witness agreement",
+      "observed_interleaving": "explicit descriptor/payload status-byte and port-I/O edges; separate processes",
+      "instrumentation": "raw serial, QEMU operation events, status-byte handshake, native scheduling and used-ring traces",
+      "guest_memory_access": "real mapped descriptor/payload copies in scoped cases; simultaneous asynchronous DMA UNQUALIFIED",
+      "reset": "real legacy port reset in active cases except explicit cancellation; HOST_MODEL coverage labeled separately",
+      "independent_evidence": [
+        "raw/native-20261115T103331.975665Z/native-result.json",
+        "device-event-graph.json",
+        "smp-contention.json"
+      ],
+      "resource_accounting": "five pages retained; zero guest DMA release",
+      "failure_behavior": "bounded fixture failure, retained raw attempts and terminal quarantine",
+      "final_device_state": "unavailable/quarantined; no new epoch"
+    }
+  ],
+  "interleaving_rule": "scoped observation does not qualify missing races"
+}

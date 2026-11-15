@@ -1,0 +1,17 @@
+{
+  "oasis": {
+    "url": "https://docs.oasis-open.org/virtio/virtio/v1.4/virtio-v1.4.html",
+    "result": "downloaded official HTML",
+    "sha256": "a48dd4967dda13cf2cf698f59b41ba1c4da0a428a30e9dfcd90ff2af3fc5d1c8"
+  },
+  "qemu_sources": [
+    {
+      "source": "GitLab qemu-project/qemu v11.1.2 hw/block/virtio-blk.c and hw/virtio/virtio.c",
+      "result": "HTTP403"
+    },
+    {
+      "source": "GitHub official qemu/qemu mirror same tag and paths",
+      "result": "connection failure in sandbox and unrestricted retry"
+    }
+  ]
+}

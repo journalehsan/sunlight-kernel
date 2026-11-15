@@ -1,0 +1,189 @@
+{
+  "status": "NOT_RUN",
+  "guest_pages_released": 0,
+  "guest_pages_reused": 0,
+  "reason": "backend drain does not supply guest allocator fencing authority; no unsafe release attempted",
+  "emulator_request_retirement": "detach and g_free once after backend callback and drain only",
+  "host_retirements": [
+    {
+      "tag": "cpu-1-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-1-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-2-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    },
+    {
+      "tag": "cpu-4-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "callbacks": 1,
+      "mapping_releases": 1
+    }
+  ]
+}

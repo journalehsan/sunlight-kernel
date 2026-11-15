@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "scope": "bounded fixture progress during live reset ownership, explicit pre-reset work/tick rendezvous",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json",
+  "work_bound": 2000000,
+  "host_boot_bound_seconds": 90,
+  "reset_read_budget": 64,
+  "lock_rule": "try_lock coordinator; scheduler identity lock dropped before device step; each worker returns to ring3 and native yield",
+  "suspected_cycles": "No production deadlock reproduced; prior polling exclusive owner prevented independent reset access. No scheduler repair claimed.",
+  "general_scheduler_fairness": "UNQUALIFIED",
+  "arbitrary_block_backend_drain_wallclock": "UNQUALIFIED"
+}

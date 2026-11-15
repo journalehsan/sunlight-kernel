@@ -1,0 +1,3 @@
+patching file hw/block/virtio-blk.c
+patching file hw/virtio/virtio.c
+/tmp/sfs5b4-qemu-src

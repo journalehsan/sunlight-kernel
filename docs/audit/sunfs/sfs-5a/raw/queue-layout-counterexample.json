@@ -1,0 +1,21 @@
+{
+  "status": "FAIL",
+  "scope": "exact source arithmetic reproduction, not executed out-of-bounds native DMA",
+  "allocation": 16384,
+  "cases": [
+    {
+      "qsize": 256,
+      "used_end": 10246
+    },
+    {
+      "qsize": 512,
+      "used_end": 16390
+    },
+    {
+      "qsize": 1024,
+      "used_end": 28678
+    }
+  ],
+  "finding": "init rejects only qsize=0; a 512/1024-entry queue can exceed allocation; no unsafe native reproduction attempted",
+  "production_repair": "NOT_RUN; remains an admission blocker outside declared QEMU default queue profile"
+}

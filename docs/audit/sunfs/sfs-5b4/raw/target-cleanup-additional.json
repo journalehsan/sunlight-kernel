@@ -1,0 +1,25 @@
+{
+  "reason": "Additional unrelated Cargo outputs removed after transient ENOSPC on bytecode rename",
+  "removed": [
+    {
+      "path": "target/r2b4-retirement/x86_64-unknown-none",
+      "apparent_bytes": 3557362490
+    },
+    {
+      "path": "target/r2b4-retirement/debug",
+      "apparent_bytes": 121600210
+    },
+    {
+      "path": "target/r2b5-retirement/x86_64-unknown-none",
+      "apparent_bytes": 3069401002
+    },
+    {
+      "path": "target/r2b5-retirement/debug",
+      "apparent_bytes": 121600220
+    }
+  ],
+  "available_before": 12973268992,
+  "available_after": 17678114816,
+  "net_available_increase": 4704845824,
+  "preserved": "R2B evidence/source/logs outside Cargo output directories; all SFS namespaces and active Cargo targets"
+}

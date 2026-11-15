@@ -1,0 +1,16 @@
+rustc-version.log 0
+cargo-version.log 0
+hosted-debug.log 0
+hosted-release.log 0
+storage.log 0
+no-std.log 0
+kernel-lifecycle.log 0
+kernel-default-build.log 0
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py", line 203, in <module>
+    if __name__ == '__main__':
+        ^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py", line 198, in main
+    write(raw/'input-integrity.json', dict(status='PASS' if not changed else 'FAIL', changed=changed))
+           ^^^^^^^^^^^
+AssertionError: ['sunlight-virtio/src/blk.rs', 'tools/sunfs5b2_validate.py']

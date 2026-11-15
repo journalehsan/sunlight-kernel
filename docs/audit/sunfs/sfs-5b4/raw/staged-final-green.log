@@ -1,0 +1,43 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-virtio v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.97s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_virtio-dda8c280486cb50a)
+
+running 30 tests
+test blk::ownership_tests::f10_delayed_ack_has_exact_read_bound ... ok
+test blk::ownership_tests::duplicate_before_submission_freezes_before_buffer_copy ... ok
+test blk::ownership_tests::f11_withheld_ack_is_terminal_and_not_a_fence ... ok
+test blk::ownership_tests::f13_f16_unexpected_or_removed_device_cannot_ack ... ok
+test blk::ownership_tests::f13_device_lost_running_state_blocks_dma_publication ... ok
+test blk::ownership_tests::f19_normal_retirement_then_reset_has_no_second_retirement ... ok
+test blk::ownership_tests::f15_f17_f18_reset_competitors_and_pressure_preserve_first_owner ... ok
+test blk::ownership_tests::f21_f22_device_error_provenance_survives_reset_and_refusal ... ok
+test blk::ownership_tests::f4_head_only_duplicate_cannot_supply_new_status ... ok
+test blk::ownership_tests::f3_f8_late_ring_write_and_stale_notification_do_not_reopen_reset ... ok
+test blk::ownership_tests::f9_f21_f22_reset_retains_uncertain_io_and_all_dma_bytes ... ok
+test blk::ownership_tests::queue_allocation_bounds ... ok
+test blk::ownership_tests::late_completion_must_not_authorize_new_request ... ok
+test blk::ownership_tests::reused_wire_head_has_no_generation_echo_demonstrated_limit ... ok
+test blk::ownership_tests::ring_index_wrap_is_separate_from_generation_exhaustion ... ok
+test blk::ownership_tests::staged_busy_admission_and_cancel_preserve_live_dma_inventory ... ok
+test blk::ownership_tests::staged_reset_or_cancel_before_timeout_records_write_uncertainty ... ok
+test blk::ownership_tests::staged_second_admission_cannot_poison_ready_first_completion ... ok
+test blk::ownership_tests::staged_timeout_reset_never_consumes_late_ring_or_reopens ... ok
+test blk::ownership_tests::staged_write_rejects_stale_tokens_and_retires_once ... ok
+test blk::ownership_tests::t10_uncertain_flush_quarantines ... ok
+test blk::ownership_tests::t15_invalid_used_head_and_index ... ok
+test blk::ownership_tests::t16_descriptor_ownership_and_bad_status ... ok
+test blk::ownership_tests::t5_legacy_length_not_authoritative ... ok
+test blk::ownership_tests::t6_failed_write_and_read_do_not_invent_prefix ... ok
+test blk::ownership_tests::t7_uncertain_write_and_retention ... ok
+test blk::ownership_tests::t8_unsupported_flush_not_submitted ... ok
+test blk::ownership_tests::t9_failed_flush_preserves_write_uncertainty ... ok
+test blk::ownership_tests::timeout_must_not_reuse_dma_page_or_descriptors ... ok
+test blk::ownership_tests::valid_completion_and_flush_provenance ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

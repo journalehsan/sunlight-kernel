@@ -1,0 +1,852 @@
+{
+  "status": "PARTIAL",
+  "allocations": "fresh boot attachment per run, pinned",
+  "identities": "guest BASELINE queue/request physical addresses; device req/head; backend opaque/acb in raw logs",
+  "attachments": [
+    {
+      "tag": "cpu-1-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-during",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-before",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-cancel",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-error",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-during",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-before",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-cancel",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-error",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-1-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895853780,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-private",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-during",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-before",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-cancel",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-error",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-during",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-before",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-cancel",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-error",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-2-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-private",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-during",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-before",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-cancel",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-error",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-during",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-before",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-cancel",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-error",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    },
+    {
+      "tag": "cpu-4-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "allocation": {
+        "queue_gpa": 274018304,
+        "request_gpa": 274034688,
+        "offered_features": 1895857876,
+        "accepted_features": 576,
+        "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-private",
+        "queue_pages": [
+          274018304,
+          274022400,
+          274026496,
+          274030592
+        ],
+        "request_pages": [
+          274034688
+        ],
+        "hhdm_offset": 18446603336221196288,
+        "queue_virtual": 18446603336495214592,
+        "request_virtual": 18446603336495230976,
+        "header_gpa": 274034688,
+        "bounce_gpa": 274034704,
+        "status_gpa": 274035216,
+        "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+        "allocator_generation": "NOT_OBSERVED"
+      }
+    }
+  ],
+  "missing": [
+    "allocator allocation generation/receipt",
+    "retirement permit",
+    "replacement allocation identity"
+  ]
+}

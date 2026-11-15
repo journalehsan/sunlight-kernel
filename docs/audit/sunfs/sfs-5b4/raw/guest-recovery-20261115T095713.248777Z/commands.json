@@ -1,0 +1,20 @@
+[
+  {
+    "name": "limine",
+    "argv": [
+      "bash",
+      "tools/setup_limine.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/limine",
+      "v8.x"
+    ],
+    "returncode": 128,
+    "seconds": 0.016733622999936415,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "build_cpu_affinity": [
+      0
+    ]
+  }
+]

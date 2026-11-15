@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "revision": "22a5947f5fbd4ffe810aee5efee57b0ec18f8915",
+  "branch": "main",
+  "incoming_regular_files_checked": 414227,
+  "prior_sfs_files_preserved": 325778,
+  "unexpected_changes": [],
+  "missing": [],
+  "modified_existing": [
+    "kernel/Cargo.toml",
+    "kernel/build.rs",
+    "kernel/src/arch/x86_64/interrupts.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "kernel/src/main.rs",
+    "sunlight-virtio/src/blk.rs"
+  ],
+  "added_sources": [
+    "kernel/src/sfs_reset.rs",
+    "kernel/src/sfs5b4_test.rs",
+    "tools/helios-probes/sfs5b4-probe.S",
+    "tools/sunfs5b4_validate.py"
+  ],
+  "final_manifest": "raw/final-source-manifest.json",
+  "evidence_seal": "evidence-seal.json",
+  "evidence_seal_sha256": "37fd9d5aaef0197f3a3179af8c77bea03a13c403c98a4fa3997ec2c3009df351",
+  "source_delta": "raw/milestone-source.patch",
+  "commit": false,
+  "push": false
+}

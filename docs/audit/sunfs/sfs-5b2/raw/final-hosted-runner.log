@@ -1,0 +1,16 @@
+rustc-version.log 0
+cargo-version.log 0
+hosted-debug.log 0
+hosted-release.log 0
+storage.log 0
+no-std.log 0
+kernel-lifecycle.log 0
+kernel-default-build.log 0
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py", line 204, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py", line 199, in main
+    assert not changed, changed
+           ^^^^^^^^^^^
+AssertionError: ['sunlight-virtio/src/blk.rs']

@@ -1,0 +1,3 @@
+[1/5] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/3] Compiling C object libsystem.a.p/hw_block_virtio-blk.c.o
+[3/3] Linking target qemu-system-x86_64

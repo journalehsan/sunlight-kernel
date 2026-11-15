@@ -1,0 +1,25 @@
+{
+  "version": "11.1.2",
+  "archive": "https://download.qemu.org/qemu-11.1.2.tar.xz",
+  "archive_local": "/tmp/sfs5b3-qemu-11.1.2.tar.xz",
+  "archive_sha256": "731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016",
+  "patch_sha256": "a8c26387667499ed2336aa867ad71604ab7feb4f6d8bb30b2593a2ce6b58d27d",
+  "source_manifest": "raw/qemu-source-manifest.json",
+  "source_manifest_sha256": "86dfbecbcce3ced2e5514a1c7b7d7560789df1aaccb717e412711858a60a506d",
+  "build_dir": "/tmp/sfs5b3-qemu-build",
+  "configure_log": "raw/qemu-configure.log",
+  "build_log": "raw/qemu-build.log",
+  "build_command": [
+    "ninja",
+    "-C",
+    "/tmp/sfs5b3-qemu-build",
+    "-j",
+    "6",
+    "qemu-system-x86_64"
+  ],
+  "system_qemu_modified": false,
+  "binary_sha256": "e4b65db579cf92909e46cc8d5d025f420c8e3514fa4fa8ac97c8447e5d3d3e36",
+  "binary_version": "11.1.2",
+  "guard": "mprotect PROT_NONE over original mappings of four queue pages and one request page; kernel process_vm_readv EFAULT negative probe",
+  "pre_guard_attempt": "raw/v1-qemu-source-identity.json"
+}

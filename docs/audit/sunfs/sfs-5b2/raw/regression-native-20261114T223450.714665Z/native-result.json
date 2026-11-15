@@ -1,0 +1,137 @@
+{
+  "status": "PASS",
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-1-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-1-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-2-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-2-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-4-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-4-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-1-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-1-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-2-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-2-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-4-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/regression-native-20261114T223450.714665Z/cpu-4-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    }
+  ]
+}

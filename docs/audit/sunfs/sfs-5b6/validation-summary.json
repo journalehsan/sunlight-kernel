@@ -1,0 +1,29 @@
+{
+  "milestone": "SFS-5B.6",
+  "status": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PARTIAL",
+    "G4": "PARTIAL",
+    "G5": "PARTIAL",
+    "G6": "PARTIAL",
+    "G7": "NOT_RUN",
+    "G8": "PARTIAL",
+    "G9": "PARTIAL",
+    "G10": "PASS"
+  },
+  "regression": "PASS",
+  "final_guest_sha256": "51b4fee36ef4d0abab5ab82cbfbd93041af66c89ff4dd3ee4f1b4e4218682856",
+  "final_qemu_sha256": "b323e2d074fcf9d8f8dd70d8cd8f339263f722cc2cf9f1c2a6701798fc352310",
+  "final_controls": 6,
+  "real_backend_scoped_runs": 30,
+  "qualified_backend_runs": 30,
+  "guest_dma_released": 0,
+  "historical_pages_retained": 5,
+  "new_epoch_authorized": false,
+  "native_sunfs_mount": false,
+  "commit": false,
+  "push": false
+}

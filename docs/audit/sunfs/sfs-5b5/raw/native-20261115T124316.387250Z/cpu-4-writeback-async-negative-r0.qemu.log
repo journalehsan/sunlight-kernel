@@ -1,0 +1,25 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=1 ns=12083951181599 thread=main stage=MAPPING_ACQUIRED iter=0 bytes=0 extra=16
+SFS5B5 seq=2 ns=12083951190225 thread=main stage=REQUEST_FETCHED iter=0 bytes=0 extra=0
+SFS5B5 seq=3 ns=12083951326133 thread=worker stage=ACCESS_ENTERED iter=0 bytes=0 extra=16
+SFS5B5 seq=4 ns=12083951345640 thread=main stage=ACCESS_ACTIVE iter=79 bytes=1264 extra=79
+SFS5B4 seq=1 ns=12083951349177 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=2 ns=12083951351013 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B5 held head=0 mode=async-negative worker=started backend=not-submitted used=not-published
+SFS5B5 seq=5 ns=12084214188936 thread=main stage=RESET_ENTERED iter=8873152 bytes=141970432 extra=0
+SFS5B5 seq=6 ns=12084214214013 thread=worker stage=ACCESS_OBSERVED_RESET_ACTIVE iter=8873153 bytes=141970448 extra=8873153
+SFS5B5 seq=7 ns=12084214244653 thread=main stage=ACCESS_ACTIVE_DURING_RESET iter=8873266 bytes=141972256 extra=114
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=8 ns=12084214304052 thread=main stage=RESET_ACKNOWLEDGED iter=8874299 bytes=141988784 extra=0
+SFS5B5 seq=9 ns=12084214313813 thread=worker stage=NEGATIVE_POST_ACK_ACCESS iter=8874300 bytes=141988800 extra=8874300
+SFS5B5 seq=10 ns=12084414340868 thread=worker stage=ACCESS_EXITED iter=14577370 bytes=233237920 extra=14577370
+SFS5B5 seq=11 ns=12084414466964 thread=main stage=NEGATIVE_WORKER_JOINED iter=14577370 bytes=233237920 extra=0
+SFS5B5 seq=12 ns=12084414499576 thread=main stage=MAPPING_RELEASED iter=14577370 bytes=233237920 extra=0
+SFS5B5 seq=13 ns=12084414506301 thread=main stage=OLD_EPOCH_QUIESCED iter=14577370 bytes=233237920 extra=0
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)

@@ -1,0 +1,23 @@
+{
+  "sha256": {
+    "sunlight-block/src/lib.rs": "6ad3a7b68e13982c2454bc5ce8ee487fca7330230e1ed6e9cfd69fb9d0a622b0",
+    "sunlight-block/src/contract.rs": "49108646535ffe064554a5aaa41e2e4c50c175da09a8ef76c057a6ca5be0feb7",
+    "sunlight-block/src/usb_msc.rs": "0c645f76b67726e184b4a50d9a7bc34beba106de9927c1750e03e2ec8005317e",
+    "sunlight-block/src/partition.rs": "eb626f8ff69d645b8788375e8a7b66548a2d3f506112e32995214aa8e9d0e62e",
+    "sunlight-block/src/registry.rs": "bfc1d8d0064819d4a95f1f489df5cad6301a2bb90b2e6a7c1b7f8237af3efbcd",
+    "sunlight-virtio/src/blk.rs": "b4015880a8768a20431ae6ea5b29eb02223364060afbfa2a2cf03d87a1a2bd7d",
+    "kernel/src/main.rs": "261f695de4e3e417866f3c2f8e1f1d5dfd5836199195828a9d41c93c3ef1b27b",
+    "kernel/src/storage.rs": "e8dc09d51c9776afaecebfadc585094c7581c370c954f9ed9526b20ee45fc600",
+    "kernel/src/usb_storage.rs": "52ef095046298b3bfd72b6492a78981c8b07a8f4d41eac10c108589a3ad5d2d5",
+    "kernel/src/usb_xhci.rs": "ccc8ad1195dd7d5d8d610168c359ebc0bbae97efc7be2743c5996fd56314038d",
+    "sunlight-fs/src/block.rs": "98c1c298626e6fddbb52d3de9b2c113f3fea0231fac7431f9e35ae0a0a42a50a",
+    "sunlight-fs/src/vfs.rs": "c32c9dc20d7e1006716747a2b40ca997b88a4458af59e4cebb45ddb70bc72e7d",
+    "sunlight-fat/src/fat.rs": "0221fc041f434b14b1ea08ed96257db9723efa662f3cf2bafd6efc414edfc5c0",
+    "sunlight-fat/src/fat/write.rs": "10ac29d33912e0d6a5adc94e08517f578b99e0aa732085da843f0ac49af2f615",
+    "sunlight-sunfs/src/block.rs": "59a809159fc4db9d2a2c478d4e52285eb66cd399e6cbec6ee6312a5568471ed0",
+    "sunlight-sunfs-lab/src/image.rs": "5886dd322c5cdcae94d530e6d9992dd9a00d57847f2ad40540876a634a405176",
+    "tools/sunfs5a_validate.py": "372c58e0c2a15538c36cbbd39ac76faf1f17f20bf082737e1c2b3cab795ffe4b",
+    "tools/test.sh": "3d1230baec6507c406b11808f464d9812036ed32c0ab6b87f2017409d25531b3"
+  },
+  "inspection_scope": "backend implementations, legacy consumers, buffer ownership, source-integrity runners; reported source findings are distinct from runtime proof"
+}

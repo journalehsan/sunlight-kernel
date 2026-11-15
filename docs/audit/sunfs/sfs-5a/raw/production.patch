@@ -1,0 +1,209 @@
+diff --git a/kernel/Cargo.toml b/kernel/Cargo.toml
+index c39b2cf57..9b69b9805 100644
+--- a/kernel/Cargo.toml
++++ b/kernel/Cargo.toml
+@@ -687,6 +687,8 @@ sunlight-sensors = { path = "../sunlight-sensors" }
+ lz4_flex = { version = "0.11", default-features = false }
+ 
+ [features]
++# Opt-in disposable-device qualification; halts before FAT/VFS probing.
++sfs5a-test = []
+ # Bounded PMM-backed filesystem regression gate; off in ordinary boots.
+ tmpfs_test = []
+ # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
+diff --git a/kernel/src/main.rs b/kernel/src/main.rs
+index f6d99b445..5b146deab 100644
+--- a/kernel/src/main.rs
++++ b/kernel/src/main.rs
+@@ -1860,6 +1860,9 @@ pub extern "C" fn _start() -> ! {
+ 
+ /// The boot virtio-blk device, moved here after `init_block_and_fat` so the
+ /// kernel VFS can keep reading the FAT volume after boot.
++#[cfg(feature = "sfs5a-test")]
++mod sfs5a_test;
++
+ struct BlkCell(Option<sunlight_virtio::VirtioBlk>);
+ // SAFETY: VirtioBlk holds raw queue pointers into kernel-owned frames that
+ // live for the whole kernel lifetime; access is serialized by the mutex.
+@@ -2173,6 +2176,13 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
+         }
+     };
+ 
++    #[cfg(feature = "sfs5a-test")]
++    let blk = {
++        let mut device = blk;
++        sfs5a_test::run(&mut device);
++        device
++    };
++
+     // Retain even an unformatted disk or rejected table for runtime enumeration.
+     let operations = sunlight_block::registry::READ
+         | if blk.supports_write() { sunlight_block::registry::WRITE } else { 0 }
+diff --git a/sunlight-virtio/src/blk.rs b/sunlight-virtio/src/blk.rs
+index fba406dbf..237d3644d 100644
+--- a/sunlight-virtio/src/blk.rs
++++ b/sunlight-virtio/src/blk.rs
+@@ -61,6 +61,8 @@ pub struct VirtioBlk {
+     capacity_sectors: u64,
+     flush_supported: bool,
+     read_only: bool,
++    // Permanent quarantine: no completion/fence API can safely reopen this queue.
++    uncertain: bool,
+ }
+ 
+ impl VirtioBlk {
+@@ -70,6 +72,8 @@ impl VirtioBlk {
+     /// `req_phys` / `req_virt`: 1-page region for the request buffer (header+data+status).
+     ///
+     /// SAFETY: All physical/virtual address pairs must be valid; caller holds ring-0 privilege.
++    /// Queue and request frames must stay pinned for the device lifetime, including
++    /// after timeout or dropping this handle. Dropping does not stop DMA.
+     pub unsafe fn init(
+         io_base: u16,
+         queue_phys: u64,
+@@ -136,10 +140,19 @@ impl VirtioBlk {
+             capacity_sectors,
+             flush_supported: accepted_features & VIRTIO_BLK_F_FLUSH != 0,
+             read_only: features & (1 << 5) != 0,
++            uncertain: false,
+         })
+     }
+ 
+     unsafe fn submit(&mut self, request_type: u32, lba: u64, data_is_device_write: bool) -> bool {
++        if self.uncertain {
++            return false;
++        }
++        // With one outstanding head, an unsolicited used entry is not ours.
++        if ((self.used_virt + 2) as *const u16).read_volatile() != self.last_used_idx {
++            self.uncertain = true;
++            return false;
++        }
+         (self.req_virt as *mut u32).write_volatile(request_type);
+         ((self.req_virt + 4) as *mut u32).write_volatile(0);
+         ((self.req_virt + 8) as *mut u64).write_volatile(lba);
+@@ -187,10 +200,11 @@ impl VirtioBlk {
+         ((self.avail_virt + 2) as *mut u16).write_volatile(new_idx);
+         self.avail_idx = new_idx;
+         fence(Ordering::SeqCst);
++        #[cfg(not(test))]
+         outw(self.io_base + REG_QUEUE_NOTIFY, 0);
+ 
+         let used_idx_ptr = (self.used_virt + 2) as *const u16;
+-        let mut limit = 50_000_000u32;
++        let mut limit = if cfg!(test) { 16u32 } else { 50_000_000u32 };
+         loop {
+             fence(Ordering::SeqCst);
+             if used_idx_ptr.read_volatile() != self.last_used_idx {
+@@ -198,11 +212,22 @@ impl VirtioBlk {
+             }
+             limit -= 1;
+             if limit == 0 {
++                self.uncertain = true;
+                 return false;
+             }
+             core::hint::spin_loop();
+         }
+-        self.last_used_idx = self.last_used_idx.wrapping_add(1);
++        let used_idx = used_idx_ptr.read_volatile();
++        fence(Ordering::SeqCst);
++        let used_slot = self.last_used_idx as usize % self.queue_size as usize;
++        let head = ((self.used_virt + 4) as *const u32)
++            .add(used_slot * 2)
++            .read_volatile();
++        if used_idx != self.last_used_idx.wrapping_add(1) || head != 0 {
++            self.uncertain = true;
++            return false;
++        }
++        self.last_used_idx = used_idx;
+         fence(Ordering::SeqCst);
+         status_ptr.read_volatile() == VIRTIO_BLK_S_OK
+     }
+@@ -221,7 +246,7 @@ impl VirtioBlk {
+     /// Write one 512-byte sector. Completion means accepted by the device;
+     /// call [`VirtioBlk::flush`] for stable-media durability.
+     pub unsafe fn write_block(&mut self, lba: u64, buf: &[u8; 512]) -> bool {
+-        if self.read_only || lba >= self.capacity_sectors {
++        if self.uncertain || self.read_only || lba >= self.capacity_sectors {
+             return false;
+         }
+         core::ptr::copy_nonoverlapping(buf.as_ptr(), (self.req_virt + 16) as *mut u8, 512);
+@@ -237,6 +262,12 @@ impl VirtioBlk {
+         self.capacity_sectors
+     }
+ 
++    /// A timeout/malformed completion retains DMA ownership permanently.
++    /// The caller must keep both allocations pinned; this is not a DMA fence.
++    pub const fn has_uncertain_io(&self) -> bool {
++        self.uncertain
++    }
++
+     pub const fn supports_flush(&self) -> bool {
+         self.flush_supported
+     }
+@@ -249,3 +280,66 @@ impl VirtioBlk {
+ // SAFETY: VirtioBlk wraps raw pointers into kernel-owned physical frames.
+ // The kernel is single-threaded during initialization.
+ unsafe impl Send for VirtioBlk {}
++
++#[cfg(test)]
++mod ownership_tests {
++    use super::*;
++
++    #[repr(C, align(4096))]
++    struct Pages([u8; QUEUE_PAGES * 4096]);
++
++    fn device(queue: &mut Pages, request: &mut Pages) -> VirtioBlk {
++        let q = queue.0.as_mut_ptr() as u64;
++        let r = request.0.as_mut_ptr() as u64;
++        VirtioBlk {
++            io_base: 0,
++            queue_size: 8,
++            desc_virt: q,
++            avail_virt: q + 128,
++            used_virt: q + 4096,
++            req_phys: r,
++            req_virt: r,
++            avail_idx: 0,
++            last_used_idx: 0,
++            capacity_sectors: 8192,
++            flush_supported: true,
++            read_only: false,
++            uncertain: false,
++        }
++    }
++
++    #[test]
++    fn timeout_must_not_reuse_dma_page_or_descriptors() {
++        let mut q = Pages([0; QUEUE_PAGES * 4096]);
++        let mut r = Pages([0; QUEUE_PAGES * 4096]);
++        let mut d = device(&mut q, &mut r);
++        unsafe {
++            assert!(!d.write_block(1, &[0x41; 512]));
++            let before_q = q.0;
++            let before_r = r.0;
++            assert!(!d.write_block(2, &[0x42; 512]));
++            assert!(r.0 == before_r, "timed-out DMA request was overwritten");
++            assert!(q.0 == before_q, "timed-out descriptors were republished");
++        }
++    }
++
++    #[test]
++    fn late_completion_must_not_authorize_new_request() {
++        let mut q = Pages([0; QUEUE_PAGES * 4096]);
++        let mut r = Pages([0; QUEUE_PAGES * 4096]);
++        let mut d = device(&mut q, &mut r);
++        unsafe {
++            assert!(!d.write_block(1, &[0x41; 512]));
++            // Device finishes the old head after the CPU has timed out.
++            ((d.used_virt + 2) as *mut u16).write_volatile(1);
++            ((d.req_virt + 528) as *mut u8).write_volatile(0);
++            let before_q = q.0;
++            let before_r = r.0;
++            let mut output = [0x99; 512];
++            assert!(!d.read_block(2, &mut output));
++            assert_eq!(output, [0x99; 512]);
++            assert!(q.0 == before_q);
++            assert!(r.0 == before_r);
++        }
++    }
++}

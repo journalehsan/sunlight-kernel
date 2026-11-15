@@ -1,0 +1,18 @@
+build-guest.log 0
+build-iso.log 0
+qemu-version.log 0
+1 writeback initial FAIL
+2 writeback initial FAIL
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5a_validate.py", line 180, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5a_validate.py", line 172, in main
+    if args.mode == 'native': native(raw)
+                              ~~~~~~^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5a_validate.py", line 114, in native
+    row = boot(raw, iso, image, cpu, cache, False)
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5a_validate.py", line 75, in boot
+    time.sleep(.2)
+    ~~~~~~~~~~^^^^
+KeyboardInterrupt

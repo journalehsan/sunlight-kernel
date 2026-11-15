@@ -1,0 +1,50 @@
+# QEMU configure log Sun Nov 15 02:40:27 +0330 2026
+# Configured with: '/tmp/sfs5b3-qemu-src/configure' '--target-list=x86_64-softmmu' '--disable-docs' '--disable-werror' '--disable-download' '--disable-gtk' '--disable-sdl' '--disable-opengl' '--disable-virglrenderer' '--disable-vnc' '--disable-tools' '--disable-user' '--disable-plugins'
+
+#
+
+funcs: do_compiler do_cc compile_object check_define main
+lines: 119 124 342 351 0
+cc -c -o config-temp/qemu-conf.o config-temp/qemu-conf.c
+
+funcs: do_compiler do_cc compile_object check_define main
+lines: 119 124 342 386 0
+cc -c -o config-temp/qemu-conf.o config-temp/qemu-conf.c
+
+funcs: do_compiler do_cc compile_object check_define main
+lines: 119 124 342 387 0
+cc -c -o config-temp/qemu-conf.o config-temp/qemu-conf.c
+config-temp/qemu-conf.c:2:2: error: #error __ILP32__ not defined
+    2 | #error __ILP32__ not defined
+      |  ^~~~~
+
+funcs: do_compiler do_cc compile_object main
+lines: 119 124 893 0
+cc -m64 -c -o config-temp/qemu-conf.o config-temp/qemu-conf.c
+
+funcs: do_compiler do_cc compile_prog main
+lines: 119 130 1082 0
+cc -m64 -Werror -fPIE -DPIE -o config-temp/qemu-conf.exe config-temp/qemu-conf.c -pie
+
+funcs: do_compiler do_cc compile_prog main
+lines: 119 130 1147 0
+cc -m64 -o config-temp/qemu-conf.exe config-temp/qemu-conf.c
+config-temp/qemu-conf.c:2:3: error: #error LITTLE
+    2 | # error LITTLE
+      |   ^~~~~
+
+funcs: do_compiler probe_target_compiler main
+lines: 1570 1688 0
+cc -m32 -o config-temp/qemu-conf.o -c config-temp/qemu-conf.c
+
+funcs: do_compiler probe_target_compiler main
+lines: 1571 1688 0
+cc -m32 -r -nostdlib -o config-temp/qemu-conf2.o config-temp/qemu-conf.o -lgcc
+
+funcs: do_compiler probe_target_compiler main
+lines: 1570 1783 0
+cc -m64 -mcx16 -o config-temp/qemu-conf.o -c config-temp/qemu-conf.c
+
+funcs: do_compiler probe_target_compiler main
+lines: 1571 1783 0
+cc -m64 -mcx16 -r -nostdlib -o config-temp/qemu-conf2.o config-temp/qemu-conf.o -lgcc

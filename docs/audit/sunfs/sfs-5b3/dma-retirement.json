@@ -1,0 +1,25 @@
+{
+  "status": "UNQUALIFIED",
+  "released_pages": 0,
+  "released_bytes": 0,
+  "transferred_mappings": 0,
+  "old_epoch_request_retirements": 0,
+  "resources": {
+    "queue_descriptor_avail_used_region": {
+      "pages": 4,
+      "owner": "old attachment, pinned"
+    },
+    "header_bounce_status": {
+      "pages": 1,
+      "owner": "old attachment, pinned"
+    },
+    "request_record": {
+      "count": 1,
+      "owner": "quarantined driver, retained"
+    }
+  },
+  "device_model_request_detached": true,
+  "distinction": "Device-side element freeing does not free guest PMM pages",
+  "allocator_reclamation_proof": "NOT_RUN",
+  "accounting": "quarantine-accounting.json"
+}

@@ -1,0 +1,53 @@
+guest-build 0
+iso-build 0
+cpu-1-writeback-hold PASS {}
+cpu-1-writeback-reset-read PASS {}
+cpu-1-writeback-error PASS {}
+cpu-1-writeback-negative PASS {}
+cpu-1-writeback-cancel PASS {}
+cpu-1-writeback-release PASS {}
+cpu-1-writeback-unmodified PASS {}
+cpu-1-none-hold PASS {}
+cpu-1-none-reset-read PASS {}
+cpu-1-none-error PASS {}
+cpu-1-none-negative PASS {}
+cpu-1-none-cancel PASS {}
+cpu-1-none-release PASS {}
+cpu-1-none-unmodified PASS {}
+cpu-2-writeback-hold PASS {}
+cpu-2-writeback-reset-read PASS {}
+cpu-2-writeback-error PASS {}
+cpu-2-writeback-negative PASS {}
+cpu-2-writeback-cancel PASS {}
+cpu-2-writeback-release PASS {}
+cpu-2-writeback-unmodified PASS {}
+cpu-2-none-hold PASS {}
+cpu-2-none-reset-read PASS {}
+cpu-2-none-error PASS {}
+cpu-2-none-negative PASS {}
+cpu-2-none-cancel PASS {}
+cpu-2-none-release PASS {}
+cpu-2-none-unmodified PASS {}
+cpu-4-writeback-hold PASS {}
+cpu-4-writeback-reset-read PASS {}
+cpu-4-writeback-error PASS {}
+cpu-4-writeback-negative PASS {}
+cpu-4-writeback-cancel PASS {}
+cpu-4-writeback-release PASS {}
+cpu-4-writeback-unmodified PASS {}
+cpu-4-none-hold PASS {}
+cpu-4-none-reset-read PASS {}
+cpu-4-none-error PASS {}
+cpu-4-none-negative PASS {}
+cpu-4-none-cancel PASS {}
+cpu-4-none-release PASS {}
+cpu-4-none-unmodified PASS {}
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4/raw/native-20261115T083227.341613Z
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b4_validate.py", line 210, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b4_validate.py", line 206, in main
+    assert not changed, changed
+           ^^^^^^^^^^^
+AssertionError: ['sunlight-virtio/src/blk.rs']

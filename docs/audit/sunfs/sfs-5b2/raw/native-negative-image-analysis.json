@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "scope": "host visibility after failed flush, not durability",
+  "exact_image": "marker plus completed sector60 write only",
+  "attempt": "raw/native-negative-20261114T224725.376442Z"
+}

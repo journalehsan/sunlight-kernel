@@ -1,0 +1,5 @@
+{"argv": ["rustc", "--version", "--verbose"], "returncode": 0, "seconds": 0.0644548399723135, "log": "raw/native-20261114T223213.283880Z/rustc-version.log"}
+{"argv": ["cargo", "--version", "--verbose"], "returncode": 0, "seconds": 0.06440033001126722, "log": "raw/native-20261114T223213.283880Z/cargo-version.log"}
+{"argv": ["cargo", "build", "-p", "sunlight-kernel", "--offline", "--locked", "--features", "sfs5b2-test"], "returncode": 0, "seconds": 2.523879934044089, "log": "raw/native-20261114T223213.283880Z/guest-build.log"}
+{"argv": ["bash", "tools/make_hybrid_iso.sh", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b2/native-20261114T223213.283880Z/sunlight-kernel.elf", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b2/native-20261114T223213.283880Z/sfs5b2.iso"], "returncode": 0, "seconds": 1.1665660460130312, "log": "raw/native-20261114T223213.283880Z/iso-build.log"}
+{"argv": ["qemu-system-x86_64", "--version"], "returncode": 0, "seconds": 0.01607103500282392, "log": "raw/native-20261114T223213.283880Z/qemu-version.log"}

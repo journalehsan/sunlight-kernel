@@ -1,0 +1,19 @@
+[
+  {
+    "tag": "cpu-1-writeback-indefinite",
+    "mode": "backend",
+    "cpu": 1,
+    "cache": "writeback",
+    "ready": false,
+    "elapsed_s": 60.068,
+    "serial": "cpu-1-writeback-indefinite.serial.log",
+    "qemu_log": "cpu-1-writeback-indefinite.qemu.log",
+    "image": "cpu-1-writeback-indefinite.img",
+    "exit": -9,
+    "sector63_sha256": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+    "sector63_all_b4": false,
+    "sector63_all_zero": true,
+    "case": "indefinite",
+    "guest_build": "preserved SFS-5B.5 ELF; source qualification pending"
+  }
+]

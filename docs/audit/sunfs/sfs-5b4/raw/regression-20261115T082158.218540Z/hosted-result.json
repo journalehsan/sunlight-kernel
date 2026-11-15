@@ -1,0 +1,113 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/regression-20261115T082158.218540Z/hosted-debug.log",
+    "seconds": 612.4783221149701,
+    "tests_passed": 54
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--release"
+    ],
+    "returncode": 0,
+    "log": "raw/regression-20261115T082158.218540Z/hosted-release.log",
+    "seconds": 951.9334001599927,
+    "tests_passed": 54
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-fat",
+      "-p",
+      "sunlight-fs",
+      "-p",
+      "sunlight-virtio",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/regression-20261115T082158.218540Z/storage.log",
+    "seconds": 0.42664827598491684
+  },
+  {
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-virtio",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "log": "raw/regression-20261115T082158.218540Z/no-std.log",
+    "seconds": 0.9154831880005077
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-kernel",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/regression-20261115T082158.218540Z/kernel-lifecycle.log",
+    "seconds": 281.4987506670295
+  },
+  {
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--offline",
+      "--locked"
+    ],
+    "returncode": 0,
+    "log": "raw/regression-20261115T082158.218540Z/kernel-default-build.log",
+    "seconds": 63.912429491989315
+  }
+]

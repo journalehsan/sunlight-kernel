@@ -1,0 +1,38 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "status": "PARTIAL",
+  "normal": [
+    "Created",
+    "Prepared",
+    "Submitted",
+    "Completed",
+    "Retired"
+  ],
+  "timeout": [
+    "Submitted",
+    "TimedOutUncertain (transient)",
+    "Quarantined (terminal)"
+  ],
+  "fencing_pending": "unavailable transition",
+  "fenced": "unavailable transition",
+  "retirement": "exact active completed owner once; request ownership retires, PMM allocations remain kernel lifetime",
+  "timeout_policy": "active ID retained; no DMA data copy or descriptors republished after latch",
+  "removal_shutdown": "Owner model quarantine only; no production hot-unplug/shutdown owner protocol implemented",
+  "resources": "four queue frames + one bounce frame retained by kernel PMM allocation policy; unsafe init precondition forbids reinitializing live/quarantined attachment",
+  "tests": [
+    "normal_exactly_once_retirement",
+    "t11_late_and_t18_quarantine",
+    "t12_duplicate",
+    "t13_wrong_queue",
+    "t14_wrong_media",
+    "t16_wrong_resources",
+    "t17_reuse_old_identity",
+    "t19_exhaustion",
+    "t20_removal_and_shutdown"
+  ]
+}

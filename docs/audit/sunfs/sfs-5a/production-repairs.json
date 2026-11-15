@@ -1,0 +1,41 @@
+{
+  "status": "PARTIAL",
+  "repairs": [
+    {
+      "id": "R1",
+      "file": "sunlight-virtio/src/blk.rs",
+      "defect": "timeout returns false while future calls reuse the same DMA page/descriptors",
+      "reproduction": "raw/ownership-before.log: both tests FAILED",
+      "root_cause": "no retained submission exclusion after unknown completion; reused descriptor head not matched",
+      "change": "terminal uncertain latch checked before write copy and every submit; timeout/unsolicited or malformed completion quarantines; exact used head/index checked; pinned-frame safety precondition documented",
+      "host_validation": "raw/virtio-after.log; raw/storage-final.log",
+      "native_validation": "native-guest-tests.json: normal read/write/flush/restart path only; real delayed completion NOT_RUN",
+      "not_fixed": [
+        "no authoritative fence or restart",
+        "no typed uncertainty propagation through native trait",
+        "no runtime DMA retirement"
+      ],
+      "additional_reproduction": "raw/extra-host-before-tests.log: unsolicited used index advanced submission on original source; supplemental test passes on repaired source",
+      "supplemental_host_validation": "raw/extra-host-tests.log: four PASS, including the two repeated ownership tests plus unsupported-flush and unsolicited-completion checks"
+    }
+  ],
+  "diagnostics": [
+    "kernel Cargo feature sfs5a-test",
+    "kernel/src/sfs5a_test.rs before FAT/VFS and before AP startup",
+    "tools/sunfs5a_validate.py uses exclusive test images and SIGKILL/restart"
+  ],
+  "scope_exclusions": [
+    "SunFS native adapter/mount",
+    "scheduler changes",
+    "IPC changes",
+    "format changes",
+    "general DMA rewrite"
+  ],
+  "failed_attempts": [
+    "raw/ownership-before.log",
+    "raw/build-guest.log initial build before marker-length correction; not native evidence",
+    "raw/native-20261114T210549.135486Z: missing RNG; secure bootstrap blocked; interrupted runner"
+  ],
+  "commit": false,
+  "push": false
+}

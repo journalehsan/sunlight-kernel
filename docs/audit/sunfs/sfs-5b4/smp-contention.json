@@ -1,0 +1,2509 @@
+{
+  "status": "PARTIAL",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json",
+  "cases": [
+    {
+      "case": "S1",
+      "status": "NOT_RUN",
+      "scope": "atomic admission vs closing-store interleaving not forced"
+    },
+    {
+      "case": "S2",
+      "status": "NOT_RUN",
+      "scope": "real completion vs ownership cut not forced"
+    },
+    {
+      "case": "S3",
+      "status": "NOT_RUN",
+      "scope": "timeout vs used-publication cut not forced"
+    },
+    {
+      "case": "S4",
+      "status": "PASS",
+      "scope": "two scheduled task incarnations compete for a live reset epoch; loser observes Closed, owner alone progresses"
+    },
+    {
+      "case": "S5",
+      "status": "PARTIAL",
+      "scope": "acknowledgment followed by retained reconciliation; no release race"
+    },
+    {
+      "case": "S6",
+      "status": "PARTIAL",
+      "scope": "held timer canceled and scalar late observer; no active backend callback overlap"
+    },
+    {
+      "case": "S7",
+      "status": "NOT_RUN",
+      "scope": "no native interrupt/queue-retirement cut; no queue retirement implemented"
+    },
+    {
+      "case": "S8",
+      "status": "PASS",
+      "scope": "I/O task observes admission closed during live terminal reset epoch"
+    },
+    {
+      "case": "S9",
+      "status": "PARTIAL",
+      "scope": "explicit owner cancellation before reset keeps quarantine; involuntary worker exit and teardown integration NOT_RUN"
+    },
+    {
+      "case": "S10",
+      "status": "PASS",
+      "scope": "after owner established, all online CPU timers and distinct pinned runnable workers advance before reset port write; no locks retained across yields"
+    }
+  ],
+  "witnesses": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-writeback-hold.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-writeback-reset-read.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "error",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-writeback-error.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "negative",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-writeback-negative.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "cancel",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-writeback-cancel.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-writeback-release.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-writeback-unmodified.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-none-hold.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "reset-read",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-none-reset-read.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "error",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-none-error.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "negative",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-none-negative.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "cancel",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-none-cancel.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "release",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-none-release.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "unmodified",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": false,
+      "independent_cpu_set": [
+        0
+      ],
+      "serial": "cpu-1-none-unmodified.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-writeback-hold.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 2,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-writeback-reset-read.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "error",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-writeback-error.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "negative",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-writeback-negative.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "cancel",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-writeback-cancel.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-writeback-release.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-writeback-unmodified.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-none-hold.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "reset-read",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-none-reset-read.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "error",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-none-error.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "negative",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-none-negative.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "cancel",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-none-cancel.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "release",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-none-release.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "unmodified",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 6,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1
+      ],
+      "serial": "cpu-2-none-unmodified.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 10,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 2,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-writeback-hold.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 9,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-writeback-reset-read.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "error",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 9,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-writeback-error.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "negative",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 10,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-writeback-negative.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "cancel",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 9,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-writeback-cancel.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 9,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-writeback-release.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 11,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-writeback-unmodified.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 9,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-none-hold.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "reset-read",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 9,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 2,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-none-reset-read.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "error",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 2,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-none-error.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "negative",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 10,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-none-negative.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "cancel",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-none-cancel.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "release",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 10,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-none-release.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "unmodified",
+      "status": "PASS",
+      "owners": [
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        }
+      ],
+      "contenders": [
+        {
+          "seq": 8,
+          "cpu": 2,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        }
+      ],
+      "workers": [
+        {
+          "seq": 1,
+          "cpu": 3,
+          "pid": 373773,
+          "task_generation": 7,
+          "role": 13,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 2,
+          "pid": 373772,
+          "task_generation": 6,
+          "role": 12,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        }
+      ],
+      "distinct_reset_cpus": true,
+      "independent_cpu_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "serial": "cpu-4-none-unmodified.serial.log",
+      "simultaneous_device_memory_access": "UNQUALIFIED"
+    }
+  ],
+  "qualification": "Only S4/S8/S10 scoped PASS; 1CPU serial reference; no complete ten-race qualification"
+}

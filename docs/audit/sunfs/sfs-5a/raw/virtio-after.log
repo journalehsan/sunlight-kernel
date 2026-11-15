@@ -1,0 +1,15 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-virtio v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.27s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_virtio-2f07e4d4d78871a8)
+
+running 2 tests
+test blk::ownership_tests::timeout_must_not_reuse_dma_page_or_descriptors ... ok
+test blk::ownership_tests::late_completion_must_not_authorize_new_request ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,202 @@
+{
+  "cpu": 1,
+  "cache": "none",
+  "mode": "cancel",
+  "status": "PASS",
+  "checks": {
+    "ready": true,
+    "exact_image": true,
+    "killed_after_window": true,
+    "post_scheduler": true,
+    "contender": true,
+    "admission_closed": true,
+    "terminal": true,
+    "progress": true,
+    "contention_progress": true,
+    "payload": true,
+    "handshake": true,
+    "quiescence": true,
+    "guard": true,
+    "negative_detector": true,
+    "reset_entry_access": true
+  },
+  "guest": [
+    {
+      "seq": 1,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "SUBMISSION_INITIATED"
+    },
+    {
+      "seq": 2,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "SUBMITTED"
+    },
+    {
+      "seq": 3,
+      "cpu": 0,
+      "pid": 373770,
+      "task_generation": 4,
+      "role": 10,
+      "ready": "true",
+      "stage": "INDEPENDENT_WORKER_RUNNING"
+    },
+    {
+      "seq": 4,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "DEVICE_ACCESS_HANDSHAKE"
+    },
+    {
+      "seq": 5,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "TIMEOUT_QUARANTINE"
+    },
+    {
+      "seq": 6,
+      "cpu": 0,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "RESET_OWNER_CONTESTED"
+    },
+    {
+      "seq": 7,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "ADMISSION_CLOSED"
+    },
+    {
+      "seq": 8,
+      "cpu": 0,
+      "pid": 373761,
+      "task_generation": 2,
+      "role": 1,
+      "ready": "true",
+      "stage": "QUIESCING"
+    },
+    {
+      "seq": 9,
+      "cpu": 0,
+      "pid": 373761,
+      "task_generation": 2,
+      "role": 1,
+      "ready": "true",
+      "stage": "RESET_OWNER_ESTABLISHED"
+    },
+    {
+      "seq": 10,
+      "cpu": 0,
+      "pid": 373761,
+      "task_generation": 2,
+      "role": 1,
+      "ready": "true",
+      "stage": "CONTENTION_PROGRESS"
+    },
+    {
+      "seq": 11,
+      "cpu": 0,
+      "pid": 373761,
+      "task_generation": 2,
+      "role": 1,
+      "ready": "true",
+      "stage": "TERMINAL_QUARANTINE"
+    },
+    {
+      "seq": 12,
+      "cpu": 0,
+      "pid": 373770,
+      "task_generation": 4,
+      "role": 10,
+      "ready": "true",
+      "stage": "FORWARD_PROGRESS"
+    }
+  ],
+  "device": [
+    {
+      "seq": 1,
+      "ns": 319146842646427,
+      "epoch": 1,
+      "queue": 0,
+      "head": 0,
+      "stage": "DEVICE_FETCHED",
+      "bytes": 0
+    },
+    {
+      "seq": 2,
+      "ns": 319146842651880,
+      "epoch": 1,
+      "queue": 0,
+      "head": 0,
+      "stage": "PAYLOAD_ACCESS_STARTED",
+      "bytes": 0
+    },
+    {
+      "seq": 3,
+      "ns": 319146842658575,
+      "epoch": 1,
+      "queue": 0,
+      "head": 0,
+      "stage": "PAYLOAD_ACCESS_ENDED",
+      "bytes": 256
+    },
+    {
+      "seq": 4,
+      "ns": 319146842660531,
+      "epoch": 1,
+      "queue": 0,
+      "head": 0,
+      "stage": "GUEST_WITNESS_PUBLISHED",
+      "bytes": 1
+    },
+    {
+      "seq": 5,
+      "ns": 319146842662292,
+      "epoch": 1,
+      "queue": 0,
+      "head": 0,
+      "stage": "REQUEST_OUTSTANDING",
+      "bytes": 0
+    }
+  ],
+  "host": [
+    {
+      "event": "PROCESS_STARTED",
+      "ns": 319125647522022
+    },
+    {
+      "event": "READY_OBSERVED",
+      "ns": 319147122328102
+    },
+    {
+      "event": "PROCESS_REAPED",
+      "ns": 319147387672705,
+      "code": -9
+    }
+  ],
+  "simultaneous_dma_reset": "UNQUALIFIED",
+  "reset": "none/cancellation",
+  "released_pages": 0,
+  "pinned_pages": 5,
+  "serial": "cpu-1-none-cancel.serial.log",
+  "trace": "cpu-1-none-cancel.trace.log",
+  "device_log": "cpu-1-none-cancel.qemu.log"
+}

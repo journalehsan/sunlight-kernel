@@ -1,0 +1,21 @@
+{
+  "attempts": [
+    {
+      "scope": "initial native no memory guard",
+      "status": "PASS",
+      "boots": 18,
+      "evidence": "native-20261114T231330.641501Z",
+      "patch": "v1-qemu-active-io.patch",
+      "qualification": "outstanding partial transfer only; superseded for guarded qualification"
+    },
+    {
+      "scope": "first guarded native attempt",
+      "status": "FAIL",
+      "evidence": "native-20261114T232055.857512Z",
+      "patch": "v2-qemu-active-io.patch",
+      "reason": "Native process_vm_readv guard-probe assertion failed; native errno was not logged. Independent standalone comparison returned EPERM for that syscall, while protected-page pipe-copy returned EFAULT. This comparison is not an exact native errno observation.",
+      "preservation": "first hold failed; two normal controls passed; runner interrupted before full matrix; no input-integrity PASS claimed",
+      "repair": "nonblocking pipe-copy checks original payload before protection and all five pages after protection"
+    }
+  ]
+}

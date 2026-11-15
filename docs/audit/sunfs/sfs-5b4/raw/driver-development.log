@@ -1,0 +1,14 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-virtio v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+error[E0425]: cannot find value `status_ptr` in this scope
+   --> sunlight-virtio/src/blk.rs:697:22
+    |
+697 |         let status = status_ptr.read_volatile();
+    |                      ^^^^^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `sunlight-virtio` (lib test) due to 1 previous error

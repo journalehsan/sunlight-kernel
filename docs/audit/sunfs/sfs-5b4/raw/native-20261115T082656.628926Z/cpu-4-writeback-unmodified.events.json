@@ -1,0 +1,210 @@
+{
+  "cpu": 4,
+  "cache": "writeback",
+  "mode": "unmodified",
+  "status": "PASS",
+  "checks": {
+    "ready": true,
+    "exact_image": true,
+    "killed_after_window": true,
+    "post_scheduler": true,
+    "contender": true,
+    "admission_closed": true,
+    "terminal": true,
+    "progress": true,
+    "contention_progress": true,
+    "payload": true,
+    "handshake": true,
+    "quiescence": true,
+    "guard": true,
+    "negative_detector": true,
+    "reset_entry_access": true
+  },
+  "guest": [
+    {
+      "seq": 1,
+      "cpu": 3,
+      "pid": 373773,
+      "task_generation": 7,
+      "role": 13,
+      "ready": "true",
+      "stage": "INDEPENDENT_WORKER_RUNNING"
+    },
+    {
+      "seq": 2,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "SUBMISSION_INITIATED"
+    },
+    {
+      "seq": 3,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "SUBMITTED"
+    },
+    {
+      "seq": 4,
+      "cpu": 2,
+      "pid": 373772,
+      "task_generation": 6,
+      "role": 12,
+      "ready": "true",
+      "stage": "INDEPENDENT_WORKER_RUNNING"
+    },
+    {
+      "seq": 5,
+      "cpu": 1,
+      "pid": 373771,
+      "task_generation": 5,
+      "role": 11,
+      "ready": "true",
+      "stage": "INDEPENDENT_WORKER_RUNNING"
+    },
+    {
+      "seq": 6,
+      "cpu": 0,
+      "pid": 373770,
+      "task_generation": 4,
+      "role": 10,
+      "ready": "true",
+      "stage": "INDEPENDENT_WORKER_RUNNING"
+    },
+    {
+      "seq": 7,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "NORMAL_COMPLETION"
+    },
+    {
+      "seq": 8,
+      "cpu": 1,
+      "pid": 373761,
+      "task_generation": 2,
+      "role": 1,
+      "ready": "true",
+      "stage": "RESET_OWNER_CONTESTED"
+    },
+    {
+      "seq": 9,
+      "cpu": 0,
+      "pid": 373760,
+      "task_generation": 1,
+      "role": 0,
+      "ready": "true",
+      "stage": "ADMISSION_CLOSED"
+    },
+    {
+      "seq": 10,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "QUIESCING"
+    },
+    {
+      "seq": 11,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "RESET_OWNER_ESTABLISHED"
+    },
+    {
+      "seq": 12,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "CONTENTION_PROGRESS"
+    },
+    {
+      "seq": 13,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "RESET_REQUESTED"
+    },
+    {
+      "seq": 14,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "RESET_PENDING"
+    },
+    {
+      "seq": 15,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "RESET_ACKNOWLEDGED"
+    },
+    {
+      "seq": 16,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "FENCE_UNQUALIFIED"
+    },
+    {
+      "seq": 17,
+      "cpu": 2,
+      "pid": 373762,
+      "task_generation": 3,
+      "role": 2,
+      "ready": "true",
+      "stage": "TERMINAL_QUARANTINE"
+    },
+    {
+      "seq": 18,
+      "cpu": 2,
+      "pid": 373772,
+      "task_generation": 6,
+      "role": 12,
+      "ready": "true",
+      "stage": "FORWARD_PROGRESS"
+    }
+  ],
+  "device": [],
+  "host": [
+    {
+      "event": "PROCESS_STARTED",
+      "ns": 319275274682864
+    },
+    {
+      "event": "READY_OBSERVED",
+      "ns": 319302349986802
+    },
+    {
+      "event": "PROCESS_REAPED",
+      "ns": 319302615315729,
+      "code": -9
+    }
+  ],
+  "simultaneous_dma_reset": "UNQUALIFIED",
+  "reset": "real legacy whole-device",
+  "released_pages": 0,
+  "pinned_pages": 5,
+  "serial": "cpu-4-writeback-unmodified.serial.log",
+  "trace": "cpu-4-writeback-unmodified.trace.log",
+  "device_log": "cpu-4-writeback-unmodified.qemu.log"
+}

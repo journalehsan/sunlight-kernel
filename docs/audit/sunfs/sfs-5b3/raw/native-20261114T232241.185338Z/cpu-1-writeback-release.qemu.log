@@ -1,0 +1,12 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 fetched queue=0 head=0 sector=63 bytes=512 guest=0x7fd920355010 mode=release
+SFS5B3 dma-read head=0 offset=0 bytes=256 value=179
+SFS5B3 held head=0 consumed=256 remaining=256 backend=not-submitted used=not-published
+SFS5B3 dma-read head=0 offset=256 bytes=256 value=179
+SFS5B3 backend-submit head=0
+SFS5B3 backend-complete head=0 ret=0

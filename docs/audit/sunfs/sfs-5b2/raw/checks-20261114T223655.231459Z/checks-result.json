@@ -1,0 +1,43 @@
+[
+  {
+    "argv": [
+      "rustfmt",
+      "--edition",
+      "2021",
+      "--check",
+      "sunlight-virtio/src/blk.rs",
+      "kernel/src/sfs5b2_test.rs"
+    ],
+    "returncode": 0,
+    "seconds": 0.06403257697820663,
+    "log": "raw/checks-20261114T223655.231459Z/format.log"
+  },
+  {
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "returncode": 0,
+    "seconds": 0.11837774497689679,
+    "log": "raw/checks-20261114T223655.231459Z/whitespace.log"
+  },
+  {
+    "argv": [
+      "cargo",
+      "clippy",
+      "-p",
+      "sunlight-virtio",
+      "-p",
+      "sunlight-block",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "seconds": 0.6649293400114402,
+    "log": "raw/checks-20261114T223655.231459Z/clippy.log"
+  }
+]

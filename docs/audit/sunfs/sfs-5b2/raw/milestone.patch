@@ -1,0 +1,776 @@
+diff --git a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/sunlight-virtio/src/blk.rs b/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio/src/blk.rs
+index 8d23d6261..c04ca4c38 100644
+--- a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/sunlight-virtio/src/blk.rs
++++ b/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio/src/blk.rs
+@@ -1,4 +1,4 @@
+-use super::pci::{inl, inw, outb, outl, outw};
++use super::pci::{inb, inl, inw, outb, outl, outw};
+ use core::sync::atomic::{fence, Ordering};
+ use sunlight_block::contract::*;
+ 
+@@ -32,6 +32,30 @@ const VIRTIO_BLK_S_OK: u8 = 0;
+ // This is enough for QUEUE_NUM up to ~500.
+ pub const QUEUE_PAGES: usize = 4;
+ 
++/// Work bound, not a wall-clock deadline or evidence of DMA termination.
++pub const RESET_READ_BUDGET: u8 = 64;
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum ResetState {
++    Running,
++    Waiting,
++    /// Status zero observed. All allocations remain pinned; no reuse authority.
++    VerifiedRetained,
++    TimedOutRetained,
++    UnexpectedStatusRetained,
++}
++
++/// Diagnostic receipt only. It cannot authorize frame release or reinitialization.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct ResetObservation {
++    pub device: DeviceIdentity,
++    pub queue_incarnation: u64,
++    pub outstanding: Option<RequestId>,
++    pub state: ResetState,
++    pub reads: u8,
++    pub status: Option<u8>,
++}
++
+ #[repr(C)]
+ struct VirtqDesc {
+     addr: u64,
+@@ -67,8 +91,17 @@ pub struct VirtioBlk {
+     owner: Owner,
+     last_outcome: Option<IoOutcome>,
+     last_used_length: Option<u32>,
++    offered_features: u32,
++    accepted_features: u32,
++    reset_state: ResetState,
++    reset_reads: u8,
++    reset_status: Option<u8>,
++    // First uncertain result survives subsequent refusal/reset observations.
++    first_uncertain: Option<IoOutcome>,
+     #[cfg(test)]
+     injection: Option<(u16, u32, u32, u8, bool)>,
++    #[cfg(test)]
++    transport_status: u8,
+ }
+ 
+ fn queue_fits(size: u16) -> bool {
+@@ -101,6 +134,18 @@ impl VirtioBlk {
+         let incarnation = new_incarnation()?;
+         // Reset the device
+         outb(io_base + REG_DEVICE_STATUS, 0);
++        // VirtIO 1.4 2.4: a write is not reset completion. Do not publish queue
++        // memory or advance initialization unless status zero is observed.
++        let mut reset_complete = false;
++        for _ in 0..RESET_READ_BUDGET {
++            if inb(io_base + REG_DEVICE_STATUS) == 0 {
++                reset_complete = true;
++                break;
++            }
++        }
++        if !reset_complete {
++            return None;
++        }
+         // Acknowledge device existence and load our driver
+         outb(
+             io_base + REG_DEVICE_STATUS,
+@@ -190,8 +235,16 @@ impl VirtioBlk {
+             }),
+             last_outcome: None,
+             last_used_length: None,
++            offered_features: features,
++            accepted_features,
++            reset_state: ResetState::Running,
++            reset_reads: 0,
++            reset_status: None,
++            first_uncertain: None,
+             #[cfg(test)]
+             injection: None,
++            #[cfg(test)]
++            transport_status: 7,
+         })
+     }
+ 
+@@ -226,6 +279,79 @@ impl VirtioBlk {
+         self.last_used_length
+     }
+ 
++    pub const fn features(&self) -> (u32, u32) {
++        (self.offered_features, self.accepted_features)
++    }
++
++    pub const fn first_uncertain(&self) -> Option<IoOutcome> {
++        self.first_uncertain
++    }
++
++    pub fn reset_observation(&self) -> ResetObservation {
++        ResetObservation {
++            device: self.owner.device,
++            queue_incarnation: self.owner.queue_incarnation,
++            outstanding: self.owner.active(),
++            state: self.reset_state,
++            reads: self.reset_reads,
++            status: self.reset_status,
++        }
++    }
++
++    /// Close admission and request ONE whole-device reset. Repeated calls are
++    /// idempotent. Exclusive mutable ownership serializes I/O/reset initiation.
++    /// No wait, allocation, ring mutation or request retirement occurs here.
++    ///
++    /// # Safety
++    /// Caller owns this entire PCI device, at ring 0, with all DMA frames pinned.
++    /// Do not invoke through a stale attachment or on an unrelated/boot device.
++    pub unsafe fn begin_terminal_reset(&mut self) -> ResetObservation {
++        if self.reset_state == ResetState::Running {
++            self.quarantine(false);
++            self.reset_state = ResetState::Waiting;
++            fence(Ordering::SeqCst);
++            #[cfg(not(test))]
++            outb(self.io_base + REG_DEVICE_STATUS, 0);
++        }
++        self.reset_observation()
++    }
++
++    fn observe_reset_status(&mut self, status: u8) {
++        if self.reset_state != ResetState::Waiting {
++            return;
++        }
++        self.reset_reads += 1; // bounded by RESET_READ_BUDGET, never wraps
++        self.reset_status = Some(status);
++        self.reset_state = if status == 0 {
++            fence(Ordering::SeqCst);
++            ResetState::VerifiedRetained
++        } else if status != STATUS_ACKNOWLEDGE | STATUS_DRIVER | STATUS_DRIVER_OK {
++            // Includes 0xff (possible removal), NEEDS_RESET and FAILED.
++            ResetState::UnexpectedStatusRetained
++        } else if self.reset_reads == RESET_READ_BUDGET {
++            ResetState::TimedOutRetained
++        } else {
++            ResetState::Waiting
++        };
++    }
++
++    /// One register read per call; no interrupt/timer/completion dependency.
++    /// VirtIO 1.4 2.4.1/2.4.2, legacy PCI status layout 4.1.4.10.
++    /// Acknowledgment never resolves write/flush durability or releases DMA.
++    ///
++    /// # Safety
++    /// Same exclusive PCI device and pinned allocation requirements as begin.
++    pub unsafe fn poll_terminal_reset(&mut self) -> ResetObservation {
++        if self.reset_state == ResetState::Waiting {
++            #[cfg(not(test))]
++            let status = inb(self.io_base + REG_DEVICE_STATUS);
++            #[cfg(test)]
++            let status = STATUS_ACKNOWLEDGE | STATUS_DRIVER | STATUS_DRIVER_OK;
++            self.observe_reset_status(status);
++        }
++        self.reset_observation()
++    }
++
+     fn receipt(
+         &mut self,
+         operation: Operation,
+@@ -260,6 +386,12 @@ impl VirtioBlk {
+             source,
+             durability,
+         };
++        if self.first_uncertain.is_none()
++            && (completion == Completion::Uncertain
++                || (request.is_some() && durability == Durability::Uncertain))
++        {
++            self.first_uncertain = Some(result);
++        }
+         self.last_outcome = Some(result);
+         result
+     }
+@@ -268,6 +400,14 @@ impl VirtioBlk {
+         self.owner.quarantine(timed_out);
+     }
+ 
++    unsafe fn device_running(&self) -> bool {
++        #[cfg(not(test))]
++        let status = inb(self.io_base + REG_DEVICE_STATUS);
++        #[cfg(test)]
++        let status = self.transport_status;
++        status == STATUS_ACKNOWLEDGE | STATUS_DRIVER | STATUS_DRIVER_OK
++    }
++
+     /// Safety: initialization's pinned coherent DMA allocation contract still holds.
+     unsafe fn transfer(
+         &mut self,
+@@ -322,7 +462,9 @@ impl VirtioBlk {
+             );
+         }
+         // Preflight before touching either DMA buffer or descriptors.
+-        if ((self.used_virt + 2) as *const u16).read_volatile() != self.last_used_idx {
++        if !self.device_running()
++            || ((self.used_virt + 2) as *const u16).read_volatile() != self.last_used_idx
++        {
+             self.quarantine(false);
+             return self.receipt(
+                 operation,
+@@ -463,13 +605,14 @@ impl VirtioBlk {
+             .add(used_slot * 2 + 1)
+             .read_volatile();
+         self.last_used_length = Some(length);
+-        // Legacy used.len is diagnostic only (VirtIO 1.2 section 5.2.6.2).
++        // Legacy used.len is diagnostic only (VirtIO 1.4 section 5.2.6.3).
+         // It cannot authorize a partial prefix or short-read success.
+         let status = status_ptr.read_volatile();
+         let resources = self.descriptors_match(operation);
+         if used_idx != self.last_used_idx.wrapping_add(1)
+             || head != u32::from(id.head)
+             || status > 2
++            || !self.device_running()
+             || !self.owner.complete(id, resources)
+         {
+             self.quarantine(false);
+@@ -657,7 +800,14 @@ mod ownership_tests {
+             }),
+             last_outcome: None,
+             last_used_length: None,
++            offered_features: VIRTIO_BLK_F_FLUSH,
++            accepted_features: VIRTIO_BLK_F_FLUSH,
++            reset_state: ResetState::Running,
++            reset_reads: 0,
++            reset_status: None,
++            first_uncertain: None,
+             injection: None,
++            transport_status: 7,
+         }
+     }
+ 
+@@ -869,4 +1019,210 @@ mod ownership_tests {
+         assert_eq!(d.last_used_idx, 0);
+         assert_eq!(result.request.unwrap().generation, 1);
+     }
++
++    #[test]
++    fn f4_head_only_duplicate_cannot_supply_new_status() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.injection = Some((1, 0, 1, 0, false));
++        assert_eq!(unsafe { d.flush_typed() }.completion, Completion::Completed);
++        // A used entry alone does not overwrite B's freshly initialized status.
++        d.injection = Some((1, 0, 1, 255, false));
++        assert_eq!(unsafe { d.flush_typed() }.completion, Completion::Uncertain);
++        assert_eq!(d.ownership(), Ownership::Quarantined);
++        assert!(d.outstanding().is_some());
++    }
++
++    #[test]
++    fn f9_f21_f22_reset_retains_uncertain_io_and_all_dma_bytes() {
++        for operation in [Operation::Write, Operation::Flush] {
++            let (mut q, mut r) = fixture();
++            let mut d = device(&mut q, &mut r);
++            let outcome = unsafe {
++                if operation == Operation::Write {
++                    d.write_typed(1, &[0x71; 512])
++                } else {
++                    d.flush_typed()
++                }
++            };
++            let before_q = q.0;
++            let before_r = r.0;
++            assert_eq!(outcome.completion, Completion::Uncertain);
++            let begin = unsafe { d.begin_terminal_reset() };
++            assert_eq!(begin.state, ResetState::Waiting);
++            assert_eq!(begin.outstanding, outcome.request);
++            d.observe_reset_status(0);
++            let done = d.reset_observation();
++            assert_eq!(done.state, ResetState::VerifiedRetained);
++            assert_eq!(done.reads, 1);
++            assert_eq!(done.outstanding, outcome.request);
++            assert_eq!(d.first_uncertain(), Some(outcome));
++            assert_eq!(d.last_outcome(), Some(outcome));
++            assert_eq!(d.ownership(), Ownership::Quarantined);
++            assert_eq!(
++                unsafe { d.flush_typed() }.completion,
++                Completion::Unavailable
++            );
++            assert_eq!(d.first_uncertain(), Some(outcome));
++            assert_eq!(outcome.durability, Durability::Uncertain);
++            assert!(q.0 == before_q);
++            assert!(r.0 == before_r);
++        }
++    }
++
++    #[test]
++    fn f10_delayed_ack_has_exact_read_bound() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        unsafe { d.begin_terminal_reset() };
++        for _ in 0..RESET_READ_BUDGET - 1 {
++            d.observe_reset_status(7);
++        }
++        assert_eq!(d.reset_observation().state, ResetState::Waiting);
++        d.observe_reset_status(0);
++        assert_eq!(d.reset_observation().state, ResetState::VerifiedRetained);
++        assert_eq!(d.reset_observation().reads, RESET_READ_BUDGET);
++    }
++
++    #[test]
++    fn f11_withheld_ack_is_terminal_and_not_a_fence() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        unsafe { d.begin_terminal_reset() };
++        for _ in 0..RESET_READ_BUDGET {
++            unsafe { d.poll_terminal_reset() };
++        }
++        let done = d.reset_observation();
++        assert_eq!(done.state, ResetState::TimedOutRetained);
++        assert_eq!(done.reads, RESET_READ_BUDGET);
++        d.observe_reset_status(0); // a later observation cannot rewrite the fault
++        assert_eq!(unsafe { d.begin_terminal_reset() }, done);
++        assert_eq!(unsafe { d.poll_terminal_reset() }, done);
++        assert_eq!(
++            unsafe { d.write_typed(1, &[0; 512]) }.completion,
++            Completion::Unavailable
++        );
++    }
++
++    #[test]
++    fn f13_f16_unexpected_or_removed_device_cannot_ack() {
++        for status in [1, 3, 8, 0x40, 0x80, 0xff] {
++            let (mut q, mut r) = fixture();
++            let mut d = device(&mut q, &mut r);
++            unsafe { d.begin_terminal_reset() };
++            d.observe_reset_status(status);
++            assert_eq!(
++                d.reset_observation().state,
++                ResetState::UnexpectedStatusRetained
++            );
++            assert_eq!(d.reset_observation().status, Some(status));
++            d.observe_reset_status(0);
++            assert_eq!(d.reset_observation().status, Some(status));
++        }
++    }
++
++    #[test]
++    fn f15_f17_f18_reset_competitors_and_pressure_preserve_first_owner() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let fault = unsafe { d.write_typed(1, &[0x62; 512]) };
++        let owner = d.outstanding();
++        let before_q = q.0;
++        let before_r = r.0;
++        let begin = unsafe { d.begin_terminal_reset() };
++        for _ in 0..1024 {
++            assert_eq!(unsafe { d.begin_terminal_reset() }, begin);
++            assert_eq!(
++                unsafe { d.write_typed(2, &[0x63; 512]) }.completion,
++                Completion::Unavailable
++            );
++        }
++        assert_eq!(d.outstanding(), owner);
++        assert_eq!(d.first_uncertain(), Some(fault));
++        assert!(q.0 == before_q);
++        assert!(r.0 == before_r);
++    }
++
++    #[test]
++    fn f3_f8_late_ring_write_and_stale_notification_do_not_reopen_reset() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let fault = unsafe { d.flush_typed() };
++        unsafe { d.begin_terminal_reset() };
++        // Device activity before acknowledgment, not after a conforming reset.
++        unsafe {
++            ((d.used_virt + 2) as *mut u16).write_volatile(1);
++            ((d.req_virt + 528) as *mut u8).write_volatile(0);
++        }
++        d.observe_reset_status(0);
++        let before = q.0;
++        assert_eq!(
++            unsafe { d.flush_typed() }.completion,
++            Completion::Unavailable
++        );
++        assert_eq!(d.outstanding(), fault.request);
++        assert!(q.0 == before);
++    }
++
++    #[test]
++    fn f19_normal_retirement_then_reset_has_no_second_retirement() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.injection = Some((1, 0, 1, 0, false));
++        let done = unsafe { d.flush_typed() };
++        assert_eq!(d.ownership(), Ownership::Retired);
++        unsafe { d.begin_terminal_reset() };
++        d.observe_reset_status(0);
++        assert_eq!(d.outstanding(), None);
++        assert!(!d.owner.retire(done.request.unwrap()));
++        assert_eq!(d.reset_observation().queue_incarnation, 1);
++    }
++
++    #[test]
++    fn f13_device_lost_running_state_blocks_dma_publication() {
++        for status in [0, 3, 0x47, 0x87, 0xff] {
++            let (mut q, mut r) = fixture();
++            let mut d = device(&mut q, &mut r);
++            d.transport_status = status;
++            let before_q = q.0;
++            let before_r = r.0;
++            assert_eq!(
++                unsafe { d.write_typed(1, &[0x73; 512]) }.completion,
++                Completion::Uncertain
++            );
++            assert_eq!(d.ownership(), Ownership::Quarantined);
++            assert!(q.0 == before_q);
++            assert!(r.0 == before_r);
++            assert_eq!(d.outstanding(), None);
++        }
++    }
++
++    #[test]
++    fn f21_f22_device_error_provenance_survives_reset_and_refusal() {
++        for operation in [Operation::Write, Operation::Flush] {
++            for status in [1, 2] {
++                let (mut q, mut r) = fixture();
++                let mut d = device(&mut q, &mut r);
++                d.injection = Some((1, 0, 1, status, false));
++                let original = unsafe {
++                    if operation == Operation::Write {
++                        d.write_typed(1, &[0x74; 512])
++                    } else {
++                        d.flush_typed()
++                    }
++                };
++                assert_eq!(original.source, StatusSource::DeviceStatus(status));
++                assert_eq!(original.durability, Durability::Uncertain);
++                assert_eq!(d.first_uncertain(), Some(original));
++                assert_eq!(d.outstanding(), None); // authoritative terminal completion
++                unsafe { d.begin_terminal_reset() };
++                d.observe_reset_status(0);
++                assert_eq!(
++                    unsafe { d.flush_typed() }.completion,
++                    Completion::Unavailable
++                );
++                assert_eq!(d.first_uncertain(), Some(original));
++            }
++        }
++    }
+ }
+diff --git a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/sunlight-virtio/src/lib.rs b/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio/src/lib.rs
+index 2558c8c0d..0090b5e01 100644
+--- a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/sunlight-virtio/src/lib.rs
++++ b/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio/src/lib.rs
+@@ -7,7 +7,7 @@ pub mod pci;
+ pub mod svga;
+ pub mod svga_regs;
+ 
+-pub use blk::{BlkError, VirtioBlk, QUEUE_PAGES};
++pub use blk::{BlkError, ResetObservation, ResetState, VirtioBlk, QUEUE_PAGES, RESET_READ_BUDGET};
+ pub use gpu::{VirtioGpu, VirtioGpuMemEntry};
+ pub use pci::{
+     find_virtio_blk, find_virtio_gpu, find_virtio_net, find_virtio_rng, find_vmware_svga,
+diff --git a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/kernel/src/main.rs b/home/ehsantor/Projects/sunlightos-kernel/kernel/src/main.rs
+index fef29ff5d..c399766c7 100644
+--- a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/kernel/src/main.rs
++++ b/home/ehsantor/Projects/sunlightos-kernel/kernel/src/main.rs
+@@ -1864,6 +1864,8 @@ pub extern "C" fn _start() -> ! {
+ mod sfs5a_test;
+ #[cfg(feature = "sfs5b1-test")]
+ mod sfs5b1_test;
++#[cfg(feature = "sfs5b2-test")]
++mod sfs5b2_test;
+ 
+ struct BlkCell(Option<sunlight_virtio::VirtioBlk>);
+ // SAFETY: VirtioBlk holds raw queue pointers into kernel-owned frames that
+@@ -2166,9 +2168,11 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
+     #[cfg(feature = "sfs5a-test")]
+     let blk = {
+         let mut device = blk;
++        #[cfg(feature = "sfs5b2-test")]
++        sfs5b2_test::run(&mut device);
+         #[cfg(feature = "sfs5b1-test")]
+         sfs5b1_test::run(&mut device);
+-        #[cfg(not(feature = "sfs5b1-test"))]
++        #[cfg(not(any(feature = "sfs5b1-test", feature = "sfs5b2-test")))]
+         sfs5a_test::run(&mut device);
+         device
+     };
+diff --git a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/kernel/Cargo.toml b/home/ehsantor/Projects/sunlightos-kernel/kernel/Cargo.toml
+index 4fcfea828..fe92cdf62 100644
+--- a/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/incoming/kernel/Cargo.toml
++++ b/home/ehsantor/Projects/sunlightos-kernel/kernel/Cargo.toml
+@@ -690,6 +690,7 @@ lz4_flex = { version = "0.11", default-features = false }
+ # Opt-in disposable-device qualification; halts before FAT/VFS probing.
+ sfs5a-test = []
+ sfs5b1-test = ["sfs5a-test"]
++sfs5b2-test = ["sfs5a-test"]
+ # Bounded PMM-backed filesystem regression gate; off in ordinary boots.
+ tmpfs_test = []
+ # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
+diff --git a/home/ehsantor/Projects/sunlightos-kernel/kernel/src/sfs5b2_test.rs b/home/ehsantor/Projects/sunlightos-kernel/kernel/src/sfs5b2_test.rs
+new file mode 100644
+index 000000000..f1ce4d8a7
+--- /dev/null
++++ b/home/ehsantor/Projects/sunlightos-kernel/kernel/src/sfs5b2_test.rs
+@@ -0,0 +1,53 @@
++//! Disposable-device terminal reset observation; no writable filesystem admission.
++use sunlight_block::contract::{Completion, Durability, Ownership};
++use sunlight_virtio::{ResetState, VirtioBlk, RESET_READ_BUDGET};
++
++pub fn run(d: &mut VirtioBlk) {
++    assert_eq!(d.block_count(), 8192, "SFS5B2 disposable capacity guard");
++    let mut marker = [0; 512];
++    assert_eq!(
++        unsafe { d.read_typed(0, &mut marker) }.completion,
++        Completion::Completed
++    );
++    assert_eq!(&marker[..34], b"SFS5A-ONLY-7b93143a-disposable-v1!");
++    crate::serial_println!(
++        "[SFS5B2] features={:?} geometry={:?}",
++        d.features(),
++        d.geometry()
++    );
++    let write = unsafe { d.write_typed(61, &[0xb2; 512]) };
++    assert_eq!(write.completion, Completion::Completed);
++    assert_eq!(write.durability, Durability::NotEstablished);
++    let flush = unsafe { d.flush_typed() };
++    assert_eq!(flush.completion, Completion::Completed);
++    let mut data = [0; 512];
++    assert_eq!(
++        unsafe { d.read_typed(61, &mut data) }.completion,
++        Completion::Completed
++    );
++    assert_eq!(data, [0xb2; 512]);
++    assert_eq!(d.ownership(), Ownership::Retired);
++    crate::serial_println!("[SFS5B2] write={:?} flush={:?}", write, flush);
++    crate::serial_println!("[SFS5B2] reset-before={:?}", d.reset_observation());
++    crate::serial_println!("[SFS5B2] reset-begin={:?}", unsafe {
++        d.begin_terminal_reset()
++    });
++    for _ in 0..RESET_READ_BUDGET {
++        if unsafe { d.poll_terminal_reset() }.state != ResetState::Waiting {
++            break;
++        }
++    }
++    let done = d.reset_observation();
++    crate::serial_println!("[SFS5B2] reset-after={:?}", done);
++    assert_eq!(done.state, ResetState::VerifiedRetained);
++    assert_eq!(unsafe { d.begin_terminal_reset() }, done);
++    let refused = unsafe { d.write_typed(62, &[0x99; 512]) };
++    assert_eq!(refused.completion, Completion::Unavailable);
++    assert_eq!(d.reset_observation(), done);
++    assert_eq!(d.outstanding(), None);
++    crate::serial_println!("[SFS5B2] RESET-OBSERVED pages-pinned=5 released=0 active-dma-at-reset=false execution=BSP-before-AP-startup");
++    crate::serial_println!("[SFS5B2] READY-FOR-HOST-OBSERVER");
++    loop {
++        x86_64::instructions::hlt();
++    }
++}
+diff --git a/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py b/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py
+new file mode 100644
+index 000000000..2e5c145b2
+--- /dev/null
++++ b/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b2_validate.py
+@@ -0,0 +1,204 @@
++#!/usr/bin/env python3
++"""SFS-5B.2 final-source regression and disposable legacy PCI reset observer.
++
++No existing image, host block device, filesystem mount, commit or push is used.
++Hosted suites are reused unchanged from the SFS-5B.1 runner with OUT redirected.
++"""
++import argparse
++import datetime
++import gzip
++import importlib.util
++import json
++import os
++from pathlib import Path
++import shutil
++import socket
++import subprocess
++import sys
++import time
++
++ROOT = Path(__file__).resolve().parents[1]
++OUT = ROOT / 'docs/audit/sunfs/sfs-5b2'
++spec = importlib.util.spec_from_file_location('sfs5b1_runner', ROOT/'tools/sunfs5b1_validate.py')
++base = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(base)
++base.OUT = OUT
++
++
++def write(p, v):
++    p.write_text(json.dumps(v, indent=2)+'\n')
++
++
++def run(argv, log, timeout=900):
++    start = time.monotonic()
++    with log.open('w') as f:
++        try:
++            p = subprocess.run(argv, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT, timeout=timeout)
++            code = p.returncode
++        except subprocess.TimeoutExpired:
++            code = 'TIMEOUT'
++    row = dict(argv=argv, returncode=code, seconds=time.monotonic()-start, log=str(log.relative_to(OUT)))
++    with (log.parent/'commands.jsonl').open('a') as f:
++        f.write(json.dumps(row)+'\n')
++    print(log.name, code, flush=True)
++    return row
++
++
++class QMP:
++    def __init__(self, path):
++        self.sock = socket.socket(socket.AF_UNIX)
++        self.sock.settimeout(5)
++        self.sock.connect(str(path))
++        self.stream = self.sock.makefile('rwb', buffering=0)
++        self.greeting = self.read()
++        self.command('qmp_capabilities')
++
++    def read(self):
++        while True:
++            value = json.loads(self.stream.readline())
++            if 'event' not in value:
++                return value
++
++    def command(self, name, args=None):
++        msg = {'execute': name}
++        if args is not None:
++            msg['arguments'] = args
++        self.stream.write((json.dumps(msg)+'\n').encode())
++        return self.read()
++
++    def close(self):
++        self.stream.close()
++        self.sock.close()
++
++
++def native(raw):
++    row = run(['cargo', 'build', '-p', 'sunlight-kernel', '--offline', '--locked', '--features', 'sfs5b2-test'], raw/'guest-build.log')
++    if row['returncode'] != 0:
++        write(raw/'native-result.json', dict(status='BLOCKED', build=row))
++        return
++    artifacts = ROOT/'target/sfs5b2'/raw.name
++    artifacts.mkdir(parents=True)
++    elf = artifacts/'sunlight-kernel.elf'
++    shutil.copyfile(ROOT/'target/x86_64-unknown-none/debug/sunlight-kernel', elf)
++    iso = artifacts/'sfs5b2.iso'
++    row = run(['bash', 'tools/make_hybrid_iso.sh', str(elf), str(iso)], raw/'iso-build.log')
++    if row['returncode'] != 0:
++        write(raw/'native-result.json', dict(status='BLOCKED', build=row))
++        return
++    events = raw/'trace-events.conf'
++    events.write_text('\n'.join(['virtio_set_status', 'virtio_queue_notify', 'virtqueue_pop', 'virtqueue_fill', 'virtqueue_flush', 'virtio_blk_req_complete', 'virtio_blk_handle_read', 'virtio_blk_handle_write'])+'\n')
++    run(['qemu-system-x86_64', '--version'], raw/'qemu-version.log')
++    rows = []
++    for cpu in [1, 2, 4]:
++        for cache in ['writeback', 'none']:
++            tag = f'cpu-{cpu}-{cache}'
++            image = artifacts/(tag+'.img')
++            expected = bytearray(8192*512)
++            expected[:len(base.MARKER)] = base.MARKER
++            with image.open('xb') as f:
++                f.write(expected)
++                f.flush()
++                os.fsync(f.fileno())
++            serial = raw/(tag+'.serial.log')
++            trace = raw/(tag+'.trace.log')
++            qmp = Path('/tmp')/f'sfs5b2-{os.getpid()}-{tag}.qmp'
++            argv = ['qemu-system-x86_64', '-machine', 'q35', '-accel', 'tcg', '-m', '1024M', '-smp', str(cpu),
++                    '-cdrom', str(iso), '-boot', 'd', '-display', 'none', '-serial', f'file:{serial}', '-monitor', 'none',
++                    '-qmp', f'unix:{qmp},server=on,wait=off',
++                    '-drive', f'id=sfs5b2test,file={image},if=none,format=raw,cache={cache}',
++                    '-device', 'virtio-blk-pci,disable-modern=on,drive=sfs5b2test,serial=SFS5B2-disposable',
++                    '-device', 'virtio-rng-pci,disable-modern=on', '-nic', 'none', '-no-reboot', '-no-shutdown',
++                    '-trace', f'events={events},file={trace}']
++            write(raw/(tag+'.invocation.json'), dict(argv=argv, cpu=cpu, cache=cache, source_sha256=base.source(),
++                  elf_sha256=base.sha(elf), iso_sha256=base.sha(iso), image_initial_sha256=base.sha(image), seed=None,
++                  destructive_lbas=[61], test_scope='normal I/O, idle whole-device reset, retained DMA, no AP execution'))
++            ready = False
++            witness = {}
++            with (raw/(tag+'.qemu.log')).open('w') as errors:
++                p = subprocess.Popen(argv, cwd=ROOT, stdout=errors, stderr=errors)
++                try:
++                    end = time.monotonic()+90
++                    while p.poll() is None and time.monotonic() < end:
++                        content = serial.read_text(errors='replace') if serial.exists() else ''
++                        if '[SFS5B2] READY-FOR-HOST-OBSERVER' in content:
++                            ready = True
++                            break
++                        if 'panicked at' in content:
++                            break
++                        time.sleep(.1)
++                    if ready:
++                        client = QMP(qmp)
++                        try:
++                            witness['greeting'] = client.greeting
++                            witness['devices'] = client.command('x-query-virtio')
++                            # Experimental x-query-virtio-status aborts QEMU 11.1.2
++                            # after reset; preserved first attempt demonstrates it.
++                            # Inventory is independent of guest counters; reset ENTRY
++                            # and request handling are observed by QEMU tracing.
++                            witness['pci'] = client.command('query-pci')
++                            witness['block'] = client.command('query-block')
++                            witness['vm_status'] = client.command('query-status')
++                        finally:
++                            client.close()
++                except Exception as e:
++                    witness['error'] = repr(e)
++                finally:
++                    if p.poll() is None:
++                        p.kill()
++                    code = p.wait(timeout=10)
++            write(raw/(tag+'.qmp.json'), witness)
++            expected[61*512:62*512] = bytes([0xb2])*512
++            exact = image.read_bytes() == expected
++            (raw/(tag+'.img.gz')).write_bytes(gzip.compress(image.read_bytes(), mtime=0))
++            row = dict(cpu=cpu, cache=cache, status='PASS' if ready and exact and 'error' not in witness and code == -9 else 'FAIL', ready=ready,
++                       host_exact_image=exact, returncode=code, active_dma_at_reset=False, frames_released=0, observer_error=witness.get('error'),
++                       ap_execution='NOT_RUN', serial=serial.name, trace=trace.name, qmp=tag+'.qmp.json')
++            rows.append(row)
++            write(raw/'native-result.json', dict(status='PASS' if all(r['status']=='PASS' for r in rows) else 'PARTIAL', boots=rows))
++            print(tag, row['status'], flush=True)
++
++
++def checks(raw):
++    rows = []
++    for name, argv in [
++        ('format', ['rustfmt', '--edition', '2021', '--check', 'sunlight-virtio/src/blk.rs', 'kernel/src/sfs5b2_test.rs']),
++        ('whitespace', ['git', 'diff', '--check']),
++        ('clippy', ['cargo', 'clippy', '-p', 'sunlight-virtio', '-p', 'sunlight-block', '--lib', '--offline', '--locked', '--target', 'x86_64-unknown-none']),
++    ]:
++        rows.append(run(argv, raw/(name+'.log')))
++    write(raw/'checks-result.json', rows)
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument('mode', choices=['native', 'hosted', 'regression-native', 'checks'])
++    mode = parser.parse_args().mode
++    stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
++    raw = OUT/'raw'/f'{mode}-{stamp}'
++    raw.mkdir()
++    frozen = base.source()
++    write(raw/'source-before.json', frozen)
++    write(raw/'runner-identity.json', dict(argv=sys.argv, runner_sha256=base.sha(Path(__file__)),
++          reused_runner_sha256=base.sha(ROOT/'tools/sunfs5b1_validate.py'), deterministic_seed='no random injection',
++          hosted_seeds={'SFS1':[0,1,2,0x534653], 'SFS2':[0,1,2,0x53465332], 'SFS3':[0x53465333], 'SFS4':[0x53465334]},
++          environment={k:os.environ.get(k) for k in ['RUSTFLAGS','RUSTUP_TOOLCHAIN','CARGO_BUILD_TARGET','CARGO_TARGET_DIR','SOURCE_DATE_EPOCH']}))
++    for tool in ['rustc', 'cargo']:
++        run([tool, '--version', '--verbose'], raw/(tool+'-version.log'))
++    if mode == 'native':
++        native(raw)
++    elif mode == 'hosted':
++        base.hosted(raw)
++    elif mode == 'regression-native':
++        base.native(raw)
++    else:
++        checks(raw)
++    after = base.source()
++    write(raw/'source-after.json', after)
++    changed = [n for n in sorted(set(frozen)|set(after)) if frozen.get(n) != after.get(n)]
++    write(raw/'input-integrity.json', dict(status='PASS' if not changed else 'FAIL', changed=changed))
++    assert not changed, changed
++    print(raw, flush=True)
++
++
++if __name__ == '__main__':
++    main()

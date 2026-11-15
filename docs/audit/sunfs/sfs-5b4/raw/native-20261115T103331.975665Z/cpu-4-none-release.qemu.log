@@ -1,0 +1,21 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B4 seq=1 ns=4531174832643 epoch=1 queue=0 head=0 stage=DEVICE_FETCHED bytes=0
+SFS5B4 seq=2 ns=4531174839418 epoch=1 queue=0 head=0 stage=PAYLOAD_ACCESS_STARTED bytes=0
+SFS5B3 fetched queue=0 head=0 sector=63 bytes=512 guest=0x7f879035d010 mode=release
+SFS5B3 dma-read head=0 offset=0 bytes=256 value=180
+SFS5B4 seq=3 ns=4531174846765 epoch=1 queue=0 head=0 stage=PAYLOAD_ACCESS_ENDED bytes=256
+SFS5B4 seq=4 ns=4531174848716 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=5 ns=4531174850576 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B3 held head=0 consumed=256 remaining=256 backend=not-submitted used=not-published
+SFS5B4 seq=6 ns=4531184108554 epoch=1 queue=0 head=0 stage=PAYLOAD_ACCESS_STARTED bytes=0
+SFS5B3 dma-read head=0 offset=256 bytes=256 value=180
+SFS5B4 seq=7 ns=4531184164236 epoch=1 queue=0 head=0 stage=PAYLOAD_ACCESS_ENDED bytes=256
+SFS5B3 backend-submit head=0
+SFS5B3 backend-complete head=0 ret=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1

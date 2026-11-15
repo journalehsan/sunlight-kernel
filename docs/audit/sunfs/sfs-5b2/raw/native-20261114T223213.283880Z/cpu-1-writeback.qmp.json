@@ -1,0 +1,353 @@
+{
+  "greeting": {
+    "QMP": {
+      "version": {
+        "qemu": {
+          "micro": 2,
+          "minor": 1,
+          "major": 11
+        },
+        "package": ""
+      },
+      "capabilities": [
+        "oob"
+      ]
+    }
+  },
+  "devices": {
+    "return": [
+      {
+        "name": "virtio-blk",
+        "path": "/machine/peripheral-anon/device[0]/virtio-backend"
+      },
+      {
+        "name": "virtio-rng",
+        "path": "/machine/peripheral-anon/device[1]/virtio-backend"
+      }
+    ]
+  },
+  "pci": {
+    "return": [
+      {
+        "bus": 0,
+        "devices": [
+          {
+            "irq_pin": 0,
+            "bus": 0,
+            "qdev_id": "",
+            "slot": 0,
+            "class_info": {
+              "class": 1536,
+              "desc": "Host bridge"
+            },
+            "id": {
+              "device": 10688,
+              "subsystem-vendor": 6900,
+              "vendor": 32902,
+              "subsystem": 4352
+            },
+            "function": 0,
+            "regions": []
+          },
+          {
+            "irq_pin": 0,
+            "bus": 0,
+            "qdev_id": "",
+            "slot": 1,
+            "class_info": {
+              "class": 768,
+              "desc": "VGA controller"
+            },
+            "id": {
+              "device": 4369,
+              "subsystem-vendor": 6900,
+              "vendor": 4660,
+              "subsystem": 4352
+            },
+            "function": 0,
+            "regions": [
+              {
+                "prefetch": true,
+                "mem_type_64": false,
+                "bar": 0,
+                "size": 16777216,
+                "address": 4244635648,
+                "type": "memory"
+              },
+              {
+                "prefetch": false,
+                "mem_type_64": false,
+                "bar": 2,
+                "size": 4096,
+                "address": 4273930240,
+                "type": "memory"
+              },
+              {
+                "prefetch": false,
+                "mem_type_64": false,
+                "bar": 6,
+                "size": 65536,
+                "address": -1,
+                "type": "memory"
+              }
+            ]
+          },
+          {
+            "irq_pin": 1,
+            "bus": 0,
+            "qdev_id": "",
+            "irq": 11,
+            "slot": 2,
+            "class_info": {
+              "class": 256,
+              "desc": "SCSI controller"
+            },
+            "id": {
+              "device": 4097,
+              "subsystem-vendor": 6900,
+              "vendor": 6900,
+              "subsystem": 2
+            },
+            "function": 0,
+            "regions": [
+              {
+                "bar": 0,
+                "size": 128,
+                "address": 49152,
+                "type": "io"
+              },
+              {
+                "prefetch": false,
+                "mem_type_64": false,
+                "bar": 1,
+                "size": 4096,
+                "address": 4273934336,
+                "type": "memory"
+              }
+            ]
+          },
+          {
+            "irq_pin": 1,
+            "bus": 0,
+            "qdev_id": "",
+            "irq": 11,
+            "slot": 3,
+            "class_info": {
+              "class": 255
+            },
+            "id": {
+              "device": 4101,
+              "subsystem-vendor": 6900,
+              "vendor": 6900,
+              "subsystem": 4
+            },
+            "function": 0,
+            "regions": [
+              {
+                "bar": 0,
+                "size": 32,
+                "address": 49344,
+                "type": "io"
+              },
+              {
+                "prefetch": false,
+                "mem_type_64": false,
+                "bar": 1,
+                "size": 4096,
+                "address": 4273938432,
+                "type": "memory"
+              }
+            ]
+          },
+          {
+            "irq_pin": 0,
+            "bus": 0,
+            "qdev_id": "",
+            "slot": 31,
+            "class_info": {
+              "class": 1537,
+              "desc": "ISA bridge"
+            },
+            "id": {
+              "device": 10520,
+              "subsystem-vendor": 6900,
+              "vendor": 32902,
+              "subsystem": 4352
+            },
+            "function": 0,
+            "regions": []
+          },
+          {
+            "irq_pin": 1,
+            "bus": 0,
+            "qdev_id": "",
+            "irq": 10,
+            "slot": 31,
+            "class_info": {
+              "class": 262,
+              "desc": "SATA controller"
+            },
+            "id": {
+              "device": 10530,
+              "subsystem-vendor": 6900,
+              "vendor": 32902,
+              "subsystem": 4352
+            },
+            "function": 2,
+            "regions": [
+              {
+                "bar": 4,
+                "size": 32,
+                "address": 49376,
+                "type": "io"
+              },
+              {
+                "prefetch": false,
+                "mem_type_64": false,
+                "bar": 5,
+                "size": 4096,
+                "address": 4273942528,
+                "type": "memory"
+              }
+            ]
+          },
+          {
+            "irq_pin": 1,
+            "bus": 0,
+            "qdev_id": "",
+            "irq": 10,
+            "slot": 31,
+            "class_info": {
+              "class": 3077,
+              "desc": "SMBus"
+            },
+            "id": {
+              "device": 10544,
+              "subsystem-vendor": 6900,
+              "vendor": 32902,
+              "subsystem": 4352
+            },
+            "function": 3,
+            "regions": [
+              {
+                "bar": 4,
+                "size": 64,
+                "address": 1792,
+                "type": "io"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "block": {
+    "return": [
+      {
+        "io-status": "ok",
+        "device": "ide2-cd0",
+        "locked": false,
+        "removable": true,
+        "inserted": {
+          "iops_rd": 0,
+          "detect_zeroes": "off",
+          "active": true,
+          "image": {
+            "limits": {
+              "request-alignment": 512,
+              "min-mem-alignment": 1,
+              "opt-mem-alignment": 4096,
+              "max-iov": 1024
+            },
+            "virtual-size": 284530688,
+            "filename": "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b2/native-20261114T223213.283880Z/sfs5b2.iso",
+            "format": "raw",
+            "actual-size": 284532736,
+            "dirty-flag": false
+          },
+          "iops_wr": 0,
+          "ro": true,
+          "children": [
+            {
+              "node-name": "#block055",
+              "child": "file"
+            }
+          ],
+          "node-name": "#block117",
+          "backing_file_depth": 0,
+          "drv": "raw",
+          "iops": 0,
+          "bps_wr": 0,
+          "write_threshold": 0,
+          "encrypted": false,
+          "bps": 0,
+          "bps_rd": 0,
+          "cache": {
+            "no-flush": false,
+            "direct": false,
+            "writeback": true
+          },
+          "file": "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b2/native-20261114T223213.283880Z/sfs5b2.iso"
+        },
+        "qdev": "/machine/unattached/device[15]",
+        "tray_open": false,
+        "type": "unknown"
+      },
+      {
+        "io-status": "ok",
+        "device": "sfs5b2test",
+        "locked": false,
+        "removable": false,
+        "inserted": {
+          "iops_rd": 0,
+          "detect_zeroes": "off",
+          "active": true,
+          "image": {
+            "limits": {
+              "request-alignment": 1,
+              "min-mem-alignment": 1,
+              "opt-mem-alignment": 4096,
+              "max-iov": 1024
+            },
+            "virtual-size": 4194304,
+            "filename": "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b2/native-20261114T223213.283880Z/cpu-1-writeback.img",
+            "format": "raw",
+            "actual-size": 4194304,
+            "dirty-flag": false
+          },
+          "iops_wr": 0,
+          "ro": false,
+          "children": [
+            {
+              "node-name": "#block224",
+              "child": "file"
+            }
+          ],
+          "node-name": "#block329",
+          "backing_file_depth": 0,
+          "drv": "raw",
+          "iops": 0,
+          "bps_wr": 0,
+          "write_threshold": 0,
+          "encrypted": false,
+          "bps": 0,
+          "bps_rd": 0,
+          "cache": {
+            "no-flush": false,
+            "direct": false,
+            "writeback": true
+          },
+          "file": "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b2/native-20261114T223213.283880Z/cpu-1-writeback.img"
+        },
+        "qdev": "/machine/peripheral-anon/device[0]/virtio-backend",
+        "type": "unknown"
+      }
+    ]
+  },
+  "vm_status": {
+    "return": {
+      "status": "running",
+      "running": true
+    }
+  }
+}

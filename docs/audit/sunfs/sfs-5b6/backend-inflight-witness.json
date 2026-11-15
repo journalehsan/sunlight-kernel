@@ -1,0 +1,246 @@
+{
+  "status": "PASS",
+  "runs": [
+    {
+      "tag": "cpu-1-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-1-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": false,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-1-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-1-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": false,
+      "sector63_all_zero": true
+    },
+    {
+      "tag": "cpu-1-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-1-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-1-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": false,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-1-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-1-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": false,
+      "sector63_all_zero": true
+    },
+    {
+      "tag": "cpu-1-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": false,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": false,
+      "sector63_all_zero": true
+    },
+    {
+      "tag": "cpu-2-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": false,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-2-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": false,
+      "sector63_all_zero": true
+    },
+    {
+      "tag": "cpu-2-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-writeback-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-writeback-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": false,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-writeback-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-writeback-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": false,
+      "sector63_all_zero": true
+    },
+    {
+      "tag": "cpu-4-writeback-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-none-during",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-none-before",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": false,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-none-cancel",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    },
+    {
+      "tag": "cpu-4-none-error",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": false,
+      "sector63_all_zero": true
+    },
+    {
+      "tag": "cpu-4-none-private",
+      "raw": "raw/native-20261115T145612.275450Z",
+      "backend_admitted_inflight": true,
+      "drain_observed_inflight": true,
+      "sector63_all_b4": true,
+      "sector63_all_zero": false
+    }
+  ],
+  "independence": "guest serial, device request identity, actual backend counter, host disposable-file readback"
+}

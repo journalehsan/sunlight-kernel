@@ -1,0 +1,82 @@
+{
+  "docs/filesystems/sunfs/sunfs-architecture-v0.2.md": {
+    "sha256": "edd04bd2a255c9ba49a0d99125982dc3b3eaae545bea26d6d864cd4d0ce20a6d",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/filesystems/sunfs/sunfs-crash-recovery-contract.md": {
+    "sha256": "7548d6ca2b8a70f7f0a359172daab5d8ba58f341af83b4c31b68e17a190c4b67",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/filesystems/sunfs/sunfs-vfs-integration.md": {
+    "sha256": "aef46e57a921c3c411cdf4d05ee3c7ea6cd3275bd3c489b2af3ed8e7e6a06607",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/filesystems/sunfs/sfs-1-storage-laboratory.md": {
+    "sha256": "d22ee0473326eecc4e23d5023e2ca6b8f88259046e6a23a9c1e15a01f1d0eb67",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/filesystems/sunfs/sfs-2-persistent-transactions-recovery.md": {
+    "sha256": "9c467014b376862bd9d88d95465cfe4053bc80efa7381e3570bdc48d0616d96f",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/filesystems/sunfs/sfs-3-namespace-orphan-lifetime.md": {
+    "sha256": "b38638908a2d637885d18397b1efc1476ea4f12d9afc7e85592cab0c856ff8b9",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/filesystems/sunfs/sfs-4-segment-cleaner-forward-progress.md": {
+    "sha256": "e2cfb531eeceffc4abdf5b49e4156dde756aae8096eb589d3eb86fec28c3251a",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/audit/sunfs/sfs-0/block-device-contract-assessment.md": {
+    "sha256": "abc26f0cc40486d5814708f9405c2bc9d37432e7b9804e255d9270913acff428",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/audit/sunfs/sfs-0/repository-capability-inventory.md": {
+    "sha256": "cc06f2c575c3c4cfbe317bf501965bec1eec4165dc9a7f3fef3ea0750498f959",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/storage/usb-storage.md": {
+    "sha256": "40fcf2bc5e13192f99abac985bd48e24f21408b943d04171356cd85a40fd172c",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/storage/partitioned-storage.md": {
+    "sha256": "0fdf3c8f101a110bf248f4943523517e593cdac052f79f61982ac94cc9758029",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/storage/runtime-storage.md": {
+    "sha256": "8775ca4267a413ad35e00a6713567f8f349ede6f99d1f5316044326bd0f629bf",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/storage/storage-audit-fat32-block-vfs.md": {
+    "sha256": "93876b6611abdf77d2f30b5485fc6227addfebf200e88d73686adb853bd9d86b",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/kernel/kfp-1-forward-progress-audit.md": {
+    "sha256": "0bf9a598a83b976820bd3f594273ddd01d406cb07f30479d9dda0e6e2767aad7",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/kernel/kfp-2a2-persistent-retirement-ownership.md": {
+    "sha256": "9baa1971a73b3a1dd835d41f5a11826114d12ef0077322662f6c45930454a658",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/kernel/kfp-2a3-retirement-lifecycle-closure.md": {
+    "sha256": "42a9834bcbebc06c47dd5a8d3b579fb04e0fca5f8a0c508a063cba911c8daec3",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/audit/sunfs/sfs-1/validation-summary.json": {
+    "sha256": "b66f58764873237b5dac9de09865c60e50d014cc7c0dc891168147f11e263e71",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/audit/sunfs/sfs-2/validation-summary.json": {
+    "sha256": "e9bf4c5484152c49fecb28dde6a2917ff176786ecadcc38a0918ebdb88b57dd9",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/audit/sunfs/sfs-3/validation-summary.json": {
+    "sha256": "7e3461a82210d3074c48cde38dc622182562a6dd8e2eac9945e94ee652920160",
+    "scope": "inspected report; historical tests not current evidence"
+  },
+  "docs/audit/sunfs/sfs-4/validation-summary.json": {
+    "sha256": "a1c1d644b5d0db5b227f2e310d74551d6102f6eff8a055a168361af993865177",
+    "scope": "inspected report; historical tests not current evidence"
+  }
+}

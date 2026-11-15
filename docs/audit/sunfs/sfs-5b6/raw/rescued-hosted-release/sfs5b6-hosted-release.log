@@ -1,0 +1,143 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs v0.2.7801-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+   Compiling sunlight-sunfs-lab v0.2.7801-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+   Compiling sunlight-sunfs-check v0.2.7801-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-check)
+    Finished `release` profile [optimized] target(s) in 55.81s
+     Running unittests src/lib.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/sunlight_sunfs-7e38fd5ac267efb1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/codecs.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/codecs-1b198988a435fad4)
+
+running 11 tests
+test geometry_boundaries ... ok
+test crc_known_answers ... ok
+test geometry_limits_and_devices ... ok
+test malformed_record_lengths_and_references ... ok
+test record_roundtrips_and_endian ... ok
+test independent_python_golden_pages ... ok
+test unused_structure_roundtrips ... ok
+test bootstrap_all_page_roundtrips ... ok
+test header_negatives ... ok
+test payload_negatives ... ok
+test geometry_properties_and_fixed_point ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running unittests src/lib.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/sunlight_sunfs_check-80530d1488ae3b32)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sunfs-check.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/sunfs_check-166018353d44f4d5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/sunlight_sunfs_lab-caa16377b9f13d07)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sunfs-format.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/sunfs_format-f80922544a4fdd87)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cleaning.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/cleaning-42129158b8ce2804)
+
+running 11 tests
+test f2_dead_and_f3_fully_protected_segments_are_not_rewritten ... ok
+test f5_runtime_orphan_pins_offsets_close_and_distinct_reaping ... ok
+test f4_fallback_releases_only_after_publication_and_retirement ... ok
+test f12_reserve_and_plan_exhaustion_reject_before_io ... ok
+test f7_no_progress_budget_dirty_and_repeated_refusal_are_bounded ... ok
+test inode_attributes_survive_and_changed_source_freezes_before_writes ... ok
+test f6_near_full_uses_cleaner_reserve_but_keeps_recovery_floor ... ok
+test cleaner_checker_rejects_crc_resealed_semantic_and_manifest_defects ... ok
+test f8_overwrite_and_f9_namespace_churn_reuse_without_ownership_loss ... ok
+test f1_mixed_relocation_positive_capacity_and_eventual_source_reuse ... ok
+test f10_interrupted_relocation_and_f11_retry_crash_matrix has been running for over 60 seconds
+test f10_interrupted_relocation_and_f11_retry_crash_matrix ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 122.65s
+
+     Running tests/laboratory.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/laboratory-c008984d8ef8b637)
+
+running 13 tests
+test checker_read_failure_is_indeterminate ... ok
+test persistence_failures_uncertainty_and_dishonesty ... ok
+test geometry_io_and_sector_adapter ... ok
+test reordered_persistence_and_repeated_blocks ... ok
+test persistence_ack_flush_loss_and_reset ... ok
+test disposable_image_safety_and_readonly_check ... ok
+test semantic_corruption_with_valid_checksums ... ok
+test checker_nonempty_graph_and_corruptions ... ok
+test corruption_classification_and_generation_selection ... ok
+test formatter_checker_clean_geometries ... ok
+test formatter_torn_partial_failed_and_uncertain_operations ... ok
+test bounded_codec_and_checker_fuzz ... ok
+test formatter_crashes_each_operation_boundary ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.73s
+
+     Running tests/namespace.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/namespace-9904fc857da7d2c4)
+
+running 11 tests
+test low_space_reap_failure_preserves_working_orphans_and_reservations ... ok
+test maximum_bounded_namespace_and_full_orphan_table ... ok
+test handles_dup_access_offsets_and_stale_sessions ... ok
+test rename_open_replacement_directory_cycles_and_types ... ok
+test recovery_orphans_are_eligible_readonly_never_reaps_and_exhaustion_is_safe ... ok
+test open_unlink_name_reuse_last_close_and_retained_closures ... ok
+test hierarchy_dot_type_depth_and_entry_bounds ... ok
+test crc_valid_directory_and_orphan_corruptions_fallback_without_writes ... ok
+test metadata_costs_and_repeated_namespace_churn ... ok
+test reordered_namespace_dependencies_preserve_previous_complete_state ... ok
+test namespace_d_p_r_r0_crash_fault_matrix has been running for over 60 seconds
+test namespace_d_p_r_r0_crash_fault_matrix ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 145.20s
+
+     Running tests/transactions.rs (/tmp/sfs5b6-rust-target/x86_64-unknown-linux-gnu/release/deps/transactions-fe0e388b3e67790b)
+
+running 8 tests
+test handles_from_an_abandoned_mount_never_alias_new_nodes ... ok
+test admission_low_space_is_readonly_and_exact ... ok
+test hello_power_loss_and_volatile_semantics ... ok
+test configured_extent_cap_and_counter_exhaustion_reject_before_io ... ok
+test writes_limits_identity_and_multiple_commits ... ok
+test reordered_dependency_persistence_never_publishes_without_checkpoint ... ok
+test recovery_semantic_corruption_fallback_and_read_errors ... ok
+test deterministic_d_p_r_r0_crash_fault_matrix ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 59.02s
+
+   Doc-tests sunlight_sunfs
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sunlight_sunfs_check
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sunlight_sunfs_lab
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

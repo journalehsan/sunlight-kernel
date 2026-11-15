@@ -1,0 +1,26 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "status": "PARTIAL",
+  "sources": [
+    "sunlight-block/src/usb_msc.rs",
+    "kernel/src/usb_xhci.rs",
+    "kernel/src/usb_storage.rs"
+  ],
+  "capacity": "READ CAPACITY10 last+1; reject non512 and READ16 sentinel",
+  "results": "BOT checks signature/tag/status/residue and exact full transfer; no partial prefix is published; byte count not retained in BlockError",
+  "typed_receipt": "NOT_IMPLEMENTED: no per-command RequestId / full IoOutcome at block boundary",
+  "changes": "geometry + unique boot-local incarnation; runtime errors Uncertain then permanently Unavailable",
+  "cache": "USB bypasses write-back cache; readiness checked each operation",
+  "flush": "SYNCHRONIZE CACHE10 implemented; no support discovery; geometry reports Unknown",
+  "ownership": "xHCI uses five pinned bounce/ring frames, transfer event slot/endpoint/pointer checked, two-second TSC budget, timeout marks controller dead; generic Transport must own buffer lifetime",
+  "reset": "BOT reset + clear halts for future command only; never replay WRITE; not authoritative DMA fencing",
+  "media": "unit attention/removal runtime error retires this object permanently; no cross-media reopen",
+  "registry_gap": "kernel USB registry still advertises WRITE|FLUSH as operations attempted; these are not qualified capability receipts",
+  "native": "NOT_RUN",
+  "tests": "existing USB BOT/SCSI tests rerun in storage.log"
+}

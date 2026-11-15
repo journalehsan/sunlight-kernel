@@ -1,0 +1,69 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PARTIAL",
+  "failure_preserved": true,
+  "repair_complete": false,
+  "actual_device": false,
+  "actual_dma": false,
+  "failure_log": "raw/aba-pre-repair-assertion.log",
+  "failing_source": "raw/aba-pre-repair-assertion.rs",
+  "initial_preproduction_marker_failure": "raw/descriptor-aba-failing.log",
+  "initial_marker_source": "raw/aba-failing-source.rs",
+  "repro_command": "raw/aba-reproducer-command.json",
+  "incoming_source": "raw/incoming/sunlight-virtio/src/blk.rs",
+  "first_attempt": "raw/baseline-witness-first.log used --exact without full module path and selected ZERO tests; not evidence",
+  "rerun": "raw/baseline-witness.log executed original demonstrated-limit regression",
+  "device": {
+    "backend": "VirtioLegacy",
+    "incarnation": 1
+  },
+  "queue": {
+    "index": 0,
+    "incarnation": 1
+  },
+  "head": 0,
+  "A": {
+    "generation": 1,
+    "used_before": 0,
+    "used_after": 1,
+    "avail_after": 1,
+    "transitions": [
+      "Prepared",
+      "Submitted",
+      "Completed",
+      "Retired"
+    ]
+  },
+  "B": {
+    "generation": 2,
+    "used_before": 1,
+    "used_after": 2,
+    "avail_after": 2,
+    "transitions": [
+      "Prepared",
+      "Submitted",
+      "Completed",
+      "Retired"
+    ]
+  },
+  "injection": {
+    "delta": 1,
+    "head": 0,
+    "len": 1,
+    "status": 0,
+    "corrupt": false,
+    "timing": "after B publication; fake ring AND B status slot written"
+  },
+  "validation": [
+    "next used index",
+    "head matches current token",
+    "status 0",
+    "owned descriptors match",
+    "current token completed/retired"
+  ],
+  "invalid_acceptance": "forged old head plus B status accepted as B Completed; device transmitted no generation",
+  "classification": "adversarial duplicate after legitimate successful retirement/reuse; NOT timeout reuse, duplicate consumption, index wrap or demonstrated compliant-device behavior",
+  "head_only_case": "f4_head_only_duplicate_cannot_supply_new_status: B status remains sentinel; queue quarantines",
+  "unresolved": "Physically identical B completion and malicious old-head-plus-B-status cannot be disambiguated; current conforming-device reuse assumption does not meet arbitrary adversarial wire guarantee"
+}

@@ -1,0 +1,15 @@
+{
+  "raw": "raw/20261115T142654.981094Z",
+  "revision": "22a5947f5fbd4ffe810aee5efee57b0ec18f8915",
+  "branch": "main",
+  "source_sha256": "8a46556b7e78bb6ef983f227400fc6ad981fb69c082a050b2fd3d83bc5e3c142",
+  "prior_evidence_sha256": "73f2c3010ccdefa2927f3903b23f66d1f1ce202dcf6b7ddb4197b940f3836f33",
+  "seed": "0x5b5001 inherited unchanged",
+  "historical_pages": 5,
+  "historical_bytes": 20480,
+  "environment": {
+    "RUSTFLAGS": null,
+    "CARGO_TARGET_DIR": null,
+    "RUSTUP_TOOLCHAIN": null
+  }
+}

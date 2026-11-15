@@ -1,0 +1,38 @@
+{
+  "reason": "User requested removal of unrelated target build artifacts",
+  "utc": "2026-11-15T08:48:01Z",
+  "removed": [
+    {
+      "path": "target/native-c-guest/kernel/x86_64-unknown-none",
+      "apparent_bytes": 3605115376
+    },
+    {
+      "path": "target/native-c-guest/kernel/debug",
+      "apparent_bytes": 157661395
+    },
+    {
+      "path": "target/embedded-build/x86_64-sunlightos",
+      "apparent_bytes": 3566980803
+    },
+    {
+      "path": "target/embedded-build/x86_64-unknown-linux-musl",
+      "apparent_bytes": 149517803
+    },
+    {
+      "path": "target/embedded-build/release",
+      "apparent_bytes": 286441794
+    },
+    {
+      "path": "target/yazi-v26.9.1-src/target",
+      "apparent_bytes": 1472642943
+    },
+    {
+      "path": "target/fastlane-f11b0e3-build/x86_64-unknown-none",
+      "apparent_bytes": 1427802928
+    }
+  ],
+  "available_before": 9683161088,
+  "available_after": 14366212096,
+  "net_available_increase": 4683051008,
+  "preserved": "SFS namespaces, active shared Cargo targets, source trees and earlier evidence/reproducer logs"
+}

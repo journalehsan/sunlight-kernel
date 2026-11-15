@@ -1,0 +1,36 @@
+{
+  "argv": [
+    "python3",
+    "tools/sunfs5b4_validate.py",
+    "native"
+  ],
+  "environment": {
+    "CARGO_BUILD_JOBS": "1",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "host_cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "native_qemu_affinity": "inherits unrestricted runner affinity; guest CPU matrix 1,2,4",
+  "recovered_guest": {
+    "sha256": "879ea1d4326c157df8434e9b313b82883d663bfc97ef304ce1e1670665ca683d",
+    "compressed_copy": "embedded-recovery-20261115T102807.072409Z/recovered-guest.elf.gz",
+    "build_load": "one compiler job on one host CPU; native runner not affinity restricted"
+  },
+  "recovery_helper_sha256": "b37e5898fd6ddaa490d3c0b02185a48647cc5906b9678e168d7e85bf19946f77"
+}

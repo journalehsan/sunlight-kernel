@@ -1084,6 +1084,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // point). Calling it once and threading the result through eliminates the
     // 2–3 redundant CPUID executions the old code did per tick per core.
     let cpu_id = crate::sched::current_cpu_id();
+    #[cfg(feature = "sfs5b3-test")]
+    crate::sfs5b3_test::on_tick(cpu_id);
+    #[cfg(feature = "sfs5b4-test")]
+    crate::sfs5b4_test::on_tick(cpu_id);
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     crate::sched::pin_release_test::timer(cpu_id);
     crate::sched::accounting::interrupt_entry(cpu_id);

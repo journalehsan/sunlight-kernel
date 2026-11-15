@@ -1,0 +1,25 @@
+{
+  "attempt": "raw/native-20261114T210549.135486Z",
+  "attempts": [
+    {
+      "log": "raw/native-20261114T210549.135486Z/cpu-1-writeback-initial.serial.log",
+      "status": "BLOCKED",
+      "cause": "secure entropy unavailable before block initialization",
+      "block_test_markers": false
+    },
+    {
+      "log": "raw/native-20261114T210549.135486Z/cpu-2-writeback-initial.serial.log",
+      "status": "BLOCKED",
+      "cause": "secure entropy unavailable before block initialization",
+      "block_test_markers": false
+    },
+    {
+      "log": "raw/native-20261114T210549.135486Z/cpu-4-writeback-initial.serial.log",
+      "status": "BLOCKED",
+      "cause": "secure entropy unavailable before block initialization",
+      "block_test_markers": false
+    }
+  ],
+  "runner": "interrupted with SIGINT; finally killed owned QEMU; original failure rows/logs preserved",
+  "later_pass_does_not_erase": true
+}

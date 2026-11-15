@@ -1,0 +1,45 @@
+{
+  "status": "PARTIAL",
+  "path": "sunlight-virtio/src/blk.rs",
+  "trace": [
+    "future SunFS adapter (absent)",
+    "KernelDisk cache -> PartitionBlockDevice",
+    "KernelBlkDev VIRTIO_BLK mutex",
+    "VirtioBlk::read_block/write_block/flush",
+    "submit -> descriptors 0/1/2 -> avail head 0 -> port notify",
+    "DMA request page header[0..16], data[16..528], status[528]",
+    "poll used.idx -> exact next index/head -> fence -> status -> read copy"
+  ],
+  "features": "all offered low 32 bits except RO and SCSI accepted; FLUSH remembered, RO separately remembered; no explicit implemented-feature allowlist",
+  "flush": {
+    "negotiated": true,
+    "submitted": "type 4, sector 0, two descriptors header+status; no data descriptor",
+    "completion": "used ring plus status==OK; false propagates as Io; unsupported capability becomes Unsupported in KernelBlkDev/VirtioBootDisk",
+    "ordering": "one outstanding request, caller serializes; cache writes dirty slots before inner flush",
+    "limitations": [
+      "no native unsupported-flush injection",
+      "no failed-flush native schedule",
+      "write-cache configuration/topology not reported"
+    ]
+  },
+  "interrupts": "no block ISR completion path; synchronous polling is authoritative; interrupts not required for used-ring progress",
+  "reset": "initial write of status 0, immediately ACK|DRIVER; no reset completion readback or runtime reset",
+  "queue_findings": [
+    "qsize only checked nonzero; fixed 16384-byte allocation can be too small",
+    "no persistent media GET_ID or config-generation query",
+    "capacity low/high read is not a stable repeated legacy snapshot",
+    "status IOERR/UNSUPP/0xff collapse to bool false"
+  ],
+  "completion_repair": "poison on timeout/unsolicited used index/malformed index or head; no post-timeout reuse",
+  "transport_scope": "legacy PCI, coherent x86_64 HHDM/PMM; no modern/MMIO/IOMMU qualification",
+  "protocol_reference": {
+    "title": "OASIS VIRTIO 1.2",
+    "url": "https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html",
+    "sections": [
+      "2.7 split virtqueues",
+      "4.1 legacy PCI",
+      "5.2 block device"
+    ]
+  },
+  "native_results": "native-guest-tests.json"
+}

@@ -1,0 +1,9 @@
+[package]
+name="sfs5b2-aba-before"
+version="0.2.7858-alpha.2"
+
+
+
+edition="2021"
+[dependencies]
+sunlight-block={path="/home/ehsantor/Projects/sunlightos-kernel/sunlight-block"}

@@ -1,0 +1,17 @@
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 SUBMIT req=0x7f272c2203e0 qiov=0x7f272c220478 head=0 sector=63 bytes=512
+SFS5B6 BACKEND_ADMITTED qiov=0x7f272c220478 inflight=1
+SFS5B6 GUEST_HANDSHAKE req=0x7f272c2203e0 status=254
+SFS5B6 DRAIN_BEGIN req=0x7f272c2203e0 terminal=0
+SFS5B6 BACKEND_DRAIN_ENTER inflight=1

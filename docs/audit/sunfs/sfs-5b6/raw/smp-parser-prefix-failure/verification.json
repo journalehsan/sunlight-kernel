@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "checks": {
+    "required_artifacts": true,
+    "thirty_identity_bound_backend_runs": true,
+    "six_profiles_each_case": true,
+    "separate_controls": true,
+    "held_case_not_quiescence": true,
+    "mandatory_graph_edges": true,
+    "missing_sync_negative_rejected": true,
+    "cyclic_graph_negative_rejected": true,
+    "prior_evidence_and_production_unchanged": true,
+    "final_native_source_binding": true,
+    "final_regressions": true,
+    "release_raw_schedules_preserved": true,
+    "fresh_schedules_each_profile": true,
+    "debug_raw_schedules_preserved": true,
+    "no_guest_retirement_or_reuse": true,
+    "no_epoch": true,
+    "historical_quarantine_retained": true,
+    "honest_partial_verdict": true
+  },
+  "scope": "evidence consistency only; parser negative controls do not qualify native allocator reuse"
+}

@@ -1,0 +1,9 @@
+{
+  "removed_apparent_bytes": 17536126964,
+  "sum_measured_net_available_increases": 9387896832,
+  "note": "Measurements bracket each deletion; concurrent validation writes also affect free space. SFS evidence and active Cargo targets retained.",
+  "records": [
+    "target-cleanup.json",
+    "target-cleanup-additional.json"
+  ]
+}

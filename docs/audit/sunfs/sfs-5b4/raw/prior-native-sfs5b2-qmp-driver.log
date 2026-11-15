@@ -1,0 +1,10 @@
+guest-build.log 0
+iso-build.log 0
+qemu-version.log 0
+cpu-1-writeback PASS
+cpu-1-none PASS
+cpu-2-writeback PASS
+cpu-2-none PASS
+cpu-4-writeback PASS
+cpu-4-none PASS
+sfs5b2 /home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4/raw/regression-native-sfs5b2-20261115T085550.587714Z

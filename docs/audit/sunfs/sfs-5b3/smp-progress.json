@@ -1,0 +1,252 @@
+{
+  "status": "PARTIAL",
+  "configured_profiles": [
+    1,
+    2,
+    4
+  ],
+  "actual_ap_startup": "PASS: AP online messages precede test submission",
+  "native_timer_progress": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          831,
+          0,
+          0,
+          0
+        ],
+        [
+          831,
+          0,
+          0,
+          0
+        ],
+        [
+          832,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_cpus_advance": true
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          834,
+          0,
+          0,
+          0
+        ],
+        [
+          834,
+          0,
+          0,
+          0
+        ],
+        [
+          835,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_cpus_advance": true
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          870,
+          868,
+          0,
+          0
+        ],
+        [
+          870,
+          868,
+          0,
+          0
+        ],
+        [
+          870,
+          869,
+          0,
+          0
+        ]
+      ],
+      "all_cpus_advance": true
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          921,
+          920,
+          0,
+          0
+        ],
+        [
+          922,
+          921,
+          0,
+          0
+        ],
+        [
+          922,
+          921,
+          0,
+          0
+        ]
+      ],
+      "all_cpus_advance": true
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          908,
+          907,
+          907,
+          907
+        ],
+        [
+          908,
+          907,
+          907,
+          907
+        ],
+        [
+          908,
+          907,
+          907,
+          907
+        ]
+      ],
+      "all_cpus_advance": true
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "progress": [
+        [
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          946,
+          947,
+          945,
+          945
+        ],
+        [
+          946,
+          947,
+          945,
+          945
+        ],
+        [
+          946,
+          947,
+          945,
+          945
+        ]
+      ],
+      "all_cpus_advance": true
+    }
+  ],
+  "scheduler_progress": "NOT_RUN: SCHEDULER_READY=false in fixture",
+  "competing_context_reset": "NOT_RUN",
+  "io_context": "BSP with interrupts enabled after AP startup; local exclusive mutable driver owner",
+  "test_hook": "per-CPU atomic increment before timer handler scheduler readiness check; no waits/allocations/locks",
+  "blocker": "synchronous transfer retains exclusive mutable device ownership through polling; safe reset from another context requires a separately designed coordinator/staged API and post-scheduler fixture",
+  "cases": [
+    {
+      "case": "S1",
+      "title": "Admission vs quiescence",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    },
+    {
+      "case": "S2",
+      "title": "Completion vs reset",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    },
+    {
+      "case": "S3",
+      "title": "Timeout vs late completion",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    },
+    {
+      "case": "S4",
+      "title": "Competing reset owners",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    },
+    {
+      "case": "S5",
+      "title": "Ack vs retirement",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    },
+    {
+      "case": "S6",
+      "title": "Reinit vs stale completion",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    },
+    {
+      "case": "S7",
+      "title": "IRQ vs teardown",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    },
+    {
+      "case": "S8",
+      "title": "Exhaustion vs admission",
+      "status": "NOT_RUN",
+      "reason": "required competing native interleaving not forced"
+    }
+  ]
+}

@@ -1,0 +1,520 @@
+[
+  {
+    "name": "pty_server",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "pty_server",
+      "--bin",
+      "pty_server"
+    ],
+    "returncode": 0,
+    "seconds": 0.5164455690000977,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-resolved",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-resolved",
+      "--bin",
+      "resolved",
+      "--bin",
+      "resolvectl"
+    ],
+    "returncode": 0,
+    "seconds": 0.7664331940000011,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-audiod",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-audiod",
+      "--bin",
+      "audiod",
+      "--bin",
+      "audioctl"
+    ],
+    "returncode": 0,
+    "seconds": 1.5208249890001753,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-niced",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-niced",
+      "--bin",
+      "nicectl"
+    ],
+    "returncode": 0,
+    "seconds": 0.1153761279997525,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-uac",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-uac",
+      "--bin",
+      "capabilityctl",
+      "--bin",
+      "runas"
+    ],
+    "returncode": 0,
+    "seconds": 0.11446587399996133,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-display",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-display",
+      "--bin",
+      "sunlight-display"
+    ],
+    "returncode": 0,
+    "seconds": 3.4248860600000626,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "eyes",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "eyes",
+      "--bin",
+      "eyes"
+    ],
+    "returncode": 0,
+    "seconds": 0.2150831039998593,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-silicon-echoes",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-silicon-echoes",
+      "--bin",
+      "silicon-echoes"
+    ],
+    "returncode": 0,
+    "seconds": 4.424797554999714,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-edit",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-edit",
+      "--bin",
+      "sunlight-edit"
+    ],
+    "returncode": 0,
+    "seconds": 2.2710240060000615,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-writer",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-writer",
+      "--bin",
+      "sunlight-writer"
+    ],
+    "returncode": 0,
+    "seconds": 2.822403748999932,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-clipd",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-clipd",
+      "--bin",
+      "sunlight-clipd",
+      "--bin",
+      "sunlight-clip"
+    ],
+    "returncode": 0,
+    "seconds": 1.71933507499989,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "wiseowl-memorydb",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "wiseowl-memorydb",
+      "--features",
+      "sunlightos",
+      "--no-default-features",
+      "--bin",
+      "wiseowl-memorydb",
+      "--bin",
+      "wiseowl-memorydbctl"
+    ],
+    "returncode": 0,
+    "seconds": 8.992149297999731,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "wiseowl-index",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "wiseowl-index",
+      "--features",
+      "sunlightos",
+      "--no-default-features",
+      "--bin",
+      "wiseowl-indexd",
+      "--bin",
+      "wiseowl-indexctl"
+    ],
+    "returncode": 0,
+    "seconds": 5.629094901999906,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "wiseowl-console",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "wiseowl-console",
+      "--bin",
+      "wiseowl"
+    ],
+    "returncode": 0,
+    "seconds": 1.6688737660001607,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-clipman",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-clipman",
+      "--bin",
+      "sunlight-clipman"
+    ],
+    "returncode": 0,
+    "seconds": 0.6663598250001996,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "sunlight-emoji-picker",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-none",
+      "-p",
+      "sunlight-emoji-picker",
+      "--bin",
+      "sunlight-emoji-picker"
+    ],
+    "returncode": 0,
+    "seconds": 0.716194385000108,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/ehsantor/Projects/sunlightos-kernel/target/embedded-build",
+      "RUSTFLAGS": "-C link-arg=-Tservices/user-space.ld -C relocation-model=static"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "helios-note",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-unknown-linux-musl",
+      "-p",
+      "helios-note"
+    ],
+    "returncode": 0,
+    "seconds": 23.85435649699957,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": null,
+      "RUSTFLAGS": "-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie"
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "helios-note-stamp",
+    "arguments": [
+      "bash",
+      "tools/stamp_helios_elf.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-musl/release/helios-note"
+    ],
+    "returncode": 0,
+    "seconds": 0.0036645350000981125,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": null,
+      "RUSTFLAGS": null
+    },
+    "cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "diagnostic-kernel",
+    "arguments": [
+      "cargo",
+      "build",
+      "--offline",
+      "--locked",
+      "-p",
+      "sunlight-kernel",
+      "--features",
+      "sfs5b4-test"
+    ],
+    "returncode": 0,
+    "seconds": 213.59516651299964,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": null,
+      "RUSTFLAGS": null
+    },
+    "cpu_affinity": [
+      0
+    ]
+  }
+]

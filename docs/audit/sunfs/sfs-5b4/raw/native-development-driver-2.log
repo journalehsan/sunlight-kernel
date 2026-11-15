@@ -1,0 +1,12 @@
+guest-build 0
+iso-build 0
+cpu-2-writeback-hold FAIL {'ready': False, 'post_scheduler': False, 'contender': False, 'admission_closed': False, 'terminal': False, 'progress': False, 'payload': False, 'quiescence': False, 'guard': False}
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4/raw/native-20261115T082314.232767Z
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b4_validate.py", line 208, in <module>
+    if __name__ == '__main__':
+        ^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b4_validate.py", line 204, in main
+    print(raw, flush=True)
+           ^^^^^^^^^^^
+AssertionError: ['tools/sunfs5b4_validate.py', 'kernel/src/sfs5b4_test.rs']

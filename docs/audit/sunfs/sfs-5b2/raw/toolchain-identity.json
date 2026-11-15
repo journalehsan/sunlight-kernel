@@ -1,0 +1,32 @@
+{
+  "scope": "post-execution binary and Limine hashes; not a source-build reproduction claim",
+  "tools": {
+    "qemu-system-x86_64": {
+      "invoked_path": "/usr/bin/qemu-system-x86_64",
+      "resolved_path": "/usr/bin/qemu-system-x86_64",
+      "sha256": "a2250f5e2b3b07c754473c0817df1cccf6c3c2443fc616dc474c4c311fa6ef1c"
+    },
+    "xorriso": {
+      "invoked_path": "/usr/bin/xorriso",
+      "resolved_path": "/usr/bin/xorriso",
+      "sha256": "3dab038fd129b742e69f2f731143016673e2e6a594fe7e2b3b9173b0f38579d6"
+    },
+    "rustc": {
+      "invoked_path": "/home/ehsantor/.cargo/bin/rustc",
+      "resolved_path": "/home/ehsantor/.cargo/bin/rustup",
+      "sha256": "4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10"
+    },
+    "cargo": {
+      "invoked_path": "/home/ehsantor/.cargo/bin/cargo",
+      "resolved_path": "/home/ehsantor/.cargo/bin/rustup",
+      "sha256": "4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10"
+    }
+  },
+  "limine": {
+    "target/limine/bin/limine": "29f9c731428a874bad482e4fcdf3c64b38ee458103742378eb2c02246ce2f434",
+    "target/limine/bin/limine-bios.sys": "9deddbb8375954cb6778e729045d25b61addd53b60fa59f2855936b7b280749d",
+    "target/limine/bin/limine-bios-cd.bin": "edf2af52e37451688778930fcd8bbcce0efba08a79b414851883bf6475af6e75",
+    "target/limine/bin/limine-uefi-cd.bin": "88752d9a3adc14befdf23c7a7c0f4ea1bf6c67c9ec86e9b084e8fce901515243",
+    "target/limine/bin/BOOTX64.EFI": "b7222701d3156c1200c6a95a75af2c1378a670e458eeb2a27e525b45ecae2799"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "production_driver_changes": [],
+  "feature": "sfs5b3-test off by default, inherits disposable sfs5a-test hook",
+  "changed_existing_files": [
+    "kernel/Cargo.toml",
+    "kernel/src/main.rs",
+    "kernel/src/arch/x86_64/interrupts.rs"
+  ],
+  "new_files": [
+    "kernel/src/sfs5b3_test.rs",
+    "tools/sunfs5b3_validate.py"
+  ],
+  "runtime_effect_when_disabled": "none from added feature-gated hooks",
+  "commit": false,
+  "push": false,
+  "native_sunfs_mount": false
+}

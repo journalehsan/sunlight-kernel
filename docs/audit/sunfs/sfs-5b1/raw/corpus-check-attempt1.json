@@ -1,0 +1,36 @@
+{
+  "status": "FAIL",
+  "check": "every crash/reordering row has status PASS and selected in expected",
+  "observations": [
+    {
+      "profile": "debug",
+      "sub": "sfs2",
+      "problem": "missing files"
+    },
+    {
+      "profile": "debug",
+      "sub": "sfs3",
+      "problem": "missing files"
+    },
+    {
+      "profile": "debug",
+      "sub": "sfs4",
+      "problem": "missing files"
+    },
+    {
+      "profile": "release",
+      "sub": "sfs2",
+      "problem": "missing files"
+    },
+    {
+      "profile": "release",
+      "sub": "sfs3",
+      "problem": "missing files"
+    },
+    {
+      "profile": "release",
+      "sub": "sfs4",
+      "problem": "missing files"
+    }
+  ]
+}

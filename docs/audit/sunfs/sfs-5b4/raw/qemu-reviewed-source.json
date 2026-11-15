@@ -1,0 +1,12 @@
+{
+  "hw/block/virtio-blk.c": "ad1a33fb7eba8a0e2a1cfecf467587ca91bddd8c07d42e16f6b63a15f7c82e82",
+  "hw/virtio/virtio.c": "2e84b7c87661d1530b9ed648bc4bf8444580a4a56bfb912462041a7efb25a8a7",
+  "hw/virtio/virtio-pci.c": "affd3c3257c3b77350f7eba692d1fbe2a155d180f5a78b2e500a0c2256f10739",
+  "hw/virtio/virtio-bus.c": "5514247fc529eb8a94ff1e1804c012dae2a02973782feaf5f4d666c0957abbd7",
+  "block/block-backend.c": "6ecbe68523d2eec780792b3dc7dbf7736f4dcb52ef9e8728f5fd3fd5633b5877",
+  "system/physmem.c": "3210a543353b435a146f7ae4a33608ea849aad038cd9e889ddb3a30c104c063f",
+  "docs/devel/multiple-iothreads.rst": "231837982149a423195928551b06359fe026d4cea4cd783458d9055e73c1cc46",
+  "include/system/dma.h": "14e4c2820bd96a1aac072a0c636ee77be22be00067c3cc0f77612385cf8dd136",
+  "util/qemu-timer.c": "2b8436271d4638cf97927981c1ab26934488c3c819e44d6aa5b870fa0621317c",
+  "include/qemu/timer.h": "58d9a9bb95575e5d4d7ff6cadd531671bfd3ccb2a4630bfc6426497ea4f41cfb"
+}

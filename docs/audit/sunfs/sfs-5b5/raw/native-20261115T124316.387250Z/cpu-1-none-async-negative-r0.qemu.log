@@ -1,0 +1,25 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=1 ns=11977999109183 thread=main stage=MAPPING_ACQUIRED iter=0 bytes=0 extra=16
+SFS5B5 seq=2 ns=11977999118890 thread=main stage=REQUEST_FETCHED iter=0 bytes=0 extra=0
+SFS5B5 seq=3 ns=11977999402864 thread=worker stage=ACCESS_ENTERED iter=0 bytes=0 extra=16
+SFS5B5 seq=4 ns=11977999481202 thread=main stage=ACCESS_ACTIVE iter=1224 bytes=19584 extra=1223
+SFS5B4 seq=1 ns=11977999504512 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=2 ns=11977999507467 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B5 held head=0 mode=async-negative worker=started backend=not-submitted used=not-published
+SFS5B5 seq=5 ns=11978249871770 thread=main stage=RESET_ENTERED iter=8657339 bytes=138517424 extra=0
+SFS5B5 seq=6 ns=11978249898259 thread=worker stage=ACCESS_OBSERVED_RESET_ACTIVE iter=8657340 bytes=138517440 extra=8657340
+SFS5B5 seq=7 ns=11978249923203 thread=main stage=ACCESS_ACTIVE_DURING_RESET iter=8657452 bytes=138519232 extra=113
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=8 ns=11978249957707 thread=main stage=RESET_ACKNOWLEDGED iter=8658243 bytes=138531888 extra=0
+SFS5B5 seq=9 ns=11978249963429 thread=worker stage=NEGATIVE_POST_ACK_ACCESS iter=8658244 bytes=138531904 extra=8658244
+SFS5B5 seq=10 ns=11978449980735 thread=worker stage=ACCESS_EXITED iter=17089563 bytes=273433008 extra=17089563
+SFS5B5 seq=11 ns=11978450026616 thread=main stage=NEGATIVE_WORKER_JOINED iter=17089563 bytes=273433008 extra=0
+SFS5B5 seq=12 ns=11978450045873 thread=main stage=MAPPING_RELEASED iter=17089563 bytes=273433008 extra=0
+SFS5B5 seq=13 ns=11978450049088 thread=main stage=OLD_EPOCH_QUIESCED iter=17089563 bytes=273433008 extra=0
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)

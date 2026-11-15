@@ -1,0 +1,233 @@
+--- a/hw/block/virtio-blk.c
++++ b/hw/block/virtio-blk.c
+@@ -1210,6 +1210,109 @@
+     }
+ }
+ 
++static VirtIOBlockReq *sfs5b6_request;
++static bool sfs5b6_terminal;
++static int sfs5b6_result;
++static BlockAIOCB *sfs5b6_acb;
++static QemuThread sfs5b6_private_thread;
++static QemuMutex sfs5b6_private_lock;
++static bool sfs5b6_private_started;
++static bool sfs5b6_private_stop;
++static uint64_t sfs5b6_private_reads;
++static bool sfs5b6_private_drained;
++static bool sfs5b6_private_observed;
++
++static void *sfs5b6_private_access(void *opaque)
++{
++    VirtIOBlockReq *req = opaque;
++    volatile unsigned char *payload = req->qiov.iov[0].iov_base;
++    unsigned char observed;
++    while (true) {
++        qemu_mutex_lock(&sfs5b6_private_lock);
++        if (sfs5b6_private_stop) {
++            qemu_mutex_unlock(&sfs5b6_private_lock);
++            break;
++        }
++        observed = *payload;
++        sfs5b6_private_reads++;
++        if (sfs5b6_private_drained && !sfs5b6_private_observed) {
++            sfs5b6_private_observed = true;
++            fprintf(stderr, "SFS5B6 PRIVATE_OBSERVED_DRAIN req=%p reads=%" PRIu64 "\n",
++                    req, sfs5b6_private_reads);
++        }
++        qemu_mutex_unlock(&sfs5b6_private_lock);
++        assert(observed == 0xb4);
++        g_usleep(100);
++    }
++    fprintf(stderr, "SFS5B6 PRIVATE_EXIT req=%p reads=%" PRIu64 "\n",
++            req, sfs5b6_private_reads);
++    return NULL;
++}
++
++static void sfs5b6_complete(void *opaque, int ret)
++{
++    VirtIOBlockReq *req = opaque;
++    assert(req == sfs5b6_request && !sfs5b6_terminal);
++    sfs5b6_terminal = true;
++    sfs5b6_result = ret;
++    fprintf(stderr, "SFS5B6 DEVICE_CALLBACK req=%p head=%u ret=%d mapping=retained\n",
++            req, req->elem.index, ret);
++}
++
++static void sfs5b6_reset(VirtIOBlock *s)
++{
++    VirtIOBlockReq *req = sfs5b6_request;
++    assert(bql_locked());
++    fprintf(stderr, "SFS5B6 DRAIN_BEGIN req=%p terminal=%d\n", req, sfs5b6_terminal);
++    if (!sfs5b6_terminal && getenv("SFS5B6_CASE") &&
++        !strcmp(getenv("SFS5B6_CASE"), "cancel")) {
++        fprintf(stderr, "SFS5B6 CANCEL_REQUEST req=%p\n", req);
++        blk_aio_cancel_async(sfs5b6_acb);
++        fprintf(stderr, "SFS5B6 CANCEL_RETURN req=%p terminal=%d\n", req, sfs5b6_terminal);
++    }
++    blk_drain(s->blk);
++    fprintf(stderr, "SFS5B6 DRAIN_END req=%p terminal=%d\n", req, sfs5b6_terminal);
++    assert(sfs5b6_terminal);
++    if (sfs5b6_private_started) {
++        unsigned waited;
++        qemu_mutex_lock(&sfs5b6_private_lock);
++        sfs5b6_private_drained = true;
++        qemu_mutex_unlock(&sfs5b6_private_lock);
++        for (waited = 0; waited < 2000; waited++) {
++            bool observed;
++            qemu_mutex_lock(&sfs5b6_private_lock);
++            observed = sfs5b6_private_observed;
++            qemu_mutex_unlock(&sfs5b6_private_lock);
++            if (observed) {
++                break;
++            }
++            g_usleep(1000);
++        }
++        assert(waited < 2000);
++        qemu_mutex_lock(&sfs5b6_private_lock);
++        fprintf(stderr, "SFS5B6 PRIVATE_ACTIVE_AFTER_DRAIN req=%p reads=%" PRIu64 "\n",
++                req, sfs5b6_private_reads);
++        sfs5b6_private_stop = true;
++        qemu_mutex_unlock(&sfs5b6_private_lock);
++        qemu_thread_join(&sfs5b6_private_thread);
++        fprintf(stderr, "SFS5B6 PRIVATE_JOINED req=%p\n", req);
++        sfs5b6_private_started = false;
++        qemu_mutex_destroy(&sfs5b6_private_lock);
++    }
++    iov_discard_undo(&req->inhdr_undo);
++    iov_discard_undo(&req->outhdr_undo);
++    virtqueue_detach_element(req->vq, &req->elem, 0);
++    if (sfs5b6_result) {
++        block_acct_failed(blk_get_stats(s->blk), &req->acct);
++    } else {
++        block_acct_done(blk_get_stats(s->blk), &req->acct);
++    }
++    fprintf(stderr, "SFS5B6 MAPPING_RELEASED req=%p head=%u used=not-published\n",
++            req, req->elem.index);
++    sfs5b6_request = NULL;
++    g_free(req);
++}
++
+ static bool sfs5b3_hold(VirtIOBlockReq *req, bool is_write)
+ {
+     const char *mode = getenv("SFS5B3_MODE");
+@@ -1220,6 +1323,33 @@
+     }
+     assert(bql_locked());
+     assert(!sfs5b3_held);
++    if (!strcmp(mode, "backend")) {
++        assert(!sfs5b6_request);
++        sfs5b6_request = req;
++        sfs5b6_terminal = false;
++        if (getenv("SFS5B6_CASE") && !strcmp(getenv("SFS5B6_CASE"), "private")) {
++            qemu_mutex_init(&sfs5b6_private_lock);
++            sfs5b6_private_stop = false;
++            sfs5b6_private_reads = 0;
++            sfs5b6_private_drained = false;
++            sfs5b6_private_observed = false;
++            sfs5b6_private_started = true;
++            qemu_thread_create(&sfs5b6_private_thread, "sfs5b6-private",
++                               sfs5b6_private_access, req, QEMU_THREAD_JOINABLE);
++        }
++        fprintf(stderr, "SFS5B6 SUBMIT req=%p qiov=%p head=%u sector=%" PRIu64 " bytes=%zu\n",
++                req, &req->qiov, req->elem.index, req->sector_num, req->qiov.size);
++        fprintf(stderr, "SFS5B6 MAPPING_IDENTITY req=%p header_gpa=0x%" PRIx64
++                " status_gpa=0x%" PRIx64 " payload_host=%p payload_bytes=%zu\n",
++                req, req->elem.out_addr[0],
++                req->elem.in_addr[req->elem.in_num - 1],
++                req->qiov.iov[0].iov_base, req->qiov.size);
++        sfs5b6_acb = blk_aio_pwritev(s->blk, req->sector_num << BDRV_SECTOR_BITS,
++                                   &req->qiov, 0, sfs5b6_complete, req);
++        stb_p(&req->in->status, 0xfe);
++        fprintf(stderr, "SFS5B6 GUEST_HANDSHAKE req=%p status=254\n", req);
++        return true;
++    }
+     if (!strncmp(mode, "async", 5)) {
+         sfs5b5_start(req, mode);
+         /* Test-only cross-boundary receipt published only after the worker
+@@ -1586,6 +1716,10 @@
+     VirtIOBlock *s = VIRTIO_BLK(vdev);
+     VirtIOBlockReq *req;
+ 
++    if (sfs5b6_request && sfs5b6_request->dev == s) {
++        sfs5b6_reset(s);
++    }
++
+     if (sfs5b5_held && sfs5b5_held->dev == s) {
+         sfs5b5_reset_enter(s);
+     }
+--- a/block/block-backend.c
++++ b/block/block-backend.c
+@@ -1407,6 +1407,36 @@
+     return ret;
+ }
+ 
++static bool sfs5b6_drain_entered;
++
++static int coroutine_fn sfs5b6_backend_hold(BlockBackend *blk, int64_t offset,
++                                           int64_t bytes, QEMUIOVector *qiov)
++{
++    const char *test_case = getenv("SFS5B6_CASE");
++    if (!getenv("SFS5B6_BACKEND") || offset != 63 * 512 || bytes != 512 ||
++        strcmp(blk_name(blk), "sfs5b5")) {
++        return 0;
++    }
++    sfs5b6_drain_entered = false;
++    fprintf(stderr, "SFS5B6 BACKEND_ADMITTED qiov=%p inflight=%u node_inflight=%u\n",
++            qiov, qatomic_read(&blk->in_flight),
++            qatomic_read(&blk_bs(blk)->in_flight));
++    if (!test_case || strcmp(test_case, "before")) {
++        while (!sfs5b6_drain_entered) {
++            qemu_co_sleep_ns(QEMU_CLOCK_REALTIME, 1000000);
++        }
++        qemu_co_sleep_ns(QEMU_CLOCK_REALTIME, 20000000);
++    }
++    if (test_case && !strcmp(test_case, "indefinite")) {
++        while (true) {
++            qemu_co_sleep_ns(QEMU_CLOCK_REALTIME, 100000000);
++        }
++    }
++    fprintf(stderr, "SFS5B6 BACKEND_RELEASE qiov=%p inflight=%u\n",
++            qiov, qatomic_read(&blk->in_flight));
++    return test_case && !strcmp(test_case, "error") ? -EIO : 0;
++}
++
+ /* To be called between exactly one pair of blk_inc/dec_in_flight() */
+ static int coroutine_fn
+ blk_co_do_pwritev_part(BlockBackend *blk, int64_t offset, int64_t bytes,
+@@ -1430,6 +1460,11 @@
+     }
+ 
+     bdrv_inc_in_flight(bs);
++    ret = sfs5b6_backend_hold(blk, offset, bytes, qiov);
++    if (ret) {
++        bdrv_dec_in_flight(bs);
++        return ret;
++    }
+     /* throttling disk I/O */
+     if (blk->public.throttle_group_member.throttle_state) {
+         throttle_group_co_io_limits_intercept(&blk->public.throttle_group_member,
+@@ -2096,6 +2131,12 @@
+     BlockDriverState *bs = blk_bs(blk);
+     GLOBAL_STATE_CODE();
+ 
++    if (getenv("SFS5B6_BACKEND") && !strcmp(blk_name(blk), "sfs5b5")) {
++        sfs5b6_drain_entered = true;
++        fprintf(stderr, "SFS5B6 BACKEND_DRAIN_ENTER inflight=%u\n",
++                qatomic_read(&blk->in_flight));
++    }
++
+     if (bs) {
+         bdrv_ref(bs);
+         bdrv_drained_begin(bs);
+@@ -2105,6 +2146,11 @@
+     AIO_WAIT_WHILE(blk_get_aio_context(blk),
+                    qatomic_read(&blk->in_flight) > 0);
+ 
++    if (getenv("SFS5B6_BACKEND") && !strcmp(blk_name(blk), "sfs5b5")) {
++        fprintf(stderr, "SFS5B6 BACKEND_DRAIN_EXIT inflight=%u\n",
++                qatomic_read(&blk->in_flight));
++    }
++
+     if (bs) {
+         bdrv_drained_end(bs);
+         bdrv_unref(bs);

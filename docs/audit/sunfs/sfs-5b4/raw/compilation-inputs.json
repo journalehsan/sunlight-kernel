@@ -1,0 +1,37 @@
+{
+  "records": [
+    {
+      "path": "target/x86_64-unknown-none/debug/sunlight-kernel.d",
+      "sha256": "98309d21d7f11fec597bb592fc26deb2b17480f05cf22159d405fa31f7fcd38a"
+    },
+    {
+      "path": "target/x86_64-unknown-none/debug/.fingerprint/sunlight-kernel-8a048e7ae86e2a8d/run-build-script-build-script-build.json",
+      "sha256": "c5551316214f68bb8b16ff325d6b92fe91dbca2eeb40a9996a8af327703b82ec"
+    },
+    {
+      "path": "target/x86_64-unknown-none/debug/.fingerprint/sunlight-kernel-f159bd44ef5422a1/lib-sunlight_kernel_mm2a.json",
+      "sha256": "8189de54c2640d0d75696a5b97b75198a7ddc1e849fc955667871d07247f213f"
+    },
+    {
+      "path": "target/x86_64-unknown-none/debug/.fingerprint/sunlight-kernel-c7e268106aac1cf0/run-build-script-build-script-build.json",
+      "sha256": "8efebb6ca8c5f8d35238f202f92dd0752287a11cc952b7eae918494a48487398"
+    },
+    {
+      "path": "target/x86_64-unknown-none/debug/.fingerprint/sunlight-kernel-b81b3aebf2750b36/bin-sunlight-kernel.json",
+      "sha256": "81b621d3c99b3b4551314021048c9973a2b3a8027be82444af315144a4991009"
+    },
+    {
+      "path": "target/x86_64-unknown-none/debug/.fingerprint/sunlight-kernel-12647fbbb051fd09/lib-sunlight_kernel_mm2a.json",
+      "sha256": "a7959e0f6f657c42107eec434990c49a3a06abed332b408495f4cafee218ebd8"
+    },
+    {
+      "path": "target/x86_64-unknown-none/debug/.fingerprint/sunlight-kernel-3c7408254d37368c/bin-sunlight-kernel.json",
+      "sha256": "fa0a4c3a83af91f25e9e8202616016e19e49cd8a5a23702cf97fd78d3df4aa1b"
+    }
+  ],
+  "flags_file": ".cargo/config.toml",
+  "toolchain": "raw/rustc-version.txt",
+  "cargo": "raw/cargo-version.txt",
+  "actual_invocations": "per native invocation.json and regression commands.jsonl",
+  "boundary": "post-build depfiles/fingerprints; per-invocation ELF/ISO and source manifests authoritative; not a hermetic generated-input attestation"
+}

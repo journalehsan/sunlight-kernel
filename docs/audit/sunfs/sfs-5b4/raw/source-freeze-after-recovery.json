@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "reference": "raw/regression-20261115T083526.956696Z/source-before.json",
+  "reference_sha256": "2869344c8da2c21f76787ace7235fd4030a6d707cc85acdfdf0c1825b4fd29d7",
+  "regular_source_inputs": 11879,
+  "changed": [],
+  "scope": "Current production, diagnostic, tool and configuration inputs versus complete earlier debug command start; docs/audit and docs/filesystems excluded by recorder."
+}

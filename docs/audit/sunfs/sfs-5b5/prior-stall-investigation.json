@@ -1,0 +1,57 @@
+{
+  "status": "UNQUALIFIED",
+  "gate": "G2 PARTIAL",
+  "original": "../sfs-5b4/raw/native-20261115T085640.621413Z/cpu-2-writeback-unmodified",
+  "original_identity": {
+    "elf_sha256": "24d0094f2afd5a8df05169e33d8d85796b6860009a97f1792313242604d59f60",
+    "iso_sha256": "6863cf017df6d4cc3c28c6c9f89698a58253a7690454dd31025e6644235127c1",
+    "qemu_sha256": "a2250f5e2b3b07c754473c0817df1cccf6c3c2443fc616dc474c4c311fa6ef1c",
+    "emulator": "system qemu-system-x86_64, unmodified",
+    "serial_bytes": 2182,
+    "trace_bytes": 35167
+  },
+  "last_observed_progress": {
+    "last_complete_line": "[ACPI] OK",
+    "trailing_bytes": "[SMBI",
+    "interpretation": "the guest stopped in the middle of emitting the first SMBIOS line, i.e. inside the serial write of the line that begins '[SMBIOS]'",
+    "stage": "early boot: after PMM/VMM/ACPI init, inside SMBIOS discovery, before SMP start and before any SFS-5B.4 fixture code",
+    "sfs_code_executed": false
+  },
+  "wait_for_graph": {
+    "runnable_entities": ["BSP only; APs are started later by the SFS fixture path"],
+    "bsp_state": "spinning in uart_16550 SerialPort::send waiting for LSR THRE",
+    "bsp_holds": ["SERIAL spin::Mutex", "interrupts disabled via without_interrupts"],
+    "required_event": "host QEMU chardev must consume the next byte",
+    "waiters": [],
+    "reset_owner": null,
+    "outstanding_requests": 0,
+    "conclusion": "no guest lock cycle, no reset owner, no device callback and no scheduler dependency exists at this point"
+  },
+  "source_backed_mechanism": {
+    "file": "kernel/src/arch/x86_64/serial.rs",
+    "detail": "_print takes the SERIAL mutex inside without_interrupts and calls uart_16550 send(), which waits for the transmit-holding-empty bit with no bound",
+    "implication": "if the emulated UART stops accepting bytes (blocking or failing host chardev write), the BSP spins forever with interrupts off and the serial log ends mid-line",
+    "consistency": "matches the preserved evidence exactly (truncated mid-line, no panic, no further output for the remaining host deadline)",
+    "alternative": "a fault taken with interrupts disabled would normally panic and print; no panic text exists"
+  },
+  "reproduction": {
+    "raw": "raw/stall-20261115T124729.089627Z",
+    "scenario": "cpu-2, cache=writeback, mode=unmodified (system QEMU), same guest fixture",
+    "attempts": 5,
+    "completed": 5,
+    "stalled": 0,
+    "host_deadline_s": 180,
+    "observed_elapsed_s": [9.819, 9.026, 9.819, 9.027, 9.62],
+    "result": "NOT REPRODUCED"
+  },
+  "classification": {
+    "guest_sfs_defect": "not supported: no SFS code had executed",
+    "scheduler_defect": "not supported: scheduler not started",
+    "lock_cycle": "not supported: no second runnable entity",
+    "host_or_harness": "plausible and consistent with evidence (serial backpressure / host I/O stall); not proven",
+    "evidence_gap": "no host disk, memory or chardev metrics were captured for the original attempt"
+  },
+  "why_not_closed": "A pass on replay does not establish the historical cause. The root cause remains UNQUALIFIED.",
+  "narrowed_scope": "The stall is not attributable to the SFS reset coordinator, the scheduler contention fixture, or any device callback: it happened before any of them ran.",
+  "next": "Capture host chardev/disk metrics and a QEMU trace with timestamps during any future recurrence; add a bounded serial transmit wait only if a stall is reproduced."
+}

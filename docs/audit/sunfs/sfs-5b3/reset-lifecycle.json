@@ -1,0 +1,16 @@
+{
+  "status": "PARTIAL",
+  "native": "RESET_ACKNOWLEDGED with one status read in all six held-request cases",
+  "unsupported": "queue reset unavailable; whole-device reset supported",
+  "delayed_and_withheld_native": "NOT_RUN",
+  "hosted": "64-read delayed/withheld/unexpected/idempotence fixtures rerun in storage regression",
+  "dma": "DMA_QUIESCENCE_UNQUALIFIED",
+  "terminal": "TERMINAL_QUARANTINE",
+  "bounds": {
+    "submission_polls": 50000000,
+    "reset_status_reads": 64,
+    "native_ack_reads": 1
+  },
+  "driver_production_changed": false,
+  "evidence": "active-io-witness.json"
+}

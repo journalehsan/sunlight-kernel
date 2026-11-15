@@ -1,0 +1,23 @@
+     Locking 1 package to latest compatible version
+   Compiling sunlight-block v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling sfs5b2-aba-before v0.1.0 (/tmp/sfs5b2-aba-before)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.85s
+     Running unittests src/lib.rs (/tmp/sfs5b2-aba-before/target/x86_64-unknown-linux-gnu/debug/deps/sfs5b2_aba_before-f5efafafff8392ed)
+
+running 1 test
+
+thread 'blk::ownership_tests::reused_wire_head_has_no_generation_echo_demonstrated_limit' (152) panicked at src/blk.rs:854:9:
+assertion `left != right` failed: old wire accepted: device=DeviceIdentity { backend: VirtioLegacy, incarnation: 1 } queue=1 head=0 A=Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 1, head: 0 }) B=Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 2, head: 0 }) used=2 avail=2 owner=Retired
+  left: Completed
+ right: Completed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test blk::ownership_tests::reused_wire_head_has_no_generation_echo_demonstrated_limit ... FAILED
+
+failures:
+
+failures:
+    blk::ownership_tests::reused_wire_head_has_no_generation_echo_demonstrated_limit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

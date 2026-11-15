@@ -238,6 +238,11 @@ pub fn exec_into_process(
         // own the broker. Withdraw before activation can replace the syscall
         // stack's VM; failed image preparation above preserves old authority.
         let mut broker = crate::capability::CAP_BROKER.lock();
+        crate::ipc::retire_vfs_process(sunlight_ipc::vfs_rpc::lifecycle::Caller {
+            pid: process.pid as u64,
+            incarnation: process.foreground.incarnation,
+            address_space_generation: old_address_space.identity().generation,
+        });
         #[cfg(any(feature = "cap_issuance_test", feature = "production_grant_test"))]
         let old_grants = broker.recipient_grant_count(process.pid);
         broker.retire_recipient_grants(process.pid);

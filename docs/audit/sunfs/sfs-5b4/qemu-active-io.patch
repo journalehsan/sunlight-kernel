@@ -1,0 +1,215 @@
+--- a/hw/block/virtio-blk.c
++++ b/hw/block/virtio-blk.c
+@@ -12,6 +12,8 @@
+  */
+ 
+ #include "qemu/osdep.h"
++#include <sys/mman.h>
++#include <fcntl.h>
+ #include "qemu/defer-call.h"
+ #include "qapi/error.h"
+ #include "qemu/iov.h"
+@@ -824,6 +826,115 @@
+     return err_status;
+ }
+ 
++
++/* SFS5B3 TEST ONLY: one disposable attachment, one real OUT sector.  This
++ * splits consumption of its actual data descriptor, before backend submission.
++ * BQL/main AioContext only; launch MUST use ioeventfd=off and no IOThread.
++ * It is not a host request mock and not an assertion of simultaneous bus DMA.
++ */
++static VirtIOBlockReq *sfs5b3_held;
++static void *sfs5b3_old_data;
++static VirtIODevice *sfs5b3_old_device;
++static QEMUTimer *sfs5b3_timer;
++static unsigned char sfs5b3_data[512];
++static QEMUIOVector sfs5b3_guest;
++static struct iovec sfs5b3_iov;
++
++static void sfs5b3_done(void *opaque, int ret)
++{
++    VirtIOBlockReq *req = opaque;
++    fprintf(stderr, "SFS5B3 backend-complete head=%u ret=%d\n", req->elem.index, ret);
++    virtio_blk_rw_complete(opaque, ret);
++}
++
++static void sfs5b3_release(void *opaque)
++{
++    const char *release = getenv("SFS5B3_RELEASE");
++    VirtIOBlockReq *req = sfs5b3_held;
++    if (!req) {
++        return;
++    }
++    if (!release || access(release, F_OK)) {
++        timer_mod(sfs5b3_timer, qemu_clock_get_ms(QEMU_CLOCK_REALTIME) + 10);
++        return;
++    }
++    assert(bql_locked());
++    assert(qemu_iovec_to_buf(&sfs5b3_guest, 256, sfs5b3_data + 256, 256) == 256);
++    fprintf(stderr, "SFS5B3 dma-read head=%u offset=256 bytes=256 value=%u\n",
++            req->elem.index, sfs5b3_data[256]);
++    sfs5b3_held = NULL;
++    sfs5b3_iov.iov_base = sfs5b3_data;
++    sfs5b3_iov.iov_len = 512;
++    qemu_iovec_init_external(&req->qiov, &sfs5b3_iov, 1);
++    fprintf(stderr, "SFS5B3 backend-submit head=%u\n", req->elem.index);
++    blk_aio_pwritev(req->dev->blk, req->sector_num << BDRV_SECTOR_BITS,
++                   &req->qiov, 0, sfs5b3_done, req);
++}
++
++
++/* Called after generic queue reset. The five-page geometry is an explicit
++ * contract of this disposable guest fixture, never inferred for normal devices.
++ * Protect original direct RAM mappings until process death; no recovery/reuse.
++ */
++void sfs5b3_guard_old_dma(VirtIODevice *vdev, void *queue_host);
++void sfs5b3_guard_old_dma(VirtIODevice *vdev, void *queue_host)
++{
++    uintptr_t data_page;
++    int fds[2];
++    ssize_t probe;
++    if (sfs5b3_old_device != vdev || !sfs5b3_old_data) {
++        return;
++    }
++    assert(bql_locked());
++    assert(queue_host && !((uintptr_t)queue_host & 4095));
++    data_page = (uintptr_t)sfs5b3_old_data & ~(uintptr_t)4095;
++    assert((uintptr_t)queue_host + 16384 <= data_page ||
++           data_page + 4096 <= (uintptr_t)queue_host);
++    assert(pipe2(fds, O_NONBLOCK | O_CLOEXEC) == 0);
++    /* Positive control: kernel can read the original payload before protection. */
++    assert(write(fds[1], sfs5b3_old_data, 1) == 1);
++    assert(mprotect(queue_host, 16384, PROT_NONE) == 0);
++    assert(mprotect((void *)data_page, 4096, PROT_NONE) == 0);
++    for (unsigned i = 0; i < 5; i++) {
++        void *page = i < 4 ? (char *)queue_host + i * 4096 : (void *)data_page;
++        errno = 0;
++        probe = write(fds[1], page, 1);
++        assert(probe == -1 && errno == EFAULT);
++    }
++    close(fds[0]);
++    close(fds[1]);
++    fprintf(stderr, "SFS5B3 guard-installed queue=%p queue-bytes=16384 request=%p request-bytes=4096 probe=EFAULT\n",
++            queue_host, (void *)data_page);
++    sfs5b3_old_data = NULL;
++    sfs5b3_old_device = NULL;
++}
++
++static bool sfs5b3_hold(VirtIOBlockReq *req, bool is_write)
++{
++    const char *mode = getenv("SFS5B3_MODE");
++    VirtIOBlock *s = req->dev;
++    if (!mode || !s->conf.serial || strcmp(s->conf.serial, "SFS5B3-disposable") ||
++        !is_write || req->sector_num != 63 || req->qiov.size != 512) {
++        return false;
++    }
++    assert(bql_locked());
++    assert(!sfs5b3_held);
++    sfs5b3_guest = req->qiov;
++    fprintf(stderr, "SFS5B3 fetched queue=0 head=%u sector=63 bytes=512 guest=%p mode=%s\n",
++            req->elem.index, req->qiov.iov[0].iov_base, mode);
++    assert(qemu_iovec_to_buf(&sfs5b3_guest, 0, sfs5b3_data, 256) == 256);
++    fprintf(stderr, "SFS5B3 dma-read head=%u offset=0 bytes=256 value=%u\n",
++            req->elem.index, sfs5b3_data[0]);
++    sfs5b3_held = req;
++    if (!sfs5b3_timer) {
++        sfs5b3_timer = timer_new_ms(QEMU_CLOCK_REALTIME, sfs5b3_release, NULL);
++    }
++    timer_mod(sfs5b3_timer, qemu_clock_get_ms(QEMU_CLOCK_REALTIME) + 10);
++    fprintf(stderr, "SFS5B3 held head=%u consumed=256 remaining=256 backend=not-submitted used=not-published\n",
++            req->elem.index);
++    return true;
++}
++
+ static int virtio_blk_handle_request(VirtIOBlockReq *req, MultiReqBuffer *mrb)
+ {
+     uint32_t type;
+@@ -893,6 +1004,10 @@
+ 
+         block_acct_start(blk_get_stats(s->blk), &req->acct, req->qiov.size,
+                          is_write ? BLOCK_ACCT_WRITE : BLOCK_ACCT_READ);
++
++        if (sfs5b3_hold(req, is_write)) {
++            return 0;
++        }
+ 
+         /* merge would exceed maximum number of requests or IO direction
+          * changes */
+@@ -1147,6 +1262,22 @@
+     VirtIOBlock *s = VIRTIO_BLK(vdev);
+     VirtIOBlockReq *req;
+ 
++    if (sfs5b3_held && sfs5b3_held->dev == s) {
++        req = sfs5b3_held;
++        assert(bql_locked());
++        fprintf(stderr, "SFS5B3 reset-entry head=%u outstanding=1 consumed=256 remaining=256\n", req->elem.index);
++        sfs5b3_old_data = sfs5b3_guest.iov[0].iov_base;
++        sfs5b3_old_device = vdev;
++        timer_del(sfs5b3_timer);
++        sfs5b3_held = NULL;
++        iov_discard_undo(&req->inhdr_undo);
++        iov_discard_undo(&req->outhdr_undo);
++        virtqueue_detach_element(req->vq, &req->elem, 0);
++        block_acct_failed(blk_get_stats(s->blk), &req->acct);
++        fprintf(stderr, "SFS5B3 detached head=%u timer=pending-cancelled backend=never-submitted used=never-published\n", req->elem.index);
++        g_free(req);
++    }
++
+     /* Dataplane has stopped... */
+     assert(!s->ioeventfd_started);
+ 
+@@ -1168,6 +1299,9 @@
+     }
+ 
+     blk_set_enable_write_cache(s->blk, s->original_wce);
++    if (getenv("SFS5B3_MODE")) {
++        fprintf(stderr, "SFS5B3 block-reset-exit held=%d\n", sfs5b3_held != NULL);
++    }
+ }
+ 
+ /* coalesce internal state, copy to pci i/o region 0
+--- a/hw/virtio/virtio.c
++++ b/hw/virtio/virtio.c
+@@ -3420,6 +3420,8 @@
+     return ret;
+ }
+ 
++void sfs5b3_guard_old_dma(VirtIODevice *vdev, void *queue_host);
++
+ void virtio_reset(VirtIODevice *vdev)
+ {
+     VirtioDeviceClass *k = VIRTIO_DEVICE_GET_CLASS(vdev);
+@@ -3427,6 +3429,13 @@
+     uint64_t features[VIRTIO_FEATURES_NU64S];
+     int i;
+ 
++    void *sfs5b3_queue_host = NULL;
++    if (getenv("SFS5B3_MODE") && vdev->name && !strcmp(vdev->name, "virtio-blk")) {
++        rcu_read_lock();
++        VRingMemoryRegionCaches *cache = vring_get_region_caches(&vdev->vq[0]);
++        sfs5b3_queue_host = cache ? cache->desc.ptr : NULL;
++        rcu_read_unlock();
++    }
+     virtio_set_status(vdev, 0);
+     if (current_cpu) {
+         /* Guest initiated reset */
+@@ -3464,6 +3473,10 @@
+         __virtio_queue_reset(vdev, i);
+     }
+ 
++    if (getenv("SFS5B3_MODE") && vdev->name && !strcmp(vdev->name, "virtio-blk")) {
++        fprintf(stderr, "SFS5B3 reset-complete status=%u queues-cleared=1\n", vdev->status);
++    }
++
+     /* Mappings are removed to prevent stale fds from remaining open. */
+     QSIMPLEQ_FOREACH(shmem, &vdev->shmem_list, entry) {
+         while (!QTAILQ_EMPTY(&shmem->mmaps)) {
+@@ -3472,6 +3485,7 @@
+                                  memory_region_size(mapping->mr));
+         }
+     }
++    sfs5b3_guard_old_dma(vdev, sfs5b3_queue_host);
+ }
+ 
+ static void virtio_device_check_notification_compatibility(VirtIODevice *vdev,

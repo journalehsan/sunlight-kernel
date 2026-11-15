@@ -1,0 +1,48 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: sunlight-net@0.2.7784-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+   Compiling sunlight-kernel v0.2.7784-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+error: linking with `rust-lld` failed: signal: 7 (SIGBUS) (core dumped)
+  |
+  = note:  "rust-lld" "-flavor" "gnu" "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/rustcIOdOyd/symbols.o" "<17 object files omitted>" "--as-needed" "-Bstatic" "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/{libsunlight_tui-3d8a57c6a8c7aeaa,liblz4_flex-d8b7f0439e43e25b,libsunlight_sensors-f5e679270ea618f8,libsunlight_smbios-54d85732447ed40e,libsunlight_elf-eafc743ce59f5a2f,liblimine-0f1adebcb6c33589,liblinked_list_allocator-ba9dd2f01679c99f,libspinning_top-eebb024e454a3730,libsunlight_fs-58ed776791bb2447,libsunlight_fat-d3b4b9e533dbfff6,libsunlight_mm-57d56071d85001b4,libsunlight_compat_linux-2ef9b764a7beed4d,libuart_16550-5fadb64d3e1c37f1,libx86-7afa2abdb18f6c21,libraw_cpuid-4486de0a25cdd4f8,libspin-f4d269a7fc05072a,liblock_api-8c1f6b23fd0c04bc,libscopeguard-b336fa512e352a5d,libx86_64-62d69e575bfc70f8,libvolatile-6414fa1f360063a7,libbitflags-5a9120c65a08fcc1,libbit_field-8bce6a1c92e9c68e,libsunlight_net-7cf9bb9cc9a4073e,libsunlight_virtio-2c98c3bcb4212d4e,libsunlight_block-e80726052be31fe2,libsmoltcp-0014146a0b36abee,libbitflags-698b5be1124a2587,libheapless-2baa5c29a0d8e149,libhash32-62cb3a55ae0ee5a5,libbyteorder-8a656cededa7c663,libmanaged-7fadd6216605dd1e,libsunlight_ipc-41923dfc7dc3bf09}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-none/lib/{liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-L" "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/rustcIOdOyd/raw-dylibs" "-Bdynamic" "--eh-frame-hdr" "-z" "noexecstack" "-o" "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/sunlight_kernel-761671cccad298ae" "--gc-sections" "-z" "relro" "-z" "now" "-Tkernel/src/arch/x86_64/linker.ld"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: PLEASE submit a bug report to https://github.com/llvm/llvm-project/issues/ and include the crash backtrace and instructions to reproduce the bug.
+          
+
+error: could not compile `sunlight-kernel` (bin "sunlight-kernel") due to 1 previous error

@@ -1,0 +1,6 @@
+{
+  "helper_sha256": "97e44f34598c07bdc3cea373b25a80cd5215db0676802b25af318bc3cc3af344",
+  "reused_runner": "tools/sunfs5b1_validate.py",
+  "runner_sha256": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169",
+  "output_redirected": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4"
+}

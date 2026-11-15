@@ -1,0 +1,1192 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 895988d3f..43f7b876d 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3497,6 +3497,9 @@ dependencies = [
+ [[package]]
+ name = "sunlight-virtio"
+ version = "0.2.7279-alpha.2"
++dependencies = [
++ "sunlight-block",
++]
+ 
+ [[package]]
+ name = "sunlight-voice-recorder"
+diff --git a/kernel/Cargo.toml b/kernel/Cargo.toml
+index c39b2cf57..4fcfea828 100644
+--- a/kernel/Cargo.toml
++++ b/kernel/Cargo.toml
+@@ -687,6 +687,9 @@ sunlight-sensors = { path = "../sunlight-sensors" }
+ lz4_flex = { version = "0.11", default-features = false }
+ 
+ [features]
++# Opt-in disposable-device qualification; halts before FAT/VFS probing.
++sfs5a-test = []
++sfs5b1-test = ["sfs5a-test"]
+ # Bounded PMM-backed filesystem regression gate; off in ordinary boots.
+ tmpfs_test = []
+ # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
+diff --git a/kernel/src/main.rs b/kernel/src/main.rs
+index f6d99b445..fef29ff5d 100644
+--- a/kernel/src/main.rs
++++ b/kernel/src/main.rs
+@@ -1860,6 +1860,11 @@ pub extern "C" fn _start() -> ! {
+ 
+ /// The boot virtio-blk device, moved here after `init_block_and_fat` so the
+ /// kernel VFS can keep reading the FAT volume after boot.
++#[cfg(feature = "sfs5a-test")]
++mod sfs5a_test;
++#[cfg(feature = "sfs5b1-test")]
++mod sfs5b1_test;
++
+ struct BlkCell(Option<sunlight_virtio::VirtioBlk>);
+ // SAFETY: VirtioBlk holds raw queue pointers into kernel-owned frames that
+ // live for the whole kernel lifetime; access is serialized by the mutex.
+@@ -1893,20 +1898,16 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
+                 usb_storage::DISK
+                     .lock()
+                     .as_mut()
+-                    .ok_or(sunlight_block::BlockError::Io)?,
++                    .ok_or(sunlight_block::BlockError::Unavailable)?,
+                 lba,
+                 buf,
+             );
+         }
+         let mut cell = VIRTIO_BLK.lock();
+-        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
++        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Unavailable)?;
+         // SAFETY: blk was initialized with valid queue/req buffers and the
+         // mutex serializes all device access.
+-        if unsafe { blk.read_block(lba, buf) } {
+-            Ok(())
+-        } else {
+-            Err(sunlight_block::BlockError::Io)
+-        }
++        unsafe { blk.read_typed(lba, buf) }.legacy()
+     }
+ 
+     fn write_block(
+@@ -1919,18 +1920,14 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
+                 usb_storage::DISK
+                     .lock()
+                     .as_mut()
+-                    .ok_or(sunlight_block::BlockError::Io)?,
++                    .ok_or(sunlight_block::BlockError::Unavailable)?,
+                 lba,
+                 buf,
+             );
+         }
+         let mut cell = VIRTIO_BLK.lock();
+-        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
+-        if unsafe { blk.write_block(lba, buf) } {
+-            Ok(())
+-        } else {
+-            Err(sunlight_block::BlockError::Io)
+-        }
++        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Unavailable)?;
++        unsafe { blk.write_typed(lba, buf) }.legacy()
+     }
+ 
+     fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
+@@ -1939,19 +1936,19 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
+                 usb_storage::DISK
+                     .lock()
+                     .as_mut()
+-                    .ok_or(sunlight_block::BlockError::Io)?,
++                    .ok_or(sunlight_block::BlockError::Unavailable)?,
+             );
+         }
+         let mut cell = VIRTIO_BLK.lock();
+-        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
+-        if !blk.supports_flush() {
+-            return Err(sunlight_block::BlockError::Unsupported);
+-        }
+-        if unsafe { blk.flush() } {
+-            Ok(())
+-        } else {
+-            Err(sunlight_block::BlockError::Io)
++        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Unavailable)?;
++        unsafe { blk.flush_typed() }.legacy()
++    }
++
++    fn geometry(&self) -> Result<sunlight_block::contract::Geometry, sunlight_block::BlockError> {
++        if matches!(self, Self::Usb) {
++            return usb_storage::DISK.lock().as_ref().ok_or(sunlight_block::BlockError::Unavailable)?.geometry();
+         }
++        VIRTIO_BLK.lock().0.as_ref().map(|d| d.geometry()).ok_or(sunlight_block::BlockError::Unavailable)
+     }
+ 
+     fn block_count(&self) -> u64 {
+@@ -2061,11 +2058,7 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
+     ) -> Result<(), sunlight_block::BlockError> {
+         // SAFETY: blk was initialized with valid queue/req buffers, and the
+         // kernel is single-threaded during boot-time FAT access.
+-        if unsafe { self.blk.read_block(lba, buf) } {
+-            Ok(())
+-        } else {
+-            Err(sunlight_block::BlockError::Io)
+-        }
++        unsafe { self.blk.read_typed(lba, buf) }.legacy()
+     }
+ 
+     fn write_block(
+@@ -2073,18 +2066,15 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
+         lba: u64,
+         buf: &[u8; sunlight_block::BLOCK_SIZE],
+     ) -> Result<(), sunlight_block::BlockError> {
+-        if unsafe { self.blk.write_block(lba, buf) } {
+-            Ok(())
+-        } else {
+-            Err(sunlight_block::BlockError::Io)
+-        }
++        unsafe { self.blk.write_typed(lba, buf) }.legacy()
+     }
+ 
+     fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
+-        if !self.blk.supports_flush() { return Err(sunlight_block::BlockError::Unsupported); }
+-        if unsafe { self.blk.flush() } { Ok(()) } else { Err(sunlight_block::BlockError::Io) }
++        unsafe { self.blk.flush_typed() }.legacy()
+     }
+ 
++    fn geometry(&self) -> Result<sunlight_block::contract::Geometry, sunlight_block::BlockError> { Ok(self.blk.geometry()) }
++
+     fn block_count(&self) -> u64 {
+         self.blk.block_count()
+     }
+@@ -2173,6 +2163,16 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
+         }
+     };
+ 
++    #[cfg(feature = "sfs5a-test")]
++    let blk = {
++        let mut device = blk;
++        #[cfg(feature = "sfs5b1-test")]
++        sfs5b1_test::run(&mut device);
++        #[cfg(not(feature = "sfs5b1-test"))]
++        sfs5a_test::run(&mut device);
++        device
++    };
++
+     // Retain even an unformatted disk or rejected table for runtime enumeration.
+     let operations = sunlight_block::registry::READ
+         | if blk.supports_write() { sunlight_block::registry::WRITE } else { 0 }
+diff --git a/sunlight-block/src/lib.rs b/sunlight-block/src/lib.rs
+index 1f1907760..07d10ea0b 100644
+--- a/sunlight-block/src/lib.rs
++++ b/sunlight-block/src/lib.rs
+@@ -11,6 +11,7 @@
+ #[cfg(test)]
+ extern crate std;
+ 
++pub mod contract;
+ pub mod partition;
+ pub mod registry;
+ pub mod usb_msc;
+@@ -24,14 +25,22 @@ pub enum BlockError {
+     Io,
+     OutOfRange,
+     Unsupported,
++    Uncertain,
++    Unavailable,
++    Failed,
+ }
+ 
+ pub trait BlockDevice {
+     fn read_block(&mut self, lba: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError>;
+     fn write_block(&mut self, lba: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), BlockError>;
+-    /// Force all writes accepted by this device to stable media.
++    /// Query qualified geometry. Unmigrated wrappers refuse admission.
++    fn geometry(&self) -> Result<contract::Geometry, BlockError> {
++        Err(BlockError::Unsupported)
++    }
++    /// Issue the backend barrier; success is bounded by its documented scope.
++    /// RAM devices provide visibility only, never persistent storage.
+     ///
+-    /// Implementations must return `Unsupported` rather than reporting
++    /// Persistent implementations must return `Unsupported` rather than reporting
+     /// success when they cannot provide a persistence barrier.
+     fn flush(&mut self) -> Result<(), BlockError>;
+     fn block_count(&self) -> u64;
+@@ -50,6 +59,10 @@ impl<D: BlockDevice + ?Sized> BlockDevice for &mut D {
+         (**self).flush()
+     }
+ 
++    fn geometry(&self) -> Result<contract::Geometry, BlockError> {
++        (**self).geometry()
++    }
++
+     fn block_count(&self) -> u64 {
+         (**self).block_count()
+     }
+@@ -196,11 +209,15 @@ impl<D: BlockDevice, const N: usize> BlockDevice for CachedBlockDevice<D, N> {
+ /// unit tests; also usable for initrd-style images.
+ pub struct MemDisk<'a> {
+     data: &'a mut [u8],
++    incarnation: Option<u64>,
+ }
+ 
+ impl<'a> MemDisk<'a> {
+     pub fn new(data: &'a mut [u8]) -> Self {
+-        Self { data }
++        Self {
++            data,
++            incarnation: contract::new_incarnation(),
++        }
+     }
+ 
+     fn range(&self, lba: u64) -> Result<core::ops::Range<usize>, BlockError> {
+@@ -219,6 +236,29 @@ impl<'a> MemDisk<'a> {
+ }
+ 
+ impl BlockDevice for MemDisk<'_> {
++    fn geometry(&self) -> Result<contract::Geometry, BlockError> {
++        use contract::*;
++        Ok(Geometry {
++            identity: DeviceIdentity {
++                backend: Backend::MemDisk,
++                incarnation: self.incarnation.ok_or(BlockError::Unavailable)?,
++            },
++            persistent_identity: Knowledge::Unsupported,
++            logical_block: 512,
++            physical_block: Knowledge::Unknown,
++            blocks: self.block_count(),
++            max_blocks: 1,
++            max_transfer: 512,
++            io_alignment: 512,
++            buffer_alignment: 1,
++            read_only: Knowledge::Known(false),
++            flush: Knowledge::Unsupported,
++            fua: Knowledge::Unsupported,
++            write_cache: Knowledge::Known(false),
++            fencing: FenceCapability::NotApplicable,
++        })
++    }
++
+     fn read_block(&mut self, lba: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError> {
+         let range = self.range(lba)?;
+         buf.copy_from_slice(&self.data[range]);
+@@ -232,7 +272,7 @@ impl BlockDevice for MemDisk<'_> {
+     }
+ 
+     fn flush(&mut self) -> Result<(), BlockError> {
+-        // Memory is the stable backing store for this deterministic device.
++        // Visibility in volatile RAM only. Persistence is not applicable.
+         Ok(())
+     }
+ 
+@@ -313,6 +353,21 @@ mod tests {
+         assert_eq!(readback, block);
+     }
+ 
++    #[test]
++    fn memdisk_geometry_is_volatile_and_incarnations_differ() {
++        use contract::*;
++        let mut a = [0; 512];
++        let mut b = [0; 512];
++        let a = MemDisk::new(&mut a);
++        let b = MemDisk::new(&mut b);
++        let g = a.geometry().unwrap();
++        g.validate().unwrap();
++        assert_ne!(g.identity, b.geometry().unwrap().identity);
++        assert_eq!(g.flush, Knowledge::Unsupported);
++        assert_eq!(g.fencing, FenceCapability::NotApplicable);
++        assert_eq!(g.physical_block, Knowledge::Unknown);
++    }
++
+     #[test]
+     fn null_device_rejects_everything() {
+         let mut dev = NullDevice;
+diff --git a/sunlight-block/src/usb_msc.rs b/sunlight-block/src/usb_msc.rs
+index e4ff3ec59..4adae08f7 100644
+--- a/sunlight-block/src/usb_msc.rs
++++ b/sunlight-block/src/usb_msc.rs
+@@ -231,6 +231,7 @@ pub struct Disk<T> {
+     bot: Bot<T>,
+     blocks: u64,
+     online: bool,
++    incarnation: u64,
+ }
+ impl<T: Transport> Disk<T> {
+     pub fn initialize(transport: T) -> Result<Self, Error> {
+@@ -238,6 +239,7 @@ impl<T: Transport> Disk<T> {
+             bot: Bot::new(transport),
+             blocks: 0,
+             online: true,
++            incarnation: crate::contract::new_incarnation().ok_or(Error::Offline)?,
+         };
+         let mut inquiry = [0; 36];
+         disk.scsi(&[0x12, 0, 0, 0, 36, 0], true, &mut inquiry)?;
+@@ -284,13 +286,13 @@ impl<T: Transport> Disk<T> {
+     }
+     fn ready(&mut self) -> Result<(), BlockError> {
+         if !self.online {
+-            return Err(BlockError::Io);
++            return Err(BlockError::Unavailable);
+         }
+         // No cache may sit above removable media without checking generation.
+         // Any runtime error permanently retires this incarnation until reboot.
+         if self.scsi(&[0; 6], false, &mut []).is_err() {
+             self.online = false;
+-            return Err(BlockError::Io);
++            return Err(BlockError::Uncertain);
+         }
+         Ok(())
+     }
+@@ -305,12 +307,38 @@ impl<T: Transport> Disk<T> {
+         cdb[8] = 1;
+         if self.scsi(&cdb, opcode == 0x28, bytes).is_err() {
+             self.online = false;
+-            return Err(BlockError::Io);
++            return Err(BlockError::Uncertain);
+         }
+         Ok(())
+     }
+ }
+ impl<T: Transport> BlockDevice for Disk<T> {
++    fn geometry(&self) -> Result<crate::contract::Geometry, BlockError> {
++        use crate::contract::*;
++        if !self.online {
++            return Err(BlockError::Unavailable);
++        }
++        Ok(Geometry {
++            identity: DeviceIdentity {
++                backend: Backend::UsbBot,
++                incarnation: self.incarnation,
++            },
++            persistent_identity: Knowledge::Unknown,
++            logical_block: 512,
++            physical_block: Knowledge::Unknown,
++            blocks: self.blocks,
++            max_blocks: 1,
++            max_transfer: 512,
++            io_alignment: 512,
++            buffer_alignment: 1,
++            read_only: Knowledge::Unknown,
++            flush: Knowledge::Unknown,
++            fua: Knowledge::Unsupported,
++            write_cache: Knowledge::Unknown,
++            fencing: FenceCapability::TransportResetOnly,
++        })
++    }
++
+     fn read_block(&mut self, lba: u64, bytes: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError> {
+         // Failed/short DMA data never becomes caller-visible.
+         let mut temporary = [0; BLOCK_SIZE];
+@@ -328,7 +356,7 @@ impl<T: Transport> BlockDevice for Disk<T> {
+             .is_err()
+         {
+             self.online = false;
+-            return Err(BlockError::Io);
++            return Err(BlockError::Uncertain);
+         }
+         Ok(())
+     }
+@@ -616,10 +644,10 @@ mod tests {
+             replies.extend([reply(0, &[], 1), reply(3, &sense(key, asc), 0)]);
+             let mut disk = Disk::initialize(Fake::new(replies)).unwrap();
+             let mut bytes = [0xee; 512];
+-            assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Io));
++            assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Uncertain));
+             assert_eq!(bytes, [0xee; 512]);
+-            assert_eq!(disk.write_block(0, &bytes), Err(BlockError::Io));
+-            assert_eq!(disk.flush(), Err(BlockError::Io));
++            assert_eq!(disk.write_block(0, &bytes), Err(BlockError::Unavailable));
++            assert_eq!(disk.flush(), Err(BlockError::Unavailable));
+             assert!(disk.bot.transport.replies.is_empty());
+         }
+     }
+@@ -629,7 +657,7 @@ mod tests {
+         replies.extend([reply(0, &[], 0), reply(0x28, &[4; 511], 0)]);
+         let mut disk = Disk::initialize(Fake::new(replies)).unwrap();
+         let mut bytes = [0xee; 512];
+-        assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Io));
++        assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Uncertain));
+         assert_eq!(bytes, [0xee; 512]);
+         assert_eq!(Sense::parse(&[]), Err(Error::Status));
+         assert_eq!(Sense::parse(&[0; 18]), Err(Error::Status));
+diff --git a/sunlight-virtio/Cargo.toml b/sunlight-virtio/Cargo.toml
+index aaab2ff22..7be5a464d 100644
+--- a/sunlight-virtio/Cargo.toml
++++ b/sunlight-virtio/Cargo.toml
+@@ -656,3 +656,6 @@ version = "0.2.7279-alpha.2"
+ edition = "2021"
+ 
+ [lib]
++
++[dependencies]
++sunlight-block = { path = "../sunlight-block" }
+diff --git a/sunlight-virtio/src/blk.rs b/sunlight-virtio/src/blk.rs
+index fba406dbf..8d23d6261 100644
+--- a/sunlight-virtio/src/blk.rs
++++ b/sunlight-virtio/src/blk.rs
+@@ -1,5 +1,6 @@
+ use super::pci::{inl, inw, outb, outl, outw};
+ use core::sync::atomic::{fence, Ordering};
++use sunlight_block::contract::*;
+ 
+ // Legacy virtio-blk I/O register offsets from io_base
+ const REG_DEVICE_FEATURES: u16 = 0x00;
+@@ -61,6 +62,19 @@ pub struct VirtioBlk {
+     capacity_sectors: u64,
+     flush_supported: bool,
+     read_only: bool,
++    // Permanent quarantine: no completion/fence API can safely reopen this queue.
++    uncertain: bool,
++    owner: Owner,
++    last_outcome: Option<IoOutcome>,
++    last_used_length: Option<u32>,
++    #[cfg(test)]
++    injection: Option<(u16, u32, u32, u8, bool)>,
++}
++
++fn queue_fits(size: u16) -> bool {
++    let n = usize::from(size);
++    let used = (n * 16 + 6 + n * 2 + 4095) & !4095;
++    size >= 3 && size.is_power_of_two() && used + 6 + n * 8 <= QUEUE_PAGES * 4096
+ }
+ 
+ impl VirtioBlk {
+@@ -70,6 +84,9 @@ impl VirtioBlk {
+     /// `req_phys` / `req_virt`: 1-page region for the request buffer (header+data+status).
+     ///
+     /// SAFETY: All physical/virtual address pairs must be valid; caller holds ring-0 privilege.
++    /// Queue and request frames must stay pinned for the device lifetime, including
++    /// after timeout or dropping this handle. Dropping does not stop DMA.
++    /// The caller must never reinitialize a live/quarantined attachment or reuse its frames.
+     pub unsafe fn init(
+         io_base: u16,
+         queue_phys: u64,
+@@ -77,6 +94,11 @@ impl VirtioBlk {
+         req_phys: u64,
+         req_virt: u64,
+     ) -> Option<Self> {
++        // No reinitialization of a live/quarantined queue is permitted by this API.
++        if queue_phys & 4095 != 0 || req_phys & 4095 != 0 || queue_phys >> 12 > u32::MAX as u64 {
++            return None;
++        }
++        let incarnation = new_incarnation()?;
+         // Reset the device
+         outb(io_base + REG_DEVICE_STATUS, 0);
+         // Acknowledge device existence and load our driver
+@@ -88,17 +110,42 @@ impl VirtioBlk {
+         // Preserve the legacy feature policy, but remember whether the device
+         // negotiated the stable-media barrier required by persistent state.
+         let features = inl(io_base + REG_DEVICE_FEATURES);
+-        let accepted_features = features & !((1 << 5) | (1 << 7));
++        // Explicitly implemented: SIZE_MAX, RO, BLK_SIZE and FLUSH only.
++        let accepted_features = features & ((1 << 1) | (1 << 5) | (1 << 6) | VIRTIO_BLK_F_FLUSH);
+         outl(io_base + REG_DRIVER_FEATURES, accepted_features);
+ 
+         // Legacy virtio-blk device-specific configuration starts at 0x14
+         // when MSI-X is not in use. Capacity is expressed in 512-byte sectors.
+-        let capacity_sectors = (inl(io_base + 0x18) as u64) << 32 | inl(io_base + 0x14) as u64;
++        let mut capacity_sectors = None;
++        for _ in 0..8 {
++            let hi = inl(io_base + 0x18);
++            let lo = inl(io_base + 0x14);
++            let hi2 = inl(io_base + 0x18);
++            let lo2 = inl(io_base + 0x14);
++            if hi == hi2 && lo == lo2 {
++                capacity_sectors = Some((hi as u64) << 32 | lo as u64);
++                break;
++            }
++        }
++        let capacity_sectors = capacity_sectors?;
++        if capacity_sectors == 0 || capacity_sectors.checked_mul(512).is_none() {
++            return None;
++        }
++        // This driver implements exactly one 512-byte data descriptor.
++        if accepted_features & (1 << 6) != 0 && inl(io_base + 0x28) != 512 {
++            return None;
++        }
++        if accepted_features & (1 << 1) != 0 {
++            let limit = inl(io_base + 0x1c);
++            if limit != 0 && limit < 512 {
++                return None;
++            }
++        }
+ 
+         // Select queue 0
+         outw(io_base + REG_QUEUE_SEL, 0);
+         let qsize = inw(io_base + REG_QUEUE_NUM);
+-        if qsize == 0 {
++        if !queue_fits(qsize) {
+             return None;
+         }
+ 
+@@ -136,10 +183,178 @@ impl VirtioBlk {
+             capacity_sectors,
+             flush_supported: accepted_features & VIRTIO_BLK_F_FLUSH != 0,
+             read_only: features & (1 << 5) != 0,
++            uncertain: false,
++            owner: Owner::new(DeviceIdentity {
++                backend: Backend::VirtioLegacy,
++                incarnation,
++            }),
++            last_outcome: None,
++            last_used_length: None,
++            #[cfg(test)]
++            injection: None,
+         })
+     }
+ 
+-    unsafe fn submit(&mut self, request_type: u32, lba: u64, data_is_device_write: bool) -> bool {
++    pub fn geometry(&self) -> Geometry {
++        Geometry {
++            identity: self.owner.device,
++            persistent_identity: Knowledge::Unknown,
++            logical_block: 512,
++            physical_block: Knowledge::Unknown,
++            blocks: self.capacity_sectors,
++            max_blocks: 1,
++            max_transfer: 512,
++            io_alignment: 512,
++            buffer_alignment: 1,
++            read_only: Knowledge::Known(self.read_only),
++            flush: Knowledge::Known(self.flush_supported),
++            fua: Knowledge::Unsupported,
++            write_cache: Knowledge::Unknown,
++            fencing: FenceCapability::Unsupported,
++        }
++    }
++    pub const fn last_outcome(&self) -> Option<IoOutcome> {
++        self.last_outcome
++    }
++    pub const fn ownership(&self) -> Ownership {
++        self.owner.state()
++    }
++    pub const fn outstanding(&self) -> Option<RequestId> {
++        self.owner.active()
++    }
++    pub const fn last_used_length(&self) -> Option<u32> {
++        self.last_used_length
++    }
++
++    fn receipt(
++        &mut self,
++        operation: Operation,
++        lba: u64,
++        request: Option<RequestId>,
++        completion: Completion,
++        source: StatusSource,
++        durability: Durability,
++    ) -> IoOutcome {
++        let bytes = if operation == Operation::Flush {
++            0
++        } else {
++            512
++        };
++        let result = IoOutcome {
++            device: self.owner.device,
++            request,
++            operation,
++            lba,
++            requested_blocks: bytes / 512,
++            requested_bytes: bytes,
++            completed: if completion == Completion::Completed {
++                Amount::Exact(bytes)
++            } else if (matches!(completion, Completion::Rejected(_))
++                || (completion == Completion::Unsupported && request.is_none()))
++            {
++                Amount::Exact(0)
++            } else {
++                Amount::Unknown
++            },
++            completion,
++            source,
++            durability,
++        };
++        self.last_outcome = Some(result);
++        result
++    }
++    fn quarantine(&mut self, timed_out: bool) {
++        self.uncertain = true;
++        self.owner.quarantine(timed_out);
++    }
++
++    /// Safety: initialization's pinned coherent DMA allocation contract still holds.
++    unsafe fn transfer(
++        &mut self,
++        operation: Operation,
++        lba: u64,
++        input: Option<&[u8; 512]>,
++        output: Option<&mut [u8; 512]>,
++    ) -> IoOutcome {
++        if self.uncertain {
++            return self.receipt(
++                operation,
++                lba,
++                None,
++                Completion::Unavailable,
++                StatusSource::Queue,
++                Durability::Uncertain,
++            );
++        }
++        let validation = if operation == Operation::Flush {
++            self.geometry().validate()
++        } else {
++            self.geometry().check(lba, 1, 512, 0).map(|_| ())
++        };
++        if let Err(e) = validation {
++            return self.receipt(
++                operation,
++                lba,
++                None,
++                Completion::Rejected(e),
++                StatusSource::Validation,
++                Durability::NotEstablished,
++            );
++        }
++        if operation == Operation::Write && self.read_only {
++            return self.receipt(
++                operation,
++                lba,
++                None,
++                Completion::Rejected(Rejection::ReadOnly),
++                StatusSource::Validation,
++                Durability::NotEstablished,
++            );
++        }
++        if operation == Operation::Flush && !self.flush_supported {
++            return self.receipt(
++                operation,
++                lba,
++                None,
++                Completion::Unsupported,
++                StatusSource::Validation,
++                Durability::NotEstablished,
++            );
++        }
++        // Preflight before touching either DMA buffer or descriptors.
++        if ((self.used_virt + 2) as *const u16).read_volatile() != self.last_used_idx {
++            self.quarantine(false);
++            return self.receipt(
++                operation,
++                lba,
++                None,
++                Completion::Uncertain,
++                StatusSource::Queue,
++                Durability::Uncertain,
++            );
++        }
++        let id = match self.owner.prepare(0) {
++            Ok(id) => id,
++            Err(e) => {
++                return self.receipt(
++                    operation,
++                    lba,
++                    None,
++                    Completion::Rejected(e),
++                    StatusSource::Validation,
++                    Durability::NotEstablished,
++                )
++            }
++        };
++        if let Some(data) = input {
++            core::ptr::copy_nonoverlapping(data.as_ptr(), (self.req_virt + 16) as *mut u8, 512);
++        }
++        let request_type = match operation {
++            Operation::Read => VIRTIO_BLK_T_IN,
++            Operation::Write => VIRTIO_BLK_T_OUT,
++            Operation::Flush => VIRTIO_BLK_T_FLUSH,
++        };
++        let data_is_device_write = operation == Operation::Read;
+         (self.req_virt as *mut u32).write_volatile(request_type);
+         ((self.req_virt + 4) as *mut u32).write_volatile(0);
+         ((self.req_virt + 8) as *mut u64).write_volatile(lba);
+@@ -178,6 +393,17 @@ impl VirtioBlk {
+             (*d2).next = 0;
+         }
+ 
++        if !self.owner.submit(id) {
++            self.quarantine(false);
++            return self.receipt(
++                operation,
++                lba,
++                Some(id),
++                Completion::Uncertain,
++                StatusSource::Queue,
++                Durability::Uncertain,
++            );
++        }
+         let avail_ring_ptr = (self.avail_virt + 4) as *mut u16;
+         let slot = (self.avail_idx as usize) % (self.queue_size as usize);
+         avail_ring_ptr.add(slot).write_volatile(0);
+@@ -187,10 +413,27 @@ impl VirtioBlk {
+         ((self.avail_virt + 2) as *mut u16).write_volatile(new_idx);
+         self.avail_idx = new_idx;
+         fence(Ordering::SeqCst);
++        #[cfg(not(test))]
+         outw(self.io_base + REG_QUEUE_NOTIFY, 0);
+ 
++        #[cfg(test)]
++        if let Some((delta, head, length, status, corrupt)) = self.injection.take() {
++            let slot = self.last_used_idx as usize % self.queue_size as usize;
++            ((self.used_virt + 4) as *mut u32)
++                .add(slot * 2)
++                .write_volatile(head);
++            ((self.used_virt + 4) as *mut u32)
++                .add(slot * 2 + 1)
++                .write_volatile(length);
++            status_ptr.write_volatile(status);
++            if corrupt {
++                (*(self.desc_virt as *mut VirtqDesc)).addr ^= 4096;
++            }
++            ((self.used_virt + 2) as *mut u16)
++                .write_volatile(self.last_used_idx.wrapping_add(delta));
++        }
+         let used_idx_ptr = (self.used_virt + 2) as *const u16;
+-        let mut limit = 50_000_000u32;
++        let mut limit = if cfg!(test) { 16u32 } else { 50_000_000u32 };
+         loop {
+             fence(Ordering::SeqCst);
+             if used_idx_ptr.read_volatile() != self.last_used_idx {
+@@ -198,45 +441,179 @@ impl VirtioBlk {
+             }
+             limit -= 1;
+             if limit == 0 {
+-                return false;
++                self.quarantine(true);
++                return self.receipt(
++                    operation,
++                    lba,
++                    Some(id),
++                    Completion::Uncertain,
++                    StatusSource::Deadline,
++                    Durability::Uncertain,
++                );
+             }
+             core::hint::spin_loop();
+         }
+-        self.last_used_idx = self.last_used_idx.wrapping_add(1);
++        let used_idx = used_idx_ptr.read_volatile();
+         fence(Ordering::SeqCst);
+-        status_ptr.read_volatile() == VIRTIO_BLK_S_OK
++        let used_slot = self.last_used_idx as usize % self.queue_size as usize;
++        let head = ((self.used_virt + 4) as *const u32)
++            .add(used_slot * 2)
++            .read_volatile();
++        let length = ((self.used_virt + 4) as *const u32)
++            .add(used_slot * 2 + 1)
++            .read_volatile();
++        self.last_used_length = Some(length);
++        // Legacy used.len is diagnostic only (VirtIO 1.2 section 5.2.6.2).
++        // It cannot authorize a partial prefix or short-read success.
++        let status = status_ptr.read_volatile();
++        let resources = self.descriptors_match(operation);
++        if used_idx != self.last_used_idx.wrapping_add(1)
++            || head != u32::from(id.head)
++            || status > 2
++            || !self.owner.complete(id, resources)
++        {
++            self.quarantine(false);
++            return self.receipt(
++                operation,
++                lba,
++                Some(id),
++                Completion::Uncertain,
++                StatusSource::Queue,
++                Durability::Uncertain,
++            );
++        }
++        self.last_used_idx = used_idx;
++        if !self.owner.retire(id) {
++            self.quarantine(false);
++            return self.receipt(
++                operation,
++                lba,
++                Some(id),
++                Completion::Uncertain,
++                StatusSource::Queue,
++                Durability::Uncertain,
++            );
++        }
++        if status == VIRTIO_BLK_S_OK {
++            if let Some(buf) = output {
++                core::ptr::copy_nonoverlapping(
++                    (self.req_virt + 16) as *const u8,
++                    buf.as_mut_ptr(),
++                    512,
++                );
++            }
++            self.receipt(
++                operation,
++                lba,
++                Some(id),
++                Completion::Completed,
++                StatusSource::DeviceStatus(status),
++                if operation == Operation::Flush {
++                    Durability::VirtualBarrier {
++                        through_generation: id.generation - 1,
++                    }
++                } else if operation == Operation::Read {
++                    Durability::NotApplicable
++                } else {
++                    Durability::NotEstablished
++                },
++            )
++        } else {
++            self.receipt(
++                operation,
++                lba,
++                Some(id),
++                if status == 2 {
++                    Completion::Unsupported
++                } else {
++                    Completion::Failed
++                },
++                StatusSource::DeviceStatus(status),
++                if operation == Operation::Read {
++                    Durability::NotApplicable
++                } else {
++                    Durability::Uncertain
++                },
++            )
++        }
+     }
+ 
+-    /// Read a 512-byte sector at `lba` into `buf`.
+-    ///
+-    /// SAFETY: All pointers initialized in `init` must still be valid.
+-    pub unsafe fn read_block(&mut self, lba: u64, buf: &mut [u8; 512]) -> bool {
+-        if lba >= self.capacity_sectors || !self.submit(VIRTIO_BLK_T_IN, lba, true) {
+-            return false;
++    unsafe fn descriptors_match(&self, operation: Operation) -> bool {
++        let expected = [
++            (self.req_phys, 16, DESC_F_NEXT, 1),
++            if operation == Operation::Flush {
++                (self.req_phys + 528, 1, DESC_F_WRITE, 0)
++            } else {
++                (
++                    self.req_phys + 16,
++                    512,
++                    DESC_F_NEXT
++                        | if operation == Operation::Read {
++                            DESC_F_WRITE
++                        } else {
++                            0
++                        },
++                    2,
++                )
++            },
++            (self.req_phys + 528, 1, DESC_F_WRITE, 0),
++        ];
++        for (index, (addr, len, flags, next)) in expected
++            .iter()
++            .enumerate()
++            .take(if operation == Operation::Flush { 2 } else { 3 })
++        {
++            let d = (self.desc_virt as *const VirtqDesc).add(index);
++            if core::ptr::addr_of!((*d).addr).read_volatile() != *addr {
++                return false;
++            }
++            if core::ptr::addr_of!((*d).len).read_volatile() != *len
++                || core::ptr::addr_of!((*d).flags).read_volatile() != *flags
++                || core::ptr::addr_of!((*d).next).read_volatile() != *next
++            {
++                return false;
++            }
+         }
+-        core::ptr::copy_nonoverlapping((self.req_virt + 16) as *const u8, buf.as_mut_ptr(), 512);
+         true
+     }
+-
+-    /// Write one 512-byte sector. Completion means accepted by the device;
+-    /// call [`VirtioBlk::flush`] for stable-media durability.
++    /// Safety: same pinned-buffer and exclusive-access requirements as init.
++    pub unsafe fn read_typed(&mut self, lba: u64, buf: &mut [u8; 512]) -> IoOutcome {
++        self.transfer(Operation::Read, lba, None, Some(buf))
++    }
++    /// Completion is visibility only; a failed write may have side effects.
++    /// Safety: same pinned-buffer and exclusive-access requirements as init.
++    pub unsafe fn write_typed(&mut self, lba: u64, buf: &[u8; 512]) -> IoOutcome {
++        self.transfer(Operation::Write, lba, Some(buf), None)
++    }
++    /// Real negotiated command; successful receipt covers this virtual queue only.
++    /// Safety: same pinned-buffer and exclusive-access requirements as init.
++    pub unsafe fn flush_typed(&mut self) -> IoOutcome {
++        self.transfer(Operation::Flush, 0, None, None)
++    }
++    /// Legacy diagnostic bridge; use typed receipts when handling errors.
++    /// Safety: same requirements as init.
++    pub unsafe fn read_block(&mut self, lba: u64, buf: &mut [u8; 512]) -> bool {
++        self.read_typed(lba, buf).legacy().is_ok()
++    }
++    /// Safety: same requirements as init.
+     pub unsafe fn write_block(&mut self, lba: u64, buf: &[u8; 512]) -> bool {
+-        if self.read_only || lba >= self.capacity_sectors {
+-            return false;
+-        }
+-        core::ptr::copy_nonoverlapping(buf.as_ptr(), (self.req_virt + 16) as *mut u8, 512);
+-        self.submit(VIRTIO_BLK_T_OUT, lba, false)
++        self.write_typed(lba, buf).legacy().is_ok()
+     }
+-
+-    /// Issue the negotiated virtio-blk stable-media barrier.
++    /// Safety: same requirements as init.
+     pub unsafe fn flush(&mut self) -> bool {
+-        self.flush_supported && self.submit(VIRTIO_BLK_T_FLUSH, 0, false)
++        self.flush_typed().legacy().is_ok()
+     }
+ 
+     pub const fn block_count(&self) -> u64 {
+         self.capacity_sectors
+     }
+ 
++    /// A timeout/malformed completion retains DMA ownership permanently.
++    /// The caller must keep both allocations pinned; this is not a DMA fence.
++    pub const fn has_uncertain_io(&self) -> bool {
++        self.uncertain
++    }
++
+     pub const fn supports_flush(&self) -> bool {
+         self.flush_supported
+     }
+@@ -249,3 +626,247 @@ impl VirtioBlk {
+ // SAFETY: VirtioBlk wraps raw pointers into kernel-owned physical frames.
+ // The kernel is single-threaded during initialization.
+ unsafe impl Send for VirtioBlk {}
++
++#[cfg(test)]
++mod ownership_tests {
++    use super::*;
++
++    #[repr(C, align(4096))]
++    struct Pages([u8; QUEUE_PAGES * 4096]);
++
++    fn device(queue: &mut Pages, request: &mut Pages) -> VirtioBlk {
++        let q = queue.0.as_mut_ptr() as u64;
++        let r = request.0.as_mut_ptr() as u64;
++        VirtioBlk {
++            io_base: 0,
++            queue_size: 8,
++            desc_virt: q,
++            avail_virt: q + 128,
++            used_virt: q + 4096,
++            req_phys: r,
++            req_virt: r,
++            avail_idx: 0,
++            last_used_idx: 0,
++            capacity_sectors: 8192,
++            flush_supported: true,
++            read_only: false,
++            uncertain: false,
++            owner: Owner::new(DeviceIdentity {
++                backend: Backend::VirtioLegacy,
++                incarnation: 1,
++            }),
++            last_outcome: None,
++            last_used_length: None,
++            injection: None,
++        }
++    }
++
++    #[test]
++    fn timeout_must_not_reuse_dma_page_or_descriptors() {
++        let mut q = Pages([0; QUEUE_PAGES * 4096]);
++        let mut r = Pages([0; QUEUE_PAGES * 4096]);
++        let mut d = device(&mut q, &mut r);
++        unsafe {
++            assert!(!d.write_block(1, &[0x41; 512]));
++            let before_q = q.0;
++            let before_r = r.0;
++            assert!(!d.write_block(2, &[0x42; 512]));
++            assert!(r.0 == before_r, "timed-out DMA request was overwritten");
++            assert!(q.0 == before_q, "timed-out descriptors were republished");
++        }
++    }
++
++    #[test]
++    fn late_completion_must_not_authorize_new_request() {
++        let mut q = Pages([0; QUEUE_PAGES * 4096]);
++        let mut r = Pages([0; QUEUE_PAGES * 4096]);
++        let mut d = device(&mut q, &mut r);
++        unsafe {
++            assert!(!d.write_block(1, &[0x41; 512]));
++            // Device finishes the old head after the CPU has timed out.
++            ((d.used_virt + 2) as *mut u16).write_volatile(1);
++            ((d.req_virt + 528) as *mut u8).write_volatile(0);
++            let before_q = q.0;
++            let before_r = r.0;
++            let mut output = [0x99; 512];
++            assert!(!d.read_block(2, &mut output));
++            assert_eq!(output, [0x99; 512]);
++            assert!(q.0 == before_q);
++            assert!(r.0 == before_r);
++        }
++    }
++    fn fixture() -> (Pages, Pages) {
++        (
++            Pages([0; QUEUE_PAGES * 4096]),
++            Pages([0; QUEUE_PAGES * 4096]),
++        )
++    }
++    #[test]
++    fn queue_allocation_bounds() {
++        assert!(!queue_fits(0));
++        assert!(!queue_fits(2));
++        assert!(!queue_fits(7));
++        assert!(queue_fits(8));
++        assert!(queue_fits(256));
++        assert!(!queue_fits(512));
++        assert!(!queue_fits(32768));
++    }
++    #[test]
++    fn valid_completion_and_flush_provenance() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.injection = Some((1, 0, 1, 0, false));
++        let write = unsafe { d.write_typed(1, &[0x33; 512]) };
++        assert_eq!(write.completion, Completion::Completed);
++        assert_eq!(write.completed, Amount::Exact(512));
++        assert_eq!(write.durability, Durability::NotEstablished);
++        assert_eq!(d.ownership(), Ownership::Retired);
++        d.injection = Some((1, 0, 1, 0, false));
++        let flush = unsafe { d.flush_typed() };
++        assert_eq!(
++            flush.durability,
++            Durability::VirtualBarrier {
++                through_generation: write.request.unwrap().generation
++            }
++        );
++        assert_eq!(flush.source, StatusSource::DeviceStatus(0));
++    }
++    #[test]
++    fn t5_legacy_length_not_authoritative() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.injection = Some((1, 0, 0, 0, false));
++        let result = unsafe { d.read_typed(0, &mut [0; 512]) };
++        // Specification's legacy exception: len cannot prove a short byte count.
++        assert_eq!(d.last_used_length(), Some(0));
++        assert_eq!(result.completed, Amount::Exact(512));
++        assert_eq!(result.source, StatusSource::DeviceStatus(0));
++    }
++    #[test]
++    fn t6_failed_write_and_read_do_not_invent_prefix() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.injection = Some((1, 0, 1, 1, false));
++        let result = unsafe { d.write_typed(0, &[9; 512]) };
++        assert_eq!(result.completion, Completion::Failed);
++        assert_eq!(result.completed, Amount::Unknown);
++        assert_eq!(result.durability, Durability::Uncertain);
++        assert_eq!(result.legacy(), Err(sunlight_block::BlockError::Uncertain));
++        d.injection = Some((1, 0, 1, 1, false));
++        let mut output = [0x91; 512];
++        let result = unsafe { d.read_typed(0, &mut output) };
++        assert_eq!(result.completion, Completion::Failed);
++        assert_eq!(output, [0x91; 512]);
++        assert_eq!(d.ownership(), Ownership::Retired);
++    }
++    #[test]
++    fn t7_uncertain_write_and_retention() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let result = unsafe { d.write_typed(0, &[1; 512]) };
++        assert_eq!(result.completion, Completion::Uncertain);
++        assert_eq!(result.source, StatusSource::Deadline);
++        assert_eq!(d.ownership(), Ownership::Quarantined);
++        assert_eq!(d.outstanding(), result.request);
++        let before = r.0;
++        let next = unsafe { d.write_typed(1, &[2; 512]) };
++        assert_eq!(next.legacy(), Err(sunlight_block::BlockError::Uncertain));
++        assert!(r.0 == before);
++    }
++    #[test]
++    fn t8_unsupported_flush_not_submitted() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.flush_supported = false;
++        let before = q.0;
++        let result = unsafe { d.flush_typed() };
++        assert_eq!(result.completion, Completion::Unsupported);
++        assert_eq!(result.request, None);
++        assert_eq!(result.completed, Amount::Exact(0));
++        assert!(q.0 == before);
++    }
++    #[test]
++    fn t9_failed_flush_preserves_write_uncertainty() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.injection = Some((1, 0, 1, 1, false));
++        let result = unsafe { d.flush_typed() };
++        assert_eq!(result.completion, Completion::Failed);
++        assert_eq!(result.durability, Durability::Uncertain);
++        assert_eq!(result.completed, Amount::Unknown);
++        assert_eq!(d.ownership(), Ownership::Retired);
++    }
++    #[test]
++    fn t10_uncertain_flush_quarantines() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let result = unsafe { d.flush_typed() };
++        assert_eq!(result.completion, Completion::Uncertain);
++        assert_eq!(result.durability, Durability::Uncertain);
++        assert_eq!(d.ownership(), Ownership::Quarantined);
++    }
++    #[test]
++    fn t15_invalid_used_head_and_index() {
++        for (delta, head) in [(1, 99), (2, 0)] {
++            let (mut q, mut r) = fixture();
++            let mut d = device(&mut q, &mut r);
++            d.injection = Some((delta, head, 1, 0, false));
++            let result = unsafe { d.flush_typed() };
++            assert_eq!(result.completion, Completion::Uncertain);
++            assert_eq!(d.ownership(), Ownership::Quarantined);
++            assert!(d.outstanding().is_some());
++        }
++    }
++    #[test]
++    fn t16_descriptor_ownership_and_bad_status() {
++        for (status, corrupt) in [(0, true), (255, false)] {
++            let (mut q, mut r) = fixture();
++            let mut d = device(&mut q, &mut r);
++            d.injection = Some((1, 0, 1, status, corrupt));
++            let result = unsafe { d.flush_typed() };
++            assert_eq!(result.completion, Completion::Uncertain);
++            assert_eq!(d.ownership(), Ownership::Quarantined);
++        }
++    }
++    #[test]
++    fn duplicate_before_submission_freezes_before_buffer_copy() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        unsafe {
++            ((d.used_virt + 2) as *mut u16).write_volatile(1);
++        }
++        let before = r.0;
++        let result = unsafe { d.write_typed(0, &[2; 512]) };
++        assert_eq!(result.completion, Completion::Uncertain);
++        assert!(r.0 == before);
++        assert_eq!(d.avail_idx, 0);
++    }
++    #[test]
++    fn reused_wire_head_has_no_generation_echo_demonstrated_limit() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.injection = Some((1, 0, 1, 0, false));
++        let old = unsafe { d.flush_typed() };
++        d.injection = Some((1, 0, 1, 0, false));
++        // A forged duplicate arriving after publication is wire-identical to a new completion.
++        let new = unsafe { d.flush_typed() };
++        assert_ne!(old.request, new.request);
++        assert_eq!(new.completion, Completion::Completed); // G4 remains PARTIAL.
++    }
++    #[test]
++    fn ring_index_wrap_is_separate_from_generation_exhaustion() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        d.avail_idx = u16::MAX;
++        d.last_used_idx = u16::MAX;
++        unsafe {
++            ((d.used_virt + 2) as *mut u16).write_volatile(u16::MAX);
++        }
++        d.injection = Some((1, 0, 1, 0, false));
++        let result = unsafe { d.flush_typed() };
++        assert_eq!(result.completion, Completion::Completed);
++        assert_eq!(d.avail_idx, 0);
++        assert_eq!(d.last_used_idx, 0);
++        assert_eq!(result.request.unwrap().generation, 1);
++    }
++}

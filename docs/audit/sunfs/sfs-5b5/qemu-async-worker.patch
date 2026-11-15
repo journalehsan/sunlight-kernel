@@ -1,0 +1,315 @@
+--- a/hw/block/virtio-blk.c
++++ b/hw/block/virtio-blk.c
+@@ -14,6 +14,7 @@
+ #include "qemu/osdep.h"
+ #include <sys/mman.h>
+ #include <fcntl.h>
++#include "qemu/thread.h"
+ #include "qemu/defer-call.h"
+ #include "qapi/error.h"
+ #include "qemu/iov.h"
+@@ -902,12 +903,14 @@
+  * contract of this disposable guest fixture, never inferred for normal devices.
+  * Protect original direct RAM mappings until process death; no recovery/reuse.
+  */
++static void sfs5b5_ack(void);
+ void sfs5b3_guard_old_dma(VirtIODevice *vdev, void *queue_host);
+ void sfs5b3_guard_old_dma(VirtIODevice *vdev, void *queue_host)
+ {
+     uintptr_t data_page;
+     int fds[2];
+     ssize_t probe;
++    sfs5b5_ack();
+     if (sfs5b3_old_device != vdev || !sfs5b3_old_data) {
+         return;
+     }
+@@ -955,6 +958,258 @@
+     sfs5b3_old_device = NULL;
+ }
+ 
++/* ---------------------------------------------------------------------------
++ * SFS5B5 TEST ONLY: genuine asynchronous device-side access worker.
++ *
++ * A dedicated joinable QemuThread performs real reads of the payload through
++ * the DMA mapping that virtqueue_pop() established for the fetched request.
++ * The main thread, holding BQL, executes virtio_blk_reset() while the worker
++ * is provably inside its access loop.  The mapping is NOT released until the
++ * worker has been joined, so no DMA mapping is unmapped while an authorised
++ * user is active.  This backend is only reachable for the disposable
++ * "SFS5B3-disposable" attachment, sector 63, with ioeventfd=off and no
++ * IOThread.  It is not a host request mock.
++ *
++ * The worker receives the mapped host pointer together with the mapping that
++ * keeps it valid (direct RAM, pinned, never hot-removed or migrated).  The
++ * pointer is therefore protected across the worker lifetime boundary by
++ * (a) the retained mapping, (b) join-before-unmap ordering and (c) static RAM.
++ * No address-space translation or RCU section is used from the worker.
++ * ------------------------------------------------------------------------- */
++typedef struct Sfs5b5Worker {
++    QemuThread thread;
++    QemuMutex lock;
++    QemuCond cond;
++    void *ptr;
++    uint32_t len;
++    uint64_t iterations;
++    uint64_t bytes;
++    uint64_t seq;
++    int64_t t_enter_ns;
++    int64_t t_exit_ns;
++    bool access_active;
++    bool reset_entered;
++    bool observed_reset_active;
++    bool cancel_requested;
++    bool acknowledged;
++    bool stop_all;
++    bool done;
++    bool negative;
++    bool fault_logged;
++    bool post_ack_logged;
++    bool started;
++} Sfs5b5Worker;
++
++static Sfs5b5Worker sfs5b5_w;
++static VirtIOBlockReq *sfs5b5_held;
++static VirtIOBlock *sfs5b5_blk;
++static bool sfs5b5_ack_pending;
++static bool sfs5b5_overlap_proven;
++static uint64_t sfs5b5_iter_at_reset;
++static uint64_t sfs5b5_iter_after_wait;
++static uint64_t sfs5b5_quiesce_ms;
++
++static void sfs5b5_event_locked(Sfs5b5Worker *w, const char *stage,
++                                uint64_t extra)
++{
++    fprintf(stderr,
++            "SFS5B5 seq=%" PRIu64 " ns=%" PRId64 " thread=%s stage=%s"
++            " iter=%" PRIu64 " bytes=%" PRIu64 " extra=%" PRIu64 "\n",
++            ++w->seq, qemu_clock_get_ns(QEMU_CLOCK_REALTIME),
++            qemu_thread_is_self(&w->thread) ? "worker" : "main",
++            stage, w->iterations, w->bytes, extra);
++    fflush(stderr);
++}
++
++static void sfs5b5_event(Sfs5b5Worker *w, const char *stage, uint64_t extra)
++{
++    qemu_mutex_lock(&w->lock);
++    sfs5b5_event_locked(w, stage, extra);
++    qemu_mutex_unlock(&w->lock);
++}
++
++static void *sfs5b5_worker_fn(void *opaque)
++{
++    Sfs5b5Worker *w = opaque;
++    const uint8_t *src = w->ptr;
++    uint32_t n = w->len;
++    uint8_t sink[512];
++
++    qemu_mutex_lock(&w->lock);
++    w->access_active = true;
++    w->t_enter_ns = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
++    sfs5b5_event_locked(w, "ACCESS_ENTERED", n);
++    qemu_cond_broadcast(&w->cond);
++    qemu_mutex_unlock(&w->lock);
++
++    for (;;) {
++        /* Real device-side payload read through the retained DMA mapping. */
++        memcpy(sink, src, n);
++        qemu_mutex_lock(&w->lock);
++        w->iterations++;
++        w->bytes += n;
++        if (w->reset_entered && !w->observed_reset_active) {
++            w->observed_reset_active = true;
++            sfs5b5_event_locked(w, "ACCESS_OBSERVED_RESET_ACTIVE",
++                                w->iterations);
++            qemu_cond_broadcast(&w->cond);
++        }
++        if (w->acknowledged && !w->post_ack_logged) {
++            w->post_ack_logged = true;
++            sfs5b5_event_locked(w, "NEGATIVE_POST_ACK_ACCESS", w->iterations);
++        }
++        if ((w->cancel_requested && !w->negative) || w->stop_all ||
++            w->iterations > 50000000) {
++            w->access_active = false;
++            w->t_exit_ns = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
++            sfs5b5_event_locked(w, "ACCESS_EXITED", w->iterations);
++            w->done = true;
++            qemu_cond_broadcast(&w->cond);
++            qemu_mutex_unlock(&w->lock);
++            break;
++        }
++        qemu_mutex_unlock(&w->lock);
++    }
++    /* Sink is only used to prevent the compiler eliding the payload reads. */
++    if (sink[0] == 0x5b && sink[n - 1] == 0x5b) {
++        w->bytes += 0;
++    }
++    return NULL;
++}
++
++static void sfs5b5_start(VirtIOBlockReq *req, const char *mode)
++{
++    Sfs5b5Worker *w = &sfs5b5_w;
++
++    memset(w, 0, sizeof(*w));
++    qemu_mutex_init(&w->lock);
++    qemu_cond_init(&w->cond);
++    w->ptr = req->elem.out_sg[0].iov_base;
++    w->len = req->elem.out_sg[0].iov_len;
++    w->negative = !strcmp(mode, "async-negative");
++    w->started = true;
++    sfs5b5_held = req;
++    sfs5b5_blk = req->dev;
++    sfs5b5_ack_pending = false;
++    sfs5b5_overlap_proven = false;
++    sfs5b5_iter_at_reset = 0;
++    sfs5b5_iter_after_wait = 0;
++    sfs5b5_quiesce_ms = 0;
++    sfs5b5_event(w, "MAPPING_ACQUIRED", w->len);
++    sfs5b5_event(w, "REQUEST_FETCHED", 0);
++    qemu_thread_create(&w->thread, "sfs5b5-access", sfs5b5_worker_fn, w,
++                       QEMU_THREAD_JOINABLE);
++    qemu_mutex_lock(&w->lock);
++    while (!w->access_active) {
++        qemu_cond_wait(&w->cond, &w->lock);
++    }
++    qemu_mutex_unlock(&w->lock);
++    sfs5b5_event(w, "ACCESS_ACTIVE", w->iterations);
++}
++
++/* Called from virtio_blk_reset() with BQL held, before blk_drain(). */
++static void sfs5b5_reset_enter(VirtIOBlock *s)
++{
++    Sfs5b5Worker *w = &sfs5b5_w;
++    VirtIOBlockReq *req = sfs5b5_held;
++    uint64_t before, after;
++    int waited_ms = 0;
++
++    assert(bql_locked());
++    assert(req && req->dev == s);
++    qemu_mutex_lock(&w->lock);
++    sfs5b5_event_locked(w, "RESET_ENTERED", 0);
++    before = w->iterations;
++    w->reset_entered = true;
++    qemu_cond_broadcast(&w->cond);
++    while (!w->observed_reset_active && !w->done && waited_ms < 2000) {
++        qemu_cond_timedwait(&w->cond, &w->lock, 20);
++        waited_ms += 20;
++    }
++    after = w->iterations;
++    sfs5b5_iter_at_reset = before;
++    sfs5b5_iter_after_wait = after;
++    sfs5b5_overlap_proven = w->observed_reset_active && after > before;
++    sfs5b5_event_locked(w,
++                        sfs5b5_overlap_proven ? "ACCESS_ACTIVE_DURING_RESET"
++                                              : "OVERLAP_NOT_OBSERVED",
++                        after - before);
++    w->cancel_requested = true;
++    qemu_cond_broadcast(&w->cond);
++    qemu_mutex_unlock(&w->lock);
++
++    if (w->negative) {
++        /* Deliberately broken TEST model: acknowledgment is published while
++         * the worker still holds and reads the mapping.  The violation is
++         * detected by the independent event-order observer, never by making
++         * the emulator perform an illegal access. */
++        sfs5b5_ack_pending = true;
++        return;
++    }
++
++    qemu_mutex_lock(&w->lock);
++    waited_ms = 0;
++    while (!w->done && waited_ms < 2000) {
++        qemu_cond_timedwait(&w->cond, &w->lock, 20);
++        waited_ms += 20;
++    }
++    sfs5b5_quiesce_ms = waited_ms;
++    sfs5b5_event_locked(w, w->done ? "CALLBACK_QUIESCED"
++                                   : "QUIESCE_TIMEOUT_BOUNDED",
++                        (uint64_t)waited_ms);
++    qemu_mutex_unlock(&w->lock);
++    qemu_thread_join(&w->thread);
++    sfs5b5_event(w, "WORKER_JOINED", 0);
++
++    sfs5b5_held = NULL;
++    iov_discard_undo(&req->inhdr_undo);
++    iov_discard_undo(&req->outhdr_undo);
++    virtqueue_detach_element(req->vq, &req->elem, 0);
++    block_acct_failed(blk_get_stats(s->blk), &req->acct);
++    sfs5b5_event(w, "MAPPING_RELEASED", 0);
++    g_free(req);
++    sfs5b5_event(w, "OLD_EPOCH_QUIESCED", 0);
++    sfs5b5_ack_pending = true;
++}
++
++/* Called from virtio_reset() after queue clearing, i.e. the acknowledgment
++ * boundary.  Negative mode finishes its deliberately late worker here. */
++static void sfs5b5_ack(void)
++{
++    Sfs5b5Worker *w = &sfs5b5_w;
++    VirtIOBlockReq *req = sfs5b5_held;
++
++    if (!sfs5b5_ack_pending) {
++        return;
++    }
++    sfs5b5_ack_pending = false;
++    sfs5b5_event(w, "RESET_ACKNOWLEDGED", 0);
++    if (!w->negative) {
++        return;
++    }
++    qemu_mutex_lock(&w->lock);
++    w->acknowledged = true;
++    qemu_cond_broadcast(&w->cond);
++    qemu_mutex_unlock(&w->lock);
++    g_usleep(200000);
++    qemu_mutex_lock(&w->lock);
++    w->stop_all = true;
++    qemu_cond_broadcast(&w->cond);
++    qemu_mutex_unlock(&w->lock);
++    qemu_thread_join(&w->thread);
++    sfs5b5_event(w, "NEGATIVE_WORKER_JOINED", 0);
++    if (req) {
++        sfs5b5_held = NULL;
++        iov_discard_undo(&req->inhdr_undo);
++        iov_discard_undo(&req->outhdr_undo);
++        virtqueue_detach_element(req->vq, &req->elem, 0);
++        block_acct_failed(blk_get_stats(sfs5b5_blk->blk), &req->acct);
++        sfs5b5_event(w, "MAPPING_RELEASED", 0);
++        g_free(req);
++        sfs5b5_event(w, "OLD_EPOCH_QUIESCED", 0);
++    }
++}
++
+ static bool sfs5b3_hold(VirtIOBlockReq *req, bool is_write)
+ {
+     const char *mode = getenv("SFS5B3_MODE");
+@@ -965,6 +1220,19 @@
+     }
+     assert(bql_locked());
+     assert(!sfs5b3_held);
++    if (!strncmp(mode, "async", 5)) {
++        sfs5b5_start(req, mode);
++        /* Test-only cross-boundary receipt published only after the worker
++         * published ACCESS_ENTERED.  No used-ring completion authority. */
++        stb_p(&req->in->status, 0xfe);
++        sfs5b4_event("GUEST_WITNESS_PUBLISHED", 1);
++        sfs5b4_event("REQUEST_OUTSTANDING", 0);
++        fprintf(stderr,
++                "SFS5B5 held head=%u mode=%s worker=started"
++                " backend=not-submitted used=not-published\n",
++                req->elem.index, mode);
++        return true;
++    }
+     sfs5b4_head = req->elem.index;
+     sfs5b4_fenced = false;
+     sfs5b4_budget = 0;
+@@ -1318,6 +1586,10 @@
+     VirtIOBlock *s = VIRTIO_BLK(vdev);
+     VirtIOBlockReq *req;
+ 
++    if (sfs5b5_held && sfs5b5_held->dev == s) {
++        sfs5b5_reset_enter(s);
++    }
++
+     if (sfs5b3_held && sfs5b3_held->dev == s) {
+         req = sfs5b3_held;
+         assert(bql_locked());

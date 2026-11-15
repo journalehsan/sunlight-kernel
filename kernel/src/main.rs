@@ -1860,6 +1860,19 @@ pub extern "C" fn _start() -> ! {
 
 /// The boot virtio-blk device, moved here after `init_block_and_fat` so the
 /// kernel VFS can keep reading the FAT volume after boot.
+#[cfg(feature = "sfs5a-test")]
+mod sfs5a_test;
+#[cfg(feature = "sfs5b1-test")]
+mod sfs5b1_test;
+#[cfg(feature = "sfs5b2-test")]
+mod sfs5b2_test;
+#[cfg(feature = "sfs5b3-test")]
+mod sfs5b3_test;
+#[cfg(feature = "sfs5b4-test")]
+mod sfs5b4_test;
+#[cfg(feature = "sfs5b4-test")]
+mod sfs_reset;
+
 struct BlkCell(Option<sunlight_virtio::VirtioBlk>);
 // SAFETY: VirtioBlk holds raw queue pointers into kernel-owned frames that
 // live for the whole kernel lifetime; access is serialized by the mutex.
@@ -1893,20 +1906,16 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
                 usb_storage::DISK
                     .lock()
                     .as_mut()
-                    .ok_or(sunlight_block::BlockError::Io)?,
+                    .ok_or(sunlight_block::BlockError::Unavailable)?,
                 lba,
                 buf,
             );
         }
         let mut cell = VIRTIO_BLK.lock();
-        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
+        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Unavailable)?;
         // SAFETY: blk was initialized with valid queue/req buffers and the
         // mutex serializes all device access.
-        if unsafe { blk.read_block(lba, buf) } {
-            Ok(())
-        } else {
-            Err(sunlight_block::BlockError::Io)
-        }
+        unsafe { blk.read_typed(lba, buf) }.legacy()
     }
 
     fn write_block(
@@ -1919,18 +1928,14 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
                 usb_storage::DISK
                     .lock()
                     .as_mut()
-                    .ok_or(sunlight_block::BlockError::Io)?,
+                    .ok_or(sunlight_block::BlockError::Unavailable)?,
                 lba,
                 buf,
             );
         }
         let mut cell = VIRTIO_BLK.lock();
-        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
-        if unsafe { blk.write_block(lba, buf) } {
-            Ok(())
-        } else {
-            Err(sunlight_block::BlockError::Io)
-        }
+        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Unavailable)?;
+        unsafe { blk.write_typed(lba, buf) }.legacy()
     }
 
     fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
@@ -1939,19 +1944,19 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
                 usb_storage::DISK
                     .lock()
                     .as_mut()
-                    .ok_or(sunlight_block::BlockError::Io)?,
+                    .ok_or(sunlight_block::BlockError::Unavailable)?,
             );
         }
         let mut cell = VIRTIO_BLK.lock();
-        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
-        if !blk.supports_flush() {
-            return Err(sunlight_block::BlockError::Unsupported);
+        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Unavailable)?;
+        unsafe { blk.flush_typed() }.legacy()
+    }
+
+    fn geometry(&self) -> Result<sunlight_block::contract::Geometry, sunlight_block::BlockError> {
+        if matches!(self, Self::Usb) {
+            return usb_storage::DISK.lock().as_ref().ok_or(sunlight_block::BlockError::Unavailable)?.geometry();
         }
-        if unsafe { blk.flush() } {
-            Ok(())
-        } else {
-            Err(sunlight_block::BlockError::Io)
-        }
+        VIRTIO_BLK.lock().0.as_ref().map(|d| d.geometry()).ok_or(sunlight_block::BlockError::Unavailable)
     }
 
     fn block_count(&self) -> u64 {
@@ -2061,11 +2066,7 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
     ) -> Result<(), sunlight_block::BlockError> {
         // SAFETY: blk was initialized with valid queue/req buffers, and the
         // kernel is single-threaded during boot-time FAT access.
-        if unsafe { self.blk.read_block(lba, buf) } {
-            Ok(())
-        } else {
-            Err(sunlight_block::BlockError::Io)
-        }
+        unsafe { self.blk.read_typed(lba, buf) }.legacy()
     }
 
     fn write_block(
@@ -2073,17 +2074,14 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
         lba: u64,
         buf: &[u8; sunlight_block::BLOCK_SIZE],
     ) -> Result<(), sunlight_block::BlockError> {
-        if unsafe { self.blk.write_block(lba, buf) } {
-            Ok(())
-        } else {
-            Err(sunlight_block::BlockError::Io)
-        }
+        unsafe { self.blk.write_typed(lba, buf) }.legacy()
     }
 
     fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
-        if !self.blk.supports_flush() { return Err(sunlight_block::BlockError::Unsupported); }
-        if unsafe { self.blk.flush() } { Ok(()) } else { Err(sunlight_block::BlockError::Io) }
+        unsafe { self.blk.flush_typed() }.legacy()
     }
+
+    fn geometry(&self) -> Result<sunlight_block::contract::Geometry, sunlight_block::BlockError> { Ok(self.blk.geometry()) }
 
     fn block_count(&self) -> u64 {
         self.blk.block_count()
@@ -2171,6 +2169,23 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
             );
             return share_phys;
         }
+    };
+
+    #[cfg(feature = "sfs5b4-test")]
+    let blk = sfs5b4_test::run(blk, queue_phys.as_u64(), req_phys.as_u64());
+
+    #[cfg(all(feature = "sfs5a-test", not(feature = "sfs5b4-test")))]
+    let blk = {
+        let mut device = blk;
+        #[cfg(feature = "sfs5b3-test")]
+        sfs5b3_test::run(&mut device, queue_phys.as_u64(), req_phys.as_u64());
+        #[cfg(feature = "sfs5b2-test")]
+        sfs5b2_test::run(&mut device);
+        #[cfg(feature = "sfs5b1-test")]
+        sfs5b1_test::run(&mut device);
+        #[cfg(not(any(feature = "sfs5b1-test", feature = "sfs5b2-test", feature = "sfs5b3-test")))]
+        sfs5a_test::run(&mut device);
+        device
     };
 
     // Retain even an unformatted disk or rejected table for runtime enumeration.

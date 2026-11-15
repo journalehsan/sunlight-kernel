@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "image_exactly_marker_plus_completed_sector60": true,
+  "write_visibility_after_failed_flush": "present in host image; no durability or rollback inference",
+  "native_expected_panic": "kernel/src/sfs5b1_test.rs:20 typed flush Failed versus Completed",
+  "retirement": "not directly observed natively; separate hosted assertions only",
+  "raw_result": "raw/native-negative-20261114T220213.398130Z/negative-native-result.json"
+}

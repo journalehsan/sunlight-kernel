@@ -1,0 +1,11 @@
+{
+  "status": "UNQUALIFIED",
+  "old_queue_incarnation": 1,
+  "admission": "permanently closed after uncertainty/reset",
+  "old_outstanding_request": "quarantined with generation2/head0",
+  "old_authority_invalidated_for_new_epoch": false,
+  "new_epoch_admission": false,
+  "reinitialization": "NOT_RUN",
+  "fresh_post_reset_io": "NOT_RUN",
+  "reason": "No qualified retirement/reuse authority; preserve old ownership"
+}

@@ -1,0 +1,27 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B4 seq=1 ns=320549407090954 epoch=1 queue=0 head=0 stage=DEVICE_FETCHED bytes=0
+SFS5B4 seq=2 ns=320549407098926 epoch=1 queue=0 head=0 stage=PAYLOAD_ACCESS_STARTED bytes=0
+SFS5B3 fetched queue=0 head=0 sector=63 bytes=512 guest=0x7f7c34359010 mode=error
+SFS5B3 dma-read head=0 offset=0 bytes=256 value=180
+SFS5B4 seq=3 ns=320549407112672 epoch=1 queue=0 head=0 stage=PAYLOAD_ACCESS_ENDED bytes=256
+SFS5B4 seq=4 ns=320549407116954 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=5 ns=320549407120905 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B3 held head=0 consumed=256 remaining=256 backend=not-submitted used=not-published
+SFS5B3 reset-entry head=0 outstanding=1 consumed=256 remaining=256
+SFS5B4 seq=6 ns=320549649293966 epoch=1 queue=0 head=0 stage=RESET_ENTERED bytes=0
+SFS5B4 seq=7 ns=320549649298927 epoch=1 queue=0 head=0 stage=DEVICE_ERROR_CANCEL bytes=0
+SFS5B3 detached head=0 timer=pending-cancelled backend=never-submitted used=never-published
+SFS5B4 seq=8 ns=320549649307547 epoch=1 queue=0 head=0 stage=OLD_EPOCH_QUIESCED bytes=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B4 seq=9 ns=320549649374480 epoch=1 queue=0 head=0 stage=POSITIVE_CONTROL_ACCESS_ENDED bytes=1
+SFS5B4 seq=10 ns=320549649377455 epoch=1 queue=0 head=0 stage=RESET_ACKNOWLEDGED bytes=0
+SFS5B3 guard-installed queue=0x7f7c34355000 queue-bytes=16384 request=0x7f7c34359000 request-bytes=4096 probe=EFAULT
+SFS5B4 seq=11 ns=320549649504648 epoch=1 queue=0 head=0 stage=ORIGINAL_MAPPINGS_PROTECTED bytes=0
+SFS5B4 seq=12 ns=320549669094445 epoch=1 queue=0 head=0 stage=LATE_CALLBACK_NO_REQUEST bytes=0
+SFS5B4 seq=13 ns=320549669133927 epoch=1 queue=0 head=0 stage=STALE_ACCESS_REJECTED bytes=0

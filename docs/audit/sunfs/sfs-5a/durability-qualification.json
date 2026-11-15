@@ -1,0 +1,68 @@
+{
+  "status": "PARTIAL",
+  "levels": {
+    "level_1_driver_protocol": "PARTIAL",
+    "level_2_native_virtual_device": "PARTIAL",
+    "level_3_physical_durability": "UNQUALIFIED"
+  },
+  "positive_scope": "acknowledged final persistence cut survived abrupt VM termination and cold guest restart on six disposable images; full host bytes match",
+  "cache_modes": {
+    "writeback": "host/QEMU caches may participate; guest flush issued before kill",
+    "none": "QEMU host direct-I/O mode; not physical power-loss certification"
+  },
+  "driver_flush": "type 4 submitted and used/status completion observed through same production path",
+  "expected_durable_state_sets": "singleton fully completed D/P/R/R0 and cycle pattern after final state-marker flush; no intermediate cut sets tested",
+  "protocol_fixture": "raw byte patterns only, not SunFS records or mount/recovery engine",
+  "data_before_checkpoint": "eight dependency-sector completions, then D flush ack, then checkpoint-pattern write and P ack",
+  "checkpoint_ack": "only after flush P in fixture; no fsync/native SunFS consumer",
+  "failed_uncertain_flush": "NOT_RUN natively; hosted SFS fault suites separate",
+  "uncertain_ownership": "UNQUALIFIED runtime fence; no mutation admission authorized",
+  "images": [
+    {
+      "path": "raw/native-20261114T211015.477037Z/cpu-1-none.img.gz",
+      "bytes": 4194304,
+      "sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c",
+      "compressed_sha256": "c30fbf64c9af80b1310d990ca22f737d759d16f4c3812e87e238d7f9f258ccdf",
+      "host_checked_entire_image": true
+    },
+    {
+      "path": "raw/native-20261114T211015.477037Z/cpu-1-writeback.img.gz",
+      "bytes": 4194304,
+      "sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c",
+      "compressed_sha256": "c30fbf64c9af80b1310d990ca22f737d759d16f4c3812e87e238d7f9f258ccdf",
+      "host_checked_entire_image": true
+    },
+    {
+      "path": "raw/native-20261114T211015.477037Z/cpu-2-none.img.gz",
+      "bytes": 4194304,
+      "sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c",
+      "compressed_sha256": "c30fbf64c9af80b1310d990ca22f737d759d16f4c3812e87e238d7f9f258ccdf",
+      "host_checked_entire_image": true
+    },
+    {
+      "path": "raw/native-20261114T211015.477037Z/cpu-2-writeback.img.gz",
+      "bytes": 4194304,
+      "sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c",
+      "compressed_sha256": "c30fbf64c9af80b1310d990ca22f737d759d16f4c3812e87e238d7f9f258ccdf",
+      "host_checked_entire_image": true
+    },
+    {
+      "path": "raw/native-20261114T211015.477037Z/cpu-4-none.img.gz",
+      "bytes": 4194304,
+      "sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c",
+      "compressed_sha256": "c30fbf64c9af80b1310d990ca22f737d759d16f4c3812e87e238d7f9f258ccdf",
+      "host_checked_entire_image": true
+    },
+    {
+      "path": "raw/native-20261114T211015.477037Z/cpu-4-writeback.img.gz",
+      "bytes": 4194304,
+      "sha256": "fa34a4bd565be7dfbc582f4f357ea8503d765dbd96530d2cc3c4e1cf4871c34c",
+      "compressed_sha256": "c30fbf64c9af80b1310d990ca22f737d759d16f4c3812e87e238d7f9f258ccdf",
+      "host_checked_entire_image": true
+    }
+  ],
+  "physical_power_loss": false,
+  "host_power_loss": false,
+  "write_cache_battery_or_drive_honesty": "UNKNOWN",
+  "successful_flush_alone_complete_chain_proof": false
+}

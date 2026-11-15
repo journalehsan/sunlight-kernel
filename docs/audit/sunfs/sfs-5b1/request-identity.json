@@ -1,0 +1,20 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "status": "PARTIAL",
+  "fields": {
+    "device.backend": "stable diagnostic backend enum",
+    "device.incarnation": "global AtomicU64 checked allocation, attachment-local authority; refusal at exhaustion",
+    "queue_incarnation": "one immutable queue epoch 1 per fresh device incarnation; no reinitialize API",
+    "generation": "checked sequence also ownership epoch and submission order; max is refused before publication",
+    "head": "owned descriptor head; checked against used ring; same head reused only after valid completion"
+  },
+  "logical_token_checks": "Owner::complete matches exact active ID, device, queue, Submitted state and resource validation",
+  "wire_limit": "legacy used entry carries head and length only. Forged old completion after slot reuse can alias the current request; executable regression demonstrates acceptance. No claim of wire generation authentication.",
+  "wrapping": "u16 ring indices wrap as protocol indices only; u64 identity counters never wrap",
+  "requalification": "reset/media replacement requires external proven quiescence and new attachment identity; unavailable here"
+}

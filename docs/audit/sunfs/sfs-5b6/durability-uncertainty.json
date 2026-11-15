@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "typed_results_unchanged": true,
+  "guest_outcome": "Uncertain remains authoritative after timeout; exact completed bytes Unknown",
+  "host_readback": "observed image contents only; neither durable barrier nor authoritative guest short count",
+  "native_writable_sunfs": "BLOCKED"
+}

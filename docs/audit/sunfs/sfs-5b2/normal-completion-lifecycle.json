@@ -1,0 +1,35 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "conforming device only; logical request retirement, no PMM release",
+  "status": "PASS",
+  "lifecycle": [
+    "Created/Retired",
+    "Prepared",
+    "Submitted",
+    "Completed",
+    "Retired"
+  ],
+  "validation": [
+    "live device status exactly ACKNOWLEDGE|DRIVER|DRIVER_OK before publication and retirement",
+    "used_idx == last_used_idx.wrapping_add(1)",
+    "used head equals current head 0",
+    "all chain addresses/lengths/flags/next pointers match exact header/data/status layout",
+    "status initialized 0xff before publication and must be 0/1/2 on completion",
+    "Owner active token matches device, queue incarnation, generation and Submitted state",
+    "used index consumed once before exact-token retirement",
+    "owner.complete/retire reject repeated and stale tokens"
+  ],
+  "ordering": "SeqCst fences around available publication and used consumption on coherent x86; not a storage barrier",
+  "wrap": "ring_index_wrap_is_separate_from_generation_exhaustion; protocol u16 wraps, request u64 generation refuses exhaustion",
+  "interrupts": "polling only; interrupt notification carries no completion authority",
+  "evidence": [
+    "storage regression log",
+    "kernel ownership contract tests",
+    "native serial and QEMU completion traces"
+  ],
+  "limitations": [
+    "same-head malicious status writer remains unresolved",
+    "no queue epoch reinitialization implemented",
+    "legacy used.len not authoritative"
+  ]
+}

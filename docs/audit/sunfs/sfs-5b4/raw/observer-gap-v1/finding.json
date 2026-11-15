@@ -1,0 +1,9 @@
+{
+  "status": "FAIL",
+  "scope": "v1 observer completeness",
+  "finding": "Unconditional successful positive pipe-copy occurred after RESET_ACKNOWLEDGED but was omitted from access event stream. Safe-mode no-post-claimed-fence-access conclusion unsupported.",
+  "repair": "Move positive control before acknowledgment and record POSITIVE_CONTROL_ACCESS_ENDED; classify all recorded access completions in graph.",
+  "v1_native_runs": "All v1 binary runs excluded from final device-model qualification despite scoped assertion PASS.",
+  "guest_source_changed": false,
+  "retirement_authorized": false
+}

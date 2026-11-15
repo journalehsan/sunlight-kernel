@@ -1,0 +1,2298 @@
+{
+  "status": "PARTIAL",
+  "races": {
+    "R2": {
+      "status": "NOT_RUN",
+      "applicability": "polling path",
+      "reason": "required deterministic native overlap not established by backend admission alone",
+      "intended_interleaving": "guest timeout competes with used-ring completion",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    },
+    "R3": {
+      "status": "PARTIAL",
+      "applicability": "polling path",
+      "reason": "backend callback executes during reset drain; stock used-ring completion cut NOT_RUN",
+      "intended_interleaving": "completion executes while reset is active",
+      "observed_runs": [
+        {
+          "run": "cpu-1-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f59d020a9a0 qiov=0x7f59d020aa38 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[23, 0, 0, 0] ticks=[28, 0, 0, 0] start-work=[2259, 0, 0, 0] work=[2671, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 0, 0, 0] ticks=[27, 0, 0, 0] contention-start-work=[2261, 0, 0, 0] work=[2667, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-1-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f545c056ec0 qiov=0x7f545c056f58 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[22, 0, 0, 0] ticks=[27, 0, 0, 0] start-work=[2363, 0, 0, 0] work=[2800, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 0, 0, 0] ticks=[26, 0, 0, 0] contention-start-work=[2365, 0, 0, 0] work=[2796, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fac6c3be270 qiov=0x7fac6c3be308 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[22, 22, 0, 0] ticks=[27, 28, 0, 0] start-work=[1308, 2108, 0, 0] work=[1609, 2534, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 22, 0, 0] ticks=[26, 26, 0, 0] contention-start-work=[1309, 2109, 0, 0] work=[1594, 2530, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f559019d2a0 qiov=0x7f559019d338 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[23, 22, 0, 0] ticks=[29, 28, 0, 0] start-work=[1465, 2170, 0, 0] work=[1714, 2519, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 23, 0, 0] ticks=[27, 27, 0, 0] contention-start-work=[1466, 2172, 0, 0] work=[1699, 2515, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fc2101c74e0 qiov=0x7fc2101c7578 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[23, 25, 25, 24] ticks=[30, 31, 30, 30] start-work=[433, 512, 460, 895] work=[520, 612, 534, 1083] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 25, 25, 25] ticks=[27, 29, 29, 29] contention-start-work=[435, 515, 462, 907] work=[512, 607, 522, 1058] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fbf501220f0 qiov=0x7fbf50122188 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[22, 23, 22, 22] ticks=[28, 29, 28, 28] start-work=[614, 885, 717, 1429] work=[781, 1076, 867, 1763] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 23, 23, 22] ticks=[26, 27, 27, 26] contention-start-work=[616, 889, 719, 1441] work=[768, 1063, 863, 1737] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373762,
+                "generation": 3
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+        }
+      ],
+      "actual_interleaving": "backend callback executes during reset drain; stock used-ring completion cut NOT_RUN"
+    },
+    "R6": {
+      "status": "PASS",
+      "applicability": "polling path",
+      "reason": "private worker reads during reset, then exits and joins before unmap",
+      "scope": "instrumented retaining callback; no allocator or stock used-publication qualification",
+      "intended_interleaving": "private worker exits while reset owns request cleanup",
+      "observed_runs": [
+        {
+          "run": "cpu-1-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f59d020a9a0 qiov=0x7f59d020aa38 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[23, 0, 0, 0] ticks=[28, 0, 0, 0] start-work=[2259, 0, 0, 0] work=[2671, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 0, 0, 0] ticks=[27, 0, 0, 0] contention-start-work=[2261, 0, 0, 0] work=[2667, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-1-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f545c056ec0 qiov=0x7f545c056f58 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[22, 0, 0, 0] ticks=[27, 0, 0, 0] start-work=[2363, 0, 0, 0] work=[2800, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 0, 0, 0] ticks=[26, 0, 0, 0] contention-start-work=[2365, 0, 0, 0] work=[2796, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fac6c3be270 qiov=0x7fac6c3be308 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[22, 22, 0, 0] ticks=[27, 28, 0, 0] start-work=[1308, 2108, 0, 0] work=[1609, 2534, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 22, 0, 0] ticks=[26, 26, 0, 0] contention-start-work=[1309, 2109, 0, 0] work=[1594, 2530, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f559019d2a0 qiov=0x7f559019d338 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[23, 22, 0, 0] ticks=[29, 28, 0, 0] start-work=[1465, 2170, 0, 0] work=[1714, 2519, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 23, 0, 0] ticks=[27, 27, 0, 0] contention-start-work=[1466, 2172, 0, 0] work=[1699, 2515, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fc2101c74e0 qiov=0x7fc2101c7578 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[23, 25, 25, 24] ticks=[30, 31, 30, 30] start-work=[433, 512, 460, 895] work=[520, 612, 534, 1083] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 25, 25, 25] ticks=[27, 29, 29, 29] contention-start-work=[435, 515, 462, 907] work=[512, 607, 522, 1058] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fbf501220f0 qiov=0x7fbf50122188 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[22, 23, 22, 22] ticks=[28, 29, 28, 28] start-work=[614, 885, 717, 1429] work=[781, 1076, 867, 1763] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 23, 23, 22] ticks=[26, 27, 27, 26] contention-start-work=[616, 889, 719, 1441] work=[768, 1063, 863, 1737] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373762,
+                "generation": 3
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+        }
+      ],
+      "actual_interleaving": "private worker reads during reset, then exits and joins before unmap"
+    },
+    "R7": {
+      "status": "NOT_RUN",
+      "applicability": "polling path",
+      "reason": "required deterministic native overlap not established by backend admission alone",
+      "intended_interleaving": "callback cancellation competes with completion",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    },
+    "R8": {
+      "status": "PASS",
+      "applicability": "polling path",
+      "reason": "mapping release precedes device status-zero completion and guest readback",
+      "scope": "instrumented retaining callback; no allocator or stock used-publication qualification",
+      "intended_interleaving": "mapping release precedes reset acknowledgment",
+      "observed_runs": [
+        {
+          "run": "cpu-1-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f59d020a9a0 qiov=0x7f59d020aa38 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[23, 0, 0, 0] ticks=[28, 0, 0, 0] start-work=[2259, 0, 0, 0] work=[2671, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 0, 0, 0] ticks=[27, 0, 0, 0] contention-start-work=[2261, 0, 0, 0] work=[2667, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-1-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f545c056ec0 qiov=0x7f545c056f58 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[22, 0, 0, 0] ticks=[27, 0, 0, 0] start-work=[2363, 0, 0, 0] work=[2800, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 0, 0, 0] ticks=[26, 0, 0, 0] contention-start-work=[2365, 0, 0, 0] work=[2796, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fac6c3be270 qiov=0x7fac6c3be308 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[22, 22, 0, 0] ticks=[27, 28, 0, 0] start-work=[1308, 2108, 0, 0] work=[1609, 2534, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 22, 0, 0] ticks=[26, 26, 0, 0] contention-start-work=[1309, 2109, 0, 0] work=[1594, 2530, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f559019d2a0 qiov=0x7f559019d338 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[23, 22, 0, 0] ticks=[29, 28, 0, 0] start-work=[1465, 2170, 0, 0] work=[1714, 2519, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 23, 0, 0] ticks=[27, 27, 0, 0] contention-start-work=[1466, 2172, 0, 0] work=[1699, 2515, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fc2101c74e0 qiov=0x7fc2101c7578 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[23, 25, 25, 24] ticks=[30, 31, 30, 30] start-work=[433, 512, 460, 895] work=[520, 612, 534, 1083] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 25, 25, 25] ticks=[27, 29, 29, 29] contention-start-work=[435, 515, 462, 907] work=[512, 607, 522, 1058] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fbf501220f0 qiov=0x7fbf50122188 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[22, 23, 22, 22] ticks=[28, 29, 28, 28] start-work=[614, 885, 717, 1429] work=[781, 1076, 867, 1763] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 23, 23, 22] ticks=[26, 27, 27, 26] contention-start-work=[616, 889, 719, 1441] work=[768, 1063, 863, 1737] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373762,
+                "generation": 3
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+        }
+      ],
+      "actual_interleaving": "mapping release precedes device status-zero completion and guest readback"
+    },
+    "R9": {
+      "status": "PARTIAL",
+      "applicability": "polling path",
+      "reason": "private exit/join precedes emulator request unmap/free; guest DMA retirement NOT_RUN",
+      "intended_interleaving": "last callback exits before resource retirement",
+      "observed_runs": [
+        {
+          "run": "cpu-1-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f59d020a9a0 qiov=0x7f59d020aa38 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[23, 0, 0, 0] ticks=[28, 0, 0, 0] start-work=[2259, 0, 0, 0] work=[2671, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 0, 0, 0] ticks=[27, 0, 0, 0] contention-start-work=[2261, 0, 0, 0] work=[2667, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-1-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f545c056ec0 qiov=0x7f545c056f58 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[22, 0, 0, 0] ticks=[27, 0, 0, 0] start-work=[2363, 0, 0, 0] work=[2800, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 0, 0, 0] ticks=[26, 0, 0, 0] contention-start-work=[2365, 0, 0, 0] work=[2796, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fac6c3be270 qiov=0x7fac6c3be308 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[22, 22, 0, 0] ticks=[27, 28, 0, 0] start-work=[1308, 2108, 0, 0] work=[1609, 2534, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 22, 0, 0] ticks=[26, 26, 0, 0] contention-start-work=[1309, 2109, 0, 0] work=[1594, 2530, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f559019d2a0 qiov=0x7f559019d338 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[23, 22, 0, 0] ticks=[29, 28, 0, 0] start-work=[1465, 2170, 0, 0] work=[1714, 2519, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 23, 0, 0] ticks=[27, 27, 0, 0] contention-start-work=[1466, 2172, 0, 0] work=[1699, 2515, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fc2101c74e0 qiov=0x7fc2101c7578 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[23, 25, 25, 24] ticks=[30, 31, 30, 30] start-work=[433, 512, 460, 895] work=[520, 612, 534, 1083] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 25, 25, 25] ticks=[27, 29, 29, 29] contention-start-work=[435, 515, 462, 907] work=[512, 607, 522, 1058] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fbf501220f0 qiov=0x7fbf50122188 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[22, 23, 22, 22] ticks=[28, 29, 28, 28] start-work=[614, 885, 717, 1429] work=[781, 1076, 867, 1763] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 23, 23, 22] ticks=[26, 27, 27, 26] contention-start-work=[616, 889, 719, 1441] work=[768, 1063, 863, 1737] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373762,
+                "generation": 3
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+        }
+      ],
+      "actual_interleaving": "private exit/join precedes emulator request unmap/free; guest DMA retirement NOT_RUN"
+    },
+    "R10": {
+      "status": "PASS",
+      "applicability": "polling path",
+      "reason": "unique generation-qualified reset owner and actual competing guest tasks",
+      "scope": "instrumented retaining callback; no allocator or stock used-publication qualification",
+      "intended_interleaving": "distinct guest tasks compete for reset ownership",
+      "observed_runs": [
+        {
+          "run": "cpu-1-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f59d020a9a0 qiov=0x7f59d020aa38 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[23, 0, 0, 0] ticks=[28, 0, 0, 0] start-work=[2259, 0, 0, 0] work=[2671, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 0, 0, 0] ticks=[27, 0, 0, 0] contention-start-work=[2261, 0, 0, 0] work=[2667, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-1-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f545c056ec0 qiov=0x7f545c056f58 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[22, 0, 0, 0] ticks=[27, 0, 0, 0] start-work=[2363, 0, 0, 0] work=[2800, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 0, 0, 0] ticks=[26, 0, 0, 0] contention-start-work=[2365, 0, 0, 0] work=[2796, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fac6c3be270 qiov=0x7fac6c3be308 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[22, 22, 0, 0] ticks=[27, 28, 0, 0] start-work=[1308, 2108, 0, 0] work=[1609, 2534, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 22, 0, 0] ticks=[26, 26, 0, 0] contention-start-work=[1309, 2109, 0, 0] work=[1594, 2530, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f559019d2a0 qiov=0x7f559019d338 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[23, 22, 0, 0] ticks=[29, 28, 0, 0] start-work=[1465, 2170, 0, 0] work=[1714, 2519, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 23, 0, 0] ticks=[27, 27, 0, 0] contention-start-work=[1466, 2172, 0, 0] work=[1699, 2515, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fc2101c74e0 qiov=0x7fc2101c7578 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[23, 25, 25, 24] ticks=[30, 31, 30, 30] start-work=[433, 512, 460, 895] work=[520, 612, 534, 1083] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 25, 25, 25] ticks=[27, 29, 29, 29] contention-start-work=[435, 515, 462, 907] work=[512, 607, 522, 1058] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fbf501220f0 qiov=0x7fbf50122188 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[22, 23, 22, 22] ticks=[28, 29, 28, 28] start-work=[614, 885, 717, 1429] work=[781, 1076, 867, 1763] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 23, 23, 22] ticks=[26, 27, 27, 26] contention-start-work=[616, 889, 719, 1441] work=[768, 1063, 863, 1737] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373762,
+                "generation": 3
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+        }
+      ],
+      "actual_interleaving": "unique generation-qualified reset owner and actual competing guest tasks"
+    },
+    "R11": {
+      "status": "NOT_RUN",
+      "applicability": "conditional on a new epoch; no new epoch authorized",
+      "reason": "required deterministic native overlap not established by backend admission alone",
+      "intended_interleaving": "old callback arrives after a new epoch",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    },
+    "R12": {
+      "status": "NOT_RUN",
+      "applicability": "polling path",
+      "reason": "required deterministic native overlap not established by backend admission alone",
+      "intended_interleaving": "device removal competes with an outstanding mapping",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    },
+    "R13": {
+      "status": "NOT_RUN",
+      "applicability": "polling path",
+      "reason": "required deterministic native overlap not established by backend admission alone",
+      "intended_interleaving": "interrupted reset is retried",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    },
+    "R14": {
+      "status": "PARTIAL",
+      "applicability": "polling path",
+      "reason": "admission closure is observed; a separately witnessed post-terminal admission cut is missing",
+      "intended_interleaving": "new I/O is attempted after terminal failure",
+      "observed_runs": [
+        {
+          "run": "cpu-1-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f59d020a9a0 qiov=0x7f59d020aa38 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[23, 0, 0, 0] ticks=[28, 0, 0, 0] start-work=[2259, 0, 0, 0] work=[2671, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 0, 0, 0] ticks=[27, 0, 0, 0] contention-start-work=[2261, 0, 0, 0] work=[2667, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-1-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f545c056ec0 qiov=0x7f545c056f58 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895853780,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-1-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=1 state=Running start-ticks=[22, 0, 0, 0] ticks=[27, 0, 0, 0] start-work=[2363, 0, 0, 0] work=[2800, 0, 0, 0] free-before=61435 free-after=61435 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 0, 0, 0] ticks=[26, 0, 0, 0] contention-start-work=[2365, 0, 0, 0] work=[2796, 0, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fac6c3be270 qiov=0x7fac6c3be308 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[22, 22, 0, 0] ticks=[27, 28, 0, 0] start-work=[1308, 2108, 0, 0] work=[1609, 2534, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 22, 0, 0] ticks=[26, 26, 0, 0] contention-start-work=[1309, 2109, 0, 0] work=[1594, 2530, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-2-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7f559019d2a0 qiov=0x7f559019d338 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-2-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=2 state=Running start-ticks=[23, 22, 0, 0] ticks=[29, 28, 0, 0] start-work=[1465, 2170, 0, 0] work=[1714, 2519, 0, 0] free-before=60653 free-after=60653 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 23, 0, 0] ticks=[27, 27, 0, 0] contention-start-work=[1466, 2172, 0, 0] work=[1699, 2515, 0, 0] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-writeback-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fc2101c74e0 qiov=0x7fc2101c7578 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[23, 25, 25, 24] ticks=[30, 31, 30, 30] start-work=[433, 512, 460, 895] work=[520, 612, 534, 1083] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[23, 25, 25, 25] ticks=[27, 29, 29, 29] contention-start-work=[435, 515, 462, 907] work=[512, 607, 522, 1058] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373761,
+                "generation": 2
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log"
+        },
+        {
+          "run": "cpu-4-none-private",
+          "raw": "raw/native-20261115T145612.275450Z",
+          "request_identity": "req=0x7fbf501220f0 qiov=0x7fbf50122188 head=0 sector=63 bytes=512",
+          "allocation": {
+            "queue_gpa": 274018304,
+            "request_gpa": 274034688,
+            "offered_features": 1895857876,
+            "accepted_features": 576,
+            "allocation_scope": "raw/native-20261115T145612.275450Z/cpu-4-none-private",
+            "queue_pages": [
+              274018304,
+              274022400,
+              274026496,
+              274030592
+            ],
+            "request_pages": [
+              274034688
+            ],
+            "hhdm_offset": 18446603336221196288,
+            "queue_virtual": 18446603336495214592,
+            "request_virtual": 18446603336495230976,
+            "header_gpa": 274034688,
+            "bounce_gpa": 274034704,
+            "status_gpa": 274035216,
+            "allocation_basis": "observed guest physical bases; source PMM alloc_frames(4)/alloc_frame and HHDM arithmetic",
+            "allocator_generation": "NOT_OBSERVED"
+          },
+          "winner": "generation-qualified guest reset owner",
+          "loser": "other reset contenders; backend callback reconciled before detach",
+          "terminal_state": "guest terminal quarantine; emulator request detached without used publication",
+          "backend_result": 0,
+          "backend": "terminal; drain returned in-flight zero",
+          "mapping": "private worker joined, then detached exactly once",
+          "dma_ownership": "guest pages pinned; retirement authority NOT_RUN",
+          "progress": {
+            "ready": "[SFS5B4] READY cpus=4 state=Running start-ticks=[22, 23, 22, 22] ticks=[28, 29, 28, 28] start-work=[614, 885, 717, 1429] work=[781, 1076, 867, 1763] free-before=59093 free-after=59093 pages-pinned=5 released=0 new-epoch=none inventory=Value((TerminalQuarantine, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: VerifiedRetained, reads: 1, status: Some(0) }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "contention": "[SFS5B4] contention-start-ticks=[22, 23, 23, 22] ticks=[26, 27, 27, 26] contention-start-work=[616, 889, 719, 1441] work=[768, 1063, 863, 1737] inventory=Value((ResetOwnerEstablished, ResetObservation { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, outstanding: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), state: Running, reads: 0, status: None }, Some(IoOutcome { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, request: Some(RequestId { device: DeviceIdentity { backend: VirtioLegacy, incarnation: 1 }, queue_incarnation: 1, generation: 6, head: 0 }), operation: Write, lba: 63, requested_blocks: 1, requested_bytes: 512, completed: Unknown, completion: Uncertain, source: Deadline, durability: Uncertain })))",
+            "worker_cpus": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "all_workers_observed": true,
+            "ap_startup_verified": true,
+            "timer_progress": true,
+            "task_progress": true,
+            "contention_timer_progress": true,
+            "contention_task_progress": true,
+            "reset_owner_identities": [
+              {
+                "pid": 373762,
+                "generation": 3
+              }
+            ],
+            "unique_reset_owner": true,
+            "reset_contested": true,
+            "progress_during_backend_drain": "NOT_RUN: counters bracket reset ownership and terminal state"
+          },
+          "events": "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+        }
+      ],
+      "actual_interleaving": "admission closure is observed; a separately witnessed post-terminal admission cut is missing"
+    },
+    "R15": {
+      "status": "NOT_RUN",
+      "applicability": "polling path",
+      "reason": "required deterministic native overlap not established by backend admission alone",
+      "intended_interleaving": "repeated reset occurs under allocation pressure",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    },
+    "R4": {
+      "status": "NOT_RUN",
+      "applicability": "NOT_APPLICABLE to current polling path",
+      "hypothetical_interrupt_path": "NOT_RUN",
+      "intended_interleaving": "interrupt-driven completion cut",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    },
+    "R5": {
+      "status": "NOT_RUN",
+      "applicability": "NOT_APPLICABLE to current polling path",
+      "hypothetical_interrupt_path": "NOT_RUN",
+      "intended_interleaving": "interrupt-driven completion cut",
+      "observed_runs": [],
+      "actual_interleaving": "NOT_RUN for required cut"
+    }
+  }
+}

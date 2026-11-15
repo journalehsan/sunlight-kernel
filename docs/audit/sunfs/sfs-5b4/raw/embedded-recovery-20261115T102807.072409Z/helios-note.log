@@ -1,0 +1,53 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling libc v0.2.186
+   Compiling proc-macro2 v1.0.106
+   Compiling errno v0.3.14
+   Compiling rustversion v1.0.23
+   Compiling signal-hook v0.3.18
+   Compiling cfg-if v1.0.4
+   Compiling parking_lot_core v0.9.12
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+   Compiling signal-hook-registry v1.4.8
+   Compiling scopeguard v1.2.0
+   Compiling smallvec v1.15.2
+   Compiling log v0.4.33
+   Compiling mio v0.8.11
+   Compiling lock_api v0.4.14
+   Compiling syn v2.0.118
+   Compiling signal-hook-mio v0.2.5
+   Compiling parking_lot v0.12.5
+   Compiling either v1.17.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling allocator-api2 v0.2.21
+   Compiling heck v0.5.0
+   Compiling paste v1.0.15
+   Compiling unicode-width v0.1.14
+   Compiling equivalent v1.0.2
+   Compiling foldhash v0.1.5
+   Compiling hashbrown v0.15.5
+   Compiling strum_macros v0.26.4
+   Compiling itertools v0.13.0
+   Compiling castaway v0.2.4
+   Compiling cassowary v0.3.0
+   Compiling bitflags v1.3.2
+   Compiling bitflags v2.13.0
+   Compiling ryu v1.0.23
+   Compiling itoa v1.0.18
+   Compiling static_assertions v1.1.0
+   Compiling compact_str v0.7.1
+   Compiling crossterm v0.27.0
+   Compiling crossterm v0.25.0
+   Compiling unicode-truncate v1.1.0
+   Compiling strum v0.26.3
+   Compiling lru v0.12.5
+   Compiling itertools v0.12.1
+   Compiling stability v0.2.1
+   Compiling ratatui v0.26.3
+   Compiling tui v0.19.0
+   Compiling helios-note v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/helios-note)
+    Finished `release` profile [optimized] target(s) in 23.77s

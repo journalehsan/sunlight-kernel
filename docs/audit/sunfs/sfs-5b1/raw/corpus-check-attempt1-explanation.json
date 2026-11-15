@@ -1,0 +1,6 @@
+{
+  "cause": "ad-hoc checker selected hosted-runner.log via next(glob(hosted-*)), rather than a directory; no test input or corpus was missing",
+  "fix": "require is_dir for the selected attempt",
+  "scope": "checker invocation error, not a suite failure; failed attempt retained",
+  "corrected_attempt": "docs/audit/sunfs/sfs-5b1/raw/hosted-20261114T215327.127052Z"
+}

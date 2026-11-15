@@ -1,0 +1,450 @@
+{
+  "status": "PASS",
+  "runs": [
+    {
+      "tag": "cpu-1-writeback-async-r0",
+      "configured_cpus": 1,
+      "online_cpus": 1,
+      "event_cpus": [
+        0
+      ],
+      "independent_worker_cpus": [
+        0
+      ],
+      "reset_owner_cpu": 0,
+      "contender_cpu": 0,
+      "ticks": [
+        "22, 0, 0, 0",
+        "26, 0, 0, 0"
+      ],
+      "work": [
+        "1090, 0, 0, 0",
+        "1289, 0, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-1-writeback-async-r1",
+      "configured_cpus": 1,
+      "online_cpus": 1,
+      "event_cpus": [
+        0
+      ],
+      "independent_worker_cpus": [
+        0
+      ],
+      "reset_owner_cpu": 0,
+      "contender_cpu": 0,
+      "ticks": [
+        "22, 0, 0, 0",
+        "26, 0, 0, 0"
+      ],
+      "work": [
+        "1635, 0, 0, 0",
+        "1917, 0, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-1-writeback-async-negative-r0",
+      "configured_cpus": 1,
+      "online_cpus": 1,
+      "event_cpus": [
+        0
+      ],
+      "independent_worker_cpus": [
+        0
+      ],
+      "reset_owner_cpu": 0,
+      "contender_cpu": 0,
+      "ticks": [
+        "22, 0, 0, 0",
+        "26, 0, 0, 0"
+      ],
+      "work": [
+        "1772, 0, 0, 0",
+        "1993, 0, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-1-none-async-r0",
+      "configured_cpus": 1,
+      "online_cpus": 1,
+      "event_cpus": [
+        0
+      ],
+      "independent_worker_cpus": [
+        0
+      ],
+      "reset_owner_cpu": 0,
+      "contender_cpu": 0,
+      "ticks": [
+        "23, 0, 0, 0",
+        "27, 0, 0, 0"
+      ],
+      "work": [
+        "1945, 0, 0, 0",
+        "2281, 0, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-1-none-async-r1",
+      "configured_cpus": 1,
+      "online_cpus": 1,
+      "event_cpus": [
+        0
+      ],
+      "independent_worker_cpus": [
+        0
+      ],
+      "reset_owner_cpu": 0,
+      "contender_cpu": 0,
+      "ticks": [
+        "23, 0, 0, 0",
+        "27, 0, 0, 0"
+      ],
+      "work": [
+        "1882, 0, 0, 0",
+        "2206, 0, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-1-none-async-negative-r0",
+      "configured_cpus": 1,
+      "online_cpus": 1,
+      "event_cpus": [
+        0
+      ],
+      "independent_worker_cpus": [
+        0
+      ],
+      "reset_owner_cpu": 0,
+      "contender_cpu": 0,
+      "ticks": [
+        "23, 0, 0, 0",
+        "27, 0, 0, 0"
+      ],
+      "work": [
+        "1366, 0, 0, 0",
+        "1665, 0, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-2-writeback-async-r0",
+      "configured_cpus": 2,
+      "online_cpus": 2,
+      "event_cpus": [
+        0,
+        1
+      ],
+      "independent_worker_cpus": [
+        0,
+        1
+      ],
+      "reset_owner_cpu": 0,
+      "contender_cpu": 1,
+      "ticks": [
+        "23, 25, 0, 0",
+        "27, 29, 0, 0"
+      ],
+      "work": [
+        "688, 1243, 0, 0",
+        "858, 1493, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-2-writeback-async-r1",
+      "configured_cpus": 2,
+      "online_cpus": 2,
+      "event_cpus": [
+        0,
+        1
+      ],
+      "independent_worker_cpus": [
+        0,
+        1
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 0,
+      "ticks": [
+        "23, 25, 0, 0",
+        "27, 29, 0, 0"
+      ],
+      "work": [
+        "576, 1071, 0, 0",
+        "690, 1236, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-2-writeback-async-negative-r0",
+      "configured_cpus": 2,
+      "online_cpus": 2,
+      "event_cpus": [
+        0,
+        1
+      ],
+      "independent_worker_cpus": [
+        0,
+        1
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 0,
+      "ticks": [
+        "23, 26, 0, 0",
+        "27, 30, 0, 0"
+      ],
+      "work": [
+        "452, 570, 0, 0",
+        "544, 676, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-2-none-async-r0",
+      "configured_cpus": 2,
+      "online_cpus": 2,
+      "event_cpus": [
+        0,
+        1
+      ],
+      "independent_worker_cpus": [
+        0,
+        1
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 0,
+      "ticks": [
+        "22, 24, 0, 0",
+        "26, 28, 0, 0"
+      ],
+      "work": [
+        "565, 875, 0, 0",
+        "653, 1003, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-2-none-async-r1",
+      "configured_cpus": 2,
+      "online_cpus": 2,
+      "event_cpus": [
+        0,
+        1
+      ],
+      "independent_worker_cpus": [
+        0,
+        1
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 0,
+      "ticks": [
+        "23, 24, 0, 0",
+        "27, 28, 0, 0"
+      ],
+      "work": [
+        "908, 1437, 0, 0",
+        "1061, 1662, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-2-none-async-negative-r0",
+      "configured_cpus": 2,
+      "online_cpus": 2,
+      "event_cpus": [
+        0,
+        1
+      ],
+      "independent_worker_cpus": [
+        0,
+        1
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 0,
+      "ticks": [
+        "23, 23, 0, 0",
+        "27, 27, 0, 0"
+      ],
+      "work": [
+        "1314, 2172, 0, 0",
+        "1583, 2542, 0, 0"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-4-writeback-async-r0",
+      "configured_cpus": 4,
+      "online_cpus": 4,
+      "event_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "independent_worker_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 2,
+      "ticks": [
+        "23, 24, 24, 24",
+        "27, 28, 28, 28"
+      ],
+      "work": [
+        "507, 460, 500, 1029",
+        "586, 531, 569, 1205"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-4-writeback-async-r1",
+      "configured_cpus": 4,
+      "online_cpus": 4,
+      "event_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "independent_worker_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 2,
+      "ticks": [
+        "23, 24, 24, 23",
+        "27, 28, 28, 28"
+      ],
+      "work": [
+        "535, 712, 633, 1121",
+        "686, 798, 726, 1379"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-4-writeback-async-negative-r0",
+      "configured_cpus": 4,
+      "online_cpus": 4,
+      "event_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "independent_worker_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reset_owner_cpu": 2,
+      "contender_cpu": 1,
+      "ticks": [
+        "23, 24, 24, 24",
+        "27, 28, 28, 28"
+      ],
+      "work": [
+        "604, 633, 649, 1289",
+        "682, 724, 730, 1514"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-4-none-async-r0",
+      "configured_cpus": 4,
+      "online_cpus": 4,
+      "event_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "independent_worker_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 2,
+      "ticks": [
+        "23, 25, 25, 24",
+        "27, 29, 29, 28"
+      ],
+      "work": [
+        "440, 519, 472, 889",
+        "547, 594, 543, 1071"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-4-none-async-r1",
+      "configured_cpus": 4,
+      "online_cpus": 4,
+      "event_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "independent_worker_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reset_owner_cpu": 1,
+      "contender_cpu": 2,
+      "ticks": [
+        "24, 25, 25, 25",
+        "28, 29, 29, 29"
+      ],
+      "work": [
+        "444, 564, 538, 951",
+        "515, 623, 609, 1073"
+      ],
+      "forward_progress": true
+    },
+    {
+      "tag": "cpu-4-none-async-negative-r0",
+      "configured_cpus": 4,
+      "online_cpus": 4,
+      "event_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "independent_worker_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reset_owner_cpu": 2,
+      "contender_cpu": 1,
+      "ticks": [
+        "23, 25, 24, 24",
+        "27, 29, 28, 28"
+      ],
+      "work": [
+        "789, 599, 579, 1751",
+        "933, 706, 682, 2119"
+      ],
+      "forward_progress": true
+    }
+  ],
+  "note": "1 CPU is the serial reference; 2/4 CPU runs show distinct CPU identities, independent timer ticks and independent runnable workers on every online CPU"
+}

@@ -2718,6 +2718,9 @@ impl Scheduler {
     }
 
     fn close_owned_ipc_endpoints(&mut self, pid: usize) {
+        if let Some(process) = self.processes.iter().find(|p| p.pid == pid) {
+            crate::ipc::retire_vfs_process(crate::ipc::vfs_process_identity(process));
+        }
         #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
         let lifecycle_who = self.processes.iter().find(|p|p.pid==pid).map(crate::capability::delivery::RecipientIdentity::of);
         #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
@@ -2921,6 +2924,9 @@ impl Scheduler {
             let caps = crate::capability::CAP_BROKER.lock();
             caps.endpoints_owned_by(pid)
         };
+
+        // Idempotent backstop before slot/VM reuse, including deferred cleanup.
+        crate::ipc::retire_vfs_process(crate::ipc::vfs_process_identity(&self.processes[idx]));
 
         let ipc_pending_before = {
             let mut n = 0usize;
@@ -3317,6 +3323,7 @@ impl Scheduler {
         crate::memory::quota_lifecycle::process(&self.processes[idx], "termination-committed");
         self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
+        crate::ipc::retire_vfs_process(crate::ipc::vfs_process_identity(&self.processes[idx]));
         if self.processes[idx].native_thread {
             note_native_borrower_finished();
         }
@@ -3405,6 +3412,7 @@ impl Scheduler {
         crate::memory::quota_lifecycle::process(&self.processes[idx], "termination-committed");
         self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
+        crate::ipc::retire_vfs_process(crate::ipc::vfs_process_identity(&self.processes[idx]));
         if self.processes[idx].native_thread {
             note_native_borrower_finished();
         }
@@ -4586,6 +4594,7 @@ fn finish_current_process_scoped(code: i32, reason: &str, group_exit: bool) -> u
         process.owning_core = u8::MAX;
         process.queued_on_core = u8::MAX;
     }
+    crate::ipc::retire_vfs_process(crate::ipc::vfs_process_identity(&sched.processes[cur]));
     #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
     crate::memory::quota_lifecycle::process(&sched.processes[cur], "termination-committed");
     #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]

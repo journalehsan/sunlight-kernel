@@ -1,0 +1,21 @@
+{
+  "status": "PARTIAL",
+  "implementation": "kernel/src/sfs_reset.rs",
+  "fixture": "kernel/src/sfs5b4_test.rs",
+  "feature": "sfs5b4-test (off by default)",
+  "transitions": [
+    "RUNNING",
+    "QUIESCING",
+    "RESET_OWNER_ESTABLISHED",
+    "RESET_PENDING",
+    "RESET_ACKNOWLEDGED",
+    "FENCE_UNQUALIFIED",
+    "TERMINAL_QUARANTINE"
+  ],
+  "owner": "CAS from zero to trusted task incarnation; attachment and queue generation in ticket; one terminal epoch, no owner reuse",
+  "admission": "atomic closure with second check under attachment mutex; already accepted request inventoried before reset step takes same mutex",
+  "outstanding": "one RequestId, retained first uncertain result, five pinned pages",
+  "cancellation": "explicit cancel retains terminal DMA owner without reset acknowledgment; native cancel mode",
+  "missing": "involuntary worker exit/reaper integration, native status-withholding and full completion/IRQ race cuts",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json"
+}

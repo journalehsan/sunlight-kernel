@@ -1,0 +1,131 @@
+{
+  "status": "PARTIAL",
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "FAIL",
+      "ready": false,
+      "returncode": -6,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": true,
+      "device_detach_observed": true,
+      "reset_exit_observed": true,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          806,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-writeback-hold.serial.log",
+      "trace": "cpu-1-writeback-hold.trace.log",
+      "device_log": "cpu-1-writeback-hold.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": true,
+      "real_request_held": true,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-writeback-release.serial.log",
+      "trace": "cpu-1-writeback-release.trace.log",
+      "device_log": "cpu-1-writeback-release.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "ready": true,
+      "returncode": -9,
+      "exact_image": true,
+      "device_dma_read_observed": false,
+      "real_request_held": false,
+      "reset_with_outstanding": false,
+      "device_detach_observed": false,
+      "reset_exit_observed": false,
+      "post_reset_instrumented_access": false,
+      "simultaneous_memory_instruction": false,
+      "progress": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0
+        ]
+      ],
+      "all_configured_cpu_timer_progress": true,
+      "scheduler_progress": "NOT_RUN",
+      "reset_other_cpu": "NOT_RUN",
+      "frames_released": 0,
+      "queue_epoch_reinitialized": false,
+      "serial": "cpu-1-writeback-unmodified.serial.log",
+      "trace": "cpu-1-writeback-unmodified.trace.log",
+      "device_log": "cpu-1-writeback-unmodified.qemu.log"
+    }
+  ]
+}

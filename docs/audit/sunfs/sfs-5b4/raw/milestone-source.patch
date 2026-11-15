@@ -1,0 +1,1274 @@
+--- a/kernel/Cargo.toml
++++ b/kernel/Cargo.toml
+@@ -692,6 +692,7 @@
+ sfs5b1-test = ["sfs5a-test"]
+ sfs5b2-test = ["sfs5a-test"]
+ sfs5b3-test = ["sfs5a-test"]
++sfs5b4-test = ["sfs5a-test"]
+ # Bounded PMM-backed filesystem regression gate; off in ordinary boots.
+ tmpfs_test = []
+ # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
+--- a/kernel/build.rs
++++ b/kernel/build.rs
+@@ -18,6 +18,26 @@
+         println!("cargo:rerun-if-changed={manifest}");
+         // guest.py explicitly builds the fixture's two support services.
+         return;
++    }
++    if env::var_os("CARGO_FEATURE_SFS5B4_TEST").is_some() {
++        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
++        let input = root.join("tools/helios-probes/sfs5b4-probe.S");
++        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
++        println!("cargo:rerun-if-changed={}", input.display());
++        assert!(Command::new("as")
++            .args(["--64", "-o"])
++            .arg(out.join("sfs5b4-probe.o"))
++            .arg(input)
++            .status()
++            .unwrap()
++            .success());
++        assert!(Command::new("ld")
++            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
++            .arg(out.join("sfs5b4-probe.elf"))
++            .arg(out.join("sfs5b4-probe.o"))
++            .status()
++            .unwrap()
++            .success());
+     }
+     if env::var_os("CARGO_FEATURE_NATIVE_DOORBELL_TEST").is_some() {
+         let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+--- a/kernel/src/main.rs
++++ b/kernel/src/main.rs
+@@ -1868,6 +1868,10 @@
+ mod sfs5b2_test;
+ #[cfg(feature = "sfs5b3-test")]
+ mod sfs5b3_test;
++#[cfg(feature = "sfs5b4-test")]
++mod sfs5b4_test;
++#[cfg(feature = "sfs5b4-test")]
++mod sfs_reset;
+ 
+ struct BlkCell(Option<sunlight_virtio::VirtioBlk>);
+ // SAFETY: VirtioBlk holds raw queue pointers into kernel-owned frames that
+@@ -2167,7 +2171,10 @@
+         }
+     };
+ 
+-    #[cfg(feature = "sfs5a-test")]
++    #[cfg(feature = "sfs5b4-test")]
++    let blk = sfs5b4_test::run(blk, queue_phys.as_u64(), req_phys.as_u64());
++
++    #[cfg(all(feature = "sfs5a-test", not(feature = "sfs5b4-test")))]
+     let blk = {
+         let mut device = blk;
+         #[cfg(feature = "sfs5b3-test")]
+--- a/kernel/src/arch/x86_64/interrupts.rs
++++ b/kernel/src/arch/x86_64/interrupts.rs
+@@ -1086,6 +1086,8 @@
+     let cpu_id = crate::sched::current_cpu_id();
+     #[cfg(feature = "sfs5b3-test")]
+     crate::sfs5b3_test::on_tick(cpu_id);
++    #[cfg(feature = "sfs5b4-test")]
++    crate::sfs5b4_test::on_tick(cpu_id);
+     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+     crate::sched::pin_release_test::timer(cpu_id);
+     crate::sched::accounting::interrupt_entry(cpu_id);
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -996,6 +996,8 @@
+         18 => ipc_try_recv(frame),
+         20 => native_thread_exit(frame.rdi as i32),
+         21 => process_yield(),
++        #[cfg(feature = "sfs5b4-test")]
++        0xf5b4 => crate::sfs5b4_test::syscall(frame.rdi),
+         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+         0xf1a0 => unsafe { crate::sched::doorbell_fixture_on_kernel_stack(frame) },
+         #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+--- a/sunlight-virtio/src/blk.rs
++++ b/sunlight-virtio/src/blk.rs
+@@ -98,6 +98,8 @@
+     reset_status: Option<u8>,
+     // First uncertain result survives subsequent refusal/reset observations.
+     first_uncertain: Option<IoOutcome>,
++    // Metadata owned by the attachment across bounded staged polls.
++    pending: Option<(Operation, u64, RequestId)>,
+     #[cfg(test)]
+     injection: Option<(u16, u32, u32, u8, bool)>,
+     #[cfg(test)]
+@@ -241,6 +243,7 @@
+             reset_reads: 0,
+             reset_status: None,
+             first_uncertain: None,
++            pending: None,
+             #[cfg(test)]
+             injection: None,
+             #[cfg(test)]
+@@ -307,7 +310,7 @@
+     /// Do not invoke through a stale attachment or on an unrelated/boot device.
+     pub unsafe fn begin_terminal_reset(&mut self) -> ResetObservation {
+         if self.reset_state == ResetState::Running {
+-            self.quarantine(false);
++            self.quarantine_terminal();
+             self.reset_state = ResetState::Waiting;
+             fence(Ordering::SeqCst);
+             #[cfg(not(test))]
+@@ -395,6 +398,24 @@
+         self.last_outcome = Some(result);
+         result
+     }
++    /// Permanently close this attachment without claiming reset or a fence.
++    /// All active metadata and DMA allocations remain owned and pinned.
++    pub fn quarantine_terminal(&mut self) {
++        if self.first_uncertain.is_none() {
++            if let Some((operation, lba, id)) = self.pending {
++                self.receipt(
++                    operation,
++                    lba,
++                    Some(id),
++                    Completion::Uncertain,
++                    StatusSource::Queue,
++                    Durability::Uncertain,
++                );
++            }
++        }
++        self.quarantine(false);
++    }
++
+     fn quarantine(&mut self, timed_out: bool) {
+         self.uncertain = true;
+         self.owner.quarantine(timed_out);
+@@ -416,15 +437,51 @@
+         input: Option<&[u8; 512]>,
+         output: Option<&mut [u8; 512]>,
+     ) -> IoOutcome {
++        let id = match self.start_transfer(operation, lba, input) {
++            Ok(id) => id,
++            Err(outcome) => return outcome,
++        };
++        let budget = if cfg!(test) { 16 } else { 50_000_000 };
++        for _ in 0..budget {
++            // Only the final successful observation consumes the caller's buffer.
++            fence(Ordering::SeqCst);
++            if ((self.used_virt + 2) as *const u16).read_volatile() != self.last_used_idx {
++                return self
++                    .poll_transfer(id, output)
++                    .expect("exclusive active request");
++            }
++            core::hint::spin_loop();
++        }
++        self.timeout_transfer(id).expect("exclusive active timeout")
++    }
++
++    unsafe fn start_transfer(
++        &mut self,
++        operation: Operation,
++        lba: u64,
++        input: Option<&[u8; 512]>,
++    ) -> Result<RequestId, IoOutcome> {
+         if self.uncertain {
+-            return self.receipt(
++            return Err(self.receipt(
+                 operation,
+                 lba,
+                 None,
+                 Completion::Unavailable,
+                 StatusSource::Queue,
+                 Durability::Uncertain,
+-            );
++            ));
++        }
++        // A staged request owns the ring even when a completion has arrived.
++        // A competing admission has no authority to interpret its used entry.
++        if self.pending.is_some() {
++            return Err(self.receipt(
++                operation,
++                lba,
++                None,
++                Completion::Rejected(Rejection::Exhausted),
++                StatusSource::Validation,
++                Durability::NotEstablished,
++            ));
+         }
+         let validation = if operation == Operation::Flush {
+             self.geometry().validate()
+@@ -432,60 +489,60 @@
+             self.geometry().check(lba, 1, 512, 0).map(|_| ())
+         };
+         if let Err(e) = validation {
+-            return self.receipt(
++            return Err(self.receipt(
+                 operation,
+                 lba,
+                 None,
+                 Completion::Rejected(e),
+                 StatusSource::Validation,
+                 Durability::NotEstablished,
+-            );
++            ));
+         }
+         if operation == Operation::Write && self.read_only {
+-            return self.receipt(
++            return Err(self.receipt(
+                 operation,
+                 lba,
+                 None,
+                 Completion::Rejected(Rejection::ReadOnly),
+                 StatusSource::Validation,
+                 Durability::NotEstablished,
+-            );
++            ));
+         }
+         if operation == Operation::Flush && !self.flush_supported {
+-            return self.receipt(
++            return Err(self.receipt(
+                 operation,
+                 lba,
+                 None,
+                 Completion::Unsupported,
+                 StatusSource::Validation,
+                 Durability::NotEstablished,
+-            );
++            ));
+         }
+         // Preflight before touching either DMA buffer or descriptors.
+         if !self.device_running()
+             || ((self.used_virt + 2) as *const u16).read_volatile() != self.last_used_idx
+         {
+             self.quarantine(false);
+-            return self.receipt(
++            return Err(self.receipt(
+                 operation,
+                 lba,
+                 None,
+                 Completion::Uncertain,
+                 StatusSource::Queue,
+                 Durability::Uncertain,
+-            );
++            ));
+         }
+         let id = match self.owner.prepare(0) {
+             Ok(id) => id,
+             Err(e) => {
+-                return self.receipt(
++                return Err(self.receipt(
+                     operation,
+                     lba,
+                     None,
+                     Completion::Rejected(e),
+                     StatusSource::Validation,
+                     Durability::NotEstablished,
+-                )
++                ))
+             }
+         };
+         if let Some(data) = input {
+@@ -537,14 +594,14 @@
+ 
+         if !self.owner.submit(id) {
+             self.quarantine(false);
+-            return self.receipt(
++            return Err(self.receipt(
+                 operation,
+                 lba,
+                 Some(id),
+                 Completion::Uncertain,
+                 StatusSource::Queue,
+                 Durability::Uncertain,
+-            );
++            ));
+         }
+         let avail_ring_ptr = (self.avail_virt + 4) as *mut u16;
+         let slot = (self.avail_idx as usize) % (self.queue_size as usize);
+@@ -574,27 +631,87 @@
+             ((self.used_virt + 2) as *mut u16)
+                 .write_volatile(self.last_used_idx.wrapping_add(delta));
+         }
++        self.pending = Some((operation, lba, id));
++        Ok(id)
++    }
++
++    /// Submit one write without waiting. Caller retains the pinned-DMA contract.
++    /// Admission and all later steps require exclusive attachment ownership.
++    ///
++    /// # Safety
++    /// Same ring-0, coherent pinned DMA requirements as `write_typed`.
++    pub unsafe fn start_write(
++        &mut self,
++        lba: u64,
++        data: &[u8; 512],
++    ) -> Result<RequestId, IoOutcome> {
++        self.start_transfer(Operation::Write, lba, Some(data))
++    }
++
++    /// One completion observation, without waiting. A stale token cannot consume
++    /// a ring entry or alter ownership. None means pending or a rejected token;
++    /// callers must also check `outstanding()` and terminal state.
++    ///
++    /// # Safety
++    /// Same pinned exclusive attachment contract as `start_write`.
++    pub unsafe fn poll_write(&mut self, id: RequestId) -> Option<IoOutcome> {
++        if self.pending != Some((Operation::Write, self.pending?.1, id)) {
++            return None;
++        }
++        self.poll_transfer(id, None)
++    }
++
++    /// Quarantine a matching pending write. Never reads or modifies DMA memory.
++    /// A stale or already terminal token has no authority.
++    pub fn timeout_write(&mut self, id: RequestId) -> Option<IoOutcome> {
++        if self.pending != Some((Operation::Write, self.pending?.1, id)) {
++            return None;
++        }
++        self.timeout_transfer(id)
++    }
++
++    fn timeout_transfer(&mut self, id: RequestId) -> Option<IoOutcome> {
++        let (operation, lba, active) = self.pending?;
++        if active != id || self.uncertain || self.owner.active() != Some(id) {
++            return None;
++        }
++        self.quarantine(true);
++        Some(self.receipt(
++            operation,
++            lba,
++            Some(id),
++            Completion::Uncertain,
++            StatusSource::Deadline,
++            Durability::Uncertain,
++        ))
++    }
++
++    unsafe fn poll_transfer(
++        &mut self,
++        id: RequestId,
++        output: Option<&mut [u8; 512]>,
++    ) -> Option<IoOutcome> {
++        let (operation, lba, active) = self.pending?;
++        if active != id || self.uncertain || self.owner.active() != Some(id) {
++            return None;
++        }
+         let used_idx_ptr = (self.used_virt + 2) as *const u16;
+-        let mut limit = if cfg!(test) { 16u32 } else { 50_000_000u32 };
+-        loop {
+-            fence(Ordering::SeqCst);
+-            if used_idx_ptr.read_volatile() != self.last_used_idx {
+-                break;
+-            }
+-            limit -= 1;
+-            if limit == 0 {
+-                self.quarantine(true);
+-                return self.receipt(
+-                    operation,
+-                    lba,
+-                    Some(id),
+-                    Completion::Uncertain,
+-                    StatusSource::Deadline,
+-                    Durability::Uncertain,
+-                );
+-            }
+-            core::hint::spin_loop();
+-        }
++        fence(Ordering::SeqCst);
++        if used_idx_ptr.read_volatile() == self.last_used_idx {
++            return None;
++        }
++        self.pending = None;
++        Some(self.finish_transfer(operation, lba, id, output))
++    }
++
++    unsafe fn finish_transfer(
++        &mut self,
++        operation: Operation,
++        lba: u64,
++        id: RequestId,
++        output: Option<&mut [u8; 512]>,
++    ) -> IoOutcome {
++        let used_idx_ptr = (self.used_virt + 2) as *const u16;
+         let used_idx = used_idx_ptr.read_volatile();
+         fence(Ordering::SeqCst);
+         let used_slot = self.last_used_idx as usize % self.queue_size as usize;
+@@ -607,7 +724,7 @@
+         self.last_used_length = Some(length);
+         // Legacy used.len is diagnostic only (VirtIO 1.4 section 5.2.6.3).
+         // It cannot authorize a partial prefix or short-read success.
+-        let status = status_ptr.read_volatile();
++        let status = ((self.req_virt + 528) as *const u8).read_volatile();
+         let resources = self.descriptors_match(operation);
+         if used_idx != self.last_used_idx.wrapping_add(1)
+             || head != u32::from(id.head)
+@@ -767,7 +884,8 @@
+ }
+ 
+ // SAFETY: VirtioBlk wraps raw pointers into kernel-owned physical frames.
+-// The kernel is single-threaded during initialization.
++// Moving exclusive ownership does not move or release the pinned frames.
++// Shared access requires external synchronization; this is not a Sync promise.
+ unsafe impl Send for VirtioBlk {}
+ 
+ #[cfg(test)]
+@@ -806,6 +924,7 @@
+             reset_reads: 0,
+             reset_status: None,
+             first_uncertain: None,
++            pending: None,
+             injection: None,
+             transport_status: 7,
+         }
+@@ -1225,4 +1344,128 @@
+             }
+         }
+     }
++    #[test]
++    fn staged_write_rejects_stale_tokens_and_retires_once() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let id = unsafe { d.start_write(63, &[0xb4; 512]) }.unwrap();
++        assert_eq!(unsafe { d.poll_write(id) }, None);
++        let mut stale = id;
++        stale.generation += 1;
++        let before_q = q.0;
++        let before_r = r.0;
++        assert_eq!(d.timeout_write(stale), None);
++        assert_eq!(unsafe { d.poll_write(stale) }, None);
++        assert!(q.0 == before_q && r.0 == before_r);
++        unsafe {
++            ((d.used_virt + 4) as *mut u32).write_volatile(0);
++            ((d.used_virt + 8) as *mut u32).write_volatile(1);
++            ((d.req_virt + 528) as *mut u8).write_volatile(0);
++            ((d.used_virt + 2) as *mut u16).write_volatile(1);
++        }
++        assert_eq!(unsafe { d.poll_write(stale) }, None);
++        assert_eq!(
++            unsafe { d.poll_write(id) }.unwrap().completion,
++            Completion::Completed
++        );
++        assert_eq!(unsafe { d.poll_write(id) }, None);
++        assert_eq!(d.timeout_write(id), None);
++        assert_eq!(d.ownership(), Ownership::Retired);
++    }
++
++    #[test]
++    fn staged_timeout_reset_never_consumes_late_ring_or_reopens() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let id = unsafe { d.start_write(63, &[0xb4; 512]) }.unwrap();
++        let outcome = d.timeout_write(id).unwrap();
++        assert_eq!(outcome.completion, Completion::Uncertain);
++        unsafe { d.begin_terminal_reset() };
++        d.observe_reset_status(0);
++        unsafe { ((d.used_virt + 2) as *mut u16).write_volatile(1) };
++        let before_q = q.0;
++        let before_r = r.0;
++        assert_eq!(unsafe { d.poll_write(id) }, None);
++        assert_eq!(d.timeout_write(id), None);
++        assert_eq!(
++            unsafe { d.start_write(64, &[0xcc; 512]) }
++                .unwrap_err()
++                .completion,
++            Completion::Unavailable
++        );
++        assert!(q.0 == before_q && r.0 == before_r);
++        assert_eq!(d.first_uncertain(), Some(outcome));
++        assert_eq!(d.outstanding(), Some(id));
++    }
++    #[test]
++    fn staged_busy_admission_and_cancel_preserve_live_dma_inventory() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let id = unsafe { d.start_write(63, &[0xb4; 512]) }.unwrap();
++        let before_q = q.0;
++        let before_r = r.0;
++        assert!(unsafe { d.start_write(64, &[0xcc; 512]) }.is_err());
++        assert!(q.0 == before_q && r.0 == before_r);
++        d.quarantine_terminal();
++        assert_eq!(d.ownership(), Ownership::Quarantined);
++        assert_eq!(d.outstanding(), Some(id));
++        assert_eq!(unsafe { d.poll_write(id) }, None);
++        assert_eq!(
++            unsafe { d.start_write(64, &[0xcc; 512]) }
++                .unwrap_err()
++                .completion,
++            Completion::Unavailable
++        );
++        assert!(q.0 == before_q && r.0 == before_r);
++        assert_eq!(d.reset_observation().state, ResetState::Running);
++    }
++    #[test]
++    fn staged_reset_or_cancel_before_timeout_records_write_uncertainty() {
++        for cancel in [false, true] {
++            let (mut q, mut r) = fixture();
++            let mut d = device(&mut q, &mut r);
++            let id = unsafe { d.start_write(63, &[0xb4; 512]) }.unwrap();
++            if cancel {
++                d.quarantine_terminal();
++            } else {
++                unsafe { d.begin_terminal_reset() };
++            }
++            let uncertain = d
++                .first_uncertain()
++                .expect("outstanding reset/cancel must preserve provenance");
++            assert_eq!(uncertain.request, Some(id));
++            assert_eq!(uncertain.operation, Operation::Write);
++            assert_eq!(uncertain.lba, 63);
++            assert_eq!(uncertain.completion, Completion::Uncertain);
++            assert_eq!(uncertain.durability, Durability::Uncertain);
++            assert_eq!(uncertain.completed, Amount::Unknown);
++            assert_eq!(d.outstanding(), Some(id));
++        }
++    }
++    #[test]
++    fn staged_second_admission_cannot_poison_ready_first_completion() {
++        let (mut q, mut r) = fixture();
++        let mut d = device(&mut q, &mut r);
++        let id = unsafe { d.start_write(63, &[0xb4; 512]) }.unwrap();
++        unsafe {
++            ((d.used_virt + 4) as *mut u32).write_volatile(0);
++            ((d.used_virt + 8) as *mut u32).write_volatile(1);
++            ((d.req_virt + 528) as *mut u8).write_volatile(0);
++            ((d.used_virt + 2) as *mut u16).write_volatile(1);
++        }
++        let before_q = q.0;
++        let before_r = r.0;
++        assert_eq!(
++            unsafe { d.start_write(64, &[0xcc; 512]) }
++                .unwrap_err()
++                .completion,
++            Completion::Rejected(Rejection::Exhausted)
++        );
++        assert!(q.0 == before_q && r.0 == before_r);
++        assert_eq!(
++            unsafe { d.poll_write(id) }.unwrap().completion,
++            Completion::Completed
++        );
++        assert_eq!(d.first_uncertain(), None);
++    }
+ }
+--- /dev/null
++++ b/kernel/src/sfs_reset.rs
+@@ -0,0 +1,179 @@
++//! Terminal VirtIO reset coordinator. One step per scheduled invocation; no
++//! scheduler lock, wait loop, allocation, DMA release or recovery authority.
++use core::sync::atomic::{AtomicU64, Ordering};
++use sunlight_block::contract::{DeviceIdentity, IoOutcome, RequestId};
++use sunlight_virtio::{ResetObservation, ResetState, VirtioBlk};
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Phase {
++    Running,
++    Quiescing,
++    ResetOwnerEstablished,
++    ResetPending,
++    ResetAcknowledged,
++    FenceUnqualified,
++    TerminalQuarantine,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Ticket {
++    pub device: DeviceIdentity,
++    pub queue: u64,
++    // A task incarnation supplied by the trusted kernel, never a bare PID.
++    pub actor: u64,
++}
++
++struct Inner {
++    device: VirtioBlk,
++    phase: Phase,
++}
++
++pub struct Coordinator {
++    inner: spin::Mutex<Inner>,
++    identity: DeviceIdentity,
++    queue: u64,
++    // Zero means admission open. CAS closes admission and selects one owner.
++    owner: AtomicU64,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Probe<T> {
++    Busy,
++    Closed,
++    Stale,
++    Value(T),
++}
++
++impl Coordinator {
++    pub fn new(device: VirtioBlk) -> Self {
++        let observation = device.reset_observation();
++        Self {
++            identity: observation.device,
++            queue: observation.queue_incarnation,
++            owner: AtomicU64::new(0),
++            inner: spin::Mutex::new(Inner {
++                device,
++                phase: Phase::Running,
++            }),
++        }
++    }
++
++    pub fn ticket(&self, actor: u64) -> Ticket {
++        Ticket {
++            device: self.identity,
++            queue: self.queue,
++            actor,
++        }
++    }
++
++    /// Generation-qualified, nonblocking admission closure and unique owner.
++    pub fn request(&self, ticket: Ticket) -> Probe<()> {
++        if ticket.actor == 0 || ticket.device != self.identity || ticket.queue != self.queue {
++            return Probe::Stale;
++        }
++        match self
++            .owner
++            .compare_exchange(0, ticket.actor, Ordering::AcqRel, Ordering::Acquire)
++        {
++            Ok(_) => Probe::Value(()),
++            Err(owner) if owner == ticket.actor => Probe::Value(()),
++            Err(_) => Probe::Closed,
++        }
++    }
++
++    pub fn inventory(&self) -> Probe<(Phase, ResetObservation, Option<IoOutcome>)> {
++        let Some(inner) = self.inner.try_lock() else {
++            return Probe::Busy;
++        };
++        Probe::Value((
++            inner.phase,
++            inner.device.reset_observation(),
++            inner.device.first_uncertain(),
++        ))
++    }
++
++    /// # Safety
++    /// Own the entire PCI attachment, with its coherent DMA allocations pinned.
++    /// No scheduler-critical lock may be held; every invocation is one step.
++    pub unsafe fn step(&self, ticket: Ticket) -> Probe<Phase> {
++        if ticket != self.ticket(self.owner.load(Ordering::Acquire)) || ticket.actor == 0 {
++            return Probe::Stale;
++        }
++        let Some(mut inner) = self.inner.try_lock() else {
++            return Probe::Busy;
++        };
++        inner.phase = match inner.phase {
++            Phase::Running => Phase::Quiescing,
++            Phase::Quiescing => Phase::ResetOwnerEstablished,
++            Phase::ResetOwnerEstablished => {
++                // Driver quarantines first. Outstanding metadata is retained.
++                inner.device.begin_terminal_reset();
++                Phase::ResetPending
++            }
++            Phase::ResetPending => match inner.device.poll_terminal_reset().state {
++                ResetState::Waiting => Phase::ResetPending,
++                ResetState::VerifiedRetained => Phase::ResetAcknowledged,
++                _ => Phase::TerminalQuarantine,
++            },
++            Phase::ResetAcknowledged => Phase::FenceUnqualified,
++            Phase::FenceUnqualified => Phase::TerminalQuarantine,
++            Phase::TerminalQuarantine => Phase::TerminalQuarantine,
++        };
++        Probe::Value(inner.phase)
++    }
++
++    /// Actor cancellation closes admission and quarantines on the next available
++    /// step, without pretending reset or quiescence completed. No owner transfer.
++    #[allow(dead_code)] // Cancellation is fail-stop; native cancellation witness remains separate.
++    pub fn cancel(&self, ticket: Ticket) -> Probe<Phase> {
++        if ticket.actor == 0 || ticket != self.ticket(self.owner.load(Ordering::Acquire)) {
++            return Probe::Stale;
++        }
++        let Some(mut inner) = self.inner.try_lock() else {
++            return Probe::Busy;
++        };
++        inner.device.quarantine_terminal();
++        // begin_terminal_reset is deliberately not called here. No port access,
++        // no acknowledgment, and no release. Closed admission pins the owner.
++        inner.phase = Phase::TerminalQuarantine;
++        Probe::Value(inner.phase)
++    }
++
++    /// # Safety
++    /// Same exclusive attachment and pinned DMA contract as `step`.
++    pub unsafe fn start_write(
++        &self,
++        lba: u64,
++        data: &[u8; 512],
++    ) -> Probe<Result<RequestId, IoOutcome>> {
++        if self.owner.load(Ordering::Acquire) != 0 {
++            return Probe::Closed;
++        }
++        let Some(mut inner) = self.inner.try_lock() else {
++            return Probe::Busy;
++        };
++        if self.owner.load(Ordering::Acquire) != 0 {
++            return Probe::Closed;
++        }
++        Probe::Value(inner.device.start_write(lba, data))
++    }
++
++    /// # Safety
++    /// Same exclusive attachment and pinned DMA contract as `step`.
++    pub unsafe fn poll_write(&self, id: RequestId) -> Probe<Option<IoOutcome>> {
++        let Some(mut inner) = self.inner.try_lock() else {
++            return Probe::Busy;
++        };
++        if self.owner.load(Ordering::Acquire) != 0 {
++            return Probe::Closed;
++        }
++        Probe::Value(inner.device.poll_write(id))
++    }
++
++    pub fn timeout_write(&self, id: RequestId) -> Probe<Option<IoOutcome>> {
++        let Some(mut inner) = self.inner.try_lock() else {
++            return Probe::Busy;
++        };
++        Probe::Value(inner.device.timeout_write(id))
++    }
++}
+--- /dev/null
++++ b/kernel/src/sfs5b4_test.rs
+@@ -0,0 +1,309 @@
++//! Isolated post-scheduler fixture. Real ring-3 tasks invoke bounded kernel
++//! steps and yield using the existing native scheduler. No filesystem mount.
++use crate::process::{layout, Process};
++use crate::sfs_reset::{Coordinator, Phase, Probe};
++use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
++use sunlight_block::contract::{Completion, RequestId};
++use sunlight_virtio::VirtioBlk;
++use x86_64::VirtAddr;
++
++#[cfg(any(
++    feature = "sfs5b1-test",
++    feature = "sfs5b2-test",
++    feature = "sfs5b3-test"
++))]
++compile_error!("SFS5B4 requires an isolated storage fixture");
++
++static DEVICE: spin::Once<Coordinator> = spin::Once::new();
++static STATUS_ADDRESS: AtomicU64 = AtomicU64::new(0);
++static FETCHED: AtomicBool = AtomicBool::new(false);
++static REQUEST: spin::Mutex<Option<RequestId>> = spin::Mutex::new(None);
++static TICKS: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
++static WORK: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
++static LOGICAL: AtomicU64 = AtomicU64::new(0);
++static SUBMIT_TICK: AtomicU64 = AtomicU64::new(0);
++static TIMEOUT: AtomicBool = AtomicBool::new(false);
++static CONTESTED: AtomicBool = AtomicBool::new(false);
++static CLOSED: AtomicBool = AtomicBool::new(false);
++static TERMINAL: AtomicBool = AtomicBool::new(false);
++static CANCEL: AtomicBool = AtomicBool::new(false);
++static READY: AtomicBool = AtomicBool::new(false);
++static FINALIZING: AtomicBool = AtomicBool::new(false);
++static CALLS: AtomicU64 = AtomicU64::new(0);
++static START: spin::Mutex<([u64; 4], [u64; 4])> = spin::Mutex::new(([0; 4], [0; 4]));
++static RESET_START: spin::Mutex<([u64; 4], [u64; 4])> = spin::Mutex::new(([0; 4], [0; 4]));
++static FREE: AtomicU64 = AtomicU64::new(0);
++const PID: usize = 0x5b400;
++
++pub fn on_tick(cpu: usize) {
++    if let Some(t) = TICKS.get(cpu) {
++        t.fetch_add(1, Ordering::Relaxed);
++    }
++}
++fn ticks() -> [u64; 4] {
++    core::array::from_fn(|i| TICKS[i].load(Ordering::Acquire))
++}
++fn work() -> [u64; 4] {
++    core::array::from_fn(|i| WORK[i].load(Ordering::Acquire))
++}
++fn event(role: u64, actor: u64, stage: &str) {
++    let seq = LOGICAL.fetch_add(1, Ordering::AcqRel) + 1;
++    crate::serial_println!(
++        "[SFS5B4] event={} cpu={} pid={} task-generation={} role={} scheduler-ready={} stage={}",
++        seq,
++        crate::sched::current_cpu_id(),
++        PID + role as usize,
++        actor,
++        role,
++        crate::sched::SCHEDULER_READY.load(Ordering::Acquire),
++        stage
++    );
++}
++fn load(hhdm: VirtAddr, role: u64, cpu: usize) -> Process {
++    let elf = include_bytes!(concat!(env!("OUT_DIR"), "/sfs5b4-probe.elf"));
++    let mut pmm = crate::PMM.lock();
++    let mut p = unsafe { Process::new(PID + role as usize, 0, "sfs5b4-worker", &mut pmm, hhdm) };
++    let entry = crate::process::elf_loader::load_elf(elf, &mut p, &mut pmm, hhdm).unwrap();
++    crate::process::spawn::map_user_stack(&mut p, &mut pmm, hhdm).unwrap();
++    p.init_context(entry, layout::USER_STACK_TOP);
++    p.set_initial_args(role, 0, 0, 0);
++    p.cpu_mask = 1 << cpu;
++    p
++}
++
++pub fn run(mut d: VirtioBlk, queue: u64, request: u64) -> VirtioBlk {
++    assert_eq!(d.block_count(), 8192);
++    let mut marker = [0; 512];
++    assert_eq!(
++        unsafe { d.read_typed(0, &mut marker) }.completion,
++        Completion::Completed
++    );
++    assert_eq!(&marker[..34], b"SFS5A-ONLY-7b93143a-disposable-v1!");
++    // Normal I/O baseline before the held sector; flush/readback remain real.
++    assert_eq!(
++        unsafe { d.write_typed(62, &[0x62; 512]) }.completion,
++        Completion::Completed
++    );
++    assert_eq!(unsafe { d.flush_typed() }.completion, Completion::Completed);
++    assert_eq!(
++        unsafe { d.read_typed(62, &mut marker) }.completion,
++        Completion::Completed
++    );
++    assert_eq!(marker, [0x62; 512]);
++    assert_eq!(
++        unsafe { d.read_typed(61, &mut marker) }.completion,
++        Completion::Completed
++    );
++    CANCEL.store(marker[0] == 1, Ordering::Release);
++    crate::serial_println!(
++        "[SFS5B4] BASELINE features={:?} queue={:#x} request={:#x} pages=5",
++        d.features(),
++        queue,
++        request
++    );
++    STATUS_ADDRESS.store(
++        crate::HHDM_REQ.response().unwrap().offset + request + 528,
++        Ordering::Release,
++    );
++    DEVICE.call_once(|| Coordinator::new(d));
++    unsafe {
++        crate::syscall::setup_syscall_msrs(VirtAddr::new(
++            crate::syscall::syscall_entry as *const () as u64,
++        ));
++    }
++    crate::memory::tlb::register_kernel_root();
++    let mp = crate::MP_REQ.response().expect("MP response");
++    let cpus = mp.cpus().len();
++    assert!((1..=4).contains(&cpus));
++    crate::arch::x86_64::smp::start_aps(mp.cpus(), mp.bsp_lapic_id);
++    crate::sched::init_cores(cpus);
++    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().unwrap().offset);
++    for (role, cpu) in [
++        (0, 0),
++        (1, usize::from(cpus > 1)),
++        (2, if cpus == 4 { 2 } else { 0 }),
++    ] {
++        let p = load(hhdm, role, cpu);
++        let mut scheduler = crate::sched::SCHEDULER.lock();
++        let index = scheduler.add_process_after_reaping(p);
++        scheduler.enqueue_ready(index);
++    }
++    for cpu in 0..cpus {
++        let p = load(hhdm, 10 + cpu as u64, cpu);
++        let mut scheduler = crate::sched::SCHEDULER.lock();
++        let index = scheduler.add_process_after_reaping(p);
++        scheduler.enqueue_ready(index);
++    }
++    FREE.store(
++        crate::PMM.lock().free_page_count() as u64,
++        Ordering::Release,
++    );
++    crate::sched::mark_scheduler_ready();
++    crate::sched::flush_dispatch_notifications();
++    crate::sched::core_idle_entry()
++}
++
++pub fn syscall(role: u64) -> u64 {
++    assert!(
++        CALLS.fetch_add(1, Ordering::Relaxed) < 2_000_000,
++        "SFS5B4 work budget exhausted"
++    );
++    let cpu = crate::sched::current_cpu_id();
++    let (actor, state) = {
++        let s = crate::sched::SCHEDULER.lock();
++        let p = s.current_process();
++        assert_eq!(p.pid, PID + role as usize);
++        (p.foreground.incarnation, p.state)
++    };
++    assert!(crate::sched::SCHEDULER_READY.load(Ordering::Acquire));
++    if READY.load(Ordering::Acquire) {
++        return 1;
++    }
++    let c = DEVICE.get().unwrap();
++    if role >= 10 {
++        assert_eq!(role as usize - 10, cpu);
++        let count = WORK[cpu].fetch_add(1, Ordering::AcqRel);
++        if count == 0 {
++            event(role, actor, "INDEPENDENT_WORKER_RUNNING");
++        }
++        if TERMINAL.load(Ordering::Acquire)
++            && CLOSED.load(Ordering::Acquire)
++            && CONTESTED.load(Ordering::Acquire)
++        {
++            let start = *START.lock();
++            let cpus = crate::sched::ONLINE_CORES.load(Ordering::Acquire);
++            if (0..cpus).all(|i| ticks()[i] > start.0[i] + 3 && work()[i] > start.1[i] + 3)
++                && FINALIZING
++                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
++                    .is_ok()
++            {
++                event(role, actor, "FORWARD_PROGRESS");
++                crate::serial_println!("[SFS5B4] READY cpus={} state={:?} start-ticks={:?} ticks={:?} start-work={:?} work={:?} free-before={} free-after={} pages-pinned=5 released=0 new-epoch=none inventory={:?}",
++                    cpus, state, start.0, ticks(), start.1, work(), FREE.load(Ordering::Acquire), crate::PMM.lock().free_page_count(), c.inventory());
++                READY.store(true, Ordering::Release);
++            }
++        }
++        return 0;
++    }
++    if role == 0 {
++        let id = *REQUEST.lock();
++        if let Some(id) = id {
++            if TIMEOUT.load(Ordering::Acquire) {
++                if matches!(unsafe { c.start_write(64, &[0xcc; 512]) }, Probe::Closed)
++                    && !CLOSED.swap(true, Ordering::AcqRel)
++                {
++                    event(role, actor, "ADMISSION_CLOSED");
++                }
++            } else {
++                // QEMU independently publishes this byte only after its actual
++                // payload copy. It does not advance used.idx or claim completion.
++                if unsafe { (STATUS_ADDRESS.load(Ordering::Acquire) as *const u8).read_volatile() }
++                    == 0xfe
++                    && !FETCHED.swap(true, Ordering::AcqRel)
++                {
++                    event(role, actor, "DEVICE_ACCESS_HANDSHAKE");
++                }
++                match unsafe { c.poll_write(id) } {
++                    Probe::Value(Some(outcome)) => {
++                        event(role, actor, "NORMAL_COMPLETION");
++                        assert_eq!(outcome.completion, Completion::Completed);
++                        // Normal release controls still exercise idle terminal reset.
++                        *START.lock() = (ticks(), work());
++                        TIMEOUT.store(true, Ordering::Release);
++                    }
++                    Probe::Value(None)
++                        if FETCHED.load(Ordering::Acquire)
++                            && ticks()[0] > SUBMIT_TICK.load(Ordering::Acquire) + 20 =>
++                    {
++                        let Probe::Value(Some(outcome)) = c.timeout_write(id) else {
++                            panic!("timeout ownership");
++                        };
++                        assert_eq!(outcome.completion, Completion::Uncertain);
++                        event(role, actor, "TIMEOUT_QUARANTINE");
++                        crate::serial_println!("[SFS5B4] uncertainty={:?}", outcome);
++                        *START.lock() = (ticks(), work());
++                        TIMEOUT.store(true, Ordering::Release);
++                    }
++                    _ => {}
++                }
++            }
++        } else {
++            event(role, actor, "SUBMISSION_INITIATED");
++            if let Probe::Value(result) = unsafe { c.start_write(63, &[0xb4; 512]) } {
++                let id = result.unwrap();
++                *REQUEST.lock() = Some(id);
++                SUBMIT_TICK.store(ticks()[0], Ordering::Release);
++                event(role, actor, "SUBMITTED");
++                crate::serial_println!("[SFS5B4] request={:?} state={:?}", id, state);
++            }
++        }
++        return 0;
++    }
++    if TERMINAL.load(Ordering::Acquire) {
++        return 0;
++    }
++    if TIMEOUT.load(Ordering::Acquire) {
++        let ticket = c.ticket(actor);
++        match c.request(ticket) {
++            Probe::Closed => {
++                if !CONTESTED.swap(true, Ordering::AcqRel) {
++                    event(role, actor, "RESET_OWNER_CONTESTED");
++                }
++            }
++            Probe::Value(()) => {
++                if !CONTESTED.load(Ordering::Acquire) {
++                    return 0;
++                }
++                let at_owner = matches!(
++                    c.inventory(),
++                    Probe::Value((Phase::ResetOwnerEstablished, _, _))
++                );
++                if at_owner {
++                    let start = *RESET_START.lock();
++                    let cpus = crate::sched::ONLINE_CORES.load(Ordering::Acquire);
++                    if !(0..cpus).all(|i| ticks()[i] > start.0[i] + 3 && work()[i] > start.1[i] + 3)
++                    {
++                        return 0; // yield in ring 3, holding no coordinator/scheduler lock
++                    }
++                    event(role, actor, "CONTENTION_PROGRESS");
++                    crate::serial_println!("[SFS5B4] contention-start-ticks={:?} ticks={:?} contention-start-work={:?} work={:?} inventory={:?}", start.0, ticks(), start.1, work(), c.inventory());
++                    if !CANCEL.load(Ordering::Acquire) {
++                        event(role, actor, "RESET_REQUESTED");
++                    }
++                }
++                let step = if CANCEL.load(Ordering::Acquire) && at_owner {
++                    c.cancel(ticket)
++                } else {
++                    unsafe { c.step(ticket) }
++                };
++                match step {
++                    Probe::Value(phase) => {
++                        if phase == Phase::ResetOwnerEstablished {
++                            *RESET_START.lock() = (ticks(), work());
++                        }
++                        event(
++                            role,
++                            actor,
++                            match phase {
++                                Phase::Quiescing => "QUIESCING",
++                                Phase::ResetOwnerEstablished => "RESET_OWNER_ESTABLISHED",
++                                Phase::ResetPending => "RESET_PENDING",
++                                Phase::ResetAcknowledged => "RESET_ACKNOWLEDGED",
++                                Phase::FenceUnqualified => "FENCE_UNQUALIFIED",
++                                Phase::TerminalQuarantine => "TERMINAL_QUARANTINE",
++                                Phase::Running => "RUNNING",
++                            },
++                        );
++                        if phase == Phase::TerminalQuarantine {
++                            TERMINAL.store(true, Ordering::Release);
++                        }
++                    }
++                    Probe::Busy => event(role, actor, "DEVICE_TRY_LOCK_BUSY"),
++                    _ => panic!("reset ticket lost"),
++                }
++            }
++            _ => panic!("reset request invalid"),
++        }
++    }
++    0
++}
+--- /dev/null
++++ b/tools/helios-probes/sfs5b4-probe.S
+@@ -0,0 +1,19 @@
++.global _start
++.section .text
++_start:
++    mov %rdi, %r12
++loop:
++    mov %r12, %rdi
++    mov $0xf5b4, %eax
++    syscall
++    test %eax, %eax
++    jnz exit
++    mov $21, %eax
++    syscall
++    jmp loop
++exit:
++    xor %edi, %edi
++    mov $20, %eax
++    syscall
++    ud2
++.section .note.GNU-stack,"",@progbits
+--- /dev/null
++++ b/tools/sunfs5b4_validate.py
+@@ -0,0 +1,210 @@
++#!/usr/bin/env python3
++"""Bounded SFS5B4 disposable native runner and final-source regression recorder.
++
++Never touches an existing image, physical block device, or earlier audit output.
++"""
++import argparse
++import datetime
++import gzip
++import hashlib
++import importlib.util
++import json
++import os
++from pathlib import Path
++import re
++import shutil
++import subprocess
++import time
++
++ROOT = Path(__file__).resolve().parents[1]
++OUT = ROOT/'docs/audit/sunfs/sfs-5b4'
++QEMU = Path('/tmp/sfs5b4-qemu-build/qemu-system-x86_64')
++SEED = 0x5b4001
++MARKER = b'SFS5A-ONLY-7b93143a-disposable-v1!'
++
++
++def sha(p):
++    return hashlib.sha256(p.read_bytes()).hexdigest()
++
++
++def put(p, value):
++    p.write_text(json.dumps(value, indent=2)+'\n')
++
++
++def sources():
++    names = subprocess.check_output(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], cwd=ROOT).decode().split('\0')
++    return {n: sha(ROOT/n) for n in names if n and (ROOT/n).is_file() and not (ROOT/n).is_symlink()
++            and not n.startswith(('docs/audit/', 'docs/filesystems/'))}
++
++
++def command(argv, raw, name, timeout=1800, env=None):
++    start = time.monotonic_ns()
++    with (raw/(name+'.log')).open('x') as log:
++        try:
++            code = subprocess.run(argv, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=timeout, env=env).returncode
++        except subprocess.TimeoutExpired:
++            code = 'TIMEOUT'
++    row = dict(argv=argv, returncode=code, start_ns=start, end_ns=time.monotonic_ns(), log=str((raw/(name+'.log')).relative_to(OUT)))
++    with (raw/'commands.jsonl').open('a') as f:
++        f.write(json.dumps(row)+'\n')
++    print(name, code, flush=True)
++    return row
++
++
++def native(raw, cpus, modes, caches):
++    build = command(['cargo', 'build', '-p', 'sunlight-kernel', '--offline', '--locked', '--features', 'sfs5b4-test'], raw, 'guest-build')
++    if build['returncode']:
++        put(raw/'native-result.json', dict(status='BLOCKED', build=build))
++        return
++    artifacts = ROOT/'target/sfs5b4'/raw.name
++    artifacts.mkdir(parents=True)
++    elf = artifacts/'sunlight-kernel.elf'
++    shutil.copyfile(ROOT/'target/x86_64-unknown-none/debug/sunlight-kernel', elf)
++    iso = artifacts/'sfs5b4.iso'
++    row = command(['bash', 'tools/make_hybrid_iso.sh', str(elf), str(iso)], raw, 'iso-build')
++    if row['returncode'] or not QEMU.exists():
++        put(raw/'native-result.json', dict(status='BLOCKED', iso=row, qemu_exists=QEMU.exists()))
++        return
++    rows = []
++    frozen = sources()
++    events = raw/'trace-events.conf'
++    events.write_text('virtio_set_status\nvirtqueue_pop\nvirtqueue_fill\nvirtqueue_flush\nvirtio_blk_req_complete\nvirtio_blk_handle_write\n')
++    for cpu in cpus:
++        for cache in caches:
++            for mode in modes:
++                tag = f'cpu-{cpu}-{cache}-{mode}'
++                image = artifacts/(tag+'.img')
++                initial = bytearray(8192*512)
++                initial[:len(MARKER)] = MARKER
++                if mode == 'cancel':
++                    initial[61*512] = 1
++                with image.open('xb') as f:
++                    f.write(initial)
++                    f.flush()
++                    os.fsync(f.fileno())
++                serial, trace, device = [raw/(tag+suffix+'.log') for suffix in ['.serial', '.trace', '.qemu']]
++                env = dict(os.environ)
++                for k in list(env):
++                    if k.startswith(('SFS5B3_', 'SFS5B4_')):
++                        del env[k]
++                executable = str(QEMU)
++                if mode == 'unmodified':
++                    executable = shutil.which('qemu-system-x86_64')
++                else:
++                    env['SFS5B3_MODE'] = 'hold' if mode == 'cancel' else mode
++                if mode == 'release':
++                    release = artifacts/(tag+'.release')
++                    release.touch(exist_ok=False)
++                    env['SFS5B3_RELEASE'] = str(release)
++                argv = [executable, '-machine', 'q35', '-accel', 'tcg', '-m', '1024M', '-smp', str(cpu),
++                        '-cdrom', str(iso), '-boot', 'd', '-display', 'none', '-serial', f'file:{serial}',
++                        '-monitor', 'none', '-drive', f'id=sfs5b4,file={image},if=none,format=raw,cache={cache}',
++                        '-device', 'virtio-blk-pci,disable-modern=on,ioeventfd=off,drive=sfs5b4,serial=SFS5B3-disposable',
++                        '-device', 'virtio-rng-pci,disable-modern=on', '-nic', 'none', '-no-reboot', '-no-shutdown',
++                        '-trace', f'events={events},file={trace}']
++                put(raw/(tag+'.invocation.json'), dict(argv=argv, seed=SEED, seed_use='deterministic bytes and named barriers, no random fault scheduling',
++                    environment={k:v for k,v in env.items() if k.startswith('SFS5B')}, source=frozen,
++                    elf_sha256=sha(elf), iso_sha256=sha(iso), qemu_sha256=sha(Path(executable)),
++                    patch_sha256=sha(OUT/'qemu-async-access.patch'), initial_image_sha256=sha(image)))
++                host_events = []
++                ready = False
++                with device.open('x') as log:
++                    p = subprocess.Popen(argv, cwd=ROOT, env=env, stdout=log, stderr=log)
++                    host_events.append(dict(event='PROCESS_STARTED', ns=time.monotonic_ns()))
++                    try:
++                        deadline = time.monotonic()+90
++                        while p.poll() is None and time.monotonic() < deadline:
++                            content = serial.read_text(errors='replace') if serial.exists() else ''
++                            if '[SFS5B4] READY' in content:
++                                ready = True
++                                host_events.append(dict(event='READY_OBSERVED', ns=time.monotonic_ns()))
++                                time.sleep(.25)
++                                break
++                            if 'panicked at' in content:
++                                break
++                            time.sleep(.05)
++                    finally:
++                        if p.poll() is None:
++                            p.kill()
++                        code = p.wait(timeout=10)
++                        host_events.append(dict(event='PROCESS_REAPED', ns=time.monotonic_ns(), code=code))
++                content = serial.read_text(errors='replace') if serial.exists() else ''
++                dev = device.read_text(errors='replace')
++                initial[62*512:63*512] = bytes([0x62])*512
++                if mode in ['release', 'unmodified']:
++                    initial[63*512:64*512] = bytes([0xb4])*512
++                exact = image.read_bytes() == initial
++                guest = [dict(seq=int(a), cpu=int(b), pid=int(c), task_generation=int(d), role=int(e), ready=f, stage=g)
++                         for a,b,c,d,e,f,g in re.findall(r'\[SFS5B4\] event=(\d+) cpu=(\d+) pid=(\d+) task-generation=(\d+) role=(\d+) scheduler-ready=(\w+) stage=(\w+)', content)]
++                device_events = [dict(seq=int(a), ns=int(b), epoch=int(c), queue=int(d), head=int(e), stage=f, bytes=int(g))
++                                 for a,b,c,d,e,f,g in re.findall(r'SFS5B4 seq=(\d+) ns=(\d+) epoch=(\d+) queue=(\d+) head=(\d+) stage=(\w+) bytes=(\d+)', dev)]
++                stages = [e['stage'] for e in device_events]
++                illegal = 'ILLEGAL_POST_FENCE_ACCESS' in stages
++                held = mode not in ['release', 'unmodified']
++                canceled = mode == 'cancel'
++                checks = dict(ready=ready, exact_image=exact, killed_after_window=code == -9,
++                              post_scheduler=bool(guest) and all(e['ready']=='true' for e in guest),
++                              contender=any(e['stage']=='RESET_OWNER_CONTESTED' for e in guest),
++                              admission_closed=any(e['stage']=='ADMISSION_CLOSED' for e in guest),
++                              terminal=any(e['stage']=='TERMINAL_QUARANTINE' for e in guest),
++                              progress=any(e['stage']=='FORWARD_PROGRESS' for e in guest),
++                              contention_progress=any(e['stage']=='CONTENTION_PROGRESS' for e in guest),
++                              payload=not held or 'PAYLOAD_ACCESS_ENDED' in stages,
++                              handshake=not held or any(e['stage']=='DEVICE_ACCESS_HANDSHAKE' for e in guest),
++                              quiescence=not held or canceled or 'OLD_EPOCH_QUIESCED' in stages,
++                              guard=not held or canceled or 'ORIGINAL_MAPPINGS_PROTECTED' in stages,
++                              negative_detector=(illegal if mode=='negative' else not illegal),
++                              reset_entry_access=mode!='reset-read' or ('RESET_ENTERED' in stages and any(e['stage']=='PAYLOAD_ACCESS_ENDED' for e in device_events[stages.index('RESET_ENTERED')+1:])))
++                row = dict(cpu=cpu, cache=cache, mode=mode, status='PASS' if all(checks.values()) else 'FAIL', checks=checks,
++                           guest=guest, device=device_events, host=host_events,
++                           simultaneous_dma_reset='UNQUALIFIED', reset='none/cancellation' if canceled else 'real legacy whole-device',
++                           released_pages=0, pinned_pages=5, serial=serial.name, trace=trace.name, device_log=device.name)
++                put(raw/(tag+'.events.json'), row)
++                rows.append(row)
++                (raw/(tag+'.img.gz')).write_bytes(gzip.compress(image.read_bytes(), mtime=0))
++                put(raw/'native-result.json', dict(status='PASS' if all(r['status']=='PASS' for r in rows) else 'PARTIAL', boots=rows))
++                print(tag, row['status'], {k:v for k,v in checks.items() if not v}, flush=True)
++
++
++def regression(raw):
++    spec = importlib.util.spec_from_file_location('sfs5b1', ROOT/'tools/sunfs5b1_validate.py')
++    base = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(base)
++    base.OUT = OUT
++    base.hosted(raw)
++    for name, argv in [
++        ('format', ['rustfmt', '--edition', '2021', '--check', 'sunlight-virtio/src/blk.rs', 'kernel/src/sfs_reset.rs', 'kernel/src/sfs5b4_test.rs', 'kernel/build.rs']),
++        ('clippy', ['cargo', 'clippy', '-p', 'sunlight-virtio', '-p', 'sunlight-block', '--lib', '--offline', '--locked', '--target', 'x86_64-unknown-none']),
++        ('whitespace', ['git', 'diff', '--check']),
++        ('diagnostic', ['cargo', 'build', '-p', 'sunlight-kernel', '--offline', '--locked', '--features', 'sfs5b4-test']),
++    ]:
++        command(argv, raw, name)
++
++
++def main():
++    p = argparse.ArgumentParser()
++    p.add_argument('action', choices=['native', 'regression'])
++    p.add_argument('--cpus', default='1,2,4')
++    p.add_argument('--modes', default='hold,reset-read,error,negative,cancel,release,unmodified')
++    p.add_argument('--caches', default='writeback,none')
++    args = p.parse_args()
++    stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
++    raw = OUT/'raw'/f'{args.action}-{stamp}'
++    raw.mkdir()
++    before = sources()
++    put(raw/'source-before.json', before)
++    put(raw/'runner.json', dict(argv=os.sys.argv, runner_sha256=sha(Path(__file__)), environment={k:os.getenv(k) for k in ['RUSTFLAGS','RUSTUP_TOOLCHAIN','CARGO_TARGET_DIR','CARGO_BUILD_TARGET']}))
++    if args.action == 'native':
++        native(raw, [int(c) for c in args.cpus.split(',')], args.modes.split(','), args.caches.split(','))
++    else:
++        regression(raw)
++    after = sources()
++    put(raw/'source-after.json', after)
++    changed = [n for n in set(before)|set(after) if before.get(n) != after.get(n)]
++    put(raw/'input-integrity.json', dict(status='PASS' if not changed else 'FAIL', changed=changed))
++    print(raw, flush=True)
++    assert not changed, changed
++
++
++if __name__ == '__main__':
++    main()

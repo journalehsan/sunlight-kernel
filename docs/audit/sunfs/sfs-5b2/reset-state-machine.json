@@ -1,0 +1,27 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PARTIAL",
+  "transitions": {
+    "Running": "begin_terminal_reset closes admission/quarantines before one whole-device status-zero write",
+    "Waiting": "poll_terminal_reset performs one status read, at most 64 calls",
+    "VerifiedRetained": "status zero acknowledgment; no reopen/release/reinitialization",
+    "TimedOutRetained": "64 reads without zero; no DMA-stop claim",
+    "UnexpectedStatusRetained": "status other than 0 or 7, including 0xff; no DMA-stop claim"
+  },
+  "coordinator": "exclusive &mut VirtioBlk, existing external mutex for shared access; no new coordinator lock",
+  "competing_begin": "same diagnostic state, no second write, no budget restart, no owner replacement",
+  "terminal": "all non-Running states reject I/O; repeated poll/begin immutable after terminal outcome",
+  "not_implemented": [
+    "OldEpochRetired",
+    "Reinitializing",
+    "RunningNewEpoch"
+  ],
+  "normative": "VirtIO 1.4 2.4.1/2.4.2 with legacy PCI status layout 4.1.4.10; 3.3/3.3.1 closes live queues on reset",
+  "work_bound": "initialization <=64 status reads; runtime begin one write; runtime poll one read, <=64 total; port-I/O completion assumes responsive platform",
+  "not_proven": [
+    "wall-clock bound on hardware register instruction",
+    "active-SMP coordination",
+    "platform DMA drain"
+  ]
+}

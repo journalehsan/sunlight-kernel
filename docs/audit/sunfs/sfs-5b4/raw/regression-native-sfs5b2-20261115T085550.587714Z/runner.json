@@ -1,0 +1,7 @@
+{
+  "helper_sha256": "09853e4430301e6f926e4d07a8ccbeac5d81e7bc8257cf9f973950d2e675c60a",
+  "reused_runner": "tools/sunfs5b2_validate.py",
+  "runner_sha256": "6ebd0247e1cea41cd6133707652eefd8e096d7c428accc180cc6bfcf3cec2c61",
+  "output_redirected": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4",
+  "source_inventory": "cached per invocation from frozen manifest, independently verified after complete matrix"
+}

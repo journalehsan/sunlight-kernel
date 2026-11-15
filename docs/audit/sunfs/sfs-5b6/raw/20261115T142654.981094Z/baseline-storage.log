@@ -1,0 +1,118 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-block v0.2.7801-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling sunlight-virtio v0.2.7801-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.95s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_block-499502fd4338bad6)
+
+running 68 tests
+test contract::tests::normal_exactly_once_retirement ... ok
+test contract::tests::t12_duplicate ... ok
+test contract::tests::t11_late_and_t18_quarantine ... ok
+test contract::tests::t13_wrong_queue ... ok
+test contract::tests::t17_reuse_old_identity ... ok
+test contract::tests::t1_invalid_geometry ... ok
+test contract::tests::t16_wrong_resources ... ok
+test contract::tests::t19_exhaustion ... ok
+test contract::tests::t14_wrong_media ... ok
+test contract::tests::t20_removal_and_shutdown ... ok
+test contract::tests::t2_overflow ... ok
+test contract::tests::t3_alignment ... ok
+test contract::tests::t4_oversized_and_zero_and_buffer ... ok
+test partition::tests::adapter_rejects_relative_boundary_before_forwarding ... ok
+test partition::tests::bounded_reads_writes_and_cache ... ok
+test partition::tests::flush_propagates_failure ... ok
+test partition::tests::legacy_superfloppy_and_sector_constraint ... ok
+test quiesce::tests::c10_repeated_cancellation_and_reset ... ok
+test partition::tests::rejects_gpt_corruption_in_both_copies ... ok
+test partition::tests::valid_mbr_and_gpt ... ok
+test quiesce::tests::c11_stale_device_incarnation_refused ... ok
+test partition::tests::rejects_bad_mbr_layouts ... ok
+test quiesce::tests::c2_cancellation_wins_completion ... ok
+test quiesce::tests::c12_stale_queue_epoch_refused ... ok
+test quiesce::tests::c1_completion_wins_cancellation ... ok
+test quiesce::tests::c4_reset_races_callback_exit ... ok
+test quiesce::tests::c3_reset_races_callback_entry ... ok
+test quiesce::tests::c5_reset_races_completion_publication ... ok
+test partition::tests::rejects_crc_valid_unsafe_gpt_geometry ... ok
+test quiesce::tests::c6_callback_fails_before_mapping ... ok
+test quiesce::tests::c7_callback_fails_after_mapping ... ok
+test quiesce::tests::cancel_then_finish_never_commits_completed ... ok
+test quiesce::tests::m4_reset_does_not_implicitly_revoke_mapping ... ok
+test quiesce::tests::m5_release_exactly_once ... ok
+test quiesce::tests::m6_stale_callback_cannot_reacquire ... ok
+test quiesce::tests::m7_new_epoch_cannot_alias_unretired_mapping ... ok
+test quiesce::tests::m1_m3_mapping_authority_spans_use ... ok
+test quiesce::tests::c9_delayed_callback_yields_bounded_failure ... ok
+test quiesce::tests::m8_access_after_fence_refused ... ok
+test quiesce::tests::c8_worker_exits_during_reset ... ok
+test quiesce::tests::nc1_use_after_release_detected ... ok
+test quiesce::tests::nc2_callback_after_teardown_refused ... ok
+test quiesce::tests::nc3_stale_queue_access_refused ... ok
+test quiesce::tests::terminal_is_exactly_once_for_all_interleavings ... ok
+test quiesce::tests::nc4_delayed_write_after_quiescence_refused ... ok
+test quiesce::tests::retired_mapping_never_resurrects ... ok
+test registry::tests::enumerates_fat_and_unknown_partitions_with_parent_and_bounds ... ok
+test registry::tests::unknown_stale_replacement_and_exhausted_ids ... ok
+test tests::cache_flushes_dirty_slot_on_collision_evict ... ok
+test registry::tests::identical_extents_on_usb_and_virtio_keep_distinct_parents ... ok
+test tests::cache_serves_repeat_reads_and_writes_back_on_flush ... ok
+test tests::memdisk_geometry_is_volatile_and_incarnations_differ ... ok
+test tests::memdisk_round_trips_and_bounds_checks ... ok
+test tests::null_device_rejects_everything ... ok
+test usb_msc::tests::command_wrapper_wire_format_and_bounds ... ok
+test usb_msc::tests::csw_stall_cleared_and_retried_once ... ok
+test usb_msc::tests::initial_unit_attention_is_bounded_and_consumed_before_registration ... ok
+test usb_msc::tests::interface_bulk_endpoint_validation ... ok
+test usb_msc::tests::reject_4kn_and_read_capacity_16_sentinel ... ok
+test usb_msc::tests::runtime_not_ready_and_unit_attention_retire_media_and_preserve_read_buffer ... ok
+test usb_msc::tests::scsi_initialization_read_write_sync_and_bounds ... ok
+test usb_msc::tests::short_data_and_cbw_never_report_success ... ok
+test usb_msc::tests::short_scsi_read_and_sense_failure_do_not_publish_stale_bytes ... ok
+test usb_msc::tests::status_signature_tag_length_residue_and_phase_errors ... ok
+test usb_msc::tests::success_tags_increase_and_failed_status_is_not_transport_reset ... ok
+test usb_msc::tests::tag_exhaustion_does_not_wrap ... ok
+test usb_msc::tests::timeout_bounded_recovery_and_no_replay ... ok
+test partition::tests::truncated_tables_and_all_single_byte_gpt_mutations_fail_closed ... ok
+
+test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_virtio-1e5ed6c210605f5a)
+
+running 30 tests
+test blk::ownership_tests::f10_delayed_ack_has_exact_read_bound ... ok
+test blk::ownership_tests::f11_withheld_ack_is_terminal_and_not_a_fence ... ok
+test blk::ownership_tests::duplicate_before_submission_freezes_before_buffer_copy ... ok
+test blk::ownership_tests::f13_device_lost_running_state_blocks_dma_publication ... ok
+test blk::ownership_tests::f13_f16_unexpected_or_removed_device_cannot_ack ... ok
+test blk::ownership_tests::f19_normal_retirement_then_reset_has_no_second_retirement ... ok
+test blk::ownership_tests::f21_f22_device_error_provenance_survives_reset_and_refusal ... ok
+test blk::ownership_tests::f15_f17_f18_reset_competitors_and_pressure_preserve_first_owner ... ok
+test blk::ownership_tests::f3_f8_late_ring_write_and_stale_notification_do_not_reopen_reset ... ok
+test blk::ownership_tests::f4_head_only_duplicate_cannot_supply_new_status ... ok
+test blk::ownership_tests::f9_f21_f22_reset_retains_uncertain_io_and_all_dma_bytes ... ok
+test blk::ownership_tests::queue_allocation_bounds ... ok
+test blk::ownership_tests::late_completion_must_not_authorize_new_request ... ok
+test blk::ownership_tests::reused_wire_head_has_no_generation_echo_demonstrated_limit ... ok
+test blk::ownership_tests::ring_index_wrap_is_separate_from_generation_exhaustion ... ok
+test blk::ownership_tests::staged_busy_admission_and_cancel_preserve_live_dma_inventory ... ok
+test blk::ownership_tests::staged_reset_or_cancel_before_timeout_records_write_uncertainty ... ok
+test blk::ownership_tests::staged_second_admission_cannot_poison_ready_first_completion ... ok
+test blk::ownership_tests::staged_timeout_reset_never_consumes_late_ring_or_reopens ... ok
+test blk::ownership_tests::staged_write_rejects_stale_tokens_and_retires_once ... ok
+test blk::ownership_tests::t10_uncertain_flush_quarantines ... ok
+test blk::ownership_tests::t15_invalid_used_head_and_index ... ok
+test blk::ownership_tests::t16_descriptor_ownership_and_bad_status ... ok
+test blk::ownership_tests::t5_legacy_length_not_authoritative ... ok
+test blk::ownership_tests::t6_failed_write_and_read_do_not_invent_prefix ... ok
+test blk::ownership_tests::t7_uncertain_write_and_retention ... ok
+test blk::ownership_tests::t8_unsupported_flush_not_submitted ... ok
+test blk::ownership_tests::t9_failed_flush_preserves_write_uncertainty ... ok
+test blk::ownership_tests::timeout_must_not_reuse_dma_page_or_descriptors ... ok
+test blk::ownership_tests::valid_completion_and_flush_provenance ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

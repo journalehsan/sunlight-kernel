@@ -1,0 +1,818 @@
+{
+  "inventories": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "hold",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-writeback-hold.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-writeback-reset-read.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "error",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-writeback-error.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "negative",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-writeback-negative.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "cancel",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-writeback-cancel.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "release",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-1-writeback-release.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-1-writeback-unmodified.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "hold",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-none-hold.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "reset-read",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-none-reset-read.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "error",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-none-error.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "negative",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-none-negative.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "cancel",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-1-none-cancel.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "release",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-1-none-release.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "unmodified",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 61214,
+      "free_after": 61214,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-1-none-unmodified.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "hold",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-writeback-hold.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-writeback-reset-read.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "error",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-writeback-error.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "negative",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-writeback-negative.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "cancel",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-writeback-cancel.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "release",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-2-writeback-release.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-2-writeback-unmodified.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "hold",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-none-hold.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "reset-read",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-none-reset-read.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "error",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-none-error.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "negative",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60452,
+      "free_after": 60452,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-none-negative.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "cancel",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-2-none-cancel.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "release",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-2-none-release.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "unmodified",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 60432,
+      "free_after": 60432,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-2-none-unmodified.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "hold",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-writeback-hold.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-writeback-reset-read.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "error",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-writeback-error.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "negative",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-writeback-negative.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "cancel",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-writeback-cancel.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "release",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-4-writeback-release.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-4-writeback-unmodified.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "hold",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-none-hold.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "reset-read",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-none-reset-read.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "error",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-none-error.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "negative",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-none-negative.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "cancel",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 1,
+      "serial": "cpu-4-none-cancel.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "release",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-4-none-release.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "mode": "unmodified",
+      "queue_pages": [
+        274042880,
+        274046976,
+        274051072,
+        274055168
+      ],
+      "request_page": 274059264,
+      "pinned_bytes": 20480,
+      "released": 0,
+      "free_before": 58872,
+      "free_after": 58872,
+      "pmm_unchanged": true,
+      "uncertain_request_authorities": 0,
+      "serial": "cpu-4-none-unmodified.serial.log"
+    }
+  ],
+  "status": "PASS",
+  "scope": "required fail-stop retention when fence is unqualified; retirement itself UNQUALIFIED",
+  "per_attachment": {
+    "queue_pages": 4,
+    "request_pages": 1,
+    "pinned_bytes": 20480,
+    "request_authorities": 1
+  },
+  "released_pages": 0,
+  "released_descriptors": 0,
+  "retired_uncertain_requests": 0,
+  "new_epochs": 0,
+  "inventory_evidence": "native serial inventory retains exact RequestId; PMM free counts sampled before/after; no per-frame reuse experiment",
+  "caveat": "normal controls legitimately complete and retire normal requests before idle reset; five attachment pages still pinned",
+  "conditional_retirement": "NOT_RUN",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json"
+}

@@ -996,6 +996,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         18 => ipc_try_recv(frame),
         20 => native_thread_exit(frame.rdi as i32),
         21 => process_yield(),
+        #[cfg(feature = "sfs5b4-test")]
+        0xf5b4 => crate::sfs5b4_test::syscall(frame.rdi),
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         0xf1a0 => unsafe { crate::sched::doorbell_fixture_on_kernel_stack(frame) },
         #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
@@ -2612,6 +2614,7 @@ fn nameserver_diagnostic_event(event: u64) -> u64 {
 fn endpoint_destroy(token: u64) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let caller_pid = sched.current_process().pid;
+    let owner = crate::ipc::vfs_process_identity(sched.current_process());
     let endpoint_id = {
         let mut caps = crate::capability::CAP_BROKER.lock();
         match caps.destroy_endpoint(caller_pid, CapabilityToken(token)) {
@@ -2627,6 +2630,7 @@ fn endpoint_destroy(token: u64) -> u64 {
             }
         }
     };
+    crate::ipc::retire_vfs_endpoint(endpoint_id, owner);
     crate::arch::x86_64::keyboard::unregister_kbd_endpoint(endpoint_id);
     crate::arch::x86_64::mouse::unregister_mouse_endpoint(endpoint_id);
     let calls = crate::ipc::with_shard(endpoint_id, |bus| bus.remove_endpoint(endpoint_id));

@@ -1,0 +1,7 @@
+{
+  "status": "UNQUALIFIED",
+  "write": "the held sector-63 write was never submitted to the block backend",
+  "flush": "no flush was issued for the held request",
+  "reset": "status-zero readback does not convert the uncertain write into durable success",
+  "persistence": "no hardware, no media, no power-loss claim"
+}

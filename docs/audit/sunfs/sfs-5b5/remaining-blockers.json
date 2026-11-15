@@ -1,0 +1,15 @@
+{
+  "status": "PARTIAL",
+  "blockers": [
+    "prior cpu-2 early-boot stall remains UNQUALIFIED: not reproduced in 5 replays, root cause unproven, narrowed to pre-fixture SMBIOS/serial stage",
+    "G5/G6/G7 are qualified only for the instrumented backend; the block-backend (blk_aio_pwritev) path is never submitted so blk_drain quiescence is unproven",
+    "platform mapping lifetime and allocator reuse remain unproven: static pinned RAM only",
+    "R4/R5 (IRQ versus reset, IRQ versus queue teardown) are NOT_RUN: the driver polls the used ring",
+    "native completion-versus-reset (R3), interrupted-reset retry (R13) and resource-pressure reset (R15) are host-model only",
+    "device removal, hot-unplug, migration and late wire completions are not exercised natively",
+    "no IOMMU, no physical device, no hardware DMA fencing, no persistence claim",
+    "the five historical SFS-5B.4 attachment pages remain pinned; their ownership is not reconstructable",
+    "conditional retirement of the historical pages and any new queue epoch remain NOT_RUN"
+  ],
+  "recommended_next": "SFS-5B.6: qualify the real block-backend path (submit the held request, then reset) with a bounded drain, add an interrupt-driven completion path to force R4/R5, and prove allocator reuse on a fresh attachment before any historical-page reclamation."
+}

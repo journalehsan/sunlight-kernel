@@ -1,0 +1,126 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-fat",
+      "-p",
+      "sunlight-fs",
+      "-p",
+      "sunlight-virtio",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "start_ns": 18942756595890,
+    "end_ns": 18952616992856,
+    "log": "raw/focused-20261115T144051.148503Z/storage.log"
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-kernel",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "start_ns": 18952617685295,
+    "end_ns": 19029050498426,
+    "log": "raw/focused-20261115T144051.148503Z/kernel-host.log"
+  },
+  {
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-virtio",
+      "-p",
+      "sunlight-sunfs",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 101,
+    "start_ns": 19029065223884,
+    "end_ns": 19061725261206,
+    "log": "raw/focused-20261115T144051.148503Z/no-std.log"
+  },
+  {
+    "argv": [
+      "rustfmt",
+      "--edition",
+      "2021",
+      "--check",
+      "sunlight-block/src/quiesce.rs",
+      "sunlight-block/src/lib.rs",
+      "sunlight-virtio/src/blk.rs"
+    ],
+    "returncode": 0,
+    "start_ns": 19061728506851,
+    "end_ns": 19061849052852,
+    "log": "raw/focused-20261115T144051.148503Z/format.log"
+  },
+  {
+    "argv": [
+      "cargo",
+      "clippy",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-virtio",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 101,
+    "start_ns": 19061850256812,
+    "end_ns": 19062566549548,
+    "log": "raw/focused-20261115T144051.148503Z/clippy.log"
+  },
+  {
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--offline",
+      "--locked"
+    ],
+    "returncode": 101,
+    "start_ns": 19062566833455,
+    "end_ns": 19089359752291,
+    "log": "raw/focused-20261115T144051.148503Z/default-build.log"
+  },
+  {
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--offline",
+      "--locked",
+      "--features",
+      "sfs5b4-test"
+    ],
+    "returncode": 101,
+    "start_ns": 19089364925334,
+    "end_ns": 19112808530633,
+    "log": "raw/focused-20261115T144051.148503Z/diagnostic-build.log"
+  }
+]

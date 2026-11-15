@@ -1,0 +1,26 @@
+{
+  "version": "11.1.2",
+  "archive": "https://download.qemu.org/qemu-11.1.2.tar.xz",
+  "archive_local": "/tmp/sfs5b3-qemu-11.1.2.tar.xz",
+  "archive_sha256": "731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016",
+  "patch_sha256": "2d37bd7e98466c6daa7e39e678dbd1302aef73c5da9a2b540e44d51472396a3f",
+  "source_manifest": "raw/qemu-source-manifest.json",
+  "source_manifest_sha256": "b4f9aa81e6dcd225fa68c6408fc6b44f3e8096a3c7d504413be6da934959a416",
+  "build_dir": "/tmp/sfs5b3-qemu-build",
+  "configure_log": "raw/qemu-configure.log",
+  "build_log": "raw/qemu-build.log",
+  "build_command": [
+    "ninja",
+    "-C",
+    "/tmp/sfs5b3-qemu-build",
+    "-j",
+    "6",
+    "qemu-system-x86_64"
+  ],
+  "system_qemu_modified": false,
+  "binary_sha256": "85eeaa952d105132b2bd9af06b4ed692cc41965e26298d74904c3d7562b64227",
+  "binary_version": "11.1.2",
+  "guard": "mprotect PROT_NONE original four queue pages and one request page; nonblocking pipe-copy positive control and EFAULT negative probes for all five pages",
+  "pre_guard_attempt": "raw/v1-qemu-source-identity.json",
+  "failed_probe_attempt": "raw/v2-qemu-source-identity.json"
+}

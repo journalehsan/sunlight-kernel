@@ -1,0 +1,15 @@
+{
+  "status": "PARTIAL",
+  "native_uncertain_write": "PASS: original Deadline receipt, Unknown amount, Uncertain durability survives reset/refusal",
+  "held_write_backing_image": "all bytes unchanged because backend never submitted; does not generalize to other timeout points",
+  "release_control": "actual payload reaches backing file and normal flush completes; no physical persistence claim",
+  "failed_uncertain_flush": "hosted fixtures only in this milestone",
+  "reset_ack_implies_durable": false,
+  "reset_ack_implies_failed_without_side_effects": false,
+  "queue_incarnation": 1,
+  "media_identity": "boot-local attachment only",
+  "native_sunfs_mount": false,
+  "typed_downstream_gate": "still incomplete",
+  "authoritative_short_transfer": "still unqualified",
+  "future_recovery": "must validate complete checkpoint closures and select valid durable generation"
+}

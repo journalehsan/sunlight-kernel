@@ -1,0 +1,62 @@
+[
+  {
+    "tag": "stall-cpu-2-writeback-unmodified-r0",
+    "mode": "unmodified",
+    "cpu": 2,
+    "cache": "writeback",
+    "ready": true,
+    "elapsed_s": 9.819,
+    "serial": "stall-cpu-2-writeback-unmodified-r0.serial.log",
+    "qemu_log": "stall-cpu-2-writeback-unmodified-r0.qemu.log",
+    "image": "stall-cpu-2-writeback-unmodified-r0.img",
+    "exit": 0
+  },
+  {
+    "tag": "stall-cpu-2-writeback-unmodified-r1",
+    "mode": "unmodified",
+    "cpu": 2,
+    "cache": "writeback",
+    "ready": true,
+    "elapsed_s": 9.026,
+    "serial": "stall-cpu-2-writeback-unmodified-r1.serial.log",
+    "qemu_log": "stall-cpu-2-writeback-unmodified-r1.qemu.log",
+    "image": "stall-cpu-2-writeback-unmodified-r1.img",
+    "exit": 0
+  },
+  {
+    "tag": "stall-cpu-2-writeback-unmodified-r2",
+    "mode": "unmodified",
+    "cpu": 2,
+    "cache": "writeback",
+    "ready": true,
+    "elapsed_s": 9.819,
+    "serial": "stall-cpu-2-writeback-unmodified-r2.serial.log",
+    "qemu_log": "stall-cpu-2-writeback-unmodified-r2.qemu.log",
+    "image": "stall-cpu-2-writeback-unmodified-r2.img",
+    "exit": 0
+  },
+  {
+    "tag": "stall-cpu-2-writeback-unmodified-r3",
+    "mode": "unmodified",
+    "cpu": 2,
+    "cache": "writeback",
+    "ready": true,
+    "elapsed_s": 9.027,
+    "serial": "stall-cpu-2-writeback-unmodified-r3.serial.log",
+    "qemu_log": "stall-cpu-2-writeback-unmodified-r3.qemu.log",
+    "image": "stall-cpu-2-writeback-unmodified-r3.img",
+    "exit": 0
+  },
+  {
+    "tag": "stall-cpu-2-writeback-unmodified-r4",
+    "mode": "unmodified",
+    "cpu": 2,
+    "cache": "writeback",
+    "ready": true,
+    "elapsed_s": 9.62,
+    "serial": "stall-cpu-2-writeback-unmodified-r4.serial.log",
+    "qemu_log": "stall-cpu-2-writeback-unmodified-r4.qemu.log",
+    "image": "stall-cpu-2-writeback-unmodified-r4.img",
+    "exit": 0
+  }
+]

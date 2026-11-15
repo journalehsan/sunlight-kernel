@@ -11,7 +11,9 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod contract;
 pub mod partition;
+pub mod quiesce;
 pub mod registry;
 pub mod usb_msc;
 pub use partition::PartitionBlockDevice;
@@ -24,14 +26,22 @@ pub enum BlockError {
     Io,
     OutOfRange,
     Unsupported,
+    Uncertain,
+    Unavailable,
+    Failed,
 }
 
 pub trait BlockDevice {
     fn read_block(&mut self, lba: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError>;
     fn write_block(&mut self, lba: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), BlockError>;
-    /// Force all writes accepted by this device to stable media.
+    /// Query qualified geometry. Unmigrated wrappers refuse admission.
+    fn geometry(&self) -> Result<contract::Geometry, BlockError> {
+        Err(BlockError::Unsupported)
+    }
+    /// Issue the backend barrier; success is bounded by its documented scope.
+    /// RAM devices provide visibility only, never persistent storage.
     ///
-    /// Implementations must return `Unsupported` rather than reporting
+    /// Persistent implementations must return `Unsupported` rather than reporting
     /// success when they cannot provide a persistence barrier.
     fn flush(&mut self) -> Result<(), BlockError>;
     fn block_count(&self) -> u64;
@@ -48,6 +58,10 @@ impl<D: BlockDevice + ?Sized> BlockDevice for &mut D {
 
     fn flush(&mut self) -> Result<(), BlockError> {
         (**self).flush()
+    }
+
+    fn geometry(&self) -> Result<contract::Geometry, BlockError> {
+        (**self).geometry()
     }
 
     fn block_count(&self) -> u64 {
@@ -196,11 +210,15 @@ impl<D: BlockDevice, const N: usize> BlockDevice for CachedBlockDevice<D, N> {
 /// unit tests; also usable for initrd-style images.
 pub struct MemDisk<'a> {
     data: &'a mut [u8],
+    incarnation: Option<u64>,
 }
 
 impl<'a> MemDisk<'a> {
     pub fn new(data: &'a mut [u8]) -> Self {
-        Self { data }
+        Self {
+            data,
+            incarnation: contract::new_incarnation(),
+        }
     }
 
     fn range(&self, lba: u64) -> Result<core::ops::Range<usize>, BlockError> {
@@ -219,6 +237,29 @@ impl<'a> MemDisk<'a> {
 }
 
 impl BlockDevice for MemDisk<'_> {
+    fn geometry(&self) -> Result<contract::Geometry, BlockError> {
+        use contract::*;
+        Ok(Geometry {
+            identity: DeviceIdentity {
+                backend: Backend::MemDisk,
+                incarnation: self.incarnation.ok_or(BlockError::Unavailable)?,
+            },
+            persistent_identity: Knowledge::Unsupported,
+            logical_block: 512,
+            physical_block: Knowledge::Unknown,
+            blocks: self.block_count(),
+            max_blocks: 1,
+            max_transfer: 512,
+            io_alignment: 512,
+            buffer_alignment: 1,
+            read_only: Knowledge::Known(false),
+            flush: Knowledge::Unsupported,
+            fua: Knowledge::Unsupported,
+            write_cache: Knowledge::Known(false),
+            fencing: FenceCapability::NotApplicable,
+        })
+    }
+
     fn read_block(&mut self, lba: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError> {
         let range = self.range(lba)?;
         buf.copy_from_slice(&self.data[range]);
@@ -232,7 +273,7 @@ impl BlockDevice for MemDisk<'_> {
     }
 
     fn flush(&mut self) -> Result<(), BlockError> {
-        // Memory is the stable backing store for this deterministic device.
+        // Visibility in volatile RAM only. Persistence is not applicable.
         Ok(())
     }
 
@@ -311,6 +352,21 @@ mod tests {
         let mut direct = CachedBlockDevice::<_, 4>::new(MemDisk::new(&mut backing));
         direct.read_block(1, &mut readback).unwrap();
         assert_eq!(readback, block);
+    }
+
+    #[test]
+    fn memdisk_geometry_is_volatile_and_incarnations_differ() {
+        use contract::*;
+        let mut a = [0; 512];
+        let mut b = [0; 512];
+        let a = MemDisk::new(&mut a);
+        let b = MemDisk::new(&mut b);
+        let g = a.geometry().unwrap();
+        g.validate().unwrap();
+        assert_ne!(g.identity, b.geometry().unwrap().identity);
+        assert_eq!(g.flush, Knowledge::Unsupported);
+        assert_eq!(g.fencing, FenceCapability::NotApplicable);
+        assert_eq!(g.physical_block, Knowledge::Unknown);
     }
 
     #[test]

@@ -1,0 +1,88 @@
+{
+  "status": "PARTIAL",
+  "review_scope": "native VirtIO block path, kernel integration, block/cache/partition, USB BOT/xHCI ownership and existing retirement boundaries; static unless test cited",
+  "findings": [
+    {
+      "id": "SEC1",
+      "severity": "high",
+      "status": "PARTIAL",
+      "topic": "DMA reuse after timeout",
+      "source": "sunlight-virtio/src/blk.rs:147",
+      "evidence": "raw/ownership-before.log",
+      "resolution": "terminal quarantine added; fake-ring tests pass; native late-DMA race NOT_RUN"
+    },
+    {
+      "id": "SEC2",
+      "severity": "high",
+      "status": "UNQUALIFIED",
+      "topic": "queue allocation fit",
+      "source": "sunlight-virtio/src/blk.rs:104",
+      "evidence": "raw/queue-layout-counterexample.json",
+      "resolution": "default QEMU 256 queue scoped only; no geometry guard production repair in this attempt; larger queues unsafe"
+    },
+    {
+      "id": "SEC3",
+      "severity": "high",
+      "status": "UNQUALIFIED",
+      "topic": "authoritative DMA fencing and media side effects",
+      "source": "sunlight-virtio/src/blk.rs:84",
+      "resolution": "reset write is initialization only; no live fence, cancellation receipt or media generation; retain resources until reboot"
+    },
+    {
+      "id": "SEC4",
+      "severity": "medium",
+      "status": "PARTIAL",
+      "topic": "error provenance",
+      "source": "kernel/src/main.rs:1888",
+      "resolution": "bool collapses status/timeout; common Io cannot prove no side effects; future SunFS adapter must freeze"
+    },
+    {
+      "id": "SEC5",
+      "severity": "medium",
+      "status": "PARTIAL",
+      "topic": "lock context / independent forward progress",
+      "source": "kernel/src/storage.rs:1; kernel/src/main.rs KernelBlkDev; kernel/src/arch/x86_64/syscall.rs; kernel/src/sched/mod.rs",
+      "resolution": "sys_file_sync (syscall.rs:9586-9616) drops SCHEDULER before taking VFS; retains VFS across FAT/cache/device polling. Scheduler reaper (sched/mod.rs:2910) takes VFS while in scheduler lifecycle; FAT close itself performs no I/O (vfs.rs:458). This creates an indirect scheduler->VFS->poll wait risk, not proof of a hardware completion cycle. No independent progress native test."
+    },
+    {
+      "id": "SEC6",
+      "severity": "medium",
+      "status": "PARTIAL",
+      "topic": "identity and removal",
+      "source": "sunlight-block/src/registry.rs:19",
+      "resolution": "monotonic runtime IDs retain existing grants; no GET_ID or VirtIO hotplug generation; diagnostic marker only test-target guard"
+    },
+    {
+      "id": "SEC7",
+      "severity": "info",
+      "status": "PARTIAL",
+      "topic": "guest memory isolation",
+      "resolution": "no IOMMU DMA domain; trusted QEMU profile only; no malicious/physical device containment qualification"
+    },
+    {
+      "id": "SEC8",
+      "severity": "info",
+      "status": "PASS",
+      "topic": "test I/O containment",
+      "resolution": "exclusive new regular 4MiB files; ISO boot only; no /dev drive; exact full-image check and retained marker; no mount reached"
+    },
+    {
+      "id": "SEC9",
+      "severity": "info",
+      "status": "PARTIAL",
+      "topic": "descriptor/buffer validation",
+      "resolution": "512-byte bounce plus one-byte status within 4KiB; header/data flags correct; exact used index/head check; no malformed-native-device injection"
+    },
+    {
+      "id": "SEC10",
+      "severity": "info",
+      "status": "PARTIAL",
+      "topic": "resource lifetime / pressure",
+      "resolution": "fixed five frames per VirtIO instance retained permanently; bounded leak by one initialized disk; unsafe Drop reclamation absent; recovery unavailable"
+    }
+  ],
+  "capabilities": "no grant, authorization, fd identity, VFS routing, PMM retirement or fail-stop rules weakened",
+  "unrelated_security_suites": "no blanket PASS claim; kernel host test command has its own exact coverage",
+  "native_concurrent_lifecycle": "NOT_RUN",
+  "scheduler_changes": false
+}

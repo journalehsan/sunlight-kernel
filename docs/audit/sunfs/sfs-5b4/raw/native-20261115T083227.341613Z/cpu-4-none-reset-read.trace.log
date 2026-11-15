@@ -1,0 +1,598 @@
+virtio_set_status vdev 0x558ed2eddf10 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2eddf10 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2eddf10 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 3
+virtio_set_status vdev 0x558ed2e4b950 val 7
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f4134107e40 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f4134107e40 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f4134107e40 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f6fd0 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f6fd0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f6fd0 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345e5d20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345e5d20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345e5d20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f74b0 in_num 1 out_num 2
+virtio_blk_handle_write vdev 0x558ed2e4b950 req 0x7f41345f74b0 sector 0 nsectors 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f74b0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f74b0 len 1 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f1030 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f1030 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f1030 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345e6520 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345e6520 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345e6520 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f1450 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f1450 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f1450 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340d8e40 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340d8e40 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340d8e40 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340d9120 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340d9120 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340d9120 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345fa080 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345fa080 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345fa080 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340d94e0 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340d94e0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340d94e0 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345eed30 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345eed30 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345eed30 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345ef010 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345ef010 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345ef010 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345ef330 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345ef330 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345ef330 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f01e0 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f01e0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f01e0 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f04c0 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f04c0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f04c0 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0740 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0740 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0740 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a20 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a20 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a20 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 1025 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 2049 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 4097 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 8193 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 8193 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 8193 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 8193 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 12289 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 12289 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 12289 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 16385 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 16385 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 24577 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 24577 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 32769 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41345f0a50 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41345f0a50 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41345f0a50 len 32769 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtio_set_status vdev 0x558ed2eddf10 val 0
+virtio_set_status vdev 0x558ed2eddf10 val 0
+virtio_set_status vdev 0x558ed2eddf10 val 3
+virtio_set_status vdev 0x558ed2eddf10 val 7
+virtqueue_pop vq 0x558ed2ee0440 elem 0x7f41345e6380 in_num 1 out_num 0
+virtqueue_fill vq 0x558ed2ee0440 elem 0x7f41345e6380 len 40 idx 0
+virtqueue_flush vq 0x558ed2ee0440 count 1
+virtio_set_status vdev 0x558ed2eddf10 val 0
+virtio_set_status vdev 0x558ed2eddf10 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 3
+virtio_set_status vdev 0x558ed2e4b950 val 7
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340dcdc0 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340dcdc0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340dcdc0 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340dd9f0 in_num 1 out_num 2
+virtio_blk_handle_write vdev 0x558ed2e4b950 req 0x7f41340dd9f0 sector 62 nsectors 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340dd9f0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340dd9f0 len 1 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340de360 in_num 1 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340de360 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340de360 len 1 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340de630 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340de630 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340de630 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41340dced0 in_num 2 out_num 1
+virtio_blk_req_complete vdev 0x558ed2e4b950 req 0x7f41340dced0 status 0
+virtqueue_fill vq 0x558ed2e765c0 elem 0x7f41340dced0 len 513 idx 0
+virtqueue_flush vq 0x558ed2e765c0 count 1
+virtqueue_pop vq 0x558ed2e765c0 elem 0x7f41342ddfa0 in_num 1 out_num 2
+virtio_blk_handle_write vdev 0x558ed2e4b950 req 0x7f41342ddfa0 sector 63 nsectors 1
+virtio_set_status vdev 0x558ed2e4b950 val 0
+virtio_set_status vdev 0x558ed2e4b950 val 0

@@ -1,0 +1,210 @@
+{
+  "attempts": [
+    {
+      "attempt": "raw/checks-20261114T222723.017103Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "checks-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/checks-20261114T223450.695147Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "checks-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/checks-20261114T223655.231459Z",
+      "source_before_matches_final": true,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "final selected execution",
+      "result_files": [
+        "checks-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/hosted-20261114T222723.074919Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "FAIL",
+        "changed": [
+          "sunlight-virtio/src/blk.rs",
+          "tools/sunfs5b2_validate.py"
+        ]
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "hosted-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/hosted-20261114T223558.731841Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "FAIL",
+        "changed": [
+          "sunlight-virtio/src/blk.rs"
+        ]
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "hosted-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/hosted-20261114T223655.187774Z",
+      "source_before_matches_final": true,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "final selected execution",
+      "result_files": [
+        "hosted-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/native-20261114T222646.299553Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "native-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/native-20261114T222847.009515Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [
+        "cpu-1-writeback.qemu.log",
+        "cpu-1-none.qemu.log",
+        "cpu-2-writeback.qemu.log",
+        "cpu-2-none.qemu.log",
+        "cpu-4-writeback.qemu.log",
+        "cpu-4-none.qemu.log"
+      ],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "native-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/native-20261114T223213.283880Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "native-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/native-20261114T223700.861380Z",
+      "source_before_matches_final": true,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "final selected execution",
+      "result_files": [
+        "native-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/native-negative-20261114T224725.376442Z",
+      "source_before_matches_final": true,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "supplemental final native negatives",
+      "result_files": [
+        "negative-native-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/regression-native-20261114T222855.774988Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "FAIL",
+        "changed": [
+          "tools/sunfs5b2_validate.py"
+        ]
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "native-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/regression-native-20261114T223450.714665Z",
+      "source_before_matches_final": false,
+      "integrity": {
+        "status": "FAIL",
+        "changed": [
+          "sunlight-virtio/src/blk.rs"
+        ]
+      },
+      "qemu_assertion_logs": [],
+      "role": "superseded or failed attempt; retained",
+      "result_files": [
+        "native-result.json"
+      ]
+    },
+    {
+      "attempt": "raw/regression-native-20261114T223655.230795Z",
+      "source_before_matches_final": true,
+      "integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qemu_assertion_logs": [],
+      "role": "final selected execution",
+      "result_files": [
+        "native-result.json"
+      ]
+    }
+  ],
+  "baseline_failures": [
+    "raw/descriptor-aba-failing.log",
+    "raw/aba-pre-repair-assertion.log"
+  ],
+  "checker_failures": [
+    "raw/baseline-witness-first.log selected zero tests",
+    "raw/derive-trace-window-failure.log counted firmware traffic before driver epoch filtering"
+  ]
+}

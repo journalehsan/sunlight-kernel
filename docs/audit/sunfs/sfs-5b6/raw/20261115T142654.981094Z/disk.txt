@@ -1,0 +1,3 @@
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p2  475G  423G   52G  90% /home/ehsantor/Projects/sunlightos-kernel
+tmpfs            16G  3.4G   13G  22% /tmp

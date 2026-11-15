@@ -1,0 +1,16 @@
+{
+  "kernel/Cargo.toml": "c05e51347d993ee496b36cc4978f1718a41c8892ae461ad5809996e1197809a7",
+  "kernel/build.rs": "459d3b1cfc5eeab5389787002f14a0701c02209f2cd18bcaf0c955691dbe1837",
+  "kernel/src/main.rs": "8cd47d0378b805fa7043272a851e4b560f09b9dc7d7890b90976017a45ca6504",
+  "kernel/src/arch/x86_64/interrupts.rs": "1ee73ec69269656f608a13da9443dc2855a92f33be61f1e8d9a9e90342fe1bbb",
+  "kernel/src/arch/x86_64/syscall.rs": "dc4ce905ec92aa29c867954a476f0b9d98d4ab2ea4cf087ee726aeda665e6463",
+  "sunlight-virtio/src/blk.rs": "7f439daf7569b5cc51ca746208853943c11a3e35a34efbe6dc76cdcc91adc2be",
+  "kernel/src/sfs_reset.rs": "d298d570dc1275b66a1fc3077f766625aa81ab1fdfbcca56c0690cb9ec6f7967",
+  "kernel/src/sfs5b4_test.rs": "94ee97ada8d518cd554fb50b4a95968557dad2b09ef32e48a26d69b4c2654194",
+  "tools/helios-probes/sfs5b4-probe.S": "aa496035eca74c0784e6ea57a37b219b72145d166afa3cc0e7be7e6109cc8862",
+  "tools/sunfs5b4_validate.py": "0ca9380e7285a4ea17ffcb9b83259e04d2f6f6cd0925609b924b5ccede103bd0",
+  "Cargo.toml": "ee5d2639492fe5fc4be1ece52a320a51d6ee023a59f0d8f34f1021030f1c4e24",
+  "Cargo.lock": "8eea7318fc7198418a7379f8d130af6bb4bae4c08bc2d0f584a25e6c175351cd",
+  ".cargo/config.toml": "185727c35b0d99ffb5332b5ef9f5cf5b7cea2b5e4376467f791f7b9d8571e854",
+  "rust-toolchain.toml": "973e644b5e87baf1e58d608c00ab077d5519c93e8c793244189e87529131b8b0"
+}

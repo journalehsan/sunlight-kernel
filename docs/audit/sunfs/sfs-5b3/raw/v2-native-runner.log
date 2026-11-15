@@ -1,0 +1,5 @@
+guest-build.log 0
+iso-build.log 0
+cpu-1-writeback-hold FAIL AP timer progress True
+cpu-1-writeback-release PASS AP timer progress True
+cpu-1-writeback-unmodified PASS AP timer progress True

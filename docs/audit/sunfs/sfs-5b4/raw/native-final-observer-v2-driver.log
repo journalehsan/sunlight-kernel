@@ -1,0 +1,25 @@
+guest-build 0
+iso-build 0
+cpu-1-writeback-hold PASS {}
+cpu-1-writeback-reset-read PASS {}
+cpu-1-writeback-error PASS {}
+cpu-1-writeback-negative PASS {}
+cpu-1-writeback-cancel PASS {}
+cpu-1-writeback-release PASS {}
+cpu-1-writeback-unmodified PASS {}
+cpu-1-none-hold PASS {}
+cpu-1-none-reset-read PASS {}
+cpu-1-none-error PASS {}
+cpu-1-none-negative PASS {}
+cpu-1-none-cancel PASS {}
+cpu-1-none-release PASS {}
+cpu-1-none-unmodified PASS {}
+cpu-2-writeback-hold PASS {}
+cpu-2-writeback-reset-read PASS {}
+cpu-2-writeback-error PASS {}
+cpu-2-writeback-negative PASS {}
+cpu-2-writeback-cancel PASS {}
+cpu-2-writeback-release PASS {}
+cpu-2-writeback-unmodified FAIL {'ready': False, 'exact_image': False, 'post_scheduler': False, 'contender': False, 'admission_closed': False, 'terminal': False, 'progress': False, 'contention_progress': False}
+cpu-2-none-hold PASS {}
+cpu-2-none-reset-read PASS {}

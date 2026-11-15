@@ -1,0 +1,18 @@
+hosted-debug.log 0
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b6_validate.py", line 111, in <module>
+    row['sector63_all_b4'] = sector == bytes([0xb4]) * 512
+    ^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b5_validate.py", line 177, in regression
+    base.hosted(raw)
+    ~~~~~~~~~~~^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b1_validate.py", line 157, in hosted
+    p.with_suffix(p.suffix+'.gz').write_bytes(gzip.compress(p.read_bytes(), mtime=0))
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 796, in write_bytes
+    with self.open(mode='wb') as f:
+         ~~~~~~~~~^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 28] No space left on device: '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b6/raw/regression-20261115T143024.754199Z/debug/sfs3/traces/last-close-reap-seed-1397117747-event-13-uncertain-true.trace.gz'

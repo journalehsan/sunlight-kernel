@@ -1,0 +1,36 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PASS",
+  "changed_from_incoming": {
+    "sunlight-virtio/src/blk.rs": "f6943adc86d4e38bcfcee1fc89d6a5b27fcaf98b4cbfa10d1a482bc3bf1ccf4b",
+    "sunlight-virtio/src/lib.rs": "a49549691215b2decb66dc0a48a7b8ca935b2c0003d1b5c5dfb0e89b02c6f6be",
+    "kernel/src/main.rs": "b936886d6ed7ec24a644a8423f05e623507986acef1567c2e1f4588116e79ee2",
+    "kernel/Cargo.toml": "1b858be3238b1eeb5185ccd2f9aeda78e420d888c3bdc4879540a47cc2de3067",
+    "kernel/src/sfs5b2_test.rs": "5cfd12f2aa80d9f2d4d0cdfd2499ef8f31e88bbb1f03d7f2a8712240cb48f1bf",
+    "tools/sunfs5b2_validate.py": "6ebd0247e1cea41cd6133707652eefd8e096d7c428accc180cc6bfcf3cec2c61"
+  },
+  "changes": [
+    "Bound initial reset status-zero acknowledgment before queue publication",
+    "Reject non-running device status before request DMA publication and before logical retirement",
+    "Exclusive one-attempt terminal reset with at most 64 one-read poll steps; no wait/allocate/retry",
+    "Retain original uncertain receipt independently of reset and subsequent refusals",
+    "Expose offered/negotiated feature and diagnostic reset observations; no retirement authority",
+    "Add hosted transition tests and off-by-default disposable native reset fixture/runner"
+  ],
+  "normal_descriptor_algorithm": "Existing exact owned-chain/index/status/token validation retained; no claim of repaired malicious same-head alias",
+  "untouched_incoming": [
+    "Cargo.lock",
+    "sunlight-block/src/contract.rs",
+    "sunlight-block/src/lib.rs",
+    "sunlight-block/src/usb_msc.rs",
+    "sunlight-virtio/Cargo.toml",
+    "kernel/src/sfs5a_test.rs",
+    "kernel/src/sfs5b1_test.rs",
+    "tools/sunfs5a_validate.py",
+    "tools/sunfs5b1_validate.py"
+  ],
+  "commit": false,
+  "push": false,
+  "native_sunfs_mount": false
+}

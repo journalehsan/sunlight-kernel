@@ -1,0 +1,89 @@
+{
+  "status": "PARTIAL",
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "status": "FAIL",
+      "ready": false,
+      "host_exact_image": false,
+      "returncode": 1,
+      "active_dma_at_reset": false,
+      "frames_released": 0,
+      "ap_execution": "NOT_RUN",
+      "serial": "cpu-1-writeback.serial.log",
+      "trace": "cpu-1-writeback.trace.log",
+      "qmp": "cpu-1-writeback.qmp.json"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "status": "FAIL",
+      "ready": false,
+      "host_exact_image": false,
+      "returncode": 1,
+      "active_dma_at_reset": false,
+      "frames_released": 0,
+      "ap_execution": "NOT_RUN",
+      "serial": "cpu-1-none.serial.log",
+      "trace": "cpu-1-none.trace.log",
+      "qmp": "cpu-1-none.qmp.json"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "status": "FAIL",
+      "ready": false,
+      "host_exact_image": false,
+      "returncode": 1,
+      "active_dma_at_reset": false,
+      "frames_released": 0,
+      "ap_execution": "NOT_RUN",
+      "serial": "cpu-2-writeback.serial.log",
+      "trace": "cpu-2-writeback.trace.log",
+      "qmp": "cpu-2-writeback.qmp.json"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "status": "FAIL",
+      "ready": false,
+      "host_exact_image": false,
+      "returncode": 1,
+      "active_dma_at_reset": false,
+      "frames_released": 0,
+      "ap_execution": "NOT_RUN",
+      "serial": "cpu-2-none.serial.log",
+      "trace": "cpu-2-none.trace.log",
+      "qmp": "cpu-2-none.qmp.json"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "status": "FAIL",
+      "ready": false,
+      "host_exact_image": false,
+      "returncode": 1,
+      "active_dma_at_reset": false,
+      "frames_released": 0,
+      "ap_execution": "NOT_RUN",
+      "serial": "cpu-4-writeback.serial.log",
+      "trace": "cpu-4-writeback.trace.log",
+      "qmp": "cpu-4-writeback.qmp.json"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "status": "FAIL",
+      "ready": false,
+      "host_exact_image": false,
+      "returncode": 1,
+      "active_dma_at_reset": false,
+      "frames_released": 0,
+      "ap_execution": "NOT_RUN",
+      "serial": "cpu-4-none.serial.log",
+      "trace": "cpu-4-none.trace.log",
+      "qmp": "cpu-4-none.qmp.json"
+    }
+  ]
+}

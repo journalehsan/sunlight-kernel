@@ -1,0 +1,12 @@
+{
+  "helper_sha256": "65ff8910a630344512bd5774dcb594b75b686740c3c7fdf03db5d2946229fc27",
+  "build_cpu_affinity": [
+    0
+  ],
+  "environment": {
+    "CARGO_BUILD_JOBS": "1",
+    "RUST_TEST_THREADS": "1",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "execution": "sequential commands; reuse explicitly identified earlier debug run on identical source"
+}

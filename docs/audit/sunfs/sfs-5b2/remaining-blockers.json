@@ -1,0 +1,18 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PARTIAL",
+  "blockers": [
+    "malicious old-head plus new-status alias after legitimate reuse remains reproducible; generation is not transmitted",
+    "no independent active-DMA reset/quiescence witness or physical/platform translation retirement proof",
+    "no old-epoch retirement, DMA frame release, safe queue reinitialization or post-fence I/O",
+    "no native timeout/delayed-DMA/withheld-reset/removal/interleaving fault injection",
+    "no active AP/SMP I/O-reset contention or scheduler progress qualification",
+    "typed USB/cache/partition/FAT/VFS receipt propagation remains incomplete",
+    "legacy short-transfer byte counts not independently authoritative; T5 remains PARTIAL",
+    "USB MSC qualification and actual media-removal uncertainty remain open; T20 remains PARTIAL",
+    "physical storage durability and hostile-device containment unqualified"
+  ],
+  "next_milestone": "SFS-5B.3: first build an independently observable active-I/O reset backend and a justified epoch/retirement protocol, then qualify post-AP contention; keep quarantine and prohibit writable SunFS",
+  "unrelated_changes": "USB, filesystem formats, CPython, SunApp, scheduler and root migration unchanged"
+}

@@ -1,0 +1,11 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "hosted receipt semantics; no native uncertain reset injection",
+  "status": "PASS",
+  "uncertain_write": "Uncertain/Unknown/Uncertain remains identical in first_uncertain after acknowledged model reset",
+  "uncertain_flush": "Uncertain/Unknown/Uncertain remains identical in first_uncertain after acknowledged model reset",
+  "reset_receipt": "separate diagnostic type cannot construct an IoOutcome success or retirement permission",
+  "completed_write": "NotEstablished durability, never durable merely on completion/reset",
+  "native_flush": "real negotiated flush returns VirtualBarrier only for completed prior generation in that queue",
+  "writable_native_sunfs": "BLOCKED; future adapter needs fenced recovery plus durable checkpoint closure validation"
+}

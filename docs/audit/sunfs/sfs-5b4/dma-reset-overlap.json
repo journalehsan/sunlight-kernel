@@ -1,0 +1,69 @@
+{
+  "status": "PARTIAL",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json",
+  "concurrency_model": "B: deterministic BQL event ordering, asynchronous timer scheduling only",
+  "cases": [
+    {
+      "case": "O1",
+      "status": "PASS",
+      "observed": "256-byte real mapped payload read before reset, explicit byte handshake precedes guest timeout",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O2",
+      "status": "PASS",
+      "observed": "reset-read mode copies remaining 256 bytes inside reset handler before acknowledgment condition",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O3",
+      "status": "UNQUALIFIED",
+      "observed": "BQL serializes payload copies and reset; no concurrent memory instruction witness",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O4",
+      "status": "UNQUALIFIED",
+      "observed": "no async memory operation to drain; pending callback is not active RAM access",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O5",
+      "status": "PARTIAL",
+      "observed": "scoped hook timer canceled, request detached, generic queues cleared; no general async/backend/platform fence",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O6",
+      "status": "PASS",
+      "observed": "negative model performs actual host kernel pipe-copy read through original mapping after claimed fence; offline graph detects violation",
+      "model": "ADVERSARIAL_NEGATIVE"
+    },
+    {
+      "case": "O7",
+      "status": "PARTIAL",
+      "observed": "scalar-only late observer after reset; no original backend completion pending at cut",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O8",
+      "status": "PASS",
+      "observed": "release/unmodified controls reset after legitimate completion, idle queue",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O9",
+      "status": "PASS",
+      "observed": "held request at reset with no payload copy actively executing",
+      "model": "INSTRUMENTED_QEMU"
+    },
+    {
+      "case": "O10",
+      "status": "PARTIAL",
+      "observed": "test-only error-cancel branch at reset; no backend EIO/transport failure injection",
+      "model": "INSTRUMENTED_QEMU"
+    }
+  ],
+  "true_simultaneous_dma_reset": "UNQUALIFIED",
+  "physical_dma": "UNQUALIFIED"
+}

@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "production": [
+    "sunlight-block/src/quiesce.rs (new): OpSlot, CallbackGate, MappingRecord, FenceGate, drain_bounded",
+    "sunlight-block/src/lib.rs: pub mod quiesce",
+    "sunlight-virtio/src/blk.rs: staged requests now own an OpSlot and a MappingRecord; completion commits one terminal and retires the mapping once; timeout/cancel only request cancellation and retain both"
+  ],
+  "diagnostic_test_only": [
+    "docs/audit/sunfs/sfs-5b5/qemu-async-worker.patch (isolated emulator, disposable attachment only)",
+    "tools/sunfs5b5_validate.py",
+    "docs/audit/sunfs/sfs-5b5/derive.py",
+    "docs/audit/sunfs/sfs-5b5/build-artifacts.py"
+  ],
+  "default_transport": "unchanged: legacy split queue 0, no free/reinit/IOMMU path, no new epoch",
+  "scheduler": "unchanged",
+  "claimed_deadlock_repair": false,
+  "preserved": "SFS-0..SFS-5B.4 evidence namespaces untouched; kernel/src/sfs_reset.rs and kernel/src/sfs5b4_test.rs untouched"
+}

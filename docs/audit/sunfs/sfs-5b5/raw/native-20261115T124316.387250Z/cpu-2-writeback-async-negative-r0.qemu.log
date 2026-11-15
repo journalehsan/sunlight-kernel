@@ -1,0 +1,25 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=1 ns=12013239486946 thread=main stage=MAPPING_ACQUIRED iter=0 bytes=0 extra=16
+SFS5B5 seq=2 ns=12013239501778 thread=main stage=REQUEST_FETCHED iter=0 bytes=0 extra=0
+SFS5B5 seq=3 ns=12013240015375 thread=worker stage=ACCESS_ENTERED iter=0 bytes=0 extra=16
+SFS5B5 seq=4 ns=12013240287755 thread=main stage=ACCESS_ACTIVE iter=4999 bytes=79984 extra=4997
+SFS5B4 seq=1 ns=12013240316687 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=2 ns=12013240321147 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B5 held head=0 mode=async-negative worker=started backend=not-submitted used=not-published
+SFS5B5 seq=5 ns=12013503540981 thread=main stage=RESET_ENTERED iter=5083389 bytes=81334224 extra=0
+SFS5B5 seq=6 ns=12013503586581 thread=worker stage=ACCESS_OBSERVED_RESET_ACTIVE iter=5083390 bytes=81334240 extra=5083390
+SFS5B5 seq=7 ns=12013503643473 thread=main stage=ACCESS_ACTIVE_DURING_RESET iter=5083544 bytes=81336704 extra=155
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=8 ns=12013503743002 thread=main stage=RESET_ACKNOWLEDGED iter=5084410 bytes=81350560 extra=0
+SFS5B5 seq=9 ns=12013503760662 thread=worker stage=NEGATIVE_POST_ACK_ACCESS iter=5084411 bytes=81350576 extra=5084411
+SFS5B5 seq=10 ns=12013703876721 thread=worker stage=ACCESS_EXITED iter=9271627 bytes=148346032 extra=9271627
+SFS5B5 seq=11 ns=12013704020115 thread=main stage=NEGATIVE_WORKER_JOINED iter=9271627 bytes=148346032 extra=0
+SFS5B5 seq=12 ns=12013704059790 thread=main stage=MAPPING_RELEASED iter=9271627 bytes=148346032 extra=0
+SFS5B5 seq=13 ns=12013704101496 thread=main stage=OLD_EPOCH_QUIESCED iter=9271627 bytes=148346032 extra=0
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)

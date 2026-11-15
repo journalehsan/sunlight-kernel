@@ -1,0 +1,316 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PARTIAL",
+  "A": "Driver Owner state, receipts, queue incarnation, reset status readback and byte-retention assertions",
+  "B": "QEMU trace backend observes actual block request handling/completion and device reset entry independently of driver counters; standard QMP inventory observes attached disposable device",
+  "observations": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "vdev": "0x55915be914e0",
+      "request_completions": [
+        [
+          "0x55915b49d1b0",
+          "0"
+        ],
+        [
+          "0x55915b49d1b0",
+          "0"
+        ],
+        [
+          "0x55915bfd1380",
+          "0"
+        ],
+        [
+          "0x55915b49d1b0",
+          "0"
+        ]
+      ],
+      "status_write_trace": [
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0"
+      ],
+      "driver_window_lines_1_based": [
+        849,
+        874
+      ],
+      "pre_driver_completions_excluded": 137,
+      "driver_ack_zero": true,
+      "trace": "raw/native-20261114T223700.861380Z/cpu-1-writeback.trace.log",
+      "qmp": "raw/native-20261114T223700.861380Z/cpu-1-writeback.qmp.json",
+      "observer_error": null,
+      "independent_scope": "QEMU request handling/completion and reset ENTRY, standard QMP PCI/block inventory; not independent DMA drain or reset completion",
+      "no_active_dma": true
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "vdev": "0x556ed48c9480",
+      "request_completions": [
+        [
+          "0x556ed3ed5170",
+          "0"
+        ],
+        [
+          "0x556ed3ed5170",
+          "0"
+        ],
+        [
+          "0x556ed4a09320",
+          "0"
+        ],
+        [
+          "0x556ed3ed5170",
+          "0"
+        ]
+      ],
+      "status_write_trace": [
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0"
+      ],
+      "driver_window_lines_1_based": [
+        849,
+        874
+      ],
+      "pre_driver_completions_excluded": 137,
+      "driver_ack_zero": true,
+      "trace": "raw/native-20261114T223700.861380Z/cpu-1-none.trace.log",
+      "qmp": "raw/native-20261114T223700.861380Z/cpu-1-none.qmp.json",
+      "observer_error": null,
+      "independent_scope": "QEMU request handling/completion and reset ENTRY, standard QMP PCI/block inventory; not independent DMA drain or reset completion",
+      "no_active_dma": true
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "vdev": "0x55d5f737ea90",
+      "request_completions": [
+        [
+          "0x55d5f69888f0",
+          "0"
+        ],
+        [
+          "0x55d5f69888f0",
+          "0"
+        ],
+        [
+          "0x55d5f747fde0",
+          "0"
+        ],
+        [
+          "0x55d5f69888f0",
+          "0"
+        ]
+      ],
+      "status_write_trace": [
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0"
+      ],
+      "driver_window_lines_1_based": [
+        849,
+        874
+      ],
+      "pre_driver_completions_excluded": 137,
+      "driver_ack_zero": true,
+      "trace": "raw/native-20261114T223700.861380Z/cpu-2-writeback.trace.log",
+      "qmp": "raw/native-20261114T223700.861380Z/cpu-2-writeback.qmp.json",
+      "observer_error": null,
+      "independent_scope": "QEMU request handling/completion and reset ENTRY, standard QMP PCI/block inventory; not independent DMA drain or reset completion",
+      "no_active_dma": true
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "vdev": "0x563cf7b74a70",
+      "request_completions": [
+        [
+          "0x563cf717e8b0",
+          "0"
+        ],
+        [
+          "0x563cf717e8b0",
+          "0"
+        ],
+        [
+          "0x563cf7c75dc0",
+          "0"
+        ],
+        [
+          "0x563cf717e8b0",
+          "0"
+        ]
+      ],
+      "status_write_trace": [
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0"
+      ],
+      "driver_window_lines_1_based": [
+        849,
+        874
+      ],
+      "pre_driver_completions_excluded": 137,
+      "driver_ack_zero": true,
+      "trace": "raw/native-20261114T223700.861380Z/cpu-2-none.trace.log",
+      "qmp": "raw/native-20261114T223700.861380Z/cpu-2-none.qmp.json",
+      "observer_error": null,
+      "independent_scope": "QEMU request handling/completion and reset ENTRY, standard QMP PCI/block inventory; not independent DMA drain or reset completion",
+      "no_active_dma": true
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "vdev": "0x563f98716f10",
+      "request_completions": [
+        [
+          "0x563f97d1d0d0",
+          "0"
+        ],
+        [
+          "0x563f97d1d0d0",
+          "0"
+        ],
+        [
+          "0x563f9842dc70",
+          "0"
+        ],
+        [
+          "0x563f97d1d0d0",
+          "0"
+        ]
+      ],
+      "status_write_trace": [
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0"
+      ],
+      "driver_window_lines_1_based": [
+        849,
+        874
+      ],
+      "pre_driver_completions_excluded": 137,
+      "driver_ack_zero": true,
+      "trace": "raw/native-20261114T223700.861380Z/cpu-4-writeback.trace.log",
+      "qmp": "raw/native-20261114T223700.861380Z/cpu-4-writeback.qmp.json",
+      "observer_error": null,
+      "independent_scope": "QEMU request handling/completion and reset ENTRY, standard QMP PCI/block inventory; not independent DMA drain or reset completion",
+      "no_active_dma": true
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "vdev": "0x560cb9274ef0",
+      "request_completions": [
+        [
+          "0x560cb887b090",
+          "0"
+        ],
+        [
+          "0x560cb887b090",
+          "0"
+        ],
+        [
+          "0x560cb8f8bc30",
+          "0"
+        ],
+        [
+          "0x560cb887b090",
+          "0"
+        ]
+      ],
+      "status_write_trace": [
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0",
+        "3",
+        "7",
+        "0",
+        "0"
+      ],
+      "driver_window_lines_1_based": [
+        849,
+        874
+      ],
+      "pre_driver_completions_excluded": 137,
+      "driver_ack_zero": true,
+      "trace": "raw/native-20261114T223700.861380Z/cpu-4-none.trace.log",
+      "qmp": "raw/native-20261114T223700.861380Z/cpu-4-none.qmp.json",
+      "observer_error": null,
+      "independent_scope": "QEMU request handling/completion and reset ENTRY, standard QMP PCI/block inventory; not independent DMA drain or reset completion",
+      "no_active_dma": true
+    }
+  ],
+  "agreement_scope": "four actual requests completed before idle reset; device reset was requested and driver read zero",
+  "no_independent_ack_or_dma_drain": true,
+  "observer_failure": "first unrestricted attempt used x-query-virtio-status after reset; QEMU 11.1.2 asserted in visit_start_struct; preserved .qemu/.qmp logs. Original runner PASS rows describe guest+image only and are superseded for observer qualification",
+  "emulator_modifications": false,
+  "physical_qualification": false,
+  "trace_accounting": "firmware/pre-driver traffic preserved but excluded using final DRIVER_OK to first following reset-entry window; failed all-trace count assertion retained in raw/derive-trace-window-failure.log",
+  "unavailable_source": "matching QEMU tag source fetch failed: GitLab HTTP403, GitHub connection failure including unrestricted retry; no implementation-level reset-drain claim"
+}

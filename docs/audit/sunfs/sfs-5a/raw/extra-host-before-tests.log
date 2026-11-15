@@ -1,0 +1,21 @@
+
+running 2 tests
+test blk::extra::unsupported_flush_does_not_submit_or_acknowledge ... ok
+test blk::extra::unsolicited_used_entry_poisoned_without_submission ... FAILED
+
+failures:
+
+---- blk::extra::unsolicited_used_entry_poisoned_without_submission stdout ----
+
+thread 'blk::extra::unsolicited_used_entry_poisoned_without_submission' (40) panicked at docs/audit/sunfs/sfs-5a/raw/extra-host-before.rs:34:13:
+assertion `left == right` failed
+  left: 1
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    blk::extra::unsolicited_used_entry_poisoned_without_submission
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

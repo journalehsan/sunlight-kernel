@@ -1,0 +1,9 @@
+
+running 4 tests
+test blk::extra::unsolicited_used_entry_poisoned_without_submission ... ok
+test blk::ownership_tests::timeout_must_not_reuse_dma_page_or_descriptors ... ok
+test blk::extra::unsupported_flush_does_not_submit_or_acknowledge ... ok
+test blk::ownership_tests::late_completion_must_not_authorize_new_request ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

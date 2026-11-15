@@ -1,0 +1,43 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PARTIAL",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PARTIAL",
+    "G3": "PASS",
+    "G4": "PARTIAL",
+    "G5": "PARTIAL",
+    "G6": "UNQUALIFIED",
+    "G7": "PARTIAL",
+    "G8": "PARTIAL",
+    "G9": "PARTIAL",
+    "G10": "PASS"
+  },
+  "available_final_source_regressions": "PASS",
+  "gate_limits": {
+    "G2": "original malicious wire ambiguity not repaired",
+    "G3": "normal conforming exactly-once logical retirement only",
+    "G4": "model safety passes; required native negative interleavings absent",
+    "G5": "native idle reset acknowledgment only; active outstanding-DMA fencing not proven",
+    "G6": "no DMA frame release qualified; all pages retained",
+    "G7": "independent request/reset-entry witness; native fault interleavings absent",
+    "G8": "hosted bounded reset; no active SMP",
+    "G9": "available full regressions pass when recorded; mandatory native fault/recovery/SMP cases not all executed"
+  },
+  "writable_native_sunfs": "BLOCKED",
+  "physical_device_qualification": "UNQUALIFIED",
+  "blockers": [
+    "malicious old-head plus new-status alias after legitimate reuse remains reproducible; generation is not transmitted",
+    "no independent active-DMA reset/quiescence witness or physical/platform translation retirement proof",
+    "no old-epoch retirement, DMA frame release, safe queue reinitialization or post-fence I/O",
+    "no native timeout/delayed-DMA/withheld-reset/removal/interleaving fault injection",
+    "no active AP/SMP I/O-reset contention or scheduler progress qualification",
+    "typed USB/cache/partition/FAT/VFS receipt propagation remains incomplete",
+    "legacy short-transfer byte counts not independently authoritative; T5 remains PARTIAL",
+    "USB MSC qualification and actual media-removal uncertainty remain open; T20 remains PARTIAL",
+    "physical storage durability and hostile-device containment unqualified"
+  ],
+  "commit": false,
+  "push": false
+}

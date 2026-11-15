@@ -1,0 +1,67 @@
+{
+  "attempts": [
+    {
+      "log": "development-1.log",
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-block",
+        "-p",
+        "sunlight-virtio",
+        "--lib",
+        "--offline",
+        "--target",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "status": "PASS",
+      "scope": "development snapshot, not final-source qualification"
+    },
+    {
+      "log": "development-2.log",
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-block",
+        "-p",
+        "sunlight-virtio",
+        "--lib",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "status": "PASS",
+      "scope": "development snapshot"
+    },
+    {
+      "log": "development-build.log",
+      "argv": [
+        "cargo",
+        "build",
+        "-p",
+        "sunlight-kernel",
+        "--features",
+        "sfs5b1-test",
+        "--offline",
+        "--locked"
+      ],
+      "status": "PASS",
+      "scope": "development build; production final build repeated by frozen runner"
+    }
+  ],
+  "audit_derivation_development": [
+    {
+      "status": "FAIL",
+      "error": "SyntaxError: keyword argument repeated: timeout",
+      "repair": "rename to timeout_policy"
+    },
+    {
+      "status": "FAIL",
+      "error": "SyntaxError: keyword argument repeated: status",
+      "repair": "rename to status_validation"
+    }
+  ],
+  "prior_sfs5a_failures": "retained in original evidence, independently baseline-hashed"
+}

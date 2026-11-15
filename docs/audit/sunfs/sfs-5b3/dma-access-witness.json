@@ -1,0 +1,18 @@
+{
+  "status": "PARTIAL",
+  "actual_device_memory_read": "PASS",
+  "active_dma_instruction_during_reset": "UNQUALIFIED",
+  "witness_A": "native driver token, ownership, timeout, status-zero readback and refusal",
+  "witness_B": "separate QEMU virtqueue trace and actual payload copy instrumentation, plus whole backing-image comparison",
+  "observed_relation": "256-byte payload read -> held request -> guest timeout -> reset entry -> timer cancellation and detach -> queues cleared/status zero; no subsequent instrumented copy",
+  "post_fence_global_memory_guard": "PARTIAL: PROT_NONE original mappings of all five old pages; EFAULT kernel negative probe per held-request reset",
+  "observation_window_after_ready_seconds": 0.5,
+  "limits": [
+    "transfer paused between memory-copy instructions during reset; not simultaneous DMA execution",
+    "no asynchronous DMA worker or physical bus transaction drain witness",
+    "original host mappings protected; aliases/remapping and a hostile hypervisor are not covered",
+    "test reset cancellation is a model modification, not unmodified QEMU behavior",
+    "guest= in QEMU custom log is a mapped host pointer, not a reported GPA"
+  ],
+  "witnesses": "active-io-witness.json"
+}

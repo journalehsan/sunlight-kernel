@@ -1,0 +1,7 @@
+{
+  "sunlight-virtio/src/blk.rs": "e07e1b4e563a0e6c614bfe3625bdf948197a28414aa4cd997aa522c9de0deeec",
+  "kernel/Cargo.toml": "2a1677dd70949b250a6eabb7a4e18b38c422cf157981fa62df4b8ce3aef55145",
+  "kernel/src/main.rs": "897f304e9d369b278bc28dbfedce38d54608f56d05e8e1a66d439d5a4a0fa1fc",
+  "kernel/src/sfs5a_test.rs": "234e8c4b2429ce8f25ab1f1b434b17f4ca9c3a59bee7882d3099d6a0621eeef5",
+  "tools/sunfs5a_validate.py": "372c58e0c2a15538c36cbbd39ac76faf1f17f20bf082737e1c2b3cab795ffe4b"
+}

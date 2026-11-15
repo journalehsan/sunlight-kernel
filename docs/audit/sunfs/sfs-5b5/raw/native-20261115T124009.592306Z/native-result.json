@@ -1,0 +1,41 @@
+{
+  "status": "PASS",
+  "runs": [
+    {
+      "tag": "cpu-1-writeback-async-r0",
+      "mode": "async",
+      "cpu": 1,
+      "cache": "writeback",
+      "ready": true,
+      "elapsed_s": 10.621,
+      "serial": "cpu-1-writeback-async-r0.serial.log",
+      "qemu_log": "cpu-1-writeback-async-r0.qemu.log",
+      "image": "cpu-1-writeback-async-r0.img",
+      "exit": 0
+    },
+    {
+      "tag": "cpu-1-writeback-async-r1",
+      "mode": "async",
+      "cpu": 1,
+      "cache": "writeback",
+      "ready": true,
+      "elapsed_s": 10.82,
+      "serial": "cpu-1-writeback-async-r1.serial.log",
+      "qemu_log": "cpu-1-writeback-async-r1.qemu.log",
+      "image": "cpu-1-writeback-async-r1.img",
+      "exit": 0
+    },
+    {
+      "tag": "cpu-1-writeback-async-negative-r0",
+      "mode": "async-negative",
+      "cpu": 1,
+      "cache": "writeback",
+      "ready": true,
+      "elapsed_s": 10.62,
+      "serial": "cpu-1-writeback-async-negative-r0.serial.log",
+      "qemu_log": "cpu-1-writeback-async-negative-r0.qemu.log",
+      "image": "cpu-1-writeback-async-negative-r0.img",
+      "exit": 0
+    }
+  ]
+}

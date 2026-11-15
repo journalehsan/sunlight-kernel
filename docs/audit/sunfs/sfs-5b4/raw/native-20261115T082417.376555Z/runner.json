@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "tools/sunfs5b4_validate.py",
+    "native",
+    "--cpus",
+    "2",
+    "--modes",
+    "hold",
+    "--caches",
+    "writeback"
+  ],
+  "runner_sha256": "73f81d83c614585f0ba083e5f72bbc5337c9fd1ce3efb2939470345a8a1775a4",
+  "environment": {
+    "RUSTFLAGS": null,
+    "RUSTUP_TOOLCHAIN": null,
+    "CARGO_TARGET_DIR": null,
+    "CARGO_BUILD_TARGET": null
+  }
+}

@@ -1,0 +1,11 @@
+guest-build 0
+iso-build 0
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4/raw/native-20261115T082119.527694Z
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b4_validate.py", line 208, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs5b4_validate.py", line 204, in main
+    assert not changed, changed
+           ^^^^^^^^^^^
+AssertionError: ['kernel/src/sfs5b4_test.rs']

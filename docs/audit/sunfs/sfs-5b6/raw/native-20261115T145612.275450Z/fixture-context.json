@@ -1,0 +1,11 @@
+{
+  "guest_source_directory": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b6/raw/guest-20261115T145335.368366Z",
+  "guest_source_sha256": "c32f26fa310a63fe1011b28cbef2fadf6e5a28731044c8348e7b38dcb08d01ae",
+  "patch_sha256": "ebf1c3e77c6e7c9c0dfdafcf58b411b8d6b83c25e1bd8d84b465a6c2eb915374",
+  "inherited_patch_sha256": "8491e258511ea9c36c12505ede42852ac6691350938b498797eb658d0712cb37",
+  "seed": "0x5b5001",
+  "reset": "terminal quarantine; no guest DMA release",
+  "execution_bound_seconds": 45,
+  "terminate_grace_seconds": 15,
+  "kill_grace_seconds": 10
+}

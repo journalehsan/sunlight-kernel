@@ -1,0 +1,25 @@
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=1 ns=11746768626771 thread=main stage=MAPPING_ACQUIRED iter=0 bytes=0 extra=16
+SFS5B5 seq=2 ns=11746768632972 thread=main stage=REQUEST_FETCHED iter=0 bytes=0 extra=0
+SFS5B5 seq=3 ns=11746768897084 thread=worker stage=ACCESS_ENTERED iter=0 bytes=0 extra=16
+SFS5B5 seq=4 ns=11746768914509 thread=main stage=ACCESS_ACTIVE iter=80 bytes=1280 extra=80
+SFS5B4 seq=1 ns=11746768917936 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=2 ns=11746768919458 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B5 held head=0 mode=async worker=started backend=not-submitted used=not-published
+SFS5B5 seq=5 ns=11747014669288 thread=main stage=RESET_ENTERED iter=11476592 bytes=183625472 extra=0
+SFS5B5 seq=6 ns=11747014684500 thread=worker stage=ACCESS_OBSERVED_RESET_ACTIVE iter=11476593 bytes=183625488 extra=11476593
+SFS5B5 seq=7 ns=11747014703149 thread=main stage=ACCESS_ACTIVE_DURING_RESET iter=11476662 bytes=183626592 extra=70
+SFS5B5 seq=8 ns=11747014712180 thread=worker stage=ACCESS_EXITED iter=11476663 bytes=183626608 extra=11476663
+SFS5B5 seq=9 ns=11747014718493 thread=main stage=CALLBACK_QUIESCED iter=11476663 bytes=183626608 extra=20
+SFS5B5 seq=10 ns=11747014744428 thread=main stage=WORKER_JOINED iter=11476663 bytes=183626608 extra=0
+SFS5B5 seq=11 ns=11747014748124 thread=main stage=MAPPING_RELEASED iter=11476663 bytes=183626608 extra=0
+SFS5B5 seq=12 ns=11747014749807 thread=main stage=OLD_EPOCH_QUIESCED iter=11476663 bytes=183626608 extra=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=13 ns=11747014776843 thread=main stage=RESET_ACKNOWLEDGED iter=11476663 bytes=183626608 extra=0
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)

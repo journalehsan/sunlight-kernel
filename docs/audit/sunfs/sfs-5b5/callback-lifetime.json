@@ -1,0 +1,229 @@
+{
+  "status": "PASS",
+  "model": "sunlight-block/src/quiesce.rs (OpSlot/CallbackGate/drain_bounded)",
+  "production_integration": "sunlight-virtio/src/blk.rs staged start_write/poll_write/timeout_write",
+  "device_side": "QEMU worker lifecycle MAPPING_ACQUIRED..RESET_ACKNOWLEDGED",
+  "cases": {
+    "cpu-1-writeback-async-r0": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-1-writeback-async-r1": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-1-writeback-async-negative-r0": {
+      "quiescence": {
+        "access_exited": 10,
+        "callback_quiesced": null,
+        "worker_joined": null,
+        "mapping_released": 12,
+        "reset_acknowledged": 8
+      },
+      "order_ok": null,
+      "no_access_after_ack": null
+    },
+    "cpu-1-none-async-r0": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-1-none-async-r1": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-1-none-async-negative-r0": {
+      "quiescence": {
+        "access_exited": 10,
+        "callback_quiesced": null,
+        "worker_joined": null,
+        "mapping_released": 12,
+        "reset_acknowledged": 8
+      },
+      "order_ok": null,
+      "no_access_after_ack": null
+    },
+    "cpu-2-writeback-async-r0": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-2-writeback-async-r1": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-2-writeback-async-negative-r0": {
+      "quiescence": {
+        "access_exited": 10,
+        "callback_quiesced": null,
+        "worker_joined": null,
+        "mapping_released": 12,
+        "reset_acknowledged": 8
+      },
+      "order_ok": null,
+      "no_access_after_ack": null
+    },
+    "cpu-2-none-async-r0": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-2-none-async-r1": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-2-none-async-negative-r0": {
+      "quiescence": {
+        "access_exited": 10,
+        "callback_quiesced": null,
+        "worker_joined": null,
+        "mapping_released": 12,
+        "reset_acknowledged": 8
+      },
+      "order_ok": null,
+      "no_access_after_ack": null
+    },
+    "cpu-4-writeback-async-r0": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-4-writeback-async-r1": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-4-writeback-async-negative-r0": {
+      "quiescence": {
+        "access_exited": 10,
+        "callback_quiesced": null,
+        "worker_joined": null,
+        "mapping_released": 12,
+        "reset_acknowledged": 8
+      },
+      "order_ok": null,
+      "no_access_after_ack": null
+    },
+    "cpu-4-none-async-r0": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-4-none-async-r1": {
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "order_ok": true,
+      "no_access_after_ack": true
+    },
+    "cpu-4-none-async-negative-r0": {
+      "quiescence": {
+        "access_exited": 10,
+        "callback_quiesced": null,
+        "worker_joined": null,
+        "mapping_released": 12,
+        "reset_acknowledged": 8
+      },
+      "order_ok": null,
+      "no_access_after_ack": null
+    }
+  },
+  "tests": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "C8",
+    "C9",
+    "C10",
+    "C11",
+    "C12"
+  ],
+  "host_tests": "25 quiesce tests + 30 sunlight-virtio tests, all passing",
+  "properties": {
+    "stable_identity": "OpSlot carries id/epoch/incarnation",
+    "explicit_owner": "begin(owner) CAS from Idle",
+    "active_inactive": "Active/Completing/Cancelling/Terminal",
+    "cancellation_authority": "cancel() returns Accepted, not completion",
+    "exactly_one_terminal": "finish() CAS, LostRace for the loser",
+    "retirement_responsibility": "MappingRecord::retire exactly once"
+  }
+}

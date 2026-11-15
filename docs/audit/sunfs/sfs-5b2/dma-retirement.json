@@ -1,0 +1,24 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "UNQUALIFIED",
+  "resources": [
+    "4 contiguous queue frames: descriptor/available/used rings",
+    "1 bounce/request frame: header+data+status",
+    "logical chain 0/1(/2)",
+    "active RequestId and owner state",
+    "indices and last outcome",
+    "first uncertain receipt"
+  ],
+  "pages_per_attachment": 5,
+  "bytes_per_attachment": 20480,
+  "hosted_fixture": "two aligned 16KiB arrays (queue plus oversized request fixture); fake DMA only, not five native PMM frames",
+  "pages_released": 0,
+  "bytes_released": 0,
+  "remaining_pinned_pages": 5,
+  "normal": "logical request retirement only after valid completion; five frames remain allocated for lifetime",
+  "reset": "acknowledgment never invokes frame free, descriptor reuse, owner retirement, DMA unmap or new epoch",
+  "actual_native_dma_at_reset": false,
+  "independent_dma_drain_witness": false,
+  "limitation": "no independent active-DMA/translation/posted-write retirement proof; no frame-free authority exposed"
+}

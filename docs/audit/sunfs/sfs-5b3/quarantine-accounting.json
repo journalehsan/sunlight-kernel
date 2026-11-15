@@ -1,0 +1,86 @@
+{
+  "status": "PARTIAL",
+  "attachments_per_vm": 1,
+  "pinned_pages_per_attachment": 5,
+  "pinned_bytes_per_attachment": 20480,
+  "native_samples": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "before": 63361,
+      "after": 63361,
+      "same_free_count": true,
+      "pinned_pages": 5,
+      "pinned_bytes": 20480,
+      "released_pages": 0,
+      "logical_uncertain_request_retirements": 0,
+      "scope": "PMM global count sample, no individual frame release or reuse proof"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "before": 63361,
+      "after": 63361,
+      "same_free_count": true,
+      "pinned_pages": 5,
+      "pinned_bytes": 20480,
+      "released_pages": 0,
+      "logical_uncertain_request_retirements": 0,
+      "scope": "PMM global count sample, no individual frame release or reuse proof"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "before": 63103,
+      "after": 63103,
+      "same_free_count": true,
+      "pinned_pages": 5,
+      "pinned_bytes": 20480,
+      "released_pages": 0,
+      "logical_uncertain_request_retirements": 0,
+      "scope": "PMM global count sample, no individual frame release or reuse proof"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "before": 63103,
+      "after": 63103,
+      "same_free_count": true,
+      "pinned_pages": 5,
+      "pinned_bytes": 20480,
+      "released_pages": 0,
+      "logical_uncertain_request_retirements": 0,
+      "scope": "PMM global count sample, no individual frame release or reuse proof"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "before": 62591,
+      "after": 62591,
+      "same_free_count": true,
+      "pinned_pages": 5,
+      "pinned_bytes": 20480,
+      "released_pages": 0,
+      "logical_uncertain_request_retirements": 0,
+      "scope": "PMM global count sample, no individual frame release or reuse proof"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "before": 62591,
+      "after": 62591,
+      "same_free_count": true,
+      "pinned_pages": 5,
+      "pinned_bytes": 20480,
+      "released_pages": 0,
+      "logical_uncertain_request_retirements": 0,
+      "scope": "PMM global count sample, no individual frame release or reuse proof"
+    }
+  ],
+  "requests_per_serialized_attachment": 1,
+  "quarantine_capacity": "one outstanding request; no subsequent admission",
+  "repeat_reset": "one write, no budget restart or new allocation; hosted repeated1024 refusals",
+  "pressure_limit": "no bounded global quarantine manager or attachment-retry allocator budget implemented",
+  "exhaustion": "existing initialization allocation expect may halt on PMM exhaustion; no infinite recovery loop or release introduced",
+  "native_pressure_test": "NOT_RUN"
+}

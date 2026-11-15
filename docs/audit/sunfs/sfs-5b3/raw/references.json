@@ -1,0 +1,161 @@
+[
+  {
+    "path": "docs/filesystems/sunfs/sfs-5a-native-block-durability.md",
+    "sha256": "0b9ade54d2b7f130f272e52cce41748ce36564451d1ae656d9d38aabe975fbc3"
+  },
+  {
+    "path": "docs/filesystems/sunfs/sfs-5b1-native-block-contract.md",
+    "sha256": "394efbb8957279246927582da5f4343df2eff0d972562d8d5a614e6308e4ad39"
+  },
+  {
+    "path": "docs/filesystems/sunfs/sfs-5b2-virtio-fencing-dma-retirement.md",
+    "sha256": "7ce30626609a44f0d7926573645be46eab8009cec63a094980f77f10c5f42bbd"
+  },
+  {
+    "path": "docs/audit/sunfs/sfs-5b2/validation-summary.json",
+    "sha256": "219ab0552c20e4c63802f0dc44c56d8b6ab3785baefaadb17c0758291fa8b8de",
+    "top_level_keys": [
+      "milestone",
+      "scope",
+      "status",
+      "gates",
+      "available_final_source_regressions",
+      "gate_limits",
+      "writable_native_sunfs",
+      "physical_device_qualification",
+      "blockers",
+      "commit",
+      "push"
+    ]
+  },
+  {
+    "path": "docs/audit/sunfs/sfs-5b2/source-integrity.json",
+    "sha256": "7835b45575960c205208c783077828534a088a06cc275eeb4578d0b7a22c43f4",
+    "top_level_keys": [
+      "status",
+      "revision",
+      "branch",
+      "worktree_status",
+      "sealed",
+      "execution_inputs",
+      "final_runs",
+      "nested_execution_harnesses",
+      "previous_sfs_files_verified",
+      "changed_incoming_files",
+      "scope",
+      "failed_and_superseded_attempts",
+      "commit",
+      "push"
+    ]
+  },
+  {
+    "path": "docs/audit/sunfs/sfs-5b2/descriptor-aba-witness.json",
+    "sha256": "d618935be56f792799c711aadbc1087387194f5476ff4da192321d763127172c",
+    "top_level_keys": [
+      "milestone",
+      "scope",
+      "status",
+      "failure_preserved",
+      "repair_complete",
+      "actual_device",
+      "actual_dma",
+      "failure_log",
+      "failing_source",
+      "initial_preproduction_marker_failure",
+      "initial_marker_source",
+      "repro_command",
+      "incoming_source",
+      "first_attempt",
+      "rerun",
+      "device",
+      "queue",
+      "head",
+      "A",
+      "B",
+      "injection",
+      "validation",
+      "invalid_acceptance",
+      "classification",
+      "head_only_case",
+      "unresolved"
+    ]
+  },
+  {
+    "path": "docs/audit/sunfs/sfs-5b2/fencing-contract.md",
+    "sha256": "a5e1373a594b6fde1240e1f2af0da402bc2ea225bb6f2e35271057da18ba00ee"
+  },
+  {
+    "path": "docs/audit/sunfs/sfs-5b2/independent-witnesses.json",
+    "sha256": "aa6d5d4de2e525607311f1aadd09e2e7f878c4362683541bdccfb01524da42a7",
+    "top_level_keys": [
+      "milestone",
+      "scope",
+      "status",
+      "A",
+      "B",
+      "observations",
+      "agreement_scope",
+      "no_independent_ack_or_dma_drain",
+      "observer_failure",
+      "emulator_modifications",
+      "physical_qualification",
+      "trace_accounting",
+      "unavailable_source"
+    ]
+  },
+  {
+    "path": "docs/audit/sunfs/sfs-5b2/native-reset-evidence.json",
+    "sha256": "06788bfc2fa21f5317e75224bc3875fd79ae92a17e5bf624c4605f02e36e2b28",
+    "top_level_keys": [
+      "milestone",
+      "scope",
+      "status",
+      "attempts",
+      "final_attempt",
+      "boots",
+      "cases",
+      "case_scope",
+      "supplemental_native_faults",
+      "exact_image",
+      "device",
+      "source_integrity",
+      "preservation"
+    ]
+  },
+  {
+    "path": "sunlight-virtio/src/pci.rs",
+    "sha256": "76f16a9ebd3498b9c0d44b9eb5226cddc728ab672a438a8763b1ec16af0919eb"
+  },
+  {
+    "path": "sunlight-virtio/src/blk.rs",
+    "sha256": "f6943adc86d4e38bcfcee1fc89d6a5b27fcaf98b4cbfa10d1a482bc3bf1ccf4b"
+  },
+  {
+    "path": "sunlight-block/src/contract.rs",
+    "sha256": "49108646535ffe064554a5aaa41e2e4c50c175da09a8ef76c057a6ca5be0feb7"
+  },
+  {
+    "path": "kernel/src/sfs5b2_test.rs",
+    "sha256": "5cfd12f2aa80d9f2d4d0cdfd2499ef8f31e88bbb1f03d7f2a8712240cb48f1bf"
+  },
+  {
+    "path": "tools/sunfs5b2_validate.py",
+    "sha256": "6ebd0247e1cea41cd6133707652eefd8e096d7c428accc180cc6bfcf3cec2c61"
+  },
+  {
+    "path": "tools/sunfs5b1_validate.py",
+    "sha256": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169"
+  },
+  {
+    "path": "tools/make_hybrid_iso.sh",
+    "sha256": "98ef36f4d3fdb18e78a9ea593629a3bdad4830f1d8ecdaa74aefc6546fae4712"
+  },
+  {
+    "path": "kernel/src/arch/x86_64/smp.rs",
+    "sha256": "1c06f4ee3b0fa76a0c7bce8f859c049e08769b6be18e195c813c0060e27172c1"
+  },
+  {
+    "path": "kernel/src/arch/x86_64/interrupts.rs",
+    "sha256": "f1a6ed77b5222baae8a0f1426887deeddb880ec9a5eb267b7dee7766a98cb992"
+  }
+]

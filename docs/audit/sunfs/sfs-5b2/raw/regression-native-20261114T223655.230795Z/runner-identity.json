@@ -1,0 +1,36 @@
+{
+  "argv": [
+    "tools/sunfs5b2_validate.py",
+    "regression-native"
+  ],
+  "runner_sha256": "6ebd0247e1cea41cd6133707652eefd8e096d7c428accc180cc6bfcf3cec2c61",
+  "reused_runner_sha256": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169",
+  "deterministic_seed": "no random injection",
+  "hosted_seeds": {
+    "SFS1": [
+      0,
+      1,
+      2,
+      5457491
+    ],
+    "SFS2": [
+      0,
+      1,
+      2,
+      1397117746
+    ],
+    "SFS3": [
+      1397117747
+    ],
+    "SFS4": [
+      1397117748
+    ]
+  },
+  "environment": {
+    "RUSTFLAGS": null,
+    "RUSTUP_TOOLCHAIN": null,
+    "CARGO_BUILD_TARGET": null,
+    "CARGO_TARGET_DIR": null,
+    "SOURCE_DATE_EPOCH": null
+  }
+}

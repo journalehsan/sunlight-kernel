@@ -1,0 +1,62 @@
+{
+  "status": "PARTIAL",
+  "matrix": [
+    {
+      "configured_vcpus": 1,
+      "cache_mode": "writeback",
+      "initial": "PASS",
+      "crash_host_exact": "PASS",
+      "cold_restart": "PASS",
+      "executing_request_cpus": "BSP only",
+      "concurrent_ap_io": "NOT_RUN"
+    },
+    {
+      "configured_vcpus": 2,
+      "cache_mode": "writeback",
+      "initial": "PASS",
+      "crash_host_exact": "PASS",
+      "cold_restart": "PASS",
+      "executing_request_cpus": "BSP only",
+      "concurrent_ap_io": "NOT_RUN"
+    },
+    {
+      "configured_vcpus": 4,
+      "cache_mode": "writeback",
+      "initial": "PASS",
+      "crash_host_exact": "PASS",
+      "cold_restart": "PASS",
+      "executing_request_cpus": "BSP only",
+      "concurrent_ap_io": "NOT_RUN"
+    },
+    {
+      "configured_vcpus": 1,
+      "cache_mode": "none",
+      "initial": "PASS",
+      "crash_host_exact": "PASS",
+      "cold_restart": "PASS",
+      "executing_request_cpus": "BSP only",
+      "concurrent_ap_io": "NOT_RUN"
+    },
+    {
+      "configured_vcpus": 2,
+      "cache_mode": "none",
+      "initial": "PASS",
+      "crash_host_exact": "PASS",
+      "cold_restart": "PASS",
+      "executing_request_cpus": "BSP only",
+      "concurrent_ap_io": "NOT_RUN"
+    },
+    {
+      "configured_vcpus": 4,
+      "cache_mode": "none",
+      "initial": "PASS",
+      "crash_host_exact": "PASS",
+      "cold_restart": "PASS",
+      "executing_request_cpus": "BSP only",
+      "concurrent_ap_io": "NOT_RUN"
+    }
+  ],
+  "actual_smp_qualification": "NOT_RUN",
+  "reason": "kernel/src/main.rs init_block_and_fat precedes smp::start_aps; no scheduler/startup redesign in this milestone",
+  "twelve_cpus_claimed": false
+}

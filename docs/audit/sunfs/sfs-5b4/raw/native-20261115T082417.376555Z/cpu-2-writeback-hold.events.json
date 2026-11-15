@@ -1,0 +1,42 @@
+{
+  "cpu": 2,
+  "cache": "writeback",
+  "mode": "hold",
+  "status": "FAIL",
+  "checks": {
+    "ready": false,
+    "exact_image": true,
+    "killed_after_window": true,
+    "post_scheduler": false,
+    "contender": false,
+    "admission_closed": false,
+    "terminal": false,
+    "progress": false,
+    "contention_progress": false,
+    "payload": false,
+    "quiescence": false,
+    "guard": false,
+    "negative_detector": true,
+    "reset_entry_access": true
+  },
+  "guest": [],
+  "device": [],
+  "host": [
+    {
+      "event": "PROCESS_STARTED",
+      "ns": 318410035553168
+    },
+    {
+      "event": "PROCESS_REAPED",
+      "ns": 318500081306396,
+      "code": -9
+    }
+  ],
+  "simultaneous_dma_reset": "UNQUALIFIED",
+  "reset": "real legacy whole-device",
+  "released_pages": 0,
+  "pinned_pages": 5,
+  "serial": "cpu-2-writeback-hold.serial.log",
+  "trace": "cpu-2-writeback-hold.trace.log",
+  "device_log": "cpu-2-writeback-hold.qemu.log"
+}

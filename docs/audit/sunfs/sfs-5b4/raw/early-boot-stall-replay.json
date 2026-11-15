@@ -1,0 +1,48 @@
+{
+  "original": "raw/native-20261115T085640.621413Z",
+  "replay": "raw/native-20261115T103331.975665Z",
+  "case": "cpu-2-writeback-unmodified",
+  "replay_status": "PASS",
+  "replay_checks": {
+    "ready": true,
+    "exact_image": true,
+    "killed_after_window": true,
+    "post_scheduler": true,
+    "contender": true,
+    "admission_closed": true,
+    "terminal": true,
+    "progress": true,
+    "contention_progress": true,
+    "payload": true,
+    "handshake": true,
+    "quiescence": true,
+    "guard": true,
+    "negative_detector": true,
+    "reset_entry_access": true
+  },
+  "source_changes": [],
+  "identities": {
+    "elf_sha256": {
+      "original": "24d0094f2afd5a8df05169e33d8d85796b6860009a97f1792313242604d59f60",
+      "replay": "879ea1d4326c157df8434e9b313b82883d663bfc97ef304ce1e1670665ca683d",
+      "same": false
+    },
+    "iso_sha256": {
+      "original": "6863cf017df6d4cc3c28c6c9f89698a58253a7690454dd31025e6644235127c1",
+      "replay": "ae0679781767fbe96dec7229b82294dfb898fc527f553f75f6977aa72ada0470",
+      "same": false
+    },
+    "qemu_sha256": {
+      "original": "a2250f5e2b3b07c754473c0817df1cccf6c3c2443fc616dc474c4c311fa6ef1c",
+      "replay": "a2250f5e2b3b07c754473c0817df1cccf6c3c2443fc616dc474c4c311fa6ef1c",
+      "same": true
+    },
+    "patch_sha256": {
+      "original": "10e8e5ad93be11f99f3a3e6685a86371e31e19cfb578fc59e7bed0dcfa57bbca",
+      "replay": "10e8e5ad93be11f99f3a3e6685a86371e31e19cfb578fc59e7bed0dcfa57bbca",
+      "same": true
+    }
+  },
+  "original_cause": "UNQUALIFIED",
+  "qualification": "Same logical CPU/cache/unmodified scenario, unchanged 90s bound and source. Recovered ELF/ISO are different binaries; passing replay does not explain historical early boot stall. Original invocation and partial logs retained."
+}

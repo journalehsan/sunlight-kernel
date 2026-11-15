@@ -1,0 +1,61 @@
+{
+  "status": "PASS",
+  "cases": [
+    {
+      "case": "queue512",
+      "status": "PASS",
+      "expected": "[BLK]  virtio-blk init failed",
+      "observed": "[BLK]  virtio-blk init failed",
+      "returncode": -9,
+      "serial": "raw/native-negative-20261114T224725.376442Z/queue512.serial.log",
+      "image_unchanged": true,
+      "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+      "actual_block_dma": false,
+      "completion_scope": "native initialization guard",
+      "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+      "fencing_claim": false
+    },
+    {
+      "case": "logical4096",
+      "status": "PASS",
+      "expected": "[BLK]  virtio-blk init failed",
+      "observed": "[BLK]  virtio-blk init failed",
+      "returncode": -9,
+      "serial": "raw/native-negative-20261114T224725.376442Z/logical4096.serial.log",
+      "image_unchanged": true,
+      "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+      "actual_block_dma": false,
+      "completion_scope": "native initialization guard",
+      "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+      "fencing_claim": false
+    },
+    {
+      "case": "readonly",
+      "status": "PASS",
+      "expected": "Rejected(ReadOnly)",
+      "observed": "Rejected(ReadOnly)",
+      "returncode": -9,
+      "serial": "raw/native-negative-20261114T224725.376442Z/readonly.serial.log",
+      "image_unchanged": true,
+      "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+      "actual_block_dma": true,
+      "completion_scope": "native typed pre-submission readonly refusal",
+      "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+      "fencing_claim": false
+    },
+    {
+      "case": "flush-ioerr",
+      "status": "PASS",
+      "expected": "left: Failed",
+      "observed": "left: Failed",
+      "returncode": -9,
+      "serial": "raw/native-negative-20261114T224725.376442Z/flush-ioerr.serial.log",
+      "image_unchanged": false,
+      "image_sha256": "92bf6bab87e5ec0397850bb0e2350ab61f02e4cd0834d021f0d07b0de4151a11",
+      "actual_block_dma": true,
+      "completion_scope": "native expected assertion at fixture; full post-error receipt/owner dump unavailable",
+      "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+      "fencing_claim": false
+    }
+  ]
+}

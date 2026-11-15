@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "pages": 5,
+  "bytes": 20480,
+  "released": 0,
+  "source": "unchanged ../sfs-5b5/quarantine-accounting.json",
+  "exact_physical_manifest": "unavailable in prior evidence; not reconstructed or invented"
+}

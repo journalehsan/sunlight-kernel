@@ -1,0 +1,13 @@
+{
+  "status": "RETAINED",
+  "historical_sfs5b4_pages": 5,
+  "historical_bytes": 20480,
+  "historical_released": 0,
+  "historical_ownership": "cannot be reconstructed from the preserved evidence; stays pinned",
+  "fresh_fixture": {
+    "request_records": "one per run, freed exactly once after join",
+    "mapping_authority": "acquired before use, released after join, retired once",
+    "dma_pages": "guest attachment pages remain pinned by the kernel fixture (released=0)"
+  },
+  "pmm": "free-before == free-after in every native run (see native-fault-matrix)"
+}

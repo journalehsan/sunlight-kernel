@@ -1,0 +1,315 @@
+{
+  "scope": "source review; VERIFIED source behavior does not imply physical or native qualification",
+  "backends": {
+    "virtio_block_legacy": {
+      "geometry": {
+        "status": "PARTIAL",
+        "note": "capacity read once from legacy config; checked byte geometry and stable config snapshot absent"
+      },
+      "logical_sector_size": {
+        "status": "PARTIAL",
+        "note": "API addresses fixed 512-byte sectors; device logical block/topology not reported"
+      },
+      "physical_sector_size": {
+        "status": "UNKNOWN",
+        "note": "not queried"
+      },
+      "alignment": {
+        "status": "PARTIAL",
+        "note": "one 512-byte bounce transfer; PMM page-aligned frames; no common maximum/alignment query"
+      },
+      "flush": {
+        "status": "PARTIAL",
+        "note": "feature bit 9 negotiated; type 4 header+status actually submitted and polled; native results separate"
+      },
+      "fua": {
+        "status": "MISSING",
+        "note": "no native FUA operation"
+      },
+      "write_cache": {
+        "status": "UNKNOWN",
+        "note": "CONFIG_WCE not inspected; successful write does not establish persistence"
+      },
+      "request_ordering": {
+        "status": "PARTIAL",
+        "note": "single mutable owner and one head; software cache eviction can reorder; barriers explicit"
+      },
+      "partial_completion": {
+        "status": "MISSING",
+        "note": "bool becomes Io; no prefix/status provenance"
+      },
+      "timeout": {
+        "status": "PARTIAL",
+        "note": "50,000,000 iterations then permanent quarantine after repair; not calibrated wall time"
+      },
+      "dma_ownership": {
+        "status": "PARTIAL",
+        "note": "kernel-lifetime PMM queue/request pages; quarantine rejects reuse; no DMA unmap or authoritative fence"
+      },
+      "reset_fencing": {
+        "status": "MISSING",
+        "note": "initial reset register only; no reset acknowledgment/drain/generation fence"
+      },
+      "device_identity": {
+        "status": "PARTIAL",
+        "note": "boot-local registry IDs only; GET_ID absent"
+      },
+      "native_guest": {
+        "status": "PARTIAL",
+        "note": "sfs5a-test BSP fixture; configured CPU matrix and raw results recorded separately"
+      }
+    },
+    "usb_msc_xhci_bot": {
+      "geometry": {
+        "status": "PARTIAL",
+        "note": "READ CAPACITY10 accepts only 512 bytes and rejects last-LBA 0xffffffff"
+      },
+      "logical_sector_size": {
+        "status": "VERIFIED",
+        "note": "source enforces exactly 512"
+      },
+      "physical_sector_size": {
+        "status": "UNKNOWN",
+        "note": "not queried"
+      },
+      "alignment": {
+        "status": "PARTIAL",
+        "note": "one sector per READ/WRITE10; bounded page-backed 512-byte xHCI staging buffer"
+      },
+      "flush": {
+        "status": "PARTIAL",
+        "note": "SYNCHRONIZE CACHE10; error retires disk online state; no native SFS5A USB execution"
+      },
+      "fua": {
+        "status": "MISSING",
+        "note": "not used in WRITE10"
+      },
+      "write_cache": {
+        "status": "UNKNOWN",
+        "note": "mode sense/cache policy not queried"
+      },
+      "request_ordering": {
+        "status": "PARTIAL",
+        "note": "serialized BOT commands, monotonic tags, no write replay"
+      },
+      "partial_completion": {
+        "status": "PARTIAL",
+        "note": "BOT validates actual/residue/tag; block trait collapses failure to Io"
+      },
+      "timeout": {
+        "status": "PARTIAL",
+        "note": "two-second calibrated TSC budget; dead controller rejects later submissions"
+      },
+      "dma_ownership": {
+        "status": "PARTIAL",
+        "note": "kernel lifetime allocation retained; pointer/slot/endpoint matching; no SFS5A race execution"
+      },
+      "reset_fencing": {
+        "status": "PARTIAL",
+        "note": "BOT reset and endpoint stop/dequeue exist; dead transport cannot recover; not a certified DMA fence"
+      },
+      "device_identity": {
+        "status": "PARTIAL",
+        "note": "monotonic boot-local registry; runtime errors retire incarnation; no hotplug reuse"
+      },
+      "native_guest": {
+        "status": "UNKNOWN",
+        "note": "SFS5A native USB tests NOT_RUN"
+      }
+    },
+    "ram_memdisk": {
+      "geometry": {
+        "status": "VERIFIED",
+        "note": "checked offset multiplication/addition and backing slice length/512"
+      },
+      "logical_sector_size": {
+        "status": "VERIFIED",
+        "note": "512"
+      },
+      "physical_sector_size": {
+        "status": "NOT_APPLICABLE",
+        "note": "RAM-only volatile backing; no transport/DMA/power-loss contract"
+      },
+      "alignment": {
+        "status": "VERIFIED",
+        "note": "sector API"
+      },
+      "flush": {
+        "status": "NOT_APPLICABLE",
+        "note": "returns Ok for deterministic in-memory stable backing, not persistent media"
+      },
+      "fua": {
+        "status": "NOT_APPLICABLE",
+        "note": "RAM-only volatile backing; no transport/DMA/power-loss contract"
+      },
+      "write_cache": {
+        "status": "NOT_APPLICABLE",
+        "note": "RAM-only volatile backing; no transport/DMA/power-loss contract"
+      },
+      "request_ordering": {
+        "status": "VERIFIED",
+        "note": "synchronous slice copy under mutable borrow"
+      },
+      "partial_completion": {
+        "status": "VERIFIED",
+        "note": "prevalidated bounds; whole sector copy or OutOfRange"
+      },
+      "timeout": {
+        "status": "NOT_APPLICABLE",
+        "note": "RAM-only volatile backing; no transport/DMA/power-loss contract"
+      },
+      "dma_ownership": {
+        "status": "NOT_APPLICABLE",
+        "note": "RAM-only volatile backing; no transport/DMA/power-loss contract"
+      },
+      "reset_fencing": {
+        "status": "NOT_APPLICABLE",
+        "note": "RAM-only volatile backing; no transport/DMA/power-loss contract"
+      },
+      "device_identity": {
+        "status": "MISSING",
+        "note": "no identity API"
+      },
+      "native_guest": {
+        "status": "NOT_APPLICABLE",
+        "note": "RAM-only volatile backing; no transport/DMA/power-loss contract"
+      }
+    },
+    "hosted_image": {
+      "geometry": {
+        "status": "VERIFIED",
+        "note": "DeviceInfo plus checked range and exclusive bounded regular file creation"
+      },
+      "logical_sector_size": {
+        "status": "VERIFIED",
+        "note": "512 logical, 4096 maximum"
+      },
+      "physical_sector_size": {
+        "status": "UNKNOWN",
+        "note": "host storage physical sector not claimed"
+      },
+      "alignment": {
+        "status": "VERIFIED",
+        "note": "DeviceInfo 512-byte alignment"
+      },
+      "flush": {
+        "status": "PARTIAL",
+        "note": "File::sync_all; end-to-end physical/power-loss not qualified"
+      },
+      "fua": {
+        "status": "MISSING",
+        "note": "explicit default UnsupportedDurability"
+      },
+      "write_cache": {
+        "status": "PARTIAL",
+        "note": "host page cache drained by sync_all; storage chain not certified"
+      },
+      "request_ordering": {
+        "status": "VERIFIED",
+        "note": "synchronous exclusive file seek/read/write"
+      },
+      "partial_completion": {
+        "status": "PARTIAL",
+        "note": "write_all errors reported uncertain; successful read staging avoids partial exposure"
+      },
+      "timeout": {
+        "status": "UNKNOWN",
+        "note": "host syscalls have no adapter deadline"
+      },
+      "dma_ownership": {
+        "status": "NOT_APPLICABLE",
+        "note": "hosted file has no guest transport/DMA"
+      },
+      "reset_fencing": {
+        "status": "NOT_APPLICABLE",
+        "note": "hosted file has no guest transport/DMA"
+      },
+      "device_identity": {
+        "status": "PARTIAL",
+        "note": "exclusive fd, incarnation=1, persistent identity=None"
+      },
+      "native_guest": {
+        "status": "NOT_APPLICABLE",
+        "note": "hosted file has no guest transport/DMA"
+      }
+    },
+    "hosted_simulator": {
+      "geometry": {
+        "status": "VERIFIED",
+        "note": "explicit DeviceInfo"
+      },
+      "logical_sector_size": {
+        "status": "VERIFIED",
+        "note": "configured model geometry"
+      },
+      "physical_sector_size": {
+        "status": "NOT_APPLICABLE",
+        "note": "deterministic hosted simulator; no real device"
+      },
+      "alignment": {
+        "status": "NOT_APPLICABLE",
+        "note": "deterministic hosted simulator; no real device"
+      },
+      "flush": {
+        "status": "VERIFIED",
+        "note": "modeled durable/volatile stores plus injected flush faults; not native durability"
+      },
+      "fua": {
+        "status": "NOT_APPLICABLE",
+        "note": "deterministic hosted simulator; no real device"
+      },
+      "write_cache": {
+        "status": "VERIFIED",
+        "note": "explicit volatile write set"
+      },
+      "request_ordering": {
+        "status": "VERIFIED",
+        "note": "deterministic injected reordering"
+      },
+      "partial_completion": {
+        "status": "VERIFIED",
+        "note": "fault schedules encode torn/partial/uncertain effects"
+      },
+      "timeout": {
+        "status": "NOT_APPLICABLE",
+        "note": "deterministic hosted simulator; no real device"
+      },
+      "dma_ownership": {
+        "status": "NOT_APPLICABLE",
+        "note": "deterministic hosted simulator; no real device"
+      },
+      "reset_fencing": {
+        "status": "VERIFIED",
+        "note": "new modeled session drops pending model writes; not a native fence"
+      },
+      "device_identity": {
+        "status": "PARTIAL",
+        "note": "model incarnation"
+      },
+      "native_guest": {
+        "status": "NOT_APPLICABLE",
+        "note": "deterministic hosted simulator; no real device"
+      }
+    },
+    "ahci_nvme_ata": {
+      "status": "MISSING",
+      "discovery": "no implementation located in kernel/src, sunlight-block, sunlight-virtio, drivers or workspace members",
+      "capabilities": {
+        "geometry": "NOT_APPLICABLE",
+        "logical_sector_size": "NOT_APPLICABLE",
+        "physical_sector_size": "NOT_APPLICABLE",
+        "alignment": "NOT_APPLICABLE",
+        "flush": "NOT_APPLICABLE",
+        "fua": "NOT_APPLICABLE",
+        "write_cache": "NOT_APPLICABLE",
+        "request_ordering": "NOT_APPLICABLE",
+        "partial_completion": "NOT_APPLICABLE",
+        "timeout": "NOT_APPLICABLE",
+        "dma_ownership": "NOT_APPLICABLE",
+        "reset_fencing": "NOT_APPLICABLE",
+        "device_identity": "NOT_APPLICABLE",
+        "native_guest": "NOT_APPLICABLE"
+      }
+    }
+  }
+}

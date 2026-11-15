@@ -1,0 +1,39 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "status": "PASS",
+  "delta_from_incoming_baseline": {
+    "Cargo.lock": "8eea7318fc7198418a7379f8d130af6bb4bae4c08bc2d0f584a25e6c175351cd",
+    "docs/filesystems/sunfs/sfs-5b1-native-block-contract.md": "394efbb8957279246927582da5f4343df2eff0d972562d8d5a614e6308e4ad39",
+    "kernel/Cargo.toml": "518a21ab9e06d0503889adc07d1e86c17cd58895a35cb92458749cd3bdd5ff0a",
+    "kernel/src/main.rs": "261f695de4e3e417866f3c2f8e1f1d5dfd5836199195828a9d41c93c3ef1b27b",
+    "kernel/src/sfs5b1_test.rs": "ce18875f0e66d1f60ce878e07d32b685ef438d389238f2e8e322b274f4881328",
+    "sunlight-block/src/contract.rs": "49108646535ffe064554a5aaa41e2e4c50c175da09a8ef76c057a6ca5be0feb7",
+    "sunlight-block/src/lib.rs": "6ad3a7b68e13982c2454bc5ce8ee487fca7330230e1ed6e9cfd69fb9d0a622b0",
+    "sunlight-block/src/usb_msc.rs": "0c645f76b67726e184b4a50d9a7bc34beba106de9927c1750e03e2ec8005317e",
+    "sunlight-virtio/Cargo.toml": "642da4897e8a13f551c3c77ef16c986e610f1490a0f750fd7821da79281dbfdd",
+    "sunlight-virtio/src/blk.rs": "b4015880a8768a20431ae6ea5b29eb02223364060afbfa2a2cf03d87a1a2bd7d",
+    "tools/sunfs5b1_validate.py": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169"
+  },
+  "production": [
+    "Cargo.lock",
+    "sunlight-block/src/contract.rs",
+    "sunlight-block/src/lib.rs",
+    "sunlight-block/src/usb_msc.rs",
+    "sunlight-virtio/Cargo.toml",
+    "sunlight-virtio/src/blk.rs",
+    "kernel/src/main.rs"
+  ],
+  "test_and_build": [
+    "kernel/Cargo.toml",
+    "kernel/src/sfs5b1_test.rs",
+    "tools/sunfs5b1_validate.py"
+  ],
+  "incoming_changes": "See source-baseline and raw/incoming; previous SFS5A fixture/runner are unchanged",
+  "commit": false,
+  "push": false
+}

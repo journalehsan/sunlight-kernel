@@ -1,0 +1,23 @@
+{
+  "status": "PARTIAL",
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "restart": false,
+      "status": "FAIL",
+      "returncode": -9,
+      "serial": "raw/native-20261114T210549.135486Z/cpu-1-writeback-initial.serial.log",
+      "termination": "failed/timeout attempt"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "restart": false,
+      "status": "FAIL",
+      "returncode": -9,
+      "serial": "raw/native-20261114T210549.135486Z/cpu-2-writeback-initial.serial.log",
+      "termination": "failed/timeout attempt"
+    }
+  ]
+}

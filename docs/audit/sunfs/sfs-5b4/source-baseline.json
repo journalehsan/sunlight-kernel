@@ -1,0 +1,26 @@
+{
+  "revision": "22a5947f5fbd4ffe810aee5efee57b0ec18f8915",
+  "branch": "main",
+  "status": "PASS",
+  "incoming_status": "raw/incoming-status.txt",
+  "incoming_patch": "raw/incoming.patch",
+  "manifest": "raw/incoming-manifest.json",
+  "files": 414227,
+  "compilation_inputs": {
+    "Cargo.toml": "ee5d2639492fe5fc4be1ece52a320a51d6ee023a59f0d8f34f1021030f1c4e24",
+    "Cargo.lock": "8eea7318fc7198418a7379f8d130af6bb4bae4c08bc2d0f584a25e6c175351cd",
+    ".cargo/config.toml": "185727c35b0d99ffb5332b5ef9f5cf5b7cea2b5e4376467f791f7b9d8571e854",
+    "rust-toolchain.toml": "973e644b5e87baf1e58d608c00ab077d5519c93e8c793244189e87529131b8b0",
+    "kernel/build.rs": "2dbf224f5da36fc832acde59c0fa4cb3d179076b8fb3ff0bfaff0b055edbcb2f",
+    "kernel/Cargo.toml": "4aad7c673545ec16e0e5cf773a48d2f1161c0e702dbd40d5a6affc63d39181f5",
+    "sunlight-virtio/Cargo.toml": "642da4897e8a13f551c3c77ef16c986e610f1490a0f750fd7821da79281dbfdd"
+  },
+  "environment": {
+    "RUSTFLAGS": null,
+    "RUSTUP_TOOLCHAIN": null,
+    "CARGO_TARGET_DIR": null,
+    "CARGO_BUILD_TARGET": null
+  },
+  "prior_evidence_preservation": "sha256 per incoming file; recheck at final seal",
+  "seed": "0x5b4001; deterministic barriers, no random schedule"
+}

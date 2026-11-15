@@ -1,0 +1,7 @@
+storage 0
+kernel-host 0
+no-std 101
+format 0
+clippy 101
+default-build 101
+diagnostic-build 101

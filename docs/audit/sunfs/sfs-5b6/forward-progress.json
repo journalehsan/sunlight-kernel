@@ -1,0 +1,8 @@
+{
+  "status": "PARTIAL",
+  "supervisor_seconds": 45,
+  "production_coordinator_unchanged": true,
+  "backend_drain_wall_clock_bound": false,
+  "indefinite_test": "isolated process only; never quiescence proof",
+  "historical_uart": "unbounded THRE wait before SMP; root cause UNQUALIFIED; no serial change"
+}

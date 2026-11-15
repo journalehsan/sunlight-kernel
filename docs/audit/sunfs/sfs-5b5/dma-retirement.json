@@ -1,0 +1,33 @@
+{
+  "status": "PASS_SCOPED",
+  "scope": "fresh instrumented fixture only; historical pages NOT reclaimed",
+  "retired": [
+    {
+      "resource": "QEMU VirtIOBlockReq record",
+      "count": "1 per run",
+      "exactly_once": "g_free after join and detach"
+    },
+    {
+      "resource": "payload DMA mapping",
+      "count": "1 per run",
+      "exactly_once": "virtqueue_detach_element after join"
+    },
+    {
+      "resource": "OpSlot / MappingRecord (driver model)",
+      "count": "1 per staged request",
+      "exactly_once": "finish() CAS + retire() CAS"
+    }
+  ],
+  "retained": [
+    {
+      "resource": "five historical SFS-5B.4 attachment pages",
+      "bytes": 20480,
+      "reason": "original ownership not reconstructable"
+    }
+  ],
+  "forbidden": [
+    "new queue epoch",
+    "fresh post-reset I/O",
+    "allocator reuse proof"
+  ]
+}

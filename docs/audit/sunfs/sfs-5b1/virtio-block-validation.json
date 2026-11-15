@@ -1,0 +1,88 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "status": "PARTIAL",
+  "features": "allowlist SIZE_MAX, RO, BLK_SIZE, FLUSH; ring/indirect/event-index/multiqueue features not accepted",
+  "geometry": "bounded repeated capacity samples; reject zero/byte overflow; reject advertised non-512 logical profile; honor SIZE_MAX refusal below 512",
+  "queue_allocation": "power-of-two >=3 and full used-ring extent <=16384; queue256 accepted, queue512 needing16390 refused before PFN publication",
+  "header": "type u32/reserved zero/sector u64; x86 legacy native endian; 16 bytes",
+  "descriptors": "header read-only 16; read/write data 512 device writable/readable; status writable1 at bounce+528; flush omits data",
+  "status_validation": "initialize0xff before publication; accept only0/1/2 after exact-next used index/head/resource validation",
+  "memory_ordering": "SeqCst fences before avail index/notification and around used/status observations; coherent x86 scope only",
+  "used_length": "recorded as diagnostic, no partial count inferred; legacy specification recommends ignoring this field",
+  "used_length_spec": "OASIS VirtIO1.2 sections2.7.8.1 and5.2.6.3 (code comment currently references adjacent5.2.6.2)",
+  "flush": {
+    "supported_native": "PASS",
+    "unsupported_hosted": "see t8; no publication",
+    "failed_hosted": "see t9; status failure with durability Uncertain",
+    "failed_native": "PARTIAL: blkdebug EIO yields typed Failed at fixture assertion; full post-error owner and durability not printed",
+    "uncertain_hosted": "see t10; terminal quarantine"
+  },
+  "physical_durability": "UNQUALIFIED",
+  "native_fault_injection": {
+    "status": "PASS",
+    "cases": [
+      {
+        "case": "queue512",
+        "status": "PASS",
+        "expected": "[BLK]  virtio-blk init failed",
+        "observed": "[BLK]  virtio-blk init failed",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/queue512.serial.log",
+        "image_unchanged": true,
+        "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+        "actual_block_dma": false,
+        "completion_scope": "native initialization guard",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      },
+      {
+        "case": "logical4096",
+        "status": "PASS",
+        "expected": "[BLK]  virtio-blk init failed",
+        "observed": "[BLK]  virtio-blk init failed",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/logical4096.serial.log",
+        "image_unchanged": true,
+        "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+        "actual_block_dma": false,
+        "completion_scope": "native initialization guard",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      },
+      {
+        "case": "readonly",
+        "status": "PASS",
+        "expected": "Rejected(ReadOnly)",
+        "observed": "Rejected(ReadOnly)",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/readonly.serial.log",
+        "image_unchanged": true,
+        "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+        "actual_block_dma": true,
+        "completion_scope": "native typed pre-submission readonly refusal",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      },
+      {
+        "case": "flush-ioerr",
+        "status": "PASS",
+        "expected": "left: Failed",
+        "observed": "left: Failed",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/flush-ioerr.serial.log",
+        "image_unchanged": false,
+        "image_sha256": "92bf6bab87e5ec0397850bb0e2350ab61f02e4cd0834d021f0d07b0de4151a11",
+        "actual_block_dma": true,
+        "completion_scope": "native expected assertion at fixture; full post-error receipt/owner dump unavailable",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      }
+    ]
+  },
+  "stale_head_alias": "PARTIAL; generation not echoed"
+}

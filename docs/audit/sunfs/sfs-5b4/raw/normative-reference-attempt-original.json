@@ -1,0 +1,23 @@
+{
+  "checked_utc_date": "2026-11-15",
+  "sources": [
+    {
+      "url": "https://docs.oasis-open.org/virtio/virtio/v1.4/cs01/virtio-v1.4-cs01.html",
+      "title": "Virtual I/O Device (VIRTIO) Version 1.4 Committee Specification 01",
+      "publication": "2026-04-08",
+      "sections": [
+        "2.4.1",
+        "2.4.2",
+        "3.3",
+        "3.3.1"
+      ],
+      "finding": "Reset completion prohibits further queue interaction until reinitialization for a conforming device; exposed buffers require queue cleanup. This conditional contract does not validate an implementation or persistence."
+    },
+    {
+      "url": "https://www.qemu.org/docs/master/devel/multiple-iothreads.html",
+      "title": "Using Multiple IOThreads",
+      "finding": "Main-loop and vCPU device execution share BQL serialization. The checked local 11.1.2 source copies, rather than rolling master documentation, determine this experiment."
+    }
+  ],
+  "effect": "Corroborates the declared models; no new fence or retirement authority."
+}

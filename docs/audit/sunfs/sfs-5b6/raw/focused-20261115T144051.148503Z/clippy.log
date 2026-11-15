@@ -1,0 +1,9 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Checking sunlight-block v0.2.7801-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+error: failed to write /home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_block-7b4a5b6f3dc19537.rmeta: No space left on device (os error 28)
+
+error: could not compile `sunlight-block` (lib) due to 1 previous error

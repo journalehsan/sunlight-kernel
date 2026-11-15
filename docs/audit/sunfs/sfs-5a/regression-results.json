@@ -1,0 +1,137 @@
+{
+  "status": "PARTIAL",
+  "host_test_commands": "PASS",
+  "attempt": "raw/hosted-20261114T210550.299939Z",
+  "tests_per_profile": {
+    "debug": 54,
+    "release": 54
+  },
+  "crash_schedules_per_profile": 13142,
+  "schedules_by_milestone": {
+    "sfs2": 3491,
+    "sfs3": 6691,
+    "sfs4": 2960
+  },
+  "debug_release_crash_corpora_equal": true,
+  "storage_existing": 139,
+  "virtio_new": 2,
+  "storage_total": 141,
+  "storage_by_crate": {
+    "block": 29,
+    "fat": 9,
+    "fs": 101,
+    "virtio": 2
+  },
+  "kernel_host": 212,
+  "supplemental_host_tests": {
+    "passed": 4,
+    "unique_additional": 2,
+    "repeated_ownership_tests": 2,
+    "log": "raw/extra-host-tests.log"
+  },
+  "no_std_alloc": "PASS",
+  "kernel_default_build": "PASS",
+  "native_guest_build": "PASS",
+  "rustfmt": "PASS",
+  "python_compile": "PASS",
+  "git_diff_check": "PASS",
+  "native_storage_lifecycle": "NOT_RUN",
+  "native_usb": "NOT_RUN",
+  "native_timeout_reset_lifecycle": "NOT_RUN",
+  "unrelated_security_claim": false,
+  "host_runner_integrity": {
+    "status": "FAIL",
+    "reason": "runner was changed to add required VirtIO RNG for native retry while hosted tests were running; broad final source assertion correctly detected tooling drift",
+    "changed_paths": [
+      "tools/sunfs5a_validate.py"
+    ],
+    "tested_rust_and_build_inputs_unchanged": true,
+    "original_runner": "raw/hosted-runner-before.py",
+    "raw_log": "raw/hosted-runner.log",
+    "final_source_verification": "all Rust/Cargo/build inputs match before/after and final bytes; native runner independently verifies unchanged complete source"
+  },
+  "commands": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-sunfs",
+        "-p",
+        "sunlight-sunfs-lab",
+        "-p",
+        "sunlight-sunfs-check",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "returncode": 0,
+      "log": "raw/hosted-20261114T210550.299939Z/hosted-debug.log",
+      "seconds": 412.66090141795576,
+      "tests_passed": 54
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-sunfs",
+        "-p",
+        "sunlight-sunfs-lab",
+        "-p",
+        "sunlight-sunfs-check",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--release"
+      ],
+      "returncode": 0,
+      "log": "raw/hosted-20261114T210550.299939Z/hosted-release.log",
+      "seconds": 335.06186155002797,
+      "tests_passed": 54
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-block",
+        "-p",
+        "sunlight-fat",
+        "-p",
+        "sunlight-fs",
+        "-p",
+        "sunlight-virtio",
+        "--lib",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "returncode": 0,
+      "log": "raw/hosted-20261114T210550.299939Z/storage.log",
+      "seconds": 0.15491279301932082
+    },
+    {
+      "argv": [
+        "cargo",
+        "check",
+        "-p",
+        "sunlight-sunfs",
+        "-p",
+        "sunlight-block",
+        "-p",
+        "sunlight-virtio",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-none"
+      ],
+      "returncode": 0,
+      "log": "raw/hosted-20261114T210550.299939Z/no-std.log",
+      "seconds": 0.5762770649744198
+    }
+  ]
+}

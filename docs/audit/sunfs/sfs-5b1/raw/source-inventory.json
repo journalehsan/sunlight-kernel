@@ -1,0 +1,126 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "baseline_revision": "22a5947f5fbd4ffe810aee5efee57b0ec18f8915",
+  "baseline_branch": "main",
+  "incoming_changes": [
+    "kernel/Cargo.toml",
+    "kernel/src/main.rs",
+    "sunlight-virtio/src/blk.rs",
+    "kernel/src/sfs5a_test.rs",
+    "tools/sunfs5a_validate.py",
+    "docs/filesystems/sunfs/sfs-5a-native-block-durability.md",
+    "docs/audit/sunfs/sfs-5a/"
+  ],
+  "consumers": [
+    "sunlight-fat/Cargo.toml",
+    "sunlight-fat/src/fat/write.rs",
+    "sunlight-fat/src/lib.rs",
+    "kernel/Cargo.toml",
+    "kernel/src/sfs5b1_test.rs",
+    "kernel/src/sfs5a_test.rs",
+    "sunlight-fat/src/fat.rs",
+    "sunlight-virtio/Cargo.toml",
+    "kernel/src/main.rs",
+    "kernel/src/usb_storage.rs",
+    "kernel/src/usb_xhci.rs",
+    "sunlight-virtio/src/lib.rs",
+    "kernel/src/storage.rs",
+    "kernel/src/storage_partition_test.rs",
+    "sunlight-virtio/src/blk.rs",
+    "sunlight-fs/Cargo.toml",
+    "sunlight-fs/src/vfs.rs",
+    "sunlight-fs/src/vfs/storage_tests.rs",
+    "sunlight-fs/src/block.rs",
+    "Cargo.toml",
+    "sunlight-block/Cargo.toml",
+    "kernel/src/arch/x86_64/syscall.rs"
+  ],
+  "inputs": {
+    "rust-toolchain.toml": "973e644b5e87baf1e58d608c00ab077d5519c93e8c793244189e87529131b8b0",
+    ".cargo/config.toml": "185727c35b0d99ffb5332b5ef9f5cf5b7cea2b5e4376467f791f7b9d8571e854",
+    "Cargo.toml": "ee5d2639492fe5fc4be1ece52a320a51d6ee023a59f0d8f34f1021030f1c4e24",
+    "Cargo.lock": "8eea7318fc7198418a7379f8d130af6bb4bae4c08bc2d0f584a25e6c175351cd",
+    "kernel/Cargo.toml": "518a21ab9e06d0503889adc07d1e86c17cd58895a35cb92458749cd3bdd5ff0a",
+    "kernel/build.rs": "2dbf224f5da36fc832acde59c0fa4cb3d179076b8fb3ff0bfaff0b055edbcb2f",
+    "tools/make_hybrid_iso.sh": "98ef36f4d3fdb18e78a9ea593629a3bdad4830f1d8ecdaa74aefc6546fae4712",
+    "tools/setup_limine.sh": "960e401e062e50fd84c174fe032542665c722990933872b19fc170042d80ea94",
+    "limine.conf": "02d6c90952cc3e8f6d3c1b561fb497931781ab8d74ab18830aaa868523a27432",
+    "limine.cfg": "607384967b4f71cca1e4b391bafa9791886f03688aac86e5d23a7e29a27bc65e",
+    "tools/sunfs5a_validate.py": "372c58e0c2a15538c36cbbd39ac76faf1f17f20bf082737e1c2b3cab795ffe4b",
+    "tools/sunfs5b1_validate.py": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169",
+    "sunlight-virtio/Cargo.toml": "642da4897e8a13f551c3c77ef16c986e610f1490a0f750fd7821da79281dbfdd",
+    "sunlight-block/Cargo.toml": "5d557283f11717a0ba89e0dee477e99fb0701906acded3d7b2cef1cc6c2f8a1e"
+  },
+  "references": {
+    "docs/filesystems/sunfs/sfs-5a-native-block-durability.md": "0b9ade54d2b7f130f272e52cce41748ce36564451d1ae656d9d38aabe975fbc3",
+    "docs/audit/sunfs/sfs-5a/block-io-contract.md": "03cb757f288ca548fb1295d6be0064c7222916dd660d62aab2ed34ffed1a053d",
+    "docs/audit/sunfs/sfs-5a/validation-summary.json": "0e45bc82bc92b013ce0900a4ccc850548e777e4d69c1a5b078de0fa2d06b1f53",
+    "docs/filesystems/sunfs/sunfs-crash-recovery-contract.md": "7548d6ca2b8a70f7f0a359172daab5d8ba58f341af83b4c31b68e17a190c4b67",
+    "docs/filesystems/sunfs/sfs-4-segment-cleaner-forward-progress.md": "e2cfb531eeceffc4abdf5b49e4156dde756aae8096eb589d3eb86fec28c3251a"
+  },
+  "incoming_patch": "raw/incoming.patch",
+  "baseline_coverage": 279473,
+  "rng_finding": "SFS-5A hosted manifest failed because runner changed to add virtio-rng-pci; retained, not discarded. New runner freezes argv and seed before execution.",
+  "hosted_seeds": {
+    "SFS1": [
+      0,
+      1,
+      2,
+      5457491
+    ],
+    "SFS2": [
+      0,
+      1,
+      2,
+      1397117746
+    ],
+    "SFS3": [
+      1397117747
+    ],
+    "SFS4": [
+      1397117748
+    ]
+  },
+  "rng_device": "virtio-rng-pci,disable-modern=on; boot security entropy is deliberately not replaced by a fixed entropy source",
+  "run_arguments": [
+    {
+      "argv": [
+        "tools/sunfs5b1_validate.py",
+        "hosted"
+      ],
+      "seed": 5967873,
+      "seed_usage": "fixed deterministic fixture bytes; no random fault schedules",
+      "rng": "virtio-rng-pci,disable-modern=on",
+      "runner_sha256": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169",
+      "env": {
+        "RUSTFLAGS": null,
+        "RUSTUP_TOOLCHAIN": null,
+        "CARGO_BUILD_TARGET": null,
+        "CARGO_TARGET_DIR": null,
+        "SOURCE_DATE_EPOCH": null
+      }
+    },
+    {
+      "argv": [
+        "tools/sunfs5b1_validate.py",
+        "native"
+      ],
+      "seed": 5967873,
+      "seed_usage": "fixed deterministic fixture bytes; no random fault schedules",
+      "rng": "virtio-rng-pci,disable-modern=on",
+      "runner_sha256": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169",
+      "env": {
+        "RUSTFLAGS": null,
+        "RUSTUP_TOOLCHAIN": null,
+        "CARGO_BUILD_TARGET": null,
+        "CARGO_TARGET_DIR": null,
+        "SOURCE_DATE_EPOCH": null
+      }
+    }
+  ]
+}

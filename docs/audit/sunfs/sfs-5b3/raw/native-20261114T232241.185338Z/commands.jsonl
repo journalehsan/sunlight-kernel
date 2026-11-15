@@ -1,0 +1,2 @@
+{"argv": ["cargo", "build", "-p", "sunlight-kernel", "--offline", "--locked", "--features", "sfs5b3-test"], "returncode": 0, "seconds": 0.3148848779965192, "log": "raw/native-20261114T232241.185338Z/guest-build.log"}
+{"argv": ["bash", "tools/make_hybrid_iso.sh", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b3/native-20261114T232241.185338Z/sunlight-kernel.elf", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b3/native-20261114T232241.185338Z/sfs5b3.iso"], "returncode": 0, "seconds": 1.2182163539691828, "log": "raw/native-20261114T232241.185338Z/iso-build.log"}

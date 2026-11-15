@@ -1,0 +1,101 @@
+{
+  "milestone": "SFS-5A",
+  "overall": "PARTIAL",
+  "complete": false,
+  "native_sunfs_writable_admission": "BLOCKED",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PARTIAL",
+    "G4": "PARTIAL",
+    "G5": "UNQUALIFIED",
+    "G6": "PARTIAL",
+    "G7": "PARTIAL",
+    "G8": "PARTIAL",
+    "G9": "PARTIAL",
+    "G10": "PASS"
+  },
+  "gate_evidence": {
+    "G1": [
+      "source-baseline.json",
+      "backend-capability-matrix.json"
+    ],
+    "G2": [
+      "block-io-contract.md"
+    ],
+    "G3": [
+      "virtio-block-audit.json",
+      "native-guest-tests.json"
+    ],
+    "G4": [
+      "dma-ownership.json",
+      "production-repairs.json"
+    ],
+    "G5": [
+      "timeout-fencing.json"
+    ],
+    "G6": [
+      "native-guest-tests.json",
+      "cpu-matrix.json"
+    ],
+    "G7": [
+      "durability-qualification.json"
+    ],
+    "G8": [
+      "security-review.json"
+    ],
+    "G9": [
+      "regression-results.json"
+    ],
+    "G10": [
+      "source-integrity.json",
+      "raw/verify-integrity.py"
+    ]
+  },
+  "scope": "legacy VirtIO x86_64 TCG disposable 4MiB block device; normal serialized BSP I/O, flush acknowledgments and final-cut crash/restart; no filesystem mount",
+  "local_date": "2026-11-15",
+  "timezone": "Asia/Tehran",
+  "incoming_revision": "22a5947f5fbd4ffe810aee5efee57b0ec18f8915",
+  "incoming_branch": "main",
+  "native_attempt": "raw/native-20261114T211015.477037Z",
+  "hosted_attempt": "raw/hosted-20261114T210550.299939Z",
+  "native_boots": 12,
+  "disposable_images": 6,
+  "configured_vcpus": [
+    1,
+    2,
+    4
+  ],
+  "executing_cpus": "BSP only; before AP startup",
+  "cache_modes": [
+    "writeback",
+    "none"
+  ],
+  "native_final_cut_restart": "PASS",
+  "native_timeout_late_dma": "NOT_RUN",
+  "runtime_dma_fence": "UNQUALIFIED",
+  "native_smp_concurrency": "NOT_RUN",
+  "physical_durability": "UNQUALIFIED",
+  "hosted_tests_per_profile": 54,
+  "hosted_crash_schedules_per_profile": 13142,
+  "storage_existing_regressions": 139,
+  "virtio_new_tests": 2,
+  "kernel_host_tests": 212,
+  "host_runner_broad_integrity": "FAIL: only RNG runner argument changed; compiled inputs separately verified unchanged",
+  "blockers": [
+    "authoritative native runtime DMA fencing and reset/generation receipts absent",
+    "native uncertainty/offline/partial/error metadata lost through bool/Io",
+    "queue-size allocation-fit validation absent beyond recorded default QEMU profile",
+    "geometry/config snapshot/physical-sector/write-cache identity qualification incomplete",
+    "unsupported/failed flush, timeout/late/duplicate completion, reset/removal faults not executed natively",
+    "per-barrier D/P/R/R0 crash cuts and active SMP/independent lifecycle progress not executed"
+  ],
+  "recommended_sfs5b": "native fence, geometry/error provenance, device-fault and active-SMP progress qualification; close remaining SFS5A gates before SunFS mounting",
+  "no_native_sunfs_mount": true,
+  "no_physical_formatting": true,
+  "no_root_migration": true,
+  "no_cpython": true,
+  "commit": false,
+  "push": false,
+  "integrity_verification": "python3 docs/audit/sunfs/sfs-5a/raw/verify-integrity.py"
+}

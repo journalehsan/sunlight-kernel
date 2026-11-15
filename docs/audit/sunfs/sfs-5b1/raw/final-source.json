@@ -1,0 +1,17 @@
+{
+  "Cargo.lock": "8eea7318fc7198418a7379f8d130af6bb4bae4c08bc2d0f584a25e6c175351cd",
+  "kernel/Cargo.toml": "518a21ab9e06d0503889adc07d1e86c17cd58895a35cb92458749cd3bdd5ff0a",
+  "kernel/src/main.rs": "261f695de4e3e417866f3c2f8e1f1d5dfd5836199195828a9d41c93c3ef1b27b",
+  "kernel/src/sfs5a_test.rs": "234e8c4b2429ce8f25ab1f1b434b17f4ca9c3a59bee7882d3099d6a0621eeef5",
+  "kernel/src/sfs5b1_test.rs": "ce18875f0e66d1f60ce878e07d32b685ef438d389238f2e8e322b274f4881328",
+  "sunlight-block/src/contract.rs": "49108646535ffe064554a5aaa41e2e4c50c175da09a8ef76c057a6ca5be0feb7",
+  "sunlight-block/src/lib.rs": "6ad3a7b68e13982c2454bc5ce8ee487fca7330230e1ed6e9cfd69fb9d0a622b0",
+  "sunlight-block/src/usb_msc.rs": "0c645f76b67726e184b4a50d9a7bc34beba106de9927c1750e03e2ec8005317e",
+  "sunlight-virtio/Cargo.toml": "642da4897e8a13f551c3c77ef16c986e610f1490a0f750fd7821da79281dbfdd",
+  "sunlight-virtio/src/blk.rs": "b4015880a8768a20431ae6ea5b29eb02223364060afbfa2a2cf03d87a1a2bd7d",
+  "tools/sunfs5a_validate.py": "372c58e0c2a15538c36cbbd39ac76faf1f17f20bf082737e1c2b3cab795ffe4b",
+  "tools/sunfs5b1_validate.py": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169",
+  ".cargo/config.toml": "185727c35b0d99ffb5332b5ef9f5cf5b7cea2b5e4376467f791f7b9d8571e854",
+  "rust-toolchain.toml": "973e644b5e87baf1e58d608c00ab077d5519c93e8c793244189e87529131b8b0",
+  "limine.conf": "02d6c90952cc3e8f6d3c1b561fb497931781ab8d74ab18830aaa868523a27432"
+}

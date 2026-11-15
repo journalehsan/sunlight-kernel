@@ -1,0 +1,30 @@
+{
+  "status": "UNQUALIFIED",
+  "safe_retention": "PARTIAL",
+  "virtio": {
+    "timeout": "50,000,000 polls; false/Io with uncertain latch",
+    "completion_certainty": "some/all/none of write may have taken effect; status not known",
+    "ownership": "request, descriptors and queue remain PMM allocated; no retry or reuse after timeout",
+    "fence": "MISSING",
+    "removal": "no hotplug/offline generation or cancellation acknowledgment",
+    "shutdown": "no teardown/reset/drain API; dropping driver does not release frames",
+    "late_completion": "host fake-ring tests only; native NOT_RUN"
+  },
+  "usb": {
+    "timeout": "two-second TSC deadline; missing calibration immediate expiration; controller dead",
+    "ownership": "pinned entire kernel lifetime; no timeout reclamation",
+    "fence": "UNQUALIFIED; BOT reset != DMA fence",
+    "removal": "port/readiness failure retires incarnation, hotplug not implemented"
+  },
+  "hosted": {
+    "image": "no bounded host syscall deadline",
+    "simulator": "explicit modeled new-session fence only"
+  },
+  "forward_progress": {
+    "bound": "finite driver polls; no wall-time guarantee for VirtIO",
+    "lock_context": "sys_file_sync releases scheduler before VFS, then synchronous device polling holds VFS/device locks; scheduler reaper can wait for same VFS lock while closing handles (close itself no disk I/O). No universal no-scheduler-critical-wait proof.",
+    "independent_progress": "native simultaneous lifecycle tests NOT_RUN",
+    "remedy_scope": "fence + device generation + lock-context qualification belongs to follow-up; no scheduler change authorized"
+  },
+  "mutation_policy": "future adapter must freeze on any uncertain/error write/flush and retain all allocations until qualified recovery"
+}

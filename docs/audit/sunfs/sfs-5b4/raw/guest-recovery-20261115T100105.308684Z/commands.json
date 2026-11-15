@@ -1,0 +1,58 @@
+[
+  {
+    "name": "limine",
+    "argv": [
+      "bash",
+      "tools/setup_limine.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/limine",
+      "v8.x"
+    ],
+    "returncode": 0,
+    "seconds": 39.06317518500009,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "build_cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "yazi",
+    "argv": [
+      "bash",
+      "tools/build_yazi.sh"
+    ],
+    "returncode": 0,
+    "seconds": 1000.654206921,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "build_cpu_affinity": [
+      0
+    ]
+  },
+  {
+    "name": "kernel",
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--offline",
+      "--locked",
+      "--features",
+      "sfs5b4-test"
+    ],
+    "returncode": 101,
+    "seconds": 444.3955545489998,
+    "environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "build_cpu_affinity": [
+      0
+    ]
+  }
+]

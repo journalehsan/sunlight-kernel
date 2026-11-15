@@ -1,0 +1,21 @@
+{
+  "version": "11.1.2",
+  "archive": "/tmp/sfs5b3-qemu-11.1.2.tar.xz",
+  "archive_sha256": "731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016",
+  "base_patch": "../sfs-5b4/qemu-async-access.patch",
+  "base_patch_sha256": "10e8e5ad93be11f99f3a3e6685a86371e31e19cfb578fc59e7bed0dcfa57bbca",
+  "patch": "qemu-async-worker.patch",
+  "patch_sha256": "8491e258511ea9c36c12505ede42852ac6691350938b498797eb658d0712cb37",
+  "source_tree": "/tmp/sfs5b5-qemu-src",
+  "build_tree": "/tmp/sfs5b5-qemu-build",
+  "binary": "/tmp/sfs5b5-qemu-build/qemu-system-x86_64",
+  "binary_sha256": "c5ec1bf289826bf574be185892aa5e9984c480abe144b0257152bc50eed9690f",
+  "build_command": [
+    "ninja",
+    "-j",
+    "2",
+    "qemu-system-x86_64"
+  ],
+  "system_emulator_changed": false,
+  "prior_binary_preserved": "/tmp/sfs5b4-qemu-build/qemu-system-x86_64 sha256 1abc7e5ab87b2e8965f258b9d31cfe42bae22d5b75be7c08ad61a71c386d2f29"
+}

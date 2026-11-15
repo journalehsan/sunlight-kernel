@@ -1,0 +1,728 @@
+virtio_set_status vdev 0x563f97daea70 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97daea70 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97daea70 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97d23680 val 3
+virtio_set_status vdev 0x563f97d23680 val 7
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0f97b0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0f97b0 sector 0 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0f97b0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0f97b0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0f9cd0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0f9cd0 sector 0 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0f9cd0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0f9cd0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0f3690 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0f3690 sector 0 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0f3690 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0f3690 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17fc20 in_num 1 out_num 2
+virtio_blk_handle_write vdev 0x563f97d23680 req 0x7f7fdc17fc20 sector 0 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17fc20 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17fc20 len 1 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc1800d0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc1800d0 sector 0 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc1800d0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc1800d0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc1803b0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc1803b0 sector 1 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc1803b0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc1803b0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc35ed70 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc35ed70 sector 2 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc35ed70 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc35ed70 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc35eff0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc35eff0 sector 3 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc35eff0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc35eff0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc35f2d0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc35f2d0 sector 4 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc35f2d0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc35f2d0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc182e50 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc182e50 sector 5 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc182e50 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc182e50 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc1831a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc1831a0 sector 6 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc1831a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc1831a0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc183490 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc183490 sector 7 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc183490 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc183490 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17e600 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17e600 sector 8 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17e600 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17e600 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17e880 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17e880 sector 9 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17e880 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17e880 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17eb00 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17eb00 sector 10 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17eb00 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17eb00 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17ed80 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17ed80 sector 11 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17ed80 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17ed80 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 12 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 13 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 14 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 15 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 16 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 17 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 18 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 19 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 20 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 21 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 22 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 23 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 24 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 25 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 26 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 27 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 28 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 29 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 30 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 31 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 32 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 33 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 34 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 35 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 36 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 37 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 38 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 39 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 40 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 41 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 42 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 43 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 44 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 45 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 46 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 47 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 48 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 49 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 50 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 51 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 52 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 53 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 54 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 55 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 56 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 57 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 58 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 59 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 60 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 61 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc17f110 sector 62 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc17f110 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc17f110 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0f95a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0f95a0 sector 63 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0f95a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0f95a0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 0 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 2 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 4 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 6 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 8 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 10 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 12 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 14 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 16 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc060570 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc060570 sector 18 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc060570 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc060570 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 20 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 22 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 24 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 26 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 28 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 30 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 32 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 34 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 36 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 38 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 40 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 42 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 44 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 46 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 48 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 50 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 52 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 54 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 56 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 58 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 60 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 62 nsectors 2
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 1025 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 4 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 8 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 12 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 16 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 20 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 24 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 28 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 32 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 36 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 40 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 44 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 48 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 52 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 56 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 60 nsectors 4
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 2049 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 8 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 16 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 24 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 32 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 40 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 48 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 56 nsectors 8
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 4097 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 16
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 8193 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 16 nsectors 16
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 8193 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 32 nsectors 16
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 8193 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 48 nsectors 16
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 8193 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 24
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 12289 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 24 nsectors 24
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 12289 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 48 nsectors 24
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 12289 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 32
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 16385 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 32 nsectors 32
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 16385 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 48
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 24577 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 48 nsectors 48
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 24577 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 64
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 32769 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc0605a0 sector 0 nsectors 64
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc0605a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc0605a0 len 32769 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtio_set_status vdev 0x563f97daea70 val 0
+virtio_set_status vdev 0x563f97daea70 val 0
+virtio_set_status vdev 0x563f97daea70 val 3
+virtio_set_status vdev 0x563f97daea70 val 7
+virtqueue_pop vq 0x563f97db0fa0 elem 0x7f7fdc35ebd0 in_num 1 out_num 0
+virtqueue_fill vq 0x563f97db0fa0 elem 0x7f7fdc35ebd0 len 40 idx 0
+virtqueue_flush vq 0x563f97db0fa0 count 1
+virtio_set_status vdev 0x563f97daea70 val 0
+virtio_set_status vdev 0x563f97daea70 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97d23680 val 0
+virtio_set_status vdev 0x563f97d23680 val 3
+virtio_set_status vdev 0x563f97d23680 val 7
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc3605f0 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc3605f0 sector 0 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc3605f0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc3605f0 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc2052a0 in_num 1 out_num 2
+virtio_blk_handle_write vdev 0x563f97d23680 req 0x7f7fdc2052a0 sector 63 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc2052a0 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc2052a0 len 1 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc208440 in_num 1 out_num 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc208440 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc208440 len 1 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1
+virtqueue_pop vq 0x563f97d4e2f0 elem 0x7f7fdc208710 in_num 2 out_num 1
+virtio_blk_handle_read vdev 0x563f97d23680 req 0x7f7fdc208710 sector 63 nsectors 1
+virtio_blk_req_complete vdev 0x563f97d23680 req 0x7f7fdc208710 status 0
+virtqueue_fill vq 0x563f97d4e2f0 elem 0x7f7fdc208710 len 513 idx 0
+virtqueue_flush vq 0x563f97d4e2f0 count 1

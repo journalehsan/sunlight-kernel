@@ -1,0 +1,1 @@
+First Python tar extraction stopped at tarfile.AbsoluteLinkError: roms/edk2/EmulatorPkg/Unix/Host/X11IncludeHack is a link to an absolute path. Configure then exited with missing configure; ninja had no build.ninja. Second attempt omitted absolute symlinks (unused ROM development include link), recorded in source integrity. No earlier QEMU source/build changed.

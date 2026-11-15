@@ -1,0 +1,203 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PASS",
+  "transport": "PCI legacy BAR0 port I/O; vendor 0x1af4/device 0x1001 in declared native fixture",
+  "queue": 0,
+  "layout": "split, 4096-byte legacy used-ring alignment",
+  "packed_supported": false,
+  "modern_block_supported": false,
+  "legacy_feature_width": 32,
+  "allowlist_bits": [
+    1,
+    5,
+    6,
+    9
+  ],
+  "features": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "offered": 1895853780,
+      "offered_hex": "0x71006ed4",
+      "accepted": 576,
+      "accepted_hex": "0x240",
+      "accepted_bits": [
+        6,
+        9
+      ],
+      "unaccepted_offered_bits": [
+        2,
+        4,
+        7,
+        10,
+        11,
+        13,
+        14,
+        24,
+        28,
+        29,
+        30
+      ],
+      "serial": "raw/native-20261114T223700.861380Z/cpu-1-writeback.serial.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "offered": 1895853780,
+      "offered_hex": "0x71006ed4",
+      "accepted": 576,
+      "accepted_hex": "0x240",
+      "accepted_bits": [
+        6,
+        9
+      ],
+      "unaccepted_offered_bits": [
+        2,
+        4,
+        7,
+        10,
+        11,
+        13,
+        14,
+        24,
+        28,
+        29,
+        30
+      ],
+      "serial": "raw/native-20261114T223700.861380Z/cpu-1-none.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "offered": 1895857876,
+      "offered_hex": "0x71007ed4",
+      "accepted": 576,
+      "accepted_hex": "0x240",
+      "accepted_bits": [
+        6,
+        9
+      ],
+      "unaccepted_offered_bits": [
+        2,
+        4,
+        7,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        28,
+        29,
+        30
+      ],
+      "serial": "raw/native-20261114T223700.861380Z/cpu-2-writeback.serial.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "offered": 1895857876,
+      "offered_hex": "0x71007ed4",
+      "accepted": 576,
+      "accepted_hex": "0x240",
+      "accepted_bits": [
+        6,
+        9
+      ],
+      "unaccepted_offered_bits": [
+        2,
+        4,
+        7,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        28,
+        29,
+        30
+      ],
+      "serial": "raw/native-20261114T223700.861380Z/cpu-2-none.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "offered": 1895857876,
+      "offered_hex": "0x71007ed4",
+      "accepted": 576,
+      "accepted_hex": "0x240",
+      "accepted_bits": [
+        6,
+        9
+      ],
+      "unaccepted_offered_bits": [
+        2,
+        4,
+        7,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        28,
+        29,
+        30
+      ],
+      "serial": "raw/native-20261114T223700.861380Z/cpu-4-writeback.serial.log"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "offered": 1895857876,
+      "offered_hex": "0x71007ed4",
+      "accepted": 576,
+      "accepted_hex": "0x240",
+      "accepted_bits": [
+        6,
+        9
+      ],
+      "unaccepted_offered_bits": [
+        2,
+        4,
+        7,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        28,
+        29,
+        30
+      ],
+      "serial": "raw/native-20261114T223700.861380Z/cpu-4-none.serial.log"
+    }
+  ],
+  "msix": "not enabled by this driver; legacy config offset 0x14",
+  "ring_reset": {
+    "bit": 40,
+    "negotiated": false,
+    "available": false
+  },
+  "version_1": {
+    "bit": 32,
+    "negotiated": false
+  },
+  "packed": {
+    "bit": 34,
+    "negotiated": false
+  },
+  "pci_bdf": "00:02.0",
+  "io_base": "0xc000",
+  "queue_size": "power-of-two in 4..256 by allocation guard; numeric native value not logged before reset",
+  "identity": "boot-local attachment incarnation 1; configured serial is harness identity, not persistent guest-read media identity",
+  "iommu": "no IOMMU isolation or translation teardown qualification",
+  "source_audit": [
+    "sunlight-virtio/src/{blk,pci}.rs",
+    "kernel/src/main.rs:1861..2190",
+    "kernel boot block initialization precedes smp::start_aps; no block IRQ completion handler found"
+  ]
+}

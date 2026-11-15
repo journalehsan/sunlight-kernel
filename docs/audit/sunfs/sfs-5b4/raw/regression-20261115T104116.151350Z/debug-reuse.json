@@ -1,0 +1,7 @@
+{
+  "original": "raw/regression-20261115T083526.956696Z",
+  "log_sha256": "314803e3fad15814a9852c90dcc4ccad77668171f6242c7bbc3a9f1cd7bcc144",
+  "source_before_sha256": "2869344c8da2c21f76787ace7235fd4030a6d707cc85acdfdf0c1825b4fd29d7",
+  "source_matches_current": true,
+  "qualification": "Earlier debug command executed in this milestone, not re-executed after cargo clean. Original full sweep interrupted; current complete source inventory matches its starting inventory."
+}

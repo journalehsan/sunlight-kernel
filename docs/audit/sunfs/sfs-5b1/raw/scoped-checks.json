@@ -1,0 +1,36 @@
+{
+  "format": {
+    "argv": [
+      "rustfmt",
+      "--check",
+      "--edition",
+      "2021",
+      "sunlight-block/src/contract.rs",
+      "sunlight-block/src/lib.rs",
+      "sunlight-block/src/usb_msc.rs",
+      "sunlight-virtio/src/blk.rs",
+      "kernel/src/sfs5b1_test.rs"
+    ],
+    "status": "PASS",
+    "log": "raw/format.log",
+    "scope": "modified crate modules and new native fixture; whole existing main.rs formatting not claimed"
+  },
+  "python": {
+    "argv": [
+      "python3",
+      "-m",
+      "py_compile",
+      "tools/sunfs5b1_validate.py",
+      "docs/audit/sunfs/sfs-5b1/derive.py"
+    ],
+    "status": "PASS"
+  },
+  "whitespace": {
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "status": "PASS"
+  }
+}

@@ -1,0 +1,1 @@
+{"argv": ["cargo", "build", "-p", "sunlight-kernel", "--offline", "--locked", "--features", "sfs5b4-test"], "returncode": 101, "start_ns": 19212173470051, "end_ns": 19216110146279, "log": "raw/guest-20261115T144520.565710Z/guest-build.log"}

@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "final_elf_sha256": "879ea1d4326c157df8434e9b313b82883d663bfc97ef304ce1e1670665ca683d",
+  "tested_elf_sha256": "879ea1d4326c157df8434e9b313b82883d663bfc97ef304ce1e1670665ca683d",
+  "same_binary": true,
+  "native": "raw/native-20261115T103331.975665Z/native-result.json",
+  "checks": "raw/regression-20261115T104116.151350Z/commands.jsonl"
+}

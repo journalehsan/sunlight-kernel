@@ -1,0 +1,1 @@
+before-protect pipe-write=1 errno=0 after-protect process-vm-readv=-1 errno=1 pipe-write=-1 errno=14

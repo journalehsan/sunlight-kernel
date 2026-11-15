@@ -1,0 +1,32 @@
+{
+  "status": "PARTIAL",
+  "virtio": {
+    "allocator": "kernel/src/main.rs init_block_and_fat: PMM alloc_frames(4), alloc_frame(); HHDM identity of frames retained",
+    "caller_memory": "never device-accessible; writes copied into request bounce page, successful reads copied out",
+    "created": "PMM frames permanently allocated before init",
+    "prepared": "CPU writes header/data/status and descriptor chain",
+    "submitted": "avail.idx publication with SeqCst fences then queue notify; device may access queue/request",
+    "completed": "exact next used.idx and head 0, CPU fence then status; valid completion releases request for serialized reuse",
+    "timed_out_uncertain": "latch uncertain=true, retain pages and descriptors, all later requests rejected",
+    "fencing": "UNQUALIFIED: no runtime fence API",
+    "fenced": "unreachable in present driver",
+    "retired": "no DMA unmap/free; kernel keeps allocations for lifetime, drop does not stop DMA",
+    "request_identity": "single head 0 with exact used-index progression; after uncertainty no slot reuse at all; no reusable request generations",
+    "late_completion": "may update retained old pages; cannot be accepted for a fresh request after quarantine",
+    "duplicate": "unexpected index before submit or invalid delta/head after submit poisons queue; malicious future DMA not prevented",
+    "limitations": [
+      "no actual device late-completion fault execution",
+      "no noncoherent DMA/IOMMU proof",
+      "fixed queue size lacks allocation-fit validation"
+    ]
+  },
+  "usb": {
+    "allocator": "kernel/src/usb_storage.rs PMM DMA_PAGES, pinned for kernel lifetime even rejected probe",
+    "owner": "kernel/src/usb_xhci.rs Controller, private staging buffers; BOT caller stack never directly DMA mapped",
+    "completion": "event slot, endpoint and TRB pointer; actual length/residue checked before copy",
+    "timeout": "dead=true; reset/clear_halt/bulk return Offline; allocation retained",
+    "fence": "controller halt/recovery paths exist but no SFS5A authoritative fencing execution"
+  },
+  "states_are_documentary": true,
+  "redundant_production_state_machine": false
+}

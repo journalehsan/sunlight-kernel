@@ -1,0 +1,43 @@
+{
+  "status": "PASS",
+  "raw": "raw/regression-20261115T125135.523990Z",
+  "freshly_executed": {
+    "sunfs_debug": {"tests_passed": 54, "failed": 0, "log": "hosted-debug.log"},
+    "sunfs_release": {"tests_passed": 54, "failed": 0, "log": "hosted-release.log"},
+    "storage_block_fat_fs_virtio": {"tests_passed": 208, "failed": 0, "log": "storage.log",
+      "note": "183 inherited + 25 new quiesce tests"},
+    "kernel_host_lifecycle": {"tests_passed": 212, "failed": 0, "log": "kernel-lifecycle.log"},
+    "no_std_check": {"returncode": 0, "log": "no-std.log"},
+    "rustfmt_check": {"returncode": 0, "log": "format.log",
+      "files": ["sunlight-block/src/quiesce.rs", "sunlight-block/src/lib.rs", "sunlight-virtio/src/blk.rs"]},
+    "clippy": {"returncode": 0, "log": "clippy.log",
+      "scope": "sunlight-virtio + sunlight-block, x86_64-unknown-none",
+      "warnings": "57 pre-existing style warnings in ipc/netop.rs and neighbours; no new warnings from this milestone"},
+    "whitespace": {"returncode": 0, "log": "whitespace.log"},
+    "kernel_default_build": {"returncode": 0, "log": "kernel-default-build-retry3.log"},
+    "kernel_diagnostic_build": {"returncode": 0, "log": "diagnostic-retry3.log"}
+  },
+  "reused_not_remeasured": {
+    "crash_schedules_per_profile": "13,142 inherited from the unchanged SunFS corpus; the count is not printed by the runner and was not re-measured",
+    "sfs_5a_to_5b4_native_results": "not re-executed; their evidence namespaces are untouched"
+  },
+  "failed_attempts_preserved": [
+    {"log": "kernel-default-build.log", "returncode": 101,
+     "cause": "ENOSPC moving a rustc dep-graph inside target/.../incremental"},
+    {"log": "diagnostic.log", "returncode": 101,
+     "cause": "same ENOSPC, twice"},
+    {"log": "kernel-default-build-retry.log", "returncode": 101,
+     "cause": "rust-lld SIGBUS at link"},
+    {"log": "diagnostic-retry.log", "returncode": 101, "cause": "rust-lld SIGBUS at link"},
+    {"log": "kernel-default-build-retry2.log", "returncode": 101, "cause": "rust-lld SIGBUS at link"}
+  ],
+  "diagnosis": {
+    "finding": "target/x86_64-unknown-none/debug/incremental had grown to 5.1 GiB and was corrupt; rustc reported ENOSPC on dep-graph renames and rust-lld then died with SIGBUS",
+    "not_a_source_defect": true,
+    "disk_at_time": "45-46 GiB free, 91% used; a 200 MiB probe write to target/ succeeded",
+    "remediation": "removed only the build cache directory target/x86_64-unknown-none/debug/incremental; no source, evidence or unrelated build output was deleted",
+    "result": "both builds then succeeded with CARGO_INCREMENTAL=0"
+  },
+  "environment": {"CARGO_BUILD_JOBS": 2, "RUST_TEST_THREADS": 1, "CARGO_INCREMENTAL": 0,
+                  "target": "x86_64-unknown-linux-gnu for host tests, x86_64-unknown-none for kernel"}
+}

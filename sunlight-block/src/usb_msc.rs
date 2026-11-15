@@ -231,6 +231,7 @@ pub struct Disk<T> {
     bot: Bot<T>,
     blocks: u64,
     online: bool,
+    incarnation: u64,
 }
 impl<T: Transport> Disk<T> {
     pub fn initialize(transport: T) -> Result<Self, Error> {
@@ -238,6 +239,7 @@ impl<T: Transport> Disk<T> {
             bot: Bot::new(transport),
             blocks: 0,
             online: true,
+            incarnation: crate::contract::new_incarnation().ok_or(Error::Offline)?,
         };
         let mut inquiry = [0; 36];
         disk.scsi(&[0x12, 0, 0, 0, 36, 0], true, &mut inquiry)?;
@@ -284,13 +286,13 @@ impl<T: Transport> Disk<T> {
     }
     fn ready(&mut self) -> Result<(), BlockError> {
         if !self.online {
-            return Err(BlockError::Io);
+            return Err(BlockError::Unavailable);
         }
         // No cache may sit above removable media without checking generation.
         // Any runtime error permanently retires this incarnation until reboot.
         if self.scsi(&[0; 6], false, &mut []).is_err() {
             self.online = false;
-            return Err(BlockError::Io);
+            return Err(BlockError::Uncertain);
         }
         Ok(())
     }
@@ -305,12 +307,38 @@ impl<T: Transport> Disk<T> {
         cdb[8] = 1;
         if self.scsi(&cdb, opcode == 0x28, bytes).is_err() {
             self.online = false;
-            return Err(BlockError::Io);
+            return Err(BlockError::Uncertain);
         }
         Ok(())
     }
 }
 impl<T: Transport> BlockDevice for Disk<T> {
+    fn geometry(&self) -> Result<crate::contract::Geometry, BlockError> {
+        use crate::contract::*;
+        if !self.online {
+            return Err(BlockError::Unavailable);
+        }
+        Ok(Geometry {
+            identity: DeviceIdentity {
+                backend: Backend::UsbBot,
+                incarnation: self.incarnation,
+            },
+            persistent_identity: Knowledge::Unknown,
+            logical_block: 512,
+            physical_block: Knowledge::Unknown,
+            blocks: self.blocks,
+            max_blocks: 1,
+            max_transfer: 512,
+            io_alignment: 512,
+            buffer_alignment: 1,
+            read_only: Knowledge::Unknown,
+            flush: Knowledge::Unknown,
+            fua: Knowledge::Unsupported,
+            write_cache: Knowledge::Unknown,
+            fencing: FenceCapability::TransportResetOnly,
+        })
+    }
+
     fn read_block(&mut self, lba: u64, bytes: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError> {
         // Failed/short DMA data never becomes caller-visible.
         let mut temporary = [0; BLOCK_SIZE];
@@ -328,7 +356,7 @@ impl<T: Transport> BlockDevice for Disk<T> {
             .is_err()
         {
             self.online = false;
-            return Err(BlockError::Io);
+            return Err(BlockError::Uncertain);
         }
         Ok(())
     }
@@ -616,10 +644,10 @@ mod tests {
             replies.extend([reply(0, &[], 1), reply(3, &sense(key, asc), 0)]);
             let mut disk = Disk::initialize(Fake::new(replies)).unwrap();
             let mut bytes = [0xee; 512];
-            assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Io));
+            assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Uncertain));
             assert_eq!(bytes, [0xee; 512]);
-            assert_eq!(disk.write_block(0, &bytes), Err(BlockError::Io));
-            assert_eq!(disk.flush(), Err(BlockError::Io));
+            assert_eq!(disk.write_block(0, &bytes), Err(BlockError::Unavailable));
+            assert_eq!(disk.flush(), Err(BlockError::Unavailable));
             assert!(disk.bot.transport.replies.is_empty());
         }
     }
@@ -629,7 +657,7 @@ mod tests {
         replies.extend([reply(0, &[], 0), reply(0x28, &[4; 511], 0)]);
         let mut disk = Disk::initialize(Fake::new(replies)).unwrap();
         let mut bytes = [0xee; 512];
-        assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Io));
+        assert_eq!(disk.read_block(0, &mut bytes), Err(BlockError::Uncertain));
         assert_eq!(bytes, [0xee; 512]);
         assert_eq!(Sense::parse(&[]), Err(Error::Status));
         assert_eq!(Sense::parse(&[0; 18]), Err(Error::Status));

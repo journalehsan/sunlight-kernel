@@ -1,0 +1,12 @@
+rustc-version.log 0
+cargo-version.log 0
+guest-build.log 0
+iso-build.log 0
+qemu-version.log 0
+cpu-1-writeback PASS
+cpu-1-none PASS
+cpu-2-writeback PASS
+cpu-2-none PASS
+cpu-4-writeback PASS
+cpu-4-none PASS
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b2/raw/native-20261114T223700.861380Z

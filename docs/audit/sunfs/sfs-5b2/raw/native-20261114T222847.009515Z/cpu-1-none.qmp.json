@@ -1,0 +1,30 @@
+{
+  "greeting": {
+    "QMP": {
+      "version": {
+        "qemu": {
+          "micro": 2,
+          "minor": 1,
+          "major": 11
+        },
+        "package": ""
+      },
+      "capabilities": [
+        "oob"
+      ]
+    }
+  },
+  "devices": {
+    "return": [
+      {
+        "name": "virtio-blk",
+        "path": "/machine/peripheral-anon/device[0]/virtio-backend"
+      },
+      {
+        "name": "virtio-rng",
+        "path": "/machine/peripheral-anon/device[1]/virtio-backend"
+      }
+    ]
+  },
+  "error": "TimeoutError('timed out')"
+}

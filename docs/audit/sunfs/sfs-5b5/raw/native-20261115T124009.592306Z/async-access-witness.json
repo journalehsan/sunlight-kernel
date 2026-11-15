@@ -1,0 +1,150 @@
+{
+  "status": "PASS",
+  "cases": [
+    {
+      "tag": "cpu-1-writeback-async-r0",
+      "mode": "async",
+      "status": "PASS",
+      "checks": {
+        "guest_handshake": true,
+        "guest_timeout": true,
+        "guest_admission_closed": true,
+        "guest_reset_ack": true,
+        "guest_terminal": true,
+        "guest_progress": true,
+        "device_access_entered": true,
+        "device_reset_entered": true,
+        "observed_reset_while_active": true,
+        "iterations_advanced_during_reset": true,
+        "quiescence_order": true,
+        "graph_acyclic": true,
+        "no_access_after_ack": true,
+        "guest_reached_ready": true
+      },
+      "overlap": {
+        "proven": true,
+        "iterations_at_reset": 11476592,
+        "iterations_observed_by_worker": 11476593,
+        "iterations_after_reset_wait": 11476662,
+        "advanced_during_reset": 70,
+        "reset_ns": 11747014669288,
+        "worker_observed_ns": 11747014684500,
+        "acknowledged_ns": 11747014776843,
+        "model": "INSTRUMENTED_QEMU genuine worker thread, BQL main thread"
+      },
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "post_ack_access": false,
+      "nodes": 29,
+      "edges": 31,
+      "ready": true,
+      "elapsed_s": 10.621,
+      "cpu": 1,
+      "cache": "writeback"
+    },
+    {
+      "tag": "cpu-1-writeback-async-r1",
+      "mode": "async",
+      "status": "PASS",
+      "checks": {
+        "guest_handshake": true,
+        "guest_timeout": true,
+        "guest_admission_closed": true,
+        "guest_reset_ack": true,
+        "guest_terminal": true,
+        "guest_progress": true,
+        "device_access_entered": true,
+        "device_reset_entered": true,
+        "observed_reset_while_active": true,
+        "iterations_advanced_during_reset": true,
+        "quiescence_order": true,
+        "graph_acyclic": true,
+        "no_access_after_ack": true,
+        "guest_reached_ready": true
+      },
+      "overlap": {
+        "proven": true,
+        "iterations_at_reset": 10083151,
+        "iterations_observed_by_worker": 10083152,
+        "iterations_after_reset_wait": 10083261,
+        "advanced_during_reset": 110,
+        "reset_ns": 11758296517647,
+        "worker_observed_ns": 11758296533205,
+        "acknowledged_ns": 11758296628947,
+        "model": "INSTRUMENTED_QEMU genuine worker thread, BQL main thread"
+      },
+      "quiescence": {
+        "access_exited": 8,
+        "callback_quiesced": 9,
+        "worker_joined": 10,
+        "mapping_released": 11,
+        "reset_acknowledged": 13
+      },
+      "post_ack_access": false,
+      "nodes": 29,
+      "edges": 31,
+      "ready": true,
+      "elapsed_s": 10.82,
+      "cpu": 1,
+      "cache": "writeback"
+    },
+    {
+      "tag": "cpu-1-writeback-async-negative-r0",
+      "mode": "async-negative",
+      "status": "PASS",
+      "checks": {
+        "guest_handshake": true,
+        "guest_timeout": true,
+        "guest_admission_closed": true,
+        "guest_reset_ack": true,
+        "guest_terminal": true,
+        "guest_progress": true,
+        "device_access_entered": true,
+        "device_reset_entered": true,
+        "observed_reset_while_active": true,
+        "iterations_advanced_during_reset": true,
+        "negative_post_ack_access": true,
+        "negative_quiescence_order_violated": true,
+        "negative_graph_cycle": true,
+        "guest_reached_ready": true
+      },
+      "overlap": {
+        "proven": true,
+        "iterations_at_reset": 6824680,
+        "iterations_observed_by_worker": 6824681,
+        "iterations_after_reset_wait": 6824776,
+        "advanced_during_reset": 96,
+        "reset_ns": 11769377894602,
+        "worker_observed_ns": 11769377932174,
+        "acknowledged_ns": 11769378021131,
+        "model": "INSTRUMENTED_QEMU genuine worker thread, BQL main thread"
+      },
+      "quiescence": {
+        "access_exited": 10,
+        "callback_quiesced": null,
+        "worker_joined": null,
+        "mapping_released": 12,
+        "reset_acknowledged": 8
+      },
+      "post_ack_access": true,
+      "nodes": 29,
+      "edges": 29,
+      "ready": true,
+      "elapsed_s": 10.62,
+      "cpu": 1,
+      "cache": "writeback"
+    }
+  ],
+  "true_simultaneous_access_reset": "PASS",
+  "scope": "instrumented QEMU 11.1.2 TCG, legacy PCI virtio-blk, split queue 0",
+  "not_claimed": [
+    "physical DMA engine",
+    "IOMMU fence",
+    "hardware persistence"
+  ]
+}

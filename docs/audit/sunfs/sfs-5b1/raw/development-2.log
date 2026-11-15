@@ -1,0 +1,78 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-block v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling sunlight-virtio v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.52s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_block-a43320f93306493e)
+
+running 43 tests
+test contract::tests::normal_exactly_once_retirement ... ok
+test contract::tests::t11_late_and_t18_quarantine ... ok
+test contract::tests::t12_duplicate ... ok
+test contract::tests::t14_wrong_media ... ok
+test contract::tests::t13_wrong_queue ... ok
+test contract::tests::t16_wrong_resources ... ok
+test contract::tests::t17_reuse_old_identity ... ok
+test contract::tests::t19_exhaustion ... ok
+test contract::tests::t1_invalid_geometry ... ok
+test contract::tests::t20_removal_and_shutdown ... ok
+test contract::tests::t2_overflow ... ok
+test contract::tests::t3_alignment ... ok
+test contract::tests::t4_oversized_and_zero_and_buffer ... ok
+test partition::tests::adapter_rejects_relative_boundary_before_forwarding ... ok
+test partition::tests::bounded_reads_writes_and_cache ... ok
+test partition::tests::flush_propagates_failure ... ok
+test partition::tests::legacy_superfloppy_and_sector_constraint ... ok
+test partition::tests::rejects_gpt_corruption_in_both_copies ... ok
+test partition::tests::rejects_bad_mbr_layouts ... ok
+test registry::tests::identical_extents_on_usb_and_virtio_keep_distinct_parents ... ok
+test tests::cache_serves_repeat_reads_and_writes_back_on_flush ... ok
+test tests::memdisk_geometry_is_volatile_and_incarnations_differ ... ok
+test partition::tests::rejects_crc_valid_unsafe_gpt_geometry ... ok
+test tests::null_device_rejects_everything ... ok
+test registry::tests::unknown_stale_replacement_and_exhausted_ids ... ok
+test partition::tests::valid_mbr_and_gpt ... ok
+test registry::tests::enumerates_fat_and_unknown_partitions_with_parent_and_bounds ... ok
+test usb_msc::tests::reject_4kn_and_read_capacity_16_sentinel ... ok
+test usb_msc::tests::csw_stall_cleared_and_retried_once ... ok
+test usb_msc::tests::runtime_not_ready_and_unit_attention_retire_media_and_preserve_read_buffer ... ok
+test usb_msc::tests::scsi_initialization_read_write_sync_and_bounds ... ok
+test tests::cache_flushes_dirty_slot_on_collision_evict ... ok
+test usb_msc::tests::command_wrapper_wire_format_and_bounds ... ok
+test usb_msc::tests::short_data_and_cbw_never_report_success ... ok
+test usb_msc::tests::initial_unit_attention_is_bounded_and_consumed_before_registration ... ok
+test usb_msc::tests::interface_bulk_endpoint_validation ... ok
+test tests::memdisk_round_trips_and_bounds_checks ... ok
+test usb_msc::tests::short_scsi_read_and_sense_failure_do_not_publish_stale_bytes ... ok
+test usb_msc::tests::status_signature_tag_length_residue_and_phase_errors ... ok
+test usb_msc::tests::success_tags_increase_and_failed_status_is_not_transport_reset ... ok
+test usb_msc::tests::tag_exhaustion_does_not_wrap ... ok
+test usb_msc::tests::timeout_bounded_recovery_and_no_replay ... ok
+test partition::tests::truncated_tables_and_all_single_byte_gpt_mutations_fail_closed ... ok
+
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_virtio-dda8c280486cb50a)
+
+running 15 tests
+test blk::ownership_tests::duplicate_before_submission_freezes_before_buffer_copy ... ok
+test blk::ownership_tests::queue_allocation_bounds ... ok
+test blk::ownership_tests::late_completion_must_not_authorize_new_request ... ok
+test blk::ownership_tests::ring_index_wrap_is_separate_from_generation_exhaustion ... ok
+test blk::ownership_tests::reused_wire_head_has_no_generation_echo_demonstrated_limit ... ok
+test blk::ownership_tests::t10_uncertain_flush_quarantines ... ok
+test blk::ownership_tests::t6_failed_write_and_read_do_not_invent_prefix ... ok
+test blk::ownership_tests::t5_legacy_length_not_authoritative ... ok
+test blk::ownership_tests::t16_descriptor_ownership_and_bad_status ... ok
+test blk::ownership_tests::t7_uncertain_write_and_retention ... ok
+test blk::ownership_tests::t8_unsupported_flush_not_submitted ... ok
+test blk::ownership_tests::valid_completion_and_flush_provenance ... ok
+test blk::ownership_tests::timeout_must_not_reuse_dma_page_or_descriptors ... ok
+test blk::ownership_tests::t15_invalid_used_head_and_index ... ok
+test blk::ownership_tests::t9_failed_flush_preserves_write_uncertainty ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

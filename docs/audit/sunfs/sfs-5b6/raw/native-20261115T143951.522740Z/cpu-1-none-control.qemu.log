@@ -1,0 +1,35 @@
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=1 ns=19098837913836 thread=main stage=MAPPING_ACQUIRED iter=0 bytes=0 extra=16
+SFS5B5 seq=2 ns=19098842547355 thread=main stage=REQUEST_FETCHED iter=0 bytes=0 extra=0
+SFS5B5 seq=3 ns=19098842875867 thread=worker stage=ACCESS_ENTERED iter=0 bytes=0 extra=16
+SFS5B5 seq=4 ns=19098855099069 thread=main stage=ACCESS_ACTIVE iter=1585 bytes=25360 extra=1585
+SFS5B4 seq=1 ns=19098855119123 epoch=1 queue=0 head=0 stage=GUEST_WITNESS_PUBLISHED bytes=1
+SFS5B4 seq=2 ns=19098855123547 epoch=1 queue=0 head=0 stage=REQUEST_OUTSTANDING bytes=0
+SFS5B5 held head=0 mode=async worker=started backend=not-submitted used=not-published
+SFS5B5 seq=5 ns=19099354329410 thread=main stage=RESET_ENTERED iter=17091236 bytes=273459776 extra=0
+SFS5B5 seq=6 ns=19099354373052 thread=worker stage=ACCESS_OBSERVED_RESET_ACTIVE iter=17091237 bytes=273459792 extra=17091237
+SFS5B5 seq=7 ns=19099354403931 thread=main stage=ACCESS_ACTIVE_DURING_RESET iter=17091427 bytes=273462832 extra=191
+SFS5B5 seq=8 ns=19099354424410 thread=worker stage=ACCESS_EXITED iter=17091428 bytes=273462848 extra=17091428
+SFS5B5 seq=9 ns=19099354450152 thread=main stage=CALLBACK_QUIESCED iter=17091428 bytes=273462848 extra=20
+SFS5B5 seq=10 ns=19099354486001 thread=main stage=WORKER_JOINED iter=17091428 bytes=273462848 extra=0
+SFS5B5 seq=11 ns=19099354498693 thread=main stage=MAPPING_RELEASED iter=17091428 bytes=273462848 extra=0
+SFS5B5 seq=12 ns=19099362490978 thread=main stage=OLD_EPOCH_QUIESCED iter=17091428 bytes=273462848 extra=0
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B5 seq=13 ns=19099371697617 thread=main stage=RESET_ACKNOWLEDGED iter=17091428 bytes=273462848 extra=0
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0

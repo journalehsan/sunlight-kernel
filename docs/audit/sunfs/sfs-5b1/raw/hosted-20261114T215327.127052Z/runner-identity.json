@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "tools/sunfs5b1_validate.py",
+    "hosted"
+  ],
+  "seed": 5967873,
+  "seed_usage": "fixed deterministic fixture bytes; no random fault schedules",
+  "rng": "virtio-rng-pci,disable-modern=on",
+  "runner_sha256": "478620941c56df33cce1dcdcaeb59e0fa243dcc04dab5554a72cbc86a25eb169",
+  "env": {
+    "RUSTFLAGS": null,
+    "RUSTUP_TOOLCHAIN": null,
+    "CARGO_BUILD_TARGET": null,
+    "CARGO_TARGET_DIR": null,
+    "SOURCE_DATE_EPOCH": null
+  }
+}

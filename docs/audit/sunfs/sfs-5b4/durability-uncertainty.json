@@ -1,0 +1,9 @@
+{
+  "status": "PARTIAL",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json",
+  "uncertain_write": "Completion::Uncertain, Amount::Unknown, Durability::Uncertain; first receipt retained across reset and closed admission",
+  "successful_controls": "virtual flush/readback only; physical persistence UNQUALIFIED",
+  "failed_write": "fresh HOST_MODEL driver error-provenance tests",
+  "uncertain_flush": "fresh HOST_MODEL flush timeout/error tests; native reset cut NOT_RUN",
+  "reset_acknowledgment_is_durable_success": false
+}

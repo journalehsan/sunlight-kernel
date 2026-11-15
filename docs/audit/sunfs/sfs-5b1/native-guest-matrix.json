@@ -1,0 +1,226 @@
+{
+  "milestone": "SFS-5B.1",
+  "scope": "native contract and logical ownership; no authoritative fencing, SunFS mount, concurrent SMP or physical durability qualification",
+  "source_manifest": "raw/hosted-20261114T215327.127052Z/source-before.json",
+  "runner": "tools/sunfs5b1_validate.py",
+  "runner_seed_label": "0x5b1001 is a fixed scenario label, not a PRNG input",
+  "fault_seed": "none: deterministic injected tuples and explicit boundary cases",
+  "status": "PARTIAL",
+  "normal_fixture_status": "PASS",
+  "attempts": [
+    "raw/native-20261114T215318.290984Z/native-result.json"
+  ],
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-1-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-1-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-2-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-2-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-4-writeback-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 4,
+      "cache": "writeback",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-4-writeback-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-1-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-1-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-2-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-2-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "restart": false,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-4-none-initial.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true,
+      "before_sha256": "b59cb88b5cbe683f6caea5dd134f92144c795e94375fc7733d7d6ac69ba3edf3",
+      "after_sha256": "5e81436b0c021496deed030def319f7e0fe9f99acd75fce065b282979009c729"
+    },
+    {
+      "cpu": 4,
+      "cache": "none",
+      "restart": true,
+      "status": "PASS",
+      "returncode": -9,
+      "serial": "raw/native-20261114T215318.290984Z/cpu-4-none-restart.serial.log",
+      "termination": "SIGKILL after acknowledged cut",
+      "host_exact_image": true
+    }
+  ],
+  "supplemental_native_attempts": [
+    "raw/native-negative-20261114T220213.398130Z/negative-native-result.json"
+  ],
+  "supplemental_native": {
+    "status": "PASS",
+    "cases": [
+      {
+        "case": "queue512",
+        "status": "PASS",
+        "expected": "[BLK]  virtio-blk init failed",
+        "observed": "[BLK]  virtio-blk init failed",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/queue512.serial.log",
+        "image_unchanged": true,
+        "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+        "actual_block_dma": false,
+        "completion_scope": "native initialization guard",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      },
+      {
+        "case": "logical4096",
+        "status": "PASS",
+        "expected": "[BLK]  virtio-blk init failed",
+        "observed": "[BLK]  virtio-blk init failed",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/logical4096.serial.log",
+        "image_unchanged": true,
+        "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+        "actual_block_dma": false,
+        "completion_scope": "native initialization guard",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      },
+      {
+        "case": "readonly",
+        "status": "PASS",
+        "expected": "Rejected(ReadOnly)",
+        "observed": "Rejected(ReadOnly)",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/readonly.serial.log",
+        "image_unchanged": true,
+        "image_sha256": "e56d69a36098d85c525133521a6a1772902eb1812363b06a92d1f4d5b360016f",
+        "actual_block_dma": true,
+        "completion_scope": "native typed pre-submission readonly refusal",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      },
+      {
+        "case": "flush-ioerr",
+        "status": "PASS",
+        "expected": "left: Failed",
+        "observed": "left: Failed",
+        "returncode": -9,
+        "serial": "raw/native-negative-20261114T220213.398130Z/flush-ioerr.serial.log",
+        "image_unchanged": false,
+        "image_sha256": "92bf6bab87e5ec0397850bb0e2350ab61f02e4cd0834d021f0d07b0de4151a11",
+        "actual_block_dma": true,
+        "completion_scope": "native expected assertion at fixture; full post-error receipt/owner dump unavailable",
+        "retirement": "native state not directly printed; driver source + separate hosted assertions only",
+        "fencing_claim": false
+      }
+    ]
+  },
+  "scenarios": {
+    "geometry": "PASS",
+    "capabilities": "PASS",
+    "read_write_flush": "PASS",
+    "invalid_request_before_submission": "PASS",
+    "receipt_provenance": "PASS",
+    "software_request_identity": "PASS",
+    "native_quarantine_fault": "NOT_RUN",
+    "native_unsupported_flush": "NOT_RUN",
+    "native_failed_flush": "PARTIAL",
+    "native_stale_completion_fault": "NOT_RUN"
+  },
+  "image_safety": "new exclusive regular4MiB files under ignored target/sfs5b1; capacity and marker guarded before first write; sector60 added to original SFS5A targets; lossless gzip images retained",
+  "crash_scope": "host SIGKILL after full acknowledged final cut; exact entire image and cold restart, not intermediate barrier cuts",
+  "actual_dma": "normal VirtIO read/write/flush plus blkdebug flush EIO; no injected late DMA"
+}

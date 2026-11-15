@@ -1,0 +1,233 @@
+{
+  "attempts": [
+    {
+      "attempt": "native-20261115T082119.527694Z",
+      "input_integrity": {
+        "status": "FAIL",
+        "changed": [
+          "kernel/src/sfs5b4_test.rs"
+        ]
+      },
+      "qualifies_final_source": false,
+      "native_status": "BLOCKED",
+      "native_boots": 0,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T082314.232767Z",
+      "input_integrity": {
+        "status": "FAIL",
+        "changed": [
+          "tools/sunfs5b4_validate.py",
+          "kernel/src/sfs5b4_test.rs"
+        ]
+      },
+      "qualifies_final_source": false,
+      "native_status": "PARTIAL",
+      "native_boots": 1,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T082417.376555Z",
+      "input_integrity": {
+        "status": "FAIL",
+        "changed": [
+          "kernel/src/sfs5b4_test.rs"
+        ]
+      },
+      "qualifies_final_source": false,
+      "native_status": "PARTIAL",
+      "native_boots": 1,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T082534.493274Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": false,
+      "native_status": "PASS",
+      "native_boots": 1,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T082656.628926Z",
+      "input_integrity": {
+        "status": "FAIL",
+        "changed": [
+          "sunlight-virtio/src/blk.rs"
+        ]
+      },
+      "qualifies_final_source": false,
+      "native_status": "PASS",
+      "native_boots": 42,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T083227.341613Z",
+      "input_integrity": {
+        "status": "FAIL",
+        "changed": [
+          "sunlight-virtio/src/blk.rs"
+        ]
+      },
+      "qualifies_final_source": false,
+      "native_status": "PASS",
+      "native_boots": 42,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T083525.831072Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PASS",
+      "native_boots": 42,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T085640.621413Z",
+      "input_integrity": "NOT_FINISHED",
+      "qualifies_final_source": false,
+      "native_status": "PARTIAL",
+      "native_boots": 23,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "native-20261115T103331.975665Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PASS",
+      "native_boots": 42,
+      "device_model_qualification": "see raw/observer-gap-v1/finding.json; v1 QEMU runs excluded from final model qualification"
+    },
+    {
+      "attempt": "regression-20261115T082158.218540Z",
+      "input_integrity": {
+        "status": "FAIL",
+        "changed": [
+          "kernel/src/sfs5b4_test.rs",
+          "tools/sunfs5b4_validate.py",
+          "sunlight-virtio/src/blk.rs"
+        ]
+      },
+      "qualifies_final_source": false,
+      "native_status": null,
+      "native_boots": 0,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-20261115T083228.489124Z",
+      "input_integrity": "NOT_FINISHED",
+      "qualifies_final_source": false,
+      "native_status": null,
+      "native_boots": 0,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-20261115T083526.956696Z",
+      "input_integrity": "NOT_FINISHED",
+      "qualifies_final_source": false,
+      "native_status": null,
+      "native_boots": 0,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-20261115T104116.151350Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": null,
+      "native_boots": 0,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-native-sfs5b1-20261115T082821.534289Z",
+      "input_integrity": {
+        "status": "FAIL",
+        "changed": [
+          "sunlight-virtio/src/blk.rs"
+        ]
+      },
+      "qualifies_final_source": false,
+      "native_status": "PASS",
+      "native_boots": 12,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-native-sfs5b1-20261115T083528.074339Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PASS",
+      "native_boots": 12,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-native-sfs5b2-20261115T083546.699566Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PARTIAL",
+      "native_boots": 6,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-native-sfs5b2-20261115T084155.474500Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PARTIAL",
+      "native_boots": 6,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-native-sfs5b2-20261115T085550.587714Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PASS",
+      "native_boots": 6,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-native-sfs5b3-20261115T084125.173066Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PASS",
+      "native_boots": 18,
+      "device_model_qualification": "separate prior milestone scope"
+    },
+    {
+      "attempt": "regression-native-sfs5b3-20261115T084328.964388Z",
+      "input_integrity": {
+        "status": "PASS",
+        "changed": []
+      },
+      "qualifies_final_source": true,
+      "native_status": "PASS",
+      "native_boots": 18,
+      "device_model_qualification": "separate prior milestone scope"
+    }
+  ],
+  "rule": "input FAIL and pre-repair runs remain excluded even if scoped assertions passed"
+}

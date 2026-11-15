@@ -6,7 +6,10 @@ use crate::capability::CapabilityBroker;
 use crate::sched::Scheduler;
 use sunlight_ipc::vfs_rpc::registration::{EndpointOwner, Registry};
 use sunlight_ipc::vfs_rpc::{lifecycle::Caller, registration::Registration};
-use sunlight_ipc::vfs_rpc::{pending_table::{PrepareError, Retired, Table}, Transfer};
+use sunlight_ipc::vfs_rpc::{
+    pending_table::{PrepareError, Retired, Table},
+    Transfer,
+};
 
 /// One boot-lived owner and one serialization point for registration and local
 /// namespace policy and pending resources. Never recreate this owner when a
@@ -61,7 +64,10 @@ impl Runtime {
         if self.registry.active() != Some(identity.registration) {
             return Err(PrepareError::Resource(ResourceError::StaleNamespace));
         }
-        let namespace = self.namespaces.lookup(identity).map_err(PrepareError::Resource)?;
+        let namespace = self
+            .namespaces
+            .lookup(identity)
+            .map_err(PrepareError::Resource)?;
         Resources::admit_stat(&mut self.pending, identity, &namespace, path)
     }
 }
@@ -179,7 +185,10 @@ pub(super) fn admit_stat(
     caps: &CapabilityBroker,
 ) -> Result<Transfer, StatAdmissionError> {
     revalidate(identity, sched, caps).map_err(|_| StatAdmissionError::Identity)?;
-    RUNTIME.lock().admit_stat(identity, path).map_err(StatAdmissionError::Prepare)
+    RUNTIME
+        .lock()
+        .admit_stat(identity, path)
+        .map_err(StatAdmissionError::Prepare)
 }
 
 /// Move one terminal entry to cleanup ownership. The runtime guard is released
@@ -363,5 +372,188 @@ mod tests {
         assert_eq!(runtime.registry.active(), None);
         assert!(runtime.namespaces.lookup(replacement).is_err());
         assert!(runtime.namespaces.lookup(other).is_err());
+    }
+
+    #[test]
+    fn runtime_retirement_keeps_pending_resources_until_explicit_reap() {
+        use super::super::vfs_resources::{charged_bytes, TEST_LEDGER_LOCK};
+        use sunlight_ipc::vfs_rpc::{
+            context,
+            lifecycle::{Failure, State},
+        };
+        let _serial = TEST_LEDGER_LOCK.lock();
+        assert_eq!(charged_bytes(), 0);
+        for event in 0..3 {
+            let mut runtime = Runtime::new();
+            let first = runtime.registry.register(owner()).unwrap();
+            let id = identity(caller(), first);
+            let mut other = id;
+            other.caller.pid += 1;
+            runtime.namespaces.install(id, 9, 10, 0).unwrap();
+            runtime.namespaces.install(other, 9, 10, 0).unwrap();
+            let binding = runtime.namespaces.lookup(id).unwrap();
+            let weak = alloc::sync::Arc::downgrade(&binding);
+            drop(binding);
+            let request = runtime.admit_stat(id, "/owned").unwrap().words()[1];
+            let unrelated = runtime.admit_stat(other, "/other").unwrap().words()[1];
+            let charged = charged_bytes();
+            assert!(charged > 0);
+            assert!(runtime.pending.reap(request).is_none());
+            for field in 0..3 {
+                let mut stale = id.caller;
+                match field {
+                    0 => stale.pid += 2,
+                    1 => stale.incarnation += 1,
+                    _ => stale.address_space_generation += 1,
+                }
+                runtime.retire_process(stale);
+                assert_eq!(runtime.pending.state(request), Some(State::Waiting));
+            }
+            let service = Caller {
+                pid: first.owner.pid,
+                incarnation: first.owner.incarnation,
+                address_space_generation: first.owner.address_space_generation,
+            };
+            let reason = if event == 0 {
+                runtime.retire_process(id.caller);
+                runtime.retire_process(id.caller);
+                assert_eq!(runtime.pending.state(unrelated), Some(State::Waiting));
+                Failure::CallerRetired
+            } else {
+                // Every authenticated endpoint/owner field must match.
+                for field in 0..4 {
+                    let mut wrong = service;
+                    let mut endpoint = first.owner.endpoint as u32;
+                    match field {
+                        0 => endpoint += 1,
+                        1 => wrong.pid += 1,
+                        2 => wrong.incarnation += 1,
+                        _ => wrong.address_space_generation += 1,
+                    }
+                    runtime.retire_endpoint(endpoint, wrong);
+                    assert_eq!(runtime.pending.state(request), Some(State::Waiting));
+                }
+                if event == 1 {
+                    runtime.retire_endpoint(first.owner.endpoint as u32, service);
+                } else {
+                    runtime.retire_process(service);
+                }
+                assert_eq!(
+                    runtime.pending.state(unrelated),
+                    Some(State::Failed(Failure::ServiceRetired))
+                );
+                Failure::ServiceRetired
+            };
+            assert_eq!(runtime.pending.state(request), Some(State::Failed(reason)));
+            assert!(runtime.admit_stat(id, "/denied").is_err());
+            assert!(weak.upgrade().is_some());
+            assert_eq!(charged_bytes(), charged);
+
+            // A replacement shares the same table and cannot recycle an ID.
+            runtime.retire_registration(first);
+            let mut new_owner = owner();
+            new_owner.address_space_generation += 1;
+            let second = runtime.registry.register(new_owner).unwrap();
+            let replacement = identity(id.caller, second);
+            runtime.namespaces.install(replacement, 9, 10, 0).unwrap();
+            let new_request = runtime.admit_stat(replacement, "/new").unwrap().words()[1];
+            assert!(new_request > unrelated);
+            runtime.retire_process(service);
+            runtime.retire_endpoint(first.owner.endpoint as u32, service);
+            runtime.retire_registration(first);
+            assert_eq!(runtime.pending.state(new_request), Some(State::Waiting));
+            // First terminal result is stable, including after service death.
+            assert_eq!(runtime.pending.state(request), Some(State::Failed(reason)));
+            let retired = runtime.pending.reap(request).unwrap();
+            assert!(runtime.pending.reap(request).is_none());
+            assert!(weak.upgrade().is_some());
+            assert!(charged_bytes() > charged);
+            assert_eq!(
+                retired.resources.revalidate_namespace(),
+                Err(ResourceError::StaleNamespace)
+            );
+            let mut groups = [0; context::MAX_GROUPS];
+            let decoded = context::decode(retired.resources.input(), &mut groups).unwrap();
+            assert_eq!(decoded.request_id, request);
+            assert_eq!(decoded.context.caller, id.caller);
+            let before_drop = charged_bytes();
+            drop(retired); // Explicit cleanup owner releases the final reference.
+            assert!(weak.upgrade().is_none());
+            assert!(charged_bytes() < before_drop);
+            runtime.retire_process(replacement.caller);
+            while let Some(retired) = runtime.pending.reap_next() {
+                drop(retired);
+            }
+            assert!(runtime.pending.is_empty());
+            assert_eq!(charged_bytes(), 0);
+        }
+    }
+
+    #[test]
+    fn terminal_capacity_completion_and_ids_survive_registration_replacement() {
+        use super::super::vfs_resources::{charged_bytes, TEST_LEDGER_LOCK};
+        use sunlight_ipc::vfs_rpc::{
+            lifecycle::{Failure, State},
+            pending_table::AdmissionError,
+            response::ReplyMessage,
+        };
+        let _serial = TEST_LEDGER_LOCK.lock();
+        let mut runtime = Runtime::new();
+        let first = runtime.registry.register(owner()).unwrap();
+        let id = identity(caller(), first);
+        for n in 0..4 {
+            let mut next = id;
+            next.caller.pid += n;
+            runtime.namespaces.install(next, 9, 10, 0).unwrap();
+            for _ in 0..16 {
+                runtime.admit_stat(next, "/bounded").unwrap();
+            }
+        }
+        assert_eq!(runtime.pending.len(), 64);
+        let charged = charged_bytes();
+        let reply = |request| ReplyMessage {
+            label: sunlight_ipc::vfs_rpc::REPLY,
+            words: [1, request, 2, 0],
+            word_count: 4,
+            cap_count: 0,
+            output: &[],
+        };
+        runtime.pending.complete(first.service(), reply(1)).unwrap();
+        runtime.retire_registration(first);
+        assert!(matches!(
+            runtime.pending.state(1),
+            Some(State::Completed(_))
+        ));
+        assert_eq!(
+            runtime.pending.state(2),
+            Some(State::Failed(Failure::ServiceRetired))
+        );
+        assert!(runtime.pending.complete(first.service(), reply(2)).is_err());
+        assert_eq!(charged_bytes(), charged);
+        let second = runtime.registry.register(owner()).unwrap();
+        let replacement = identity(id.caller, second);
+        runtime.namespaces.install(replacement, 9, 10, 0).unwrap();
+        assert_eq!(
+            runtime.admit_stat(replacement, "/full"),
+            Err(PrepareError::Admission(AdmissionError::Full))
+        );
+        assert_eq!(charged_bytes(), charged);
+        let retired = runtime.pending.reap_next().unwrap();
+        assert_eq!(retired.request_id, 1);
+        // Reaping frees a table slot; the cleanup owner still holds the charge.
+        assert_eq!(charged_bytes(), charged);
+        drop(retired);
+        let next = runtime
+            .admit_stat(replacement, "/replacement")
+            .unwrap()
+            .words()[1];
+        assert!(next > 64);
+        runtime.retire_registration(first);
+        assert_eq!(runtime.pending.state(next), Some(State::Waiting));
+        runtime.retire_registration(second);
+        while let Some(retired) = runtime.pending.reap_next() {
+            drop(retired);
+        }
+        assert_eq!(charged_bytes(), 0);
     }
 }

@@ -1,0 +1,47 @@
+build-guest.log 0
+build-iso.log 0
+qemu-version.log 0
+1 writeback initial PASS
+1 writeback restart PASS
+2 writeback initial PASS
+2 writeback restart PASS
+4 writeback initial PASS
+4 writeback restart PASS
+1 none initial PASS
+1 none restart PASS
+2 none initial PASS
+2 none restart PASS
+4 none initial PASS
+4 none restart PASS
+sfs5b1 /home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4/raw/regression-native-sfs5b1-20261115T083528.074339Z
+guest-build.log 0
+iso-build.log 0
+qemu-version.log 0
+cpu-1-writeback FAIL
+cpu-1-none FAIL
+cpu-2-writeback FAIL
+cpu-2-none FAIL
+cpu-4-writeback FAIL
+cpu-4-none FAIL
+sfs5b2 /home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4/raw/regression-native-sfs5b2-20261115T084155.474500Z
+guest-build.log 0
+iso-build.log 0
+cpu-1-writeback-hold PASS AP timer progress True
+cpu-1-writeback-release PASS AP timer progress True
+cpu-1-writeback-unmodified PASS AP timer progress True
+cpu-1-none-hold PASS AP timer progress True
+cpu-1-none-release PASS AP timer progress True
+cpu-1-none-unmodified PASS AP timer progress True
+cpu-2-writeback-hold PASS AP timer progress True
+cpu-2-writeback-release PASS AP timer progress True
+cpu-2-writeback-unmodified PASS AP timer progress True
+cpu-2-none-hold PASS AP timer progress True
+cpu-2-none-release PASS AP timer progress True
+cpu-2-none-unmodified PASS AP timer progress True
+cpu-4-writeback-hold PASS AP timer progress True
+cpu-4-writeback-release PASS AP timer progress True
+cpu-4-writeback-unmodified PASS AP timer progress True
+cpu-4-none-hold PASS AP timer progress True
+cpu-4-none-release PASS AP timer progress True
+cpu-4-none-unmodified PASS AP timer progress True
+sfs5b3 /home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b4/raw/regression-native-sfs5b3-20261115T084328.964388Z

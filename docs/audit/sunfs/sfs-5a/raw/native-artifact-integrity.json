@@ -1,0 +1,67 @@
+{
+  "status": "PASS",
+  "native_source_unchanged": true,
+  "final_compiled_paths_match": true,
+  "artifacts": [
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-1-none-initial.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-1-none-restart.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-1-writeback-initial.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-1-writeback-restart.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-2-none-initial.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-2-none-restart.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-2-writeback-initial.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-2-writeback-restart.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-4-none-initial.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-4-none-restart.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-4-writeback-initial.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    },
+    {
+      "invocation": "raw/native-20261114T211015.477037Z/cpu-4-writeback-restart.invocation.json",
+      "elf_sha256": "9d569de48a36b4ac138b9095e80ae17ee8d08793d5e99d3136dd8cee56a6f23f",
+      "iso_sha256": "00f6c54ba9bee414db893d1c1a3c5ead650c00a80a7839ad0f53ae91a9876077"
+    }
+  ]
+}

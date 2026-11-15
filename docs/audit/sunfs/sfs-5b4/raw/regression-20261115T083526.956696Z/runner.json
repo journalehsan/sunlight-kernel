@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "tools/sunfs5b4_validate.py",
+    "regression"
+  ],
+  "runner_sha256": "0ca9380e7285a4ea17ffcb9b83259e04d2f6f6cd0925609b924b5ccede103bd0",
+  "environment": {
+    "RUSTFLAGS": null,
+    "RUSTUP_TOOLCHAIN": null,
+    "CARGO_TARGET_DIR": null,
+    "CARGO_BUILD_TARGET": null
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "milestone": "SFS-5B.5",
+  "revision": "22a5947f5fbd4ffe810aee5efee57b0ec18f8915",
+  "branch": "main",
+  "incoming_worktree": "carried the uncommitted SFS-5A..SFS-5B.4 changes plus 5589 pre-existing deletions (5542 under .threading-evidence) and 23 untracked paths; none were touched by this milestone",
+  "native_raw": "raw/native-20261115T124316.387250Z",
+  "stall_raw": "raw/stall-20261115T124729.089627Z",
+  "source_inventory_sha256": "ab208669b29566bccfab00893c99e6cf45ce1007126c138372d064881b24705e",
+  "seed": "0x5b5001 deterministic fixture bytes and named barriers; no random fault scheduling",
+  "qemu": "isolated /tmp/sfs5b5-qemu-build, system emulator unchanged",
+  "prior_evidence": "SFS-0..SFS-5B.4 namespaces untouched"
+}

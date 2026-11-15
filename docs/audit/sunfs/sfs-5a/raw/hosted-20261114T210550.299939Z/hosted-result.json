@@ -1,0 +1,84 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T210550.299939Z/hosted-debug.log",
+    "seconds": 412.66090141795576,
+    "tests_passed": 54
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--release"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T210550.299939Z/hosted-release.log",
+    "seconds": 335.06186155002797,
+    "tests_passed": 54
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-fat",
+      "-p",
+      "sunlight-fs",
+      "-p",
+      "sunlight-virtio",
+      "--lib",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T210550.299939Z/storage.log",
+    "seconds": 0.15491279301932082
+  },
+  {
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-virtio",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "log": "raw/hosted-20261114T210550.299939Z/no-std.log",
+    "seconds": 0.5762770649744198
+  }
+]

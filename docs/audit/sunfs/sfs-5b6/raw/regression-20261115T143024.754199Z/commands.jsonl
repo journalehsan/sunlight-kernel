@@ -1,0 +1,1 @@
+{"argv": ["cargo", "test", "-p", "sunlight-sunfs", "-p", "sunlight-sunfs-lab", "-p", "sunlight-sunfs-check", "--offline", "--locked", "--target", "x86_64-unknown-linux-gnu"], "returncode": 0, "log": "raw/regression-20261115T143024.754199Z/hosted-debug.log", "seconds": 666.7404052489983}

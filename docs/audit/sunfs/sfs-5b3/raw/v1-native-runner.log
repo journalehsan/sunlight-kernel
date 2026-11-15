@@ -1,0 +1,21 @@
+guest-build.log 0
+iso-build.log 0
+cpu-1-writeback-hold PASS AP timer progress True
+cpu-1-writeback-release PASS AP timer progress True
+cpu-1-writeback-unmodified PASS AP timer progress True
+cpu-1-none-hold PASS AP timer progress True
+cpu-1-none-release PASS AP timer progress True
+cpu-1-none-unmodified PASS AP timer progress True
+cpu-2-writeback-hold PASS AP timer progress True
+cpu-2-writeback-release PASS AP timer progress True
+cpu-2-writeback-unmodified PASS AP timer progress True
+cpu-2-none-hold PASS AP timer progress True
+cpu-2-none-release PASS AP timer progress True
+cpu-2-none-unmodified PASS AP timer progress False
+cpu-4-writeback-hold PASS AP timer progress True
+cpu-4-writeback-release PASS AP timer progress True
+cpu-4-writeback-unmodified PASS AP timer progress True
+cpu-4-none-hold PASS AP timer progress True
+cpu-4-none-release PASS AP timer progress True
+cpu-4-none-unmodified PASS AP timer progress True
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/sunfs/sfs-5b3/raw/native-20261114T231330.641501Z

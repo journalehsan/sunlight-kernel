@@ -1,0 +1,5 @@
+{"argv": ["rustc", "--version", "--verbose"], "returncode": 0, "seconds": 0.06394759000977501, "log": "raw/regression-native-20261114T222855.774988Z/rustc-version.log"}
+{"argv": ["cargo", "--version", "--verbose"], "returncode": 0, "seconds": 0.06428627303102985, "log": "raw/regression-native-20261114T222855.774988Z/cargo-version.log"}
+{"argv": ["cargo", "build", "-p", "sunlight-kernel", "--offline", "--locked", "--features", "sfs5b1-test"], "returncode": 0, "log": "raw/regression-native-20261114T222855.774988Z/build-guest.log", "seconds": 21.375869315001182}
+{"argv": ["bash", "tools/make_hybrid_iso.sh", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b1/regression-native-20261114T222855.774988Z/sunlight-kernel.elf", "/home/ehsantor/Projects/sunlightos-kernel/target/sfs5b1/regression-native-20261114T222855.774988Z/sfs5b1.iso"], "returncode": 0, "log": "raw/regression-native-20261114T222855.774988Z/build-iso.log", "seconds": 1.2312867160071619}
+{"argv": ["qemu-system-x86_64", "--version"], "returncode": 0, "log": "raw/regression-native-20261114T222855.774988Z/qemu-version.log", "seconds": 0.05525472300359979}

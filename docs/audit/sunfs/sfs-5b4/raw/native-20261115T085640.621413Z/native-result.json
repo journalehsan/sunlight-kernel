@@ -1,0 +1,6200 @@
+{
+  "status": "PARTIAL",
+  "boots": [
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320374826813197,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320374826830348,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320374826844623,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320374826848983,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320374826853273,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320375313921658,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320375341359898,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320375341438049,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 9,
+          "ns": 320375341442698,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320375341574571,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 11,
+          "ns": 320375404380379,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320375404406242,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320354826765695
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320375486584702
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320375743800139,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-writeback-hold.serial.log",
+      "trace": "cpu-1-writeback-hold.trace.log",
+      "device_log": "cpu-1-writeback-hold.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320399848507576,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320399848538316,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320399848550413,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320399848553542,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320399848557205,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320400092793386,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320400092967786,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320400092975253,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 9,
+          "ns": 320400092984280,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320400093061316,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 11,
+          "ns": 320400093063531,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320400093160581,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320400113028798,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 14,
+          "ns": 320400115565161,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320376778266123
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320400124378586
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320400381612430,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-writeback-reset-read.serial.log",
+      "trace": "cpu-1-writeback-reset-read.trace.log",
+      "device_log": "cpu-1-writeback-reset-read.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "error",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320427144979086,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320427145006239,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320427145012918,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320427145014561,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320427145016203,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320427458532281,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320427458538657,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_ERROR_CANCEL",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320427458552328,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 9,
+          "ns": 320427458670967,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 10,
+          "ns": 320427458676330,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 11,
+          "ns": 320427458797876,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320427478019063,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320427478062842,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320402048497078
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320427493562922
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320427759048781,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-writeback-error.serial.log",
+      "trace": "cpu-1-writeback-error.trace.log",
+      "device_log": "cpu-1-writeback-error.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "negative",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320443619338232,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320443619359833,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320443619369814,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320443619372814,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320443619375673,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320443906625397,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320443906641526,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320443906774322,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 9,
+          "ns": 320443906778471,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320443906789034,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ILLEGAL_POST_FENCE_ACCESS",
+          "bytes": 1
+        },
+        {
+          "seq": 11,
+          "ns": 320443906899499,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320443926097656,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320443926127171,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320428698466771
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320443916908402
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320444174209442,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-writeback-negative.serial.log",
+      "trace": "cpu-1-writeback-negative.trace.log",
+      "device_log": "cpu-1-writeback-negative.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "cancel",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320460107885054,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320460107905055,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320460108166360,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320460108168557,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320460108170015,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320445117755779
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320460365631475
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320460622937682,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "none/cancellation",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-writeback-cancel.serial.log",
+      "trace": "cpu-1-writeback-cancel.trace.log",
+      "device_log": "cpu-1-writeback-cancel.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "NORMAL_COMPLETION"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320475413281161,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320475413298103,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320475413304450,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320475413306199,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320475413307778,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320475423045456,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320475423391624,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320461766018580
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320475549408401
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320475814790029,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-writeback-release.serial.log",
+      "trace": "cpu-1-writeback-release.trace.log",
+      "device_log": "cpu-1-writeback-release.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "NORMAL_COMPLETION"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320476709024762
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320491891851160
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320492149108618,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-writeback-unmodified.serial.log",
+      "trace": "cpu-1-writeback-unmodified.trace.log",
+      "device_log": "cpu-1-writeback-unmodified.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320516302373628,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320516302655807,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320516302911653,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320516302917459,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320516302920470,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320517764242973,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320517764255509,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320517764437572,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 9,
+          "ns": 320517764445183,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320517764549118,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 11,
+          "ns": 320517785867338,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320517785949926,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320493093790705
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320517999612077
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320518264943636,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-none-hold.serial.log",
+      "trace": "cpu-1-none-hold.trace.log",
+      "device_log": "cpu-1-none-hold.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "reset-read",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320534178458875,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320534178996178,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320534182316178,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320534182320567,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320534182323955,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320534878696054,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320534878699169,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320534878701762,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 9,
+          "ns": 320534878709147,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320534878778676,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 11,
+          "ns": 320534878780766,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320534878967063,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320534971323140,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 14,
+          "ns": 320534972977907,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320519455312379
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320535160965698
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320535418581097,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-none-reset-read.serial.log",
+      "trace": "cpu-1-none-reset-read.trace.log",
+      "device_log": "cpu-1-none-reset-read.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "error",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320549407090954,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320549407098926,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320549407112672,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320549407116954,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320549407120905,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320549649293966,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320549649298927,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_ERROR_CANCEL",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320549649307547,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 9,
+          "ns": 320549649374480,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 10,
+          "ns": 320549649377455,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 11,
+          "ns": 320549649504648,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320549669094445,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320549669133927,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320536433140073
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320549652878352
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320549918502275,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-none-error.serial.log",
+      "trace": "cpu-1-none-error.trace.log",
+      "device_log": "cpu-1-none-error.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "negative",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320567947558086,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320567947573222,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320567947581153,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320567947583020,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320567947584732,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320568231057435,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320568231071253,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320568231153188,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 9,
+          "ns": 320568231158344,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320568231171887,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ILLEGAL_POST_FENCE_ACCESS",
+          "bytes": 1
+        },
+        {
+          "seq": 11,
+          "ns": 320568231409298,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320568251076925,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320568251101650,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320551047036189
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320568282735548
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320568540081517,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-none-negative.serial.log",
+      "trace": "cpu-1-none-negative.trace.log",
+      "device_log": "cpu-1-none-negative.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "cancel",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320583916486360,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320583916509916,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320583916516018,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320583916517466,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320583916518848,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320569923635994
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320584203031743
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320584460327034,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "none/cancellation",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-none-cancel.serial.log",
+      "trace": "cpu-1-none-cancel.trace.log",
+      "device_log": "cpu-1-none-cancel.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "release",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "NORMAL_COMPLETION"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 16,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320600266951090,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320600266963154,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320600267503267,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320600267506651,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320600267509115,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320600277048833,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320600277073941,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320585549389898
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320600332090200
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320600597456522,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-none-release.serial.log",
+      "trace": "cpu-1-none-release.trace.log",
+      "device_log": "cpu-1-none-release.qemu.log"
+    },
+    {
+      "cpu": 1,
+      "cache": "none",
+      "mode": "unmodified",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "NORMAL_COMPLETION"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 11,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 12,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 14,
+          "cpu": 0,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 15,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320601599446122
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320613375521884
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320613641289737,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-1-none-unmodified.serial.log",
+      "trace": "cpu-1-none-unmodified.trace.log",
+      "device_log": "cpu-1-none-unmodified.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "hold",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 9,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 13,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 14,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 15,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 16,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 17,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320626719398478,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320626719427610,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320626719441616,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320626719445528,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320626719448965,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320626967663403,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320626967675586,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320626967746552,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 9,
+          "ns": 320626967751273,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320626967907715,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 11,
+          "ns": 320626987093984,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320626987105810,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320614904674158
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320627021159129
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320627278393290,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-writeback-hold.serial.log",
+      "trace": "cpu-2-writeback-hold.trace.log",
+      "device_log": "cpu-2-writeback-hold.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "reset-read",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 13,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 14,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 15,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 16,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 17,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320639765687305,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320639765704353,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320639765709344,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320639765710646,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320639765711861,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320640019067440,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320640019070384,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320640019072709,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 9,
+          "ns": 320640019079570,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320640019132275,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 11,
+          "ns": 320640019133986,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320640019227636,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320640039104320,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 14,
+          "ns": 320640039130372,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320628012446149
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320640026162907
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320640283359688,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-writeback-reset-read.serial.log",
+      "trace": "cpu-2-writeback-reset-read.trace.log",
+      "device_log": "cpu-2-writeback-reset-read.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "error",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 13,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 14,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 15,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 16,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 17,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320654958232032,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320654958251117,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320654958290639,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320654958294309,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320654958297689,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320655203943090,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320655203946551,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_ERROR_CANCEL",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320655203952821,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 9,
+          "ns": 320655204009048,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 10,
+          "ns": 320655204011515,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 11,
+          "ns": 320655204114637,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320655224082207,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320655224100978,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320641034661885
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320655232270098
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320655489646191,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-writeback-error.serial.log",
+      "trace": "cpu-2-writeback-error.trace.log",
+      "device_log": "cpu-2-writeback-error.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "negative",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 9,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 13,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 14,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 15,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 16,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 17,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320667809861524,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320667809871954,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320667809877857,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320667809879629,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320667809881342,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320668177037586,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320668177054646,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320668177144950,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 9,
+          "ns": 320668177149387,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320668177159892,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ILLEGAL_POST_FENCE_ACCESS",
+          "bytes": 1
+        },
+        {
+          "seq": 11,
+          "ns": 320668177279446,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320668197024266,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320668197049397,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320656202212882
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320668235970759
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320668501673455,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-writeback-negative.serial.log",
+      "trace": "cpu-2-writeback-negative.trace.log",
+      "device_log": "cpu-2-writeback-negative.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "cancel",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 13,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320683448971839,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320683448992398,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320683449102325,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320683449106359,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320683449109970,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320669368461092
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320683737652401
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320683994973829,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "none/cancellation",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-writeback-cancel.serial.log",
+      "trace": "cpu-2-writeback-cancel.trace.log",
+      "device_log": "cpu-2-writeback-cancel.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "release",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 3,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "NORMAL_COMPLETION"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 10,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 13,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 14,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 15,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 16,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 17,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320701472457148,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320701472489088,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320701472505882,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320701472510522,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320701472515186,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320701482091963,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320701482121904,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320684817614709
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320701580341129
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320701845707517,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-writeback-release.serial.log",
+      "trace": "cpu-2-writeback-release.trace.log",
+      "device_log": "cpu-2-writeback-release.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "writeback",
+      "mode": "unmodified",
+      "status": "FAIL",
+      "checks": {
+        "ready": false,
+        "exact_image": false,
+        "killed_after_window": true,
+        "post_scheduler": false,
+        "contender": false,
+        "admission_closed": false,
+        "terminal": false,
+        "progress": false,
+        "contention_progress": false,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [],
+      "device": [],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320703182335356
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320793238152273,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-writeback-unmodified.serial.log",
+      "trace": "cpu-2-writeback-unmodified.trace.log",
+      "device_log": "cpu-2-writeback-unmodified.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "hold",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 13,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 14,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 15,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 16,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 17,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320870285384841,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320870289477352,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320870298914332,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320870298922591,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320870298928394,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320878580073882,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320878580140851,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320878603021190,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 9,
+          "ns": 320878603396915,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320878625225617,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 11,
+          "ns": 320878637768891,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320878680234215,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320795008627866
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320881110114335
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320881375772867,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-none-hold.serial.log",
+      "trace": "cpu-2-none-hold.trace.log",
+      "device_log": "cpu-2-none-hold.qemu.log"
+    },
+    {
+      "cpu": 2,
+      "cache": "none",
+      "mode": "reset-read",
+      "status": "PASS",
+      "checks": {
+        "ready": true,
+        "exact_image": true,
+        "killed_after_window": true,
+        "post_scheduler": true,
+        "contender": true,
+        "admission_closed": true,
+        "terminal": true,
+        "progress": true,
+        "contention_progress": true,
+        "payload": true,
+        "handshake": true,
+        "quiescence": true,
+        "guard": true,
+        "negative_detector": true,
+        "reset_entry_access": true
+      },
+      "guest": [
+        {
+          "seq": 1,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 2,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMISSION_INITIATED"
+        },
+        {
+          "seq": 3,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "SUBMITTED"
+        },
+        {
+          "seq": 4,
+          "cpu": 0,
+          "pid": 373770,
+          "task_generation": 4,
+          "role": 10,
+          "ready": "true",
+          "stage": "INDEPENDENT_WORKER_RUNNING"
+        },
+        {
+          "seq": 5,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "DEVICE_ACCESS_HANDSHAKE"
+        },
+        {
+          "seq": 6,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "TIMEOUT_QUARANTINE"
+        },
+        {
+          "seq": 7,
+          "cpu": 0,
+          "pid": 373762,
+          "task_generation": 3,
+          "role": 2,
+          "ready": "true",
+          "stage": "RESET_OWNER_CONTESTED"
+        },
+        {
+          "seq": 8,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "QUIESCING"
+        },
+        {
+          "seq": 9,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_OWNER_ESTABLISHED"
+        },
+        {
+          "seq": 10,
+          "cpu": 0,
+          "pid": 373760,
+          "task_generation": 1,
+          "role": 0,
+          "ready": "true",
+          "stage": "ADMISSION_CLOSED"
+        },
+        {
+          "seq": 11,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "CONTENTION_PROGRESS"
+        },
+        {
+          "seq": 12,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_REQUESTED"
+        },
+        {
+          "seq": 13,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_PENDING"
+        },
+        {
+          "seq": 14,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "RESET_ACKNOWLEDGED"
+        },
+        {
+          "seq": 15,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "FENCE_UNQUALIFIED"
+        },
+        {
+          "seq": 16,
+          "cpu": 1,
+          "pid": 373761,
+          "task_generation": 2,
+          "role": 1,
+          "ready": "true",
+          "stage": "TERMINAL_QUARANTINE"
+        },
+        {
+          "seq": 17,
+          "cpu": 1,
+          "pid": 373771,
+          "task_generation": 5,
+          "role": 11,
+          "ready": "true",
+          "stage": "FORWARD_PROGRESS"
+        }
+      ],
+      "device": [
+        {
+          "seq": 1,
+          "ns": 320934166290961,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "DEVICE_FETCHED",
+          "bytes": 0
+        },
+        {
+          "seq": 2,
+          "ns": 320934166331673,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 3,
+          "ns": 320934185582912,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 4,
+          "ns": 320934185758780,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "GUEST_WITNESS_PUBLISHED",
+          "bytes": 1
+        },
+        {
+          "seq": 5,
+          "ns": 320934185772516,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "REQUEST_OUTSTANDING",
+          "bytes": 0
+        },
+        {
+          "seq": 6,
+          "ns": 320956515621626,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ENTERED",
+          "bytes": 0
+        },
+        {
+          "seq": 7,
+          "ns": 320956520150809,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_STARTED",
+          "bytes": 0
+        },
+        {
+          "seq": 8,
+          "ns": 320956520244176,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "PAYLOAD_ACCESS_ENDED",
+          "bytes": 256
+        },
+        {
+          "seq": 9,
+          "ns": 320956520275297,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "OLD_EPOCH_QUIESCED",
+          "bytes": 0
+        },
+        {
+          "seq": 10,
+          "ns": 320956520380859,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "POSITIVE_CONTROL_ACCESS_ENDED",
+          "bytes": 1
+        },
+        {
+          "seq": 11,
+          "ns": 320956520414762,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "RESET_ACKNOWLEDGED",
+          "bytes": 0
+        },
+        {
+          "seq": 12,
+          "ns": 320956573772990,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "ORIGINAL_MAPPINGS_PROTECTED",
+          "bytes": 0
+        },
+        {
+          "seq": 13,
+          "ns": 320956573945075,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "LATE_CALLBACK_NO_REQUEST",
+          "bytes": 0
+        },
+        {
+          "seq": 14,
+          "ns": 320956583016634,
+          "epoch": 1,
+          "queue": 0,
+          "head": 0,
+          "stage": "STALE_ACCESS_REJECTED",
+          "bytes": 0
+        }
+      ],
+      "host": [
+        {
+          "event": "PROCESS_STARTED",
+          "ns": 320882480709115
+        },
+        {
+          "event": "READY_OBSERVED",
+          "ns": 320958606120455
+        },
+        {
+          "event": "PROCESS_REAPED",
+          "ns": 320958871990985,
+          "code": -9
+        }
+      ],
+      "simultaneous_dma_reset": "UNQUALIFIED",
+      "reset": "real legacy whole-device",
+      "released_pages": 0,
+      "pinned_pages": 5,
+      "serial": "cpu-2-none-reset-read.serial.log",
+      "trace": "cpu-2-none-reset-read.trace.log",
+      "device_log": "cpu-2-none-reset-read.qemu.log"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "sha256": "879ea1d4326c157df8434e9b313b82883d663bfc97ef304ce1e1670665ca683d",
+  "compressed_copy": "embedded-recovery-20261115T102807.072409Z/recovered-guest.elf.gz",
+  "build_load": "one compiler job on one host CPU; native runner not affinity restricted"
+}

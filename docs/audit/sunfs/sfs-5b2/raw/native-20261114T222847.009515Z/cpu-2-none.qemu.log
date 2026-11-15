@@ -1,0 +1,1 @@
+qemu-system-x86_64: ../qemu-11.1.2/qapi/qapi-visit-core.c:52: visit_start_struct: Assertion `!(v->type & VISITOR_OUTPUT) || *obj' failed.

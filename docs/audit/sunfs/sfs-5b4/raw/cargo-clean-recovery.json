@@ -1,0 +1,15 @@
+{
+  "utc": "2026-11-15T09:46:21.748833+00:00",
+  "user_action": "User clarified that they ran cargo clean after system hangs",
+  "observed": {
+    "target_exists": false,
+    "qemu_source_exists": false,
+    "qemu_build_exists": false,
+    "archive_exists": false,
+    "disk_free": 64129343488
+  },
+  "interrupted_native": "native-20261115T085640.621413Z: partial sweep and early unmodified-QEMU boot failure retained",
+  "failed_hosted": "regression-20261115T083526.956696Z: debug PASS; release ENOSPC and later evidence-compression ENOSPC retained",
+  "policy": "Rebuild necessary inputs and validate sequentially; CARGO_BUILD_JOBS=1; no timeout increase; do not infer cause of early guest stall from host ENOSPC",
+  "partial_cleanup": "Old-incremental cleanup command may have partially executed before interruption; no completion record existed. Later user cargo clean removed target."
+}

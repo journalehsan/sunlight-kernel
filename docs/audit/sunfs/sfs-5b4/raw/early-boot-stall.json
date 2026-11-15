@@ -1,0 +1,9 @@
+{
+  "status": "UNQUALIFIED",
+  "attempt": "raw/native-20261115T085640.621413Z",
+  "case": "cpu-2-writeback-unmodified",
+  "observed": "Guest serial stopped during early SMBIOS boot output; no SFS5B4 or post-scheduler contention witness; 90s host deadline expired. Other nearby cases progressed.",
+  "cause": "UNQUALIFIED; do not infer host ENOSPC or scheduler/reset defect from this observation.",
+  "reproducer": "Saved invocation, original source/ELF/ISO/emulator hashes, partial serial and trace remain in attempt. target ELF/ISO and temporary emulator were later absent after user cleanup/interruption. Exact original binary replay unavailable.",
+  "next": "Replay the same logical CPU/cache/unmodified scenario on rebuilt source-equivalent inputs with unchanged bound. A pass cannot establish historical cause."
+}

@@ -1,0 +1,79 @@
+{
+  "milestone": "SFS-5B.2",
+  "scope": "coherent x86_64 legacy PCI split ring in QEMU; no physical device qualification",
+  "status": "PARTIAL",
+  "configured_cpus": [
+    1,
+    2,
+    4
+  ],
+  "cache_modes": [
+    "writeback",
+    "none"
+  ],
+  "ap_startup": false,
+  "secondary_execution": false,
+  "post_ap_io": false,
+  "reset_contention": false,
+  "independent_cpu_progress": "NOT_RUN",
+  "execution": "BSP before start_aps, all native fixtures halt before AP startup",
+  "progress": [
+    {
+      "id": "P1",
+      "status": "PARTIAL",
+      "witness": "native idle reset acknowledgment at read1; hosted acknowledgment at read64"
+    },
+    {
+      "id": "P2",
+      "status": "PARTIAL",
+      "witness": "hosted64 reads returns TimedOutRetained; native withheld acknowledgment absent"
+    },
+    {
+      "id": "P3",
+      "status": "NOT_RUN",
+      "witness": "serialized adjacent completion/reset test only"
+    },
+    {
+      "id": "P4",
+      "status": "PARTIAL",
+      "witness": "1024 repeated begin calls immutable; active-CPU contention absent"
+    },
+    {
+      "id": "P5",
+      "status": "PARTIAL",
+      "witness": "hosted late ring write before ack retains active token; native race absent"
+    },
+    {
+      "id": "P6",
+      "status": "PARTIAL",
+      "witness": "I/O before/after quiescence serialized via exclusive mutable owner; actual admission race absent"
+    },
+    {
+      "id": "P7",
+      "status": "PARTIAL",
+      "witness": "1024 post-timeout refusals with unchanged bytes; native timeout absent"
+    },
+    {
+      "id": "P8",
+      "status": "NOT_RUN",
+      "witness": "no active-SMP secondary-CPU operations"
+    }
+  ],
+  "review": {
+    "new_locks": 0,
+    "new_allocations_during_reset": 0,
+    "reset_interrupt_dependency": false,
+    "reset_timer_dependency": false,
+    "runtime_poll": "one port read per call,64 maximum; no lock acquisition in driver",
+    "existing_submit": "50,000,000 iteration polling under external device mutex; VFS outer-lock contexts remain a latency/ordering blocker",
+    "memory_ordering": "coherent x86 SeqCst barriers, no noncoherent/IOMMU claim",
+    "identity": "no queue epoch change/reinit; u64 request generation remains checked",
+    "instruction_progress": "register instruction/emulator trap response itself not a software-time bound",
+    "unqualified": [
+      "native contention/starvation",
+      "reset versus in-progress software completion",
+      "physical DMA mappings/posted writes",
+      "device reincarnation/hot removal"
+    ]
+  }
+}

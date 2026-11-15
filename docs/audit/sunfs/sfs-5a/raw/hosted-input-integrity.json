@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "qualification": "compiled test inputs only; broad runner assertion failed as preserved",
+  "changed_paths": [
+    "tools/sunfs5a_validate.py"
+  ],
+  "all_compiled_rust_and_cargo_inputs_match_final": true
+}

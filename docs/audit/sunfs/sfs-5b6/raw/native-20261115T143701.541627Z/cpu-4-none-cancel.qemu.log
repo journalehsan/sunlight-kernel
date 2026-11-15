@@ -1,0 +1,31 @@
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+SFS5B6 SUBMIT req=0x7f93d8303a50 qiov=0x7f93d8303ae8 head=0 sector=63 bytes=512
+SFS5B6 BACKEND_ADMITTED qiov=0x7f93d8303ae8 inflight=1
+SFS5B6 GUEST_HANDSHAKE req=0x7f93d8303a50 status=254
+SFS5B6 DRAIN_BEGIN req=0x7f93d8303a50 terminal=0
+SFS5B6 CANCEL_REQUEST req=0x7f93d8303a50
+SFS5B6 CANCEL_RETURN req=0x7f93d8303a50 terminal=0
+SFS5B6 BACKEND_DRAIN_ENTER inflight=1
+SFS5B6 BACKEND_RELEASE qiov=0x7f93d8303ae8 inflight=1
+SFS5B6 DEVICE_CALLBACK req=0x7f93d8303a50 head=0 ret=0 mapping=retained
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B6 DRAIN_END req=0x7f93d8303a50 terminal=1
+SFS5B6 MAPPING_RELEASED req=0x7f93d8303a50 head=0 used=not-published
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0
+SFS5B3 block-reset-exit held=0
+SFS5B3 reset-complete status=0 queues-cleared=1
+qemu-system-x86_64: terminating on signal 15 from pid 4 (python3)
+SFS5B6 BACKEND_DRAIN_ENTER inflight=0
+SFS5B6 BACKEND_DRAIN_EXIT inflight=0

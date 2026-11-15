@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--manifest-path",
+    "/tmp/sfs5b2-aba-before/Cargo.toml",
+    "--lib",
+    "--offline",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "reused_wire_head_has_no_generation_echo_demonstrated_limit",
+    "--",
+    "--nocapture"
+  ],
+  "expected_returncode": 101,
+  "observed_returncode": 101,
+  "inputs": {
+    "aba-reproducer/Cargo.toml": "bb3880e725356f8b3c5e2ede52c813566e0d552863fdd551c2a77679592c692f",
+    "aba-reproducer/Cargo.lock": "29b84e4500f4d6513d41fae798db264411d8eb59e99c14bf7ba10b579a45d446",
+    "aba-reproducer/src/lib.rs": "275b5a171db4ea249da1746a159e652f51d87fcd7e48b084822952a88c66f812",
+    "aba-reproducer/src/pci.rs": "76f16a9ebd3498b9c0d44b9eb5226cddc728ab672a438a8763b1ec16af0919eb",
+    "aba-reproducer/src/blk.rs": "9e0a8e95e1dacde85ba360cbbbb81a8066c1fd1b73fcbc39c60c43576e1496ed"
+  },
+  "scope": "Archived incoming driver, unchanged current block dependency; only original demonstrated-limit test assertion replaced with safety assertion. Initial pre-production trace and later assertion reproduction both retained.",
+  "reproduce": "Copy raw/aba-reproducer to a fresh directory under /tmp, then run the recorded cargo command with that manifest path. No production source is replaced."
+}

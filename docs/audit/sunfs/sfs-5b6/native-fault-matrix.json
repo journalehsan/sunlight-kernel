@@ -1,0 +1,175 @@
+{
+  "status": "PARTIAL",
+  "scenarios": {
+    "N1": {
+      "status": "PARTIAL",
+      "reason": "real file I/O readback verified; retaining callback suppresses normal guest used-ring completion"
+    },
+    "N2": {
+      "status": "PASS",
+      "fixture": "during",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "N3": {
+      "status": "PASS",
+      "fixture": "before",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-before.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-before.qemu.log"
+      ]
+    },
+    "N4": {
+      "status": "PASS",
+      "fixture": "during",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "N5": {
+      "status": "PASS",
+      "fixture": "during",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "N6": {
+      "status": "PASS",
+      "fixture": "error",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-error.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-error.qemu.log"
+      ]
+    },
+    "N7": {
+      "status": "PARTIAL",
+      "reason": "sequenced cancel/reset/mapping observations exist; required competing cut incomplete"
+    },
+    "N8": {
+      "status": "PASS",
+      "fixture": "private",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+      ]
+    },
+    "N9": {
+      "status": "PARTIAL",
+      "reason": "sequenced cancel/reset/mapping observations exist; required competing cut incomplete"
+    },
+    "N10": {
+      "status": "PARTIAL",
+      "reason": "sequenced cancel/reset/mapping observations exist; required competing cut incomplete"
+    },
+    "N11": {
+      "status": "PASS",
+      "fixture": "during",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-during.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-during.qemu.log"
+      ]
+    },
+    "N12": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N13": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N14": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N15": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N16": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N17": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N18": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N19": {
+      "status": "NOT_RUN",
+      "reason": "required native cut not executed"
+    },
+    "N20": {
+      "status": "PASS",
+      "scope": "actual CPU-affined scheduler tasks and reset-owner contention; during-drain progress not claimed",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.serial.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-private.serial.log"
+      ]
+    },
+    "N21": {
+      "status": "PASS",
+      "scope": "actual CPU-affined scheduler tasks and reset-owner contention; during-drain progress not claimed",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.serial.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-private.serial.log"
+      ]
+    },
+    "N22": {
+      "status": "PASS",
+      "fixture": "private",
+      "scope": "instrumented disposable attachment; final guest/QEMU hashes",
+      "evidence": [
+        "raw/native-20261115T145612.275450Z/cpu-1-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-1-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-2-none-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-writeback-private.qemu.log",
+        "raw/native-20261115T145612.275450Z/cpu-4-none-private.qemu.log"
+      ]
+    }
+  },
+  "runs_index": "real-backend-fixture.json",
+  "note": "missing retirement/reuse, removal, retry and pressure cuts remain NOT_RUN"
+}

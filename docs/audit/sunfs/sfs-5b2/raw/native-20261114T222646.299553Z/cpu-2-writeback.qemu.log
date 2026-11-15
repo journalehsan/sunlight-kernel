@@ -1,0 +1,1 @@
+qemu-system-x86_64: -qmp unix:/tmp/sfs5b2-6-cpu-2-writeback.qmp,server=on,wait=off: Failed to bind socket to /tmp/sfs5b2-6-cpu-2-writeback.qmp: Operation not permitted

@@ -1,0 +1,37 @@
+{
+  "milestone": "SFS-5B.4",
+  "status": "PARTIAL",
+  "complete": false,
+  "scope": "native SunlightOS in isolated QEMU11.1.2 TCG legacy PCI; BQL event ordering and post-scheduler tasks",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PARTIAL",
+    "G3": "PARTIAL",
+    "G4": "PASS",
+    "G5": "UNQUALIFIED",
+    "G6": "PASS",
+    "G7": "PARTIAL",
+    "G8": "PARTIAL",
+    "G9": "PARTIAL",
+    "G10": "PASS"
+  },
+  "native_scoped_boots": 42,
+  "native_scoped_assertions": "PASS",
+  "native": "raw/native-20261115T103331.975665Z/native-result.json",
+  "gate_limits": {
+    "G2": "safe deferred/event-order backend only; no true async memory worker",
+    "G3": "O1/O2 observed, O3/O4 unqualified",
+    "G4": "independent witnesses for declared ordering scope only",
+    "G5": "status zero and serialized cancellation do not qualify full retirement fence",
+    "G6": "retention only; zero DMA retirement",
+    "G7": "post-scheduler coordinator subset; involuntary exit/full races absent",
+    "G8": "real S4/S8/S10 subset; remaining cuts absent",
+    "G9": "available regressions recorded separately; full fault matrix incomplete",
+    "G10": "artifact completeness and conservative statuses, not all gates complete"
+  },
+  "dma_retirement": "UNQUALIFIED",
+  "physical_hardware": "UNQUALIFIED",
+  "native_writable_sunfs": "BLOCKED",
+  "commit": false,
+  "push": false
+}
