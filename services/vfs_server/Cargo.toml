@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-vfs-server"
-version = "0.2.7279-alpha.2"
+version = "0.2.7858-alpha.2"
+
+
+
 
 
 
@@ -660,6 +663,7 @@ name = "sunlight-vfs-server"
 path = "src/main.rs"
 
 [dependencies]
+spin = "0.9"
 sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-mm = { path = "../../sunlight-mm" }
 sunlight-fs = { path = "../../sunlight-fs" }
@@ -670,3 +674,6 @@ heapless = "0.8"
 [features]
 # Bounded rendezvous on real authorization requests; absent in normal images.
 production-grant-test = []
+
+[dev-dependencies]
+sunlight-mm = { path = "../../sunlight-mm", features = ["testutil"] }

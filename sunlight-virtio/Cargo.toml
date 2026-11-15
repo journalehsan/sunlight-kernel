@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-virtio"
-version = "0.2.7279-alpha.2"
+version = "0.2.7858-alpha.2"
+
+
+
 
 
 
@@ -656,3 +659,6 @@ version = "0.2.7279-alpha.2"
 edition = "2021"
 
 [lib]
+
+[dependencies]
+sunlight-block = { path = "../sunlight-block" }

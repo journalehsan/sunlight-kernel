@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.7279-alpha.2"
+version = "0.2.7858-alpha.2"
+
+
+
 
 
 
@@ -687,6 +690,12 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+# Opt-in disposable-device qualification; halts before FAT/VFS probing.
+sfs5a-test = []
+sfs5b1-test = ["sfs5a-test"]
+sfs5b2-test = ["sfs5a-test"]
+sfs5b3-test = ["sfs5a-test"]
+sfs5b4-test = ["sfs5a-test"]
 # Bounded PMM-backed filesystem regression gate; off in ordinary boots.
 tmpfs_test = []
 # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
