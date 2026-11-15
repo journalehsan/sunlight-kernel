@@ -5,6 +5,7 @@ use super::{
     wire::{acknowledge_release, Frame, PendingRetain, Refusal},
     Receipt, Scope,
 };
+use crate::vfs_rpc::lifecycle::Caller;
 use crate::vfs_rpc::{registration::Registration, ProtocolError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,6 +106,36 @@ impl<const N: usize> Ownership<N> {
         }
         *abandoned = true;
         Ok(())
+    }
+
+    /// Lifecycle reconciliation under the owner's external serialization.
+    /// Exact caller identity spans every namespace generation captured for it.
+    /// Held/releasing leases retain ownership: local users must drain before
+    /// release, even when caller retirement has already withdrawn admission.
+    pub fn abandon_caller(&mut self, caller: Caller) {
+        self.abandon_matching(|scope| scope.caller == caller);
+    }
+
+    /// Stop all pending installations when this registration is withdrawn.
+    /// This is not proof of remote drain and never reclaims a lease or slot.
+    pub fn abandon_all(&mut self) {
+        self.abandon_matching(|_| true);
+    }
+
+    fn abandon_matching(&mut self, matches: impl Fn(Scope) -> bool) {
+        for entry in &mut self.entries {
+            if let Some(Lease::Pending {
+                request, abandoned, ..
+            }) = entry
+            {
+                let Frame::Retain { scope, .. } = request.request() else {
+                    unreachable!()
+                };
+                if matches(scope) {
+                    *abandoned = true;
+                }
+            }
+        }
     }
 
     /// Returns the matched disposition once only. Authentication must come from

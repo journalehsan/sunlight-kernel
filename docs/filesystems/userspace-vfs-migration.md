@@ -3,8 +3,10 @@
 Status: request/response codecs, operation-bound pending-operation model and service
 negotiation implemented. Namespace context framing and trusted, epoch-bound kernel
 service registration, kernel admission-identity capture/revalidation, kernel
-namespace-record/buffer preparation, and a bounded resource-owning pending table are implemented;
-file dispatch and continuations remain open.
+namespace-record/buffer preparation, a bounded resource-owning pending table with
+lifecycle retirement/explicit reap, and boot-lived remote retention bookkeeping
+are implemented; authenticated retention transport, file dispatch and continuations
+remain open.
 Normal file syscalls still use KERNEL_VFS. No runtime file routing or namespace
 ownership has changed. FS-1 kernel integration and its native IPC gate remain open.
 
@@ -22,7 +24,7 @@ milestone names below group related work; they do not imply completion of a phas
 | 5 | Open-file lifecycle | Unimplemented |
 | 6 | Production root/mount namespace | Unimplemented; current service namespace remains separate |
 | 7 | Remaining namespace operations | Codecs only; execution unsupported |
-| 8 | Failure handling and kernel retirement | Local admission retirement wired to exit/exec/endpoint destruction; remote drain and pending completion cleanup remain open |
+| 8 | Failure handling and kernel retirement | Local admission/pending retirement and explicit reap implemented; bounded remote ownership survives replacement with lifecycle abandonment; remote drain and release reconciliation remain open |
 
 The next native acceptance gate is a deliberately selected test process/root,
 authenticated stat dispatch, and completion without KERNEL_VFS traversal. A
@@ -1265,9 +1267,83 @@ zero-length group scratch buffer where decoding requires `MAX_GROUPS`; it is
 preserved in `target/vfs-pending-runtime-adapter.log`. The corrected final harness
 passes without changing production group semantics.
 
+The final-source Phase 3.0 QEMU regression passes in
+`target/vfs-pending-runtime-phase30.log`; raw serial is retained in
+`target/vfs-pending-runtime-phase30-serial.log`. Implementation, harness and
+expected-marker hashes in `target/vfs-pending-runtime-source.sha256` were verified
+after the gate. The existing service fixtures still use synthetic identities and
+`transport=fixture`. This is boot/filesystem regression evidence; native
+exit/exec/endpoint races with populated pending state remain NOT RUN.
+
 Authenticated kernel-origin transport/envelope enforcement, trusted runtime
 provisioning, registration-lived service policy and kernel remote-lease ownership,
 remote drain, caller-exit remote-release reconciliation, restricted mappings and
 quotas, publication/completion, park/resume and native lifecycle-race validation
 remain outstanding. Dispatch stays disabled; KERNEL_VFS remains authoritative.
 
+### Boot-lived remote retention ownership slice (2026-11-15)
+
+The kernel `Runtime` now reserves a registration-lived `Ownership<64>` for every
+trusted service registration. Four bounded registration slots include the active
+service and retired epochs with unresolved leases. Capacity is admitted before
+changing the registry. If all four slots remain occupied, replacement registration
+fails closed; no old ownership is evicted. Idempotent registration preserves the
+same owner and retention ID allocator even when its lease table is empty.
+Retention IDs are registration-scoped; local RPC IDs remain boot-scoped.
+
+Caller lifecycle retirement now abandons every pending retain matching the full
+PID/incarnation/VM identity across all owned registrations and namespace scopes.
+Service retirement abandons every pending retain in the exact registration and
+closes new retain preparation for that epoch. The existing authenticated endpoint,
+exit/successful-exec and lazy service-liveness retirement paths all use this
+operation. These hooks perform bounded bookkeeping under existing serialization;
+they send no IPC and infer no remote drain from endpoint destruction or VM exit.
+
+Retired owners remain available to the private reply-correlation helpers. A late
+success for an abandoned retain enters releasing state before returning its frame;
+lost sends/acknowledgements leave release ownership retryable. A correlated refusal
+or release acknowledgement can clear its exact obligation. Only an empty retired
+owner is collected. Held and releasing leases survive caller/service retirement:
+held leases still require withdrawal and independent local-user drain before
+release. Local pending-request reap neither clears these obligations nor proves
+that drain. Unknown pending leases can exhaust registration capacity indefinitely
+until a future authenticated registration-drain mechanism is implemented.
+
+The new runtime helpers are kernel-private preparation/correlation components,
+not transport authentication. Preparation still requires future trusted scope
+provisioning and lifecycle revalidation; receipt installation is not wired to
+`NamespacePolicy` or pending resource cleanup. Reply identity arguments must come
+from future independent transport records, never decoded payloads. Ordinary images
+create empty ownership bookkeeping on trusted registration and send no retains.
+No ordinary IPC route or filesystem dispatch is enabled.
+
+Eleven host adapter tests pass. Four new tests cover mixed pending/held/releasing
+states, complete caller/registration identity matching, multiple namespace scopes,
+late replies across service replacement, stale/malformed/duplicate replies,
+idempotent registration and non-reused per-epoch IDs, all 64 lease slots, all four
+registration slots, and exact acknowledgement/refusal reclamation. Tests execute
+production runtime and shared retention components with mock scheduler/broker
+records and supplied reply identities. They do not authenticate IPC or execute
+native lifecycle races. Logs: `target/vfs-remote-runtime-adapter-final.log`,
+`target/vfs-remote-runtime-libraries.log` (seven service, 101 filesystem and 151 IPC
+unit tests), `target/vfs-remote-runtime-ipc-integration.log` (151 IPC unit tests and
+nine integration tests), and `target/vfs-remote-runtime-check.log` (kernel, IPC and
+service compilation with existing warnings). Focused rustfmt and changed-file
+whitespace checks pass. `target/vfs-remote-runtime-adapter.log` preserves the first
+passing ten-test run before the additional lease-capacity test.
+
+The final-source Phase 3.0 QEMU regression passes in
+`target/vfs-remote-runtime-phase30.log`; raw serial is preserved in
+`target/vfs-remote-runtime-phase30-serial.log`. Trusted VFS registration succeeds
+with empty remote ownership in this image. Implementation/harness/expected-marker
+hashes in `target/vfs-remote-runtime-source.sha256` were verified after the gate;
+kernel/ISO hashes are in `target/vfs-remote-runtime-image.sha256`. Existing service
+fixtures still report `transport=fixture`. This is boot/filesystem regression
+evidence, not a native remote-retention exchange or populated lifecycle-race test.
+
+Authenticated kernel-origin transport/envelope enforcement, trusted provisioning,
+registration-lived service runtime policy, receipt-backed namespace installation,
+held-lease/local-reference drain and pending-reap release reconciliation, proven
+remote registration drain, restricted mappings/quotas, publication/completion,
+park/resume and native lifecycle races remain outstanding. Dispatch stays disabled;
+KERNEL_VFS remains authoritative.

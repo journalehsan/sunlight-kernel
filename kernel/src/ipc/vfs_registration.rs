@@ -8,16 +8,34 @@ use sunlight_ipc::vfs_rpc::registration::{EndpointOwner, Registry};
 use sunlight_ipc::vfs_rpc::{lifecycle::Caller, registration::Registration};
 use sunlight_ipc::vfs_rpc::{
     pending_table::{PrepareError, Retired, Table},
+    retention::{
+        ownership::{Error as OwnershipError, Ownership, Retained},
+        wire::{Frame, Refusal},
+        Scope,
+    },
     Transfer,
 };
 
-/// One boot-lived owner and one serialization point for registration and local
-/// namespace policy and pending resources. Never recreate this owner when a
-/// service is replaced: namespace generations and request IDs are boot-scoped.
+// Unresolved old epochs consume these slots. Exhaustion closes registration
+// admission rather than losing unknown remote leases during replacement.
+const REMOTE_REGISTRATIONS: usize = 4;
+const REMOTE_LEASES: usize = 64;
+
+struct RemoteRegistration {
+    registration: Registration,
+    retired: bool,
+    ownership: Ownership<REMOTE_LEASES>,
+}
+
+/// One boot-lived owner and serialization point for registration, local namespace
+/// policy, pending resources and remote lease obligations. Never recreate this
+/// owner on replacement: namespace generations and RPC IDs are boot-scoped;
+/// retention IDs are registration-scoped and old owners survive retirement.
 struct Runtime {
     registry: Registry,
     namespaces: NamespacePolicy<64>,
     pending: Table<Resources, 64>,
+    remote: [Option<RemoteRegistration>; REMOTE_REGISTRATIONS],
 }
 
 impl Runtime {
@@ -26,7 +44,116 @@ impl Runtime {
             registry: Registry::new(),
             namespaces: NamespacePolicy::new(),
             pending: Table::new(),
+            remote: [const { None }; REMOTE_REGISTRATIONS],
         }
+    }
+
+    fn register(&mut self, candidate: EndpointOwner) -> Result<Registration, IpcError> {
+        if self.registry.active().is_some() {
+            // Idempotence must preserve the existing ownership and ID allocator.
+            return self
+                .registry
+                .register(candidate)
+                .map_err(|_| IpcError::InvalidCapability);
+        }
+        self.collect_remote();
+        let slot = self
+            .remote
+            .iter()
+            .position(Option::is_none)
+            .ok_or(IpcError::InvalidCapability)?;
+        // Admit capacity before changing the active registration. Registry
+        // validates every field required by Ownership; insertion cannot fail.
+        let registration = self
+            .registry
+            .register(candidate)
+            .map_err(|_| IpcError::InvalidCapability)?;
+        self.remote[slot] = Some(RemoteRegistration {
+            registration,
+            retired: false,
+            ownership: Ownership::new(registration).expect("validated VFS registration"),
+        });
+        Ok(registration)
+    }
+
+    fn collect_remote(&mut self) {
+        for slot in &mut self.remote {
+            if slot
+                .as_ref()
+                .is_some_and(|r| r.retired && r.ownership.outstanding() == 0)
+            {
+                *slot = None;
+            }
+        }
+    }
+
+    #[allow(dead_code)] // No authenticated retention transport is wired yet.
+    fn remote_owner(
+        &mut self,
+        registration: Registration,
+    ) -> Result<&mut Ownership<REMOTE_LEASES>, OwnershipError> {
+        self.remote
+            .iter_mut()
+            .flatten()
+            .find(|r| r.registration == registration)
+            .map(|r| &mut r.ownership)
+            .ok_or(OwnershipError::State)
+    }
+
+    /// Trusted local preparation only. Future callers must revalidate process,
+    /// credentials and provisioned scope under lifecycle locks before this call.
+    /// The returned retain is single-send, including after uncertain publication.
+    #[allow(dead_code)]
+    fn prepare_retain(
+        &mut self,
+        registration: Registration,
+        scope: Scope,
+    ) -> Result<Frame, OwnershipError> {
+        if self.registry.active() != Some(registration) {
+            return Err(OwnershipError::State);
+        }
+        self.remote_owner(registration)?.prepare(scope)
+    }
+
+    /// Authentication must come from future transport records, never decoded
+    /// bytes. Keep retired epochs routable so late success can own its release.
+    /// Install still requires live caller/scope revalidation by the integration.
+    #[allow(dead_code)]
+    fn retained(
+        &mut self,
+        authenticated: Registration,
+        id: u64,
+        bytes: &[u8],
+    ) -> Result<Retained, OwnershipError> {
+        self.remote_owner(authenticated)?
+            .retained(id, authenticated, bytes)
+    }
+
+    #[allow(dead_code)]
+    fn refused(
+        &mut self,
+        authenticated: Registration,
+        id: u64,
+        bytes: &[u8],
+    ) -> Result<Refusal, OwnershipError> {
+        let reason = self
+            .remote_owner(authenticated)?
+            .refused(id, authenticated, bytes)?;
+        self.collect_remote();
+        Ok(reason)
+    }
+
+    #[allow(dead_code)]
+    fn released(
+        &mut self,
+        authenticated: Registration,
+        id: u64,
+        bytes: &[u8],
+    ) -> Result<(), OwnershipError> {
+        self.remote_owner(authenticated)?
+            .released(id, authenticated, bytes)?;
+        self.collect_remote();
+        Ok(())
     }
 
     fn retire_registration(&mut self, expected: Registration) {
@@ -37,11 +164,22 @@ impl Runtime {
         }
         self.namespaces.retire_registration(expected);
         self.pending.retire_service(expected.service());
+        for remote in self.remote.iter_mut().flatten() {
+            if remote.registration == expected {
+                remote.retired = true;
+                remote.ownership.abandon_all();
+            }
+        }
+        self.collect_remote();
     }
 
     fn retire_process(&mut self, expected: Caller) {
         self.namespaces.retire_caller(expected);
         self.pending.retire_caller(expected);
+        // Include quarantined old registrations, not only the active service.
+        for remote in self.remote.iter_mut().flatten() {
+            remote.ownership.abandon_caller(expected);
+        }
         if let Some(active) = self.registry.active() {
             if owner_matches(active.owner, expected) {
                 self.retire_registration(active);
@@ -95,7 +233,8 @@ pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
 
 /// Call at termination commit or successful live exec, holding SCHEDULER.
 /// Revokes local admission and terminalizes matching pending requests, retaining
-/// their resources until explicit reap. No remote drain, IPC or VM cleanup.
+/// their resources until explicit reap, and abandons matching pending retains.
+/// Remote ownership survives retirement. No remote drain, IPC or VM cleanup.
 pub(crate) fn retire_process(expected: Caller) {
     RUNTIME.lock().retire_process(expected);
 }
@@ -256,7 +395,6 @@ pub(super) fn register(
     let mut runtime = RUNTIME.lock();
     live_registration(&mut runtime, sched, caps);
     runtime
-        .registry
         .register(candidate)
         .map(|_| ())
         .map_err(|_| IpcError::InvalidCapability)
@@ -296,7 +434,7 @@ mod tests {
     #[test]
     fn caller_retirement_is_exact_and_preserves_other_bindings_and_generations() {
         let mut runtime = Runtime::new();
-        let registration = runtime.registry.register(owner()).unwrap();
+        let registration = runtime.register(owner()).unwrap();
         let id = identity(caller(), registration);
         let mut other = id;
         other.caller.pid += 1;
@@ -330,7 +468,7 @@ mod tests {
     #[test]
     fn endpoint_and_service_retirement_revoke_all_scopes_without_resetting_epochs() {
         let mut runtime = Runtime::new();
-        let first = runtime.registry.register(owner()).unwrap();
+        let first = runtime.register(owner()).unwrap();
         let id = identity(caller(), first);
         runtime.namespaces.install(id, 9, 10, 0).unwrap();
         let service = Caller {
@@ -356,7 +494,7 @@ mod tests {
         assert!(runtime.namespaces.lookup(id).is_err());
         let mut new_owner = owner();
         new_owner.address_space_generation += 1;
-        let second = runtime.registry.register(new_owner).unwrap();
+        let second = runtime.register(new_owner).unwrap();
         assert!(second.epoch > first.epoch);
         let replacement = identity(id.caller, second);
         runtime.namespaces.install(replacement, 9, 10, 0).unwrap();
@@ -389,7 +527,7 @@ mod tests {
         assert_eq!(charged_bytes(), 0);
         for event in 0..3 {
             let mut runtime = Runtime::new();
-            let first = runtime.registry.register(owner()).unwrap();
+            let first = runtime.register(owner()).unwrap();
             let id = identity(caller(), first);
             let mut other = id;
             other.caller.pid += 1;
@@ -457,7 +595,7 @@ mod tests {
             runtime.retire_registration(first);
             let mut new_owner = owner();
             new_owner.address_space_generation += 1;
-            let second = runtime.registry.register(new_owner).unwrap();
+            let second = runtime.register(new_owner).unwrap();
             let replacement = identity(id.caller, second);
             runtime.namespaces.install(replacement, 9, 10, 0).unwrap();
             let new_request = runtime.admit_stat(replacement, "/new").unwrap().words()[1];
@@ -503,7 +641,7 @@ mod tests {
         };
         let _serial = TEST_LEDGER_LOCK.lock();
         let mut runtime = Runtime::new();
-        let first = runtime.registry.register(owner()).unwrap();
+        let first = runtime.register(owner()).unwrap();
         let id = identity(caller(), first);
         for n in 0..4 {
             let mut next = id;
@@ -548,7 +686,7 @@ mod tests {
         );
         assert!(runtime.pending.complete(first.service(), reply(2)).is_err());
         assert_eq!(charged_bytes(), charged);
-        let second = runtime.registry.register(owner()).unwrap();
+        let second = runtime.register(owner()).unwrap();
         let replacement = identity(id.caller, second);
         runtime.namespaces.install(replacement, 9, 10, 0).unwrap();
         assert_eq!(
@@ -573,5 +711,266 @@ mod tests {
             drop(retired);
         }
         assert_eq!(charged_bytes(), 0);
+    }
+
+    fn scope() -> Scope {
+        Scope {
+            caller: caller(),
+            namespace_id: 9,
+            namespace_generation: 10,
+        }
+    }
+
+    #[test]
+    fn lifecycle_abandons_exact_caller_across_scopes_without_releasing_local_users() {
+        use sunlight_ipc::vfs_rpc::retention::Table as LeaseTable;
+        for field in 0..4 {
+            let mut runtime = Runtime::new();
+            let registration = runtime.register(owner()).unwrap();
+            let mut service = LeaseTable::<(), 4>::new(registration).unwrap();
+            let mut receipts = alloc::vec::Vec::new();
+            for id in 1..=4 {
+                let mut s = scope();
+                s.namespace_generation += id;
+                runtime.prepare_retain(registration, s).unwrap();
+                receipts.push(
+                    service
+                        .retain(registration, id, s, || Ok::<_, ()>(()))
+                        .unwrap(),
+                );
+            }
+            // Two successes have already won: one held with potential local
+            // users, one releasing with a lost acknowledgement.
+            for id in 3..=4 {
+                let receipt = receipts[id - 1];
+                assert_eq!(
+                    runtime.retained(
+                        registration,
+                        id as u64,
+                        &Frame::Retained(receipt).encode().unwrap()
+                    ),
+                    Ok(Retained::Install(receipt))
+                );
+            }
+            runtime
+                .remote_owner(registration)
+                .unwrap()
+                .release(4)
+                .unwrap();
+            let mut event = caller();
+            match field {
+                0 => event.pid += 1,
+                1 => event.incarnation += 1,
+                2 => event.address_space_generation += 1,
+                _ => (),
+            }
+            runtime.retire_process(event);
+            runtime.retire_process(event);
+            assert_eq!(runtime.remote_owner(registration).unwrap().outstanding(), 4);
+            assert_eq!(
+                runtime
+                    .remote_owner(registration)
+                    .unwrap()
+                    .releases()
+                    .count(),
+                1
+            );
+            for receipt in &receipts[..2] {
+                assert_eq!(
+                    runtime.retained(
+                        registration,
+                        receipt.request_id(),
+                        &Frame::Retained(*receipt).encode().unwrap()
+                    ),
+                    Ok(if field == 3 {
+                        Retained::Release(Frame::Release(*receipt))
+                    } else {
+                        Retained::Install(*receipt)
+                    })
+                );
+            }
+            // Neither caller nor service retirement proves local-user drain.
+            runtime.retire_registration(registration);
+            assert_eq!(runtime.remote_owner(registration).unwrap().outstanding(), 4);
+            assert_eq!(
+                runtime
+                    .remote_owner(registration)
+                    .unwrap()
+                    .releases()
+                    .count(),
+                if field == 3 { 3 } else { 1 }
+            );
+        }
+    }
+
+    #[test]
+    fn retired_remote_epochs_survive_replacement_and_authenticate_every_reply_field() {
+        use sunlight_ipc::vfs_rpc::retention::Table as LeaseTable;
+        for event in 0..3 {
+            let mut runtime = Runtime::new();
+            let first = runtime.register(owner()).unwrap();
+            let mut service = LeaseTable::<(), 1>::new(first).unwrap();
+            runtime.prepare_retain(first, scope()).unwrap();
+            let receipt = service
+                .retain(first, 1, scope(), || Ok::<_, ()>(()))
+                .unwrap();
+            // Lost success ACK, then service endpoint destruction/exit/exec.
+            let service_caller = Caller {
+                pid: first.owner.pid,
+                incarnation: first.owner.incarnation,
+                address_space_generation: first.owner.address_space_generation,
+            };
+            match event {
+                0 => runtime.retire_endpoint(0, service_caller),
+                1 => runtime.retire_process(service_caller),
+                _ => runtime.retire_registration(first), // lazy liveness failure
+            }
+            assert_eq!(
+                runtime.prepare_retain(first, scope()),
+                Err(OwnershipError::State)
+            );
+            let second = runtime.register(owner()).unwrap();
+            runtime.prepare_retain(second, scope()).unwrap(); // Same request ID, new epoch.
+            let bytes = Frame::Retained(receipt).encode().unwrap();
+            for field in 0..5 {
+                let mut wrong = first;
+                match field {
+                    0 => wrong.owner.endpoint += 1,
+                    1 => wrong.owner.pid += 1,
+                    2 => wrong.owner.incarnation += 1,
+                    3 => wrong.owner.address_space_generation += 1,
+                    _ => wrong.epoch = second.epoch,
+                }
+                assert!(runtime.retained(wrong, 1, &bytes).is_err());
+            }
+            assert!(runtime.retained(second, 1, &bytes).is_err());
+            assert!(runtime.retained(first, 1, &bytes[..111]).is_err());
+            assert_eq!(runtime.remote_owner(first).unwrap().outstanding(), 1);
+            assert_eq!(
+                runtime.retained(first, 1, &bytes),
+                Ok(Retained::Release(Frame::Release(receipt)))
+            );
+            assert_eq!(
+                runtime.retained(first, 1, &bytes),
+                Err(OwnershipError::State)
+            );
+            assert_eq!(runtime.remote_owner(first).unwrap().releases().count(), 1);
+            runtime.retire_registration(first); // Stale hook cannot affect replacement.
+            assert_eq!(runtime.registry.active(), Some(second));
+            assert_eq!(runtime.remote_owner(second).unwrap().outstanding(), 1);
+            service.release(first, receipt).unwrap();
+            let released = Frame::Released(receipt).encode().unwrap();
+            assert!(runtime.released(second, 1, &released).is_err());
+            runtime.released(first, 1, &released).unwrap();
+            assert!(runtime.remote_owner(first).is_err());
+            assert_eq!(
+                runtime.released(first, 1, &released),
+                Err(OwnershipError::State)
+            );
+            assert_eq!(runtime.remote_owner(second).unwrap().outstanding(), 1);
+        }
+    }
+
+    #[test]
+    fn remote_capacity_is_reserved_before_registration_and_only_proven_replies_reclaim_it() {
+        use sunlight_ipc::vfs_rpc::retention::wire::PendingRetain;
+        let mut runtime = Runtime::new();
+        let mut epochs = alloc::vec::Vec::new();
+        for _ in 0..REMOTE_REGISTRATIONS {
+            let registration = runtime.register(owner()).unwrap();
+            assert_eq!(runtime.register(owner()), Ok(registration));
+            let Frame::Retain { request_id, .. } =
+                runtime.prepare_retain(registration, scope()).unwrap()
+            else {
+                panic!()
+            };
+            assert_eq!(request_id, 1);
+            runtime.retire_registration(registration);
+            assert_eq!(runtime.remote_owner(registration).unwrap().outstanding(), 1);
+            epochs.push(registration);
+        }
+        assert_eq!(runtime.register(owner()), Err(IpcError::InvalidCapability));
+        assert_eq!(runtime.registry.active(), None);
+        assert_eq!(
+            runtime.remote.iter().flatten().count(),
+            REMOTE_REGISTRATIONS
+        );
+        let first = epochs[0];
+        let refusal = Frame::Refused {
+            request: PendingRetain::new(first, scope(), 1).unwrap(),
+            reason: Refusal::Resolve,
+        }
+        .encode()
+        .unwrap();
+        assert!(runtime.refused(first, 2, &refusal).is_err());
+        assert!(runtime.refused(epochs[1], 1, &refusal).is_err());
+        assert_eq!(runtime.register(owner()), Err(IpcError::InvalidCapability));
+        assert_eq!(runtime.refused(first, 1, &refusal), Ok(Refusal::Resolve));
+        assert!(runtime.remote_owner(first).is_err());
+        let replacement = runtime.register(owner()).unwrap();
+        assert!(replacement.epoch > epochs.last().unwrap().epoch);
+        // Clearing an active empty owner would reset its IDs within the epoch.
+        runtime.prepare_retain(replacement, scope()).unwrap();
+        let reply = Frame::Refused {
+            request: PendingRetain::new(replacement, scope(), 1).unwrap(),
+            reason: Refusal::Capacity,
+        }
+        .encode()
+        .unwrap();
+        runtime.refused(replacement, 1, &reply).unwrap();
+        assert_eq!(runtime.register(owner()), Ok(replacement));
+        let Frame::Retain { request_id, .. } =
+            runtime.prepare_retain(replacement, scope()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(request_id, 2);
+        assert!(runtime.refused(first, 1, &refusal).is_err());
+        assert_eq!(runtime.remote_owner(replacement).unwrap().outstanding(), 1);
+    }
+
+    #[test]
+    fn full_remote_lease_table_survives_idempotent_registration_and_retirement() {
+        let mut runtime = Runtime::new();
+        let registration = runtime.register(owner()).unwrap();
+        for id in 1..=REMOTE_LEASES {
+            let Frame::Retain { request_id, .. } =
+                runtime.prepare_retain(registration, scope()).unwrap()
+            else {
+                panic!()
+            };
+            assert_eq!(request_id, id as u64);
+        }
+        assert_eq!(runtime.register(owner()), Ok(registration));
+        assert_eq!(
+            runtime.prepare_retain(registration, scope()),
+            Err(OwnershipError::Capacity)
+        );
+        runtime.retire_process(caller());
+        runtime.retire_registration(registration);
+        assert_eq!(
+            runtime.remote_owner(registration).unwrap().outstanding(),
+            REMOTE_LEASES
+        );
+        assert_eq!(
+            runtime
+                .remote_owner(registration)
+                .unwrap()
+                .releases()
+                .count(),
+            0
+        );
+        let replacement = runtime.register(owner()).unwrap();
+        assert_ne!(registration, replacement);
+        assert_eq!(
+            runtime.remote_owner(registration).unwrap().outstanding(),
+            REMOTE_LEASES
+        );
+        let Frame::Retain { request_id, .. } =
+            runtime.prepare_retain(replacement, scope()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(request_id, 1);
     }
 }
