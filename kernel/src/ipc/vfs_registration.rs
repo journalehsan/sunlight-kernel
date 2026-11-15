@@ -30,7 +30,11 @@ impl Runtime {
     }
 
     fn retire_registration(&mut self, expected: Registration) {
-        self.registry.retire(expected);
+        // Check the full registration before projecting to Service, whose
+        // identity uses the boot-unique epoch instead of a separate VM field.
+        if !self.registry.retire(expected) {
+            return;
+        }
         self.namespaces.retire_registration(expected);
         self.pending.retire_service(expected.service());
     }
@@ -511,6 +515,20 @@ mod tests {
         }
         assert_eq!(runtime.pending.len(), 64);
         let charged = charged_bytes();
+        for field in 0..5 {
+            let mut wrong = first;
+            match field {
+                0 => wrong.owner.endpoint += 1,
+                1 => wrong.owner.pid += 1,
+                2 => wrong.owner.incarnation += 1,
+                3 => wrong.owner.address_space_generation += 1,
+                _ => wrong.epoch += 1,
+            }
+            runtime.retire_registration(wrong);
+            assert_eq!(runtime.registry.active(), Some(first));
+            assert_eq!(runtime.pending.state(1), Some(State::Waiting));
+            assert!(runtime.namespaces.lookup(id).is_ok());
+        }
         let reply = |request| ReplyMessage {
             label: sunlight_ipc::vfs_rpc::REPLY,
             words: [1, request, 2, 0],

@@ -1215,3 +1215,59 @@ caller-exit release reconciliation, restricted mappings and quotas,
 publication/completion and park/resume. Dispatch stays disabled; KERNEL_VFS
 remains authoritative.
 
+### Boot-lived pending terminal and explicit-reap slice (2026-11-15)
+
+The same kernel `Runtime` now owns a bounded 64-entry `Table<Resources, 64>`.
+Request IDs survive caller and service replacement for the entire boot. Local
+stat preparation revalidates the process/credential/registration snapshot under
+scheduler and broker lifecycle serialization, selects the exact installed
+namespace, and transactionally frames resources with the table-generated ID.
+No production namespace provisioning or request publication is wired; ordinary
+images leave this table empty. Preparation currently allocates bounded local
+heap buffers under lifecycle/runtime serialization; it does not wait for IPC.
+Any future mapping or remote-wait integration must revisit that preparation path.
+
+Existing exit, successful-exec and endpoint-destruction hooks now terminalize
+matching waiting entries in addition to withdrawing local namespace admission.
+Caller retirement matches all three caller identity fields. Registration
+retirement validates the entire registration before projecting it to the pending
+table's epoch-bound service identity, including checking the service VM generation.
+Repeated retirement and stale replacement events preserve the first terminal
+result. Lazy service-liveness failure uses the same retirement operation.
+
+Terminal entries retain their table slots, buffers, namespace references and
+quota charges. The kernel-private `reap_next` transfers one terminal resource
+owner after releasing the runtime mutex; its caller must also release scheduler
+and broker guards before delivery/destruction. Reap frees a table slot, while
+the returned owner retains its charge until destruction. No lifecycle hook
+implicitly reaps or fabricates a remote release acknowledgement. This cleanup
+contract covers only local, unpublished preparation resources; remote leases and
+published mappings will require their own release/drain barriers.
+
+Seven adapter tests pass, including two new production-component tests for
+populated pending-table retirement, all caller/endpoint/registration identity
+fields, replacement immunity, monotonic IDs, first-terminal-result preservation,
+late completion rejection, retained references/charges, exactly-once reap, and
+64 terminal entries blocking admission until reap. The harness also checks the
+kernel-private preparation entrypoint rejects stale credential/process snapshots
+and a valid identity without installed namespace authority. Test ledger assertions
+are serialized so concurrent host tests cannot corrupt accounting observations.
+These tests use mock process/broker records and local runtime instances; they
+do not execute native scheduler lifecycle races or authenticate IPC.
+
+Validation logs: `target/vfs-pending-runtime-adapter-final.log` (seven adapter
+tests), `target/vfs-pending-runtime-libraries.log` (seven service, 101 filesystem
+and 151 IPC unit tests), `target/vfs-pending-runtime-ipc-integration.log` (151 IPC
+unit and nine integration tests), and `target/vfs-pending-runtime-check-final.log`
+(kernel/IPC/service compilation with existing warnings). Focused rustfmt and
+changed-file whitespace checks pass. The initial adapter compile failure used a
+zero-length group scratch buffer where decoding requires `MAX_GROUPS`; it is
+preserved in `target/vfs-pending-runtime-adapter.log`. The corrected final harness
+passes without changing production group semantics.
+
+Authenticated kernel-origin transport/envelope enforcement, trusted runtime
+provisioning, registration-lived service policy and kernel remote-lease ownership,
+remote drain, caller-exit remote-release reconciliation, restricted mappings and
+quotas, publication/completion, park/resume and native lifecycle-race validation
+remain outstanding. Dispatch stays disabled; KERNEL_VFS remains authoritative.
+

@@ -98,6 +98,12 @@ mod ipc {
         assert!(snapshot.groups.is_empty());
         assert_eq!(snapshot.registration.owner.pid, 4);
         assert_eq!(vfs_registration::revalidate(snapshot, &sched, &caps), Ok(()));
+        // Valid credentials alone do not install a namespace or admit a call.
+        assert_eq!(vfs_registration::admit_stat(snapshot, "/", &sched, &caps),
+            Err(vfs_registration::StatAdmissionError::Prepare(
+                sunlight_ipc::vfs_rpc::pending_table::PrepareError::Resource(
+                    vfs_resources::Error::StaleNamespace))));
+        assert!(vfs_registration::reap_next().is_none());
         assert_eq!(vfs_registration::capture(99, &sched, &caps), Err(IpcError::InvalidCapability));
         for field in 0..6 {
             // Each independently invalidates the retained admission snapshot.
@@ -110,6 +116,8 @@ mod ipc {
                 _ => sched.processes[2].pid = 99,
             }
             assert_eq!(vfs_registration::revalidate(snapshot, &sched, &caps), denied);
+            assert_eq!(vfs_registration::admit_stat(snapshot, "/", &sched, &caps),
+                Err(vfs_registration::StatAdmissionError::Identity));
             sched.processes[2].uid = 1001;
             sched.processes[2].gid = 1002;
             sched.processes[2].foreground.incarnation = 11;
