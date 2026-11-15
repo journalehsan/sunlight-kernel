@@ -217,7 +217,7 @@ pub extern "C" fn _start() -> ! {
     debug_log("[VFS]  VFS server started");
 
     let ep = endpoint_create();
-    nameserver_register("vfs", ep);
+    assert!(nameserver_register("vfs", ep), "VFS registration rejected");
     debug_log("[VFS]  Registered as 'vfs'");
 
     // Root filesystem (RamFs)
@@ -237,7 +237,7 @@ pub extern "C" fn _start() -> ! {
     let _ = ensure_resolv_conf(&mut state);
 
     // Phase 3.0 self-tests (RamFs)
-    run_phase30_tests(&mut state);
+    run_phase30_tests(&mut state, ep);
 
     // Phase 3.5 self-tests (/boot mount)
     run_phase35_tests(&mut state);
@@ -333,6 +333,20 @@ fn read_seed_file(vfs: &mut Vfs, path: &str, out: &mut [u8]) -> usize {
 // ---------------------------------------------------------------------------
 
 fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
+    // Negotiation is read-only and grants no authority. File dispatch stays
+    // disabled until authenticated kernel registration and continuations exist.
+    if msg.label == sunlight_ipc::vfs_rpc::NEGOTIATE {
+        let words = sunlight_ipc::vfs_rpc::negotiate(
+            [msg.words[0], msg.words[1], msg.words[2], msg.words[3]],
+            msg.word_count as usize,
+            msg.cap_count as usize,
+        );
+        return IpcMsg::with_label(sunlight_ipc::vfs_rpc::NEGOTIATE_REPLY)
+            .word(0, words[0])
+            .word(1, words[1])
+            .word(2, words[2])
+            .word(3, words[3]);
+    }
     #[cfg(feature = "production-grant-test")]
     if msg.badge == 0xF4F0 && msg.label == 0xF11B07 && msg.cap_count == 0 {
         // This service owns no delegation registry. Report real legacy handle
@@ -956,7 +970,153 @@ fn getpwuid(state: &mut State, uid: u32) -> IpcMsg {
 // Phase 3.0 self-tests (RamFs gate)
 // ---------------------------------------------------------------------------
 
-fn run_phase30_tests(state: &mut State) {
+/// Ring-3 ownership fixture using a real isolated tmpfs backend. The identities
+/// below are fixture values, not authenticated transport records. No IPC route,
+/// process binding, namespace publication or production root is exercised.
+fn test_directory_retention() {
+    use sunlight_fs::{mode, FileSystem, Tmpfs, TmpfsLimits};
+    use sunlight_ipc::vfs_rpc::{
+        lifecycle::Caller,
+        registration::{EndpointOwner, Registration},
+        retention::{
+            ownership::{Ownership, Retained},
+            wire::{Frame, PendingRetain},
+            Scope,
+        },
+    };
+    use sunlight_vfs_server::{directory::DirectoryNamespace, policy::Policy};
+
+    let mut fs = Tmpfs::with_limits(&[], TmpfsLimits::new(0, 3)).unwrap();
+    fs.mkdir("/root", 1, 2, mode::DIR_755).unwrap();
+    fs.mkdir("/root/cwd", 3, 4, mode::DIR_700).unwrap();
+    let namespace = DirectoryNamespace::new(fs).unwrap();
+    let registration = Registration {
+        owner: EndpointOwner {
+            endpoint: 0,
+            pid: 1,
+            incarnation: 2,
+            address_space_generation: 3,
+        },
+        epoch: 4,
+    };
+    let scope = Scope {
+        caller: Caller {
+            pid: 5,
+            incarnation: 6,
+            address_space_generation: 7,
+        },
+        namespace_id: 8,
+        namespace_generation: 9,
+    };
+    let mut owner = Ownership::<1>::new(registration).unwrap();
+    let mut policy = Policy::<1, 1>::new(registration).unwrap();
+    policy
+        .install(scope, &namespace, "/root", "/root/cwd")
+        .unwrap();
+    assert!(matches!(
+        owner.prepare(scope).unwrap(),
+        Frame::Retain { request_id: 1, .. }
+    ));
+    owner.abandon(1, scope).unwrap();
+    let reply = policy
+        .request(
+            registration,
+            &PendingRetain::new(registration, scope, 1)
+                .unwrap()
+                .request()
+                .encode()
+                .unwrap(),
+        )
+        .unwrap();
+    let Retained::Release(Frame::Release(receipt)) = owner
+        .retained(1, registration, &reply.encode().unwrap())
+        .unwrap()
+    else {
+        panic!("abandoned retain must release")
+    };
+    // A lost publication keeps the real handles and the retry inventory owned.
+    assert_eq!(owner.releases().next(), Some(Frame::Release(receipt)));
+    policy.withdraw(scope).unwrap();
+    drop(namespace);
+    let metadata = policy.metadata(registration, receipt).unwrap();
+    assert_eq!((metadata[1].1.uid, metadata[1].1.gid), (3, 4));
+    let release = Frame::Release(receipt).encode().unwrap();
+    policy.request(registration, &release).unwrap();
+    // A lost release acknowledgement requires an idempotent service retry.
+    assert_eq!(owner.outstanding(), 1);
+    let released = policy.request(registration, &release).unwrap();
+    owner
+        .released(1, registration, &released.encode().unwrap())
+        .unwrap();
+    assert_eq!(owner.outstanding(), 0);
+    assert!(matches!(
+        policy
+            .request(
+                registration,
+                &PendingRetain::new(registration, scope, 2)
+                    .unwrap()
+                    .request()
+                    .encode()
+                    .unwrap()
+            )
+            .unwrap(),
+        Frame::Refused {
+            reason: sunlight_ipc::vfs_rpc::retention::wire::Refusal::Resolve,
+            ..
+        }
+    ));
+    debug_log("[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture");
+    debug_log("[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture");
+}
+
+fn run_phase30_tests(state: &mut State, ep: sunlight_ipc::EndpointId) {
+    // Real userspace syscall, not a direct handler call. Even the trusted VFS
+    // service cannot publish a kernel-origin namespace frame via ordinary IPC.
+    let forged = sunlight_ipc::ipc_call_timeout(
+        sunlight_ipc::CapabilityToken(ep.0),
+        IpcMsg::with_label(sunlight_ipc::vfs_rpc::REQUEST)
+            .word(0, sunlight_ipc::vfs_rpc::VERSION)
+            .word(1, 1)
+            .word(2, 0)
+            .word(3, 56),
+        1000,
+    );
+    if !matches!(forged, Err(sunlight_ipc::IpcCallError::InvalidCapability)) {
+        debug_log("[VFS-RPC] userspace dispatch injection FAIL");
+        return;
+    }
+    debug_log("[VFS-RPC] userspace dispatch injection rejected");
+    // Exercise the actual ring-3 handler. This is a handler regression, not
+    // evidence of authenticated kernel dispatch or IPC round-trip lifecycle.
+    let negotiate = IpcMsg::with_label(sunlight_ipc::vfs_rpc::NEGOTIATE)
+        .word(0, sunlight_ipc::vfs_rpc::VERSION)
+        .word(1, sunlight_ipc::vfs_rpc::VERSION)
+        .word(2, 0)
+        .word(3, 0);
+    let reply = handle_request(state, negotiate);
+    if reply.label != sunlight_ipc::vfs_rpc::NEGOTIATE_REPLY
+        || reply.word_count != 4
+        || reply.cap_count != 0
+        || reply.words[..4] != [1, 0, sunlight_ipc::vfs_rpc::MAX_TRANSFER, 0]
+    {
+        debug_log("[VFS-RPC] negotiation handler FAIL");
+        return;
+    }
+    let mut incompatible = negotiate;
+    incompatible.words[0] = 2;
+    incompatible.words[1] = 2;
+    if handle_request(state, incompatible).words[1] != 93 {
+        debug_log("[VFS-RPC] version rejection FAIL");
+        return;
+    }
+    let mut truncated = negotiate;
+    truncated.word_count = 3;
+    if handle_request(state, truncated).words[1] != 22 {
+        debug_log("[VFS-RPC] truncated negotiation FAIL");
+        return;
+    }
+    debug_log("[VFS-RPC] negotiation handler OK dispatch=disabled");
+    test_directory_retention();
     debug_log("[VFS]  Test open /etc/motd");
     let open_reply = handle_request(state, path_msg(VfsMsg::OPEN, "/etc/motd"));
     let motd = if open_reply.label == VfsMsg::REPLY && open_reply.words[0] == STATUS_OK {

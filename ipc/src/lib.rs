@@ -20,6 +20,7 @@ pub mod supervision;
 pub mod storage;
 pub mod swap_policy;
 pub mod vfs_grants;
+pub mod vfs_rpc;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
     BORDER_W as DISPLAY_BORDER_W, MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE,

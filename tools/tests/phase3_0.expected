@@ -3,6 +3,10 @@
 rtc: decoded_utc=
 timezone: zone=
 [VFS]  Registered as 'vfs'
+[VFS-RPC] userspace dispatch injection rejected
+[VFS-RPC] negotiation handler OK dispatch=disabled
+[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture
+[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture
 [VFS]  Test open /etc/motd
 [VFS]  Test read /etc/motd
 [VFS]  Read: "Welcome to SunlightOS\n"

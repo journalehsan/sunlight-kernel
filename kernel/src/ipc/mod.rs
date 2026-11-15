@@ -7,6 +7,13 @@ pub(crate) mod deferred_test;
 #[cfg(all(debug_assertions, feature = "ipc_reply_race_test"))]
 pub(crate) mod reply_race_test;
 pub mod message;
+mod vfs_registration;
+mod vfs_resources;
+
+pub(crate) use vfs_registration::{
+    process_identity as vfs_process_identity, retire_endpoint as retire_vfs_endpoint,
+    retire_process as retire_vfs_process,
+};
 
 use crate::capability::{CapabilityBroker, CapabilityRights, CapabilityToken};
 use crate::process::{
@@ -1188,6 +1195,14 @@ pub fn handle_ipc_call(
         return result;
     }
 
+    // Namespace RPC requests are kernel publications. A user IPC caller must
+    // never turn a syntactically valid credential frame into trusted authority.
+    // Future file continuations enqueue through their own admission path.
+    if msg.label == sunlight_ipc::vfs_rpc::REQUEST {
+        sched.processes[idx].ipc_next_deadline_tick = None;
+        return Err(IpcError::InvalidCapability);
+    }
+
     let (endpoint_id, target_owner) = match caps.token_owner(target_cap, CapabilityRights::SEND) {
         Ok(target) => target,
         Err(_) => {
@@ -1344,13 +1359,25 @@ fn mediate_nameserver_register(
             UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
             IpcError::InvalidCapability
         })?;
-    let (process_name, trusted_display_service) = sched
+    let (process_name, trusted_display_service, trusted_vfs_service) = sched
         .processes
         .iter()
         .find(|process| process.pid == caller_pid)
-        .map(|process| (process.name_str(), process.trusted_display_service))
+        .map(|process| {
+            (
+                process.name_str(),
+                process.trusted_display_service,
+                process.trusted_vfs_service && !process.is_exiting(),
+            )
+        })
         .ok_or(IpcError::InvalidArgument)?;
     if !registration_authorized(owner_pid, caller_pid, process_name, msg.words[0]) {
+        UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
+        return Err(IpcError::InvalidCapability);
+    }
+    // A matching executable/process name is not filesystem service provenance.
+    // Boot assigns this role and successful exec withdraws it.
+    if msg.words[0] == name_hash("vfs") && !trusted_vfs_service {
         UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
         return Err(IpcError::InvalidCapability);
     }
@@ -1370,6 +1397,15 @@ fn mediate_nameserver_register(
     let public = caps
         .derive(source, CapabilityRights::SEND_ONLY)
         .map_err(|_| IpcError::InvalidCapability)?;
+    if msg.words[0] == name_hash("vfs") {
+        if let Err(error) = vfs_registration::register(caller_pid, endpoint_id, sched, caps) {
+            // Registration rejected after derivation: do not publish authority.
+            // The derived token must be revoked just like failed registrations.
+            caps.revoke(public);
+            UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
+            return Err(error);
+        }
+    }
     msg.words[1] = public.0;
     msg.words[2] = endpoint_id as u64;
     msg.word_count = msg.word_count.max(3);
