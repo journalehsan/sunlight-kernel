@@ -29,6 +29,8 @@ SVG_PACKAGES = {
 
 
 def main():
+    if subprocess.run([sys.executable, "tools/audit_vfs_cutover.py", "--no-growth"], cwd=ROOT).returncode:
+        return 1
     metadata = json.loads(subprocess.check_output(
         ["cargo", "metadata", "--format-version", "1", "--no-deps"], cwd=ROOT))
     commands = [["cargo", "check", "--workspace", "--lib", "--target", HOST]]

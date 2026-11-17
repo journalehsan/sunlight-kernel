@@ -1029,6 +1029,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/traceroute"
         | "/usr/bin/arp"
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
+        #[cfg(feature = "vfs_stat_failure_test")]
+        "/bin/vfs-stat-caller" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/vfs-stat-caller")),
         // Base servers spawned by init (pid=1), not hardcoded in kernel boot.
         // These need no privileged memory setup (unlike vfs/tty).
         "/sbin/timer_server" | "/usr/sbin/timer_server" => Ok(crate::TIMER_SERVER_ELF_BYTES),

@@ -44,6 +44,46 @@ class MetricsTests(unittest.TestCase):
             self.assertEqual(data["cargo"]["workspace_member_count"], 1)
             self.assertEqual(data["tests_static_estimate"]["rust_files_with_test_indicators"], 1)
 
+    def test_evidence_snapshots_and_copied_manifests_are_excluded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "kernel").mkdir()
+            (root / "kernel/main.rs").write_text("fn main() {}\n", encoding="utf-8")
+            (root / "kernel/Cargo.toml").write_text("[package]\nname = \"kernel\"\n", encoding="utf-8")
+            audit = root / "docs/audit/sunfs/sfs-1/raw/final-source/kernel"
+            audit.mkdir(parents=True)
+            (audit / "copy.rs").write_text("one\ntwo\nthree\nfour\nfive\n", encoding="utf-8")
+            (audit / "Cargo.toml").write_text("[package]\nname = \"copy\"\n", encoding="utf-8")
+            fastlane = root / ".fastlane-evidence/m1"
+            fastlane.mkdir(parents=True)
+            (fastlane / "snapshot.rs").write_text("snapshot\n", encoding="utf-8")
+            threading = root / ".threading-evidence"
+            threading.mkdir()
+            (threading / "old.rs").write_text("old\n", encoding="utf-8")
+            vendor = root / "sunlight-libc/vendor/libm"
+            vendor.mkdir(parents=True)
+            (vendor / "vendored.rs").write_text("vendor\n", encoding="utf-8")
+            (vendor / "Cargo.toml").write_text("[package]\nname = \"vendor\"\n", encoding="utf-8")
+            (root / "Cargo.toml").write_text('[workspace]\nmembers = ["kernel"]\n', encoding="utf-8")
+            import subprocess
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+
+            data = metrics.collect(root)
+            self.assertEqual(data["rust"]["total"]["lines"], 1)
+            self.assertEqual(data["rust"]["kernel"]["lines"], 1)
+            self.assertEqual(data["cargo"]["manifest_count"], 2)
+            self.assertEqual(data["cargo"]["workspace_member_count"], 1)
+            self.assertEqual(data["excluded_files"], 6)
+
+            filesystem = metrics.collect(root, "filesystem")
+            self.assertEqual(filesystem["source"], data["source"])
+            self.assertEqual(filesystem["cargo"]["manifest_count"], data["cargo"]["manifest_count"])
+
+            with_evidence = metrics.collect(root, include_evidence=True)
+            self.assertEqual(with_evidence["rust"]["total"]["lines"], 8)
+            self.assertEqual(with_evidence["cargo"]["manifest_count"], 3)
+
     def test_categories_subsystems_and_snapshots(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

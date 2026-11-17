@@ -63,7 +63,7 @@ impl Dispatch<'_> {
         if words[1] != self.request_id {
             return Err(ProtocolError::RequestId);
         }
-        if words[3] < contract.buffer_bytes() as u64 {
+        if words[3] < contract.output_capacity as u64 {
             return Err(ProtocolError::Bounds);
         }
         Ok(transfer)
@@ -257,6 +257,26 @@ mod tests {
             },
         }
     }
+    #[test]
+    fn large_immutable_input_keeps_a_metadata_sized_output_region() {
+        let path_bytes = [b'/'; super::super::MAX_PATH_BYTES];
+        let path = core::str::from_utf8(&path_bytes).unwrap();
+        let mut d = dispatch();
+        d.request = Request::Stat { path: &path };
+        let words = [
+            VERSION,
+            d.request_id,
+            0,
+            super::super::response::METADATA_BYTES as u64,
+        ];
+        assert!(d.transfer(REQUEST, words, 4, 2, words[3]).is_ok());
+        let mut bytes = [0; HEADER_BYTES + MAX_GROUPS * 4 + super::super::MAX_PATH_BYTES + 16];
+        let length = d.encode(&mut bytes).unwrap();
+        let mut groups = [0; MAX_GROUPS];
+        let decoded = decode(&bytes[..length], &mut groups).unwrap();
+        assert_eq!(decoded.request, Request::Stat { path: &path });
+    }
+
     #[test]
     fn exact_frame_round_trip_and_every_truncation() {
         let d = dispatch();

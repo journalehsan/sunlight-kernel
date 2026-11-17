@@ -2081,7 +2081,7 @@ impl Scheduler {
 
     /// Linux leaders and opt-in native std owners hold group-wide resources
     /// until all their workers are reaped. Existing native tasks remain private.
-    fn shared_process_index(&self, idx: usize) -> usize {
+    pub(crate) fn shared_process_index(&self, idx: usize) -> usize {
         let Some(tgid) = self.processes[idx]
             .linux_tgid
             .or(self.processes[idx].native_shared_owner)

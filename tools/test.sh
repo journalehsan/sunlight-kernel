@@ -24,6 +24,13 @@ BUILD_LOG=$(mktemp)
 PHASE="${1:-phase3.0}"
 
 case "$PHASE" in
+    vfs-stat-failure)
+        EXPECTED_FILE="tools/tests/vfs_stat_failure.expected"
+        FINAL_MARKER="[VFS-RPC] native stat service loss/resume/no fallback OK"
+        PASS_LABEL="VFS stat failure"
+        NEED_DISK=false
+        TIMEOUT=90
+        ;;
     shell-pty-liveness)
         EXPECTED_FILE="tools/tests/shell_pty_liveness.expected"
         FINAL_MARKER="[TTY]  exit: sshl --pty-liveness-tests -> 0"
@@ -65,7 +72,7 @@ case "$PHASE" in
         ;;
     phase3.0)
         EXPECTED_FILE="tools/tests/phase3_0.expected"
-        FINAL_MARKER="[SunlightOS] Phase 3.0 OK"
+        FINAL_MARKER="[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK"
         PASS_LABEL="Phase 3.0"
         NEED_DISK=false
         ;;
@@ -538,8 +545,18 @@ fi
 
 mapfile -t EXPECTED < <(grep -Ev '^[[:space:]]*($|#)' "$EXPECTED_FILE")
 
+# Migration ceiling: permit removal, reject newly introduced ring-0 owners.
+if ! python3 "$PROJECT_ROOT/tools/audit_vfs_cutover.py" --no-growth >"$BUILD_LOG" 2>&1; then
+    cat "$BUILD_LOG"
+    exit 1
+fi
+
 # --- Step 1: Build service binaries first ---
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release >"$BUILD_LOG" 2>&1
+VFS_STAT_FEATURES=()
+if [[ "$PHASE" == "vfs-stat-failure" ]]; then
+    VFS_STAT_FEATURES=(--features stat-failure-test)
+fi
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init "${VFS_STAT_FEATURES[@]}" --release >"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-swapd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release >>"$BUILD_LOG" 2>&1
@@ -555,7 +572,7 @@ if [[ "$PHASE" == "audio" ]]; then
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-audiod --release >>"$BUILD_LOG" 2>&1
 fi
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server "${VFS_STAT_FEATURES[@]}" --release >>"$BUILD_LOG" 2>&1
 if [[ "$PHASE" == "session-foundation" ]]; then
     SUNLIGHT_INJECT_PHASE=session_foundation RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "session-configuration" ]]; then
@@ -750,6 +767,9 @@ if [[ "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" ]]; then
     bash "$SCRIPT_DIR/build_yazi.sh" >>"$BUILD_LOG" 2>&1
 fi
 KERNEL_FEATURES=""
+if [[ "$PHASE" == "vfs-stat-failure" ]]; then
+    KERNEL_FEATURES="--features vfs_stat_failure_test"
+fi
 if [[ "$PHASE" == shell-* || "$PHASE" == "helios-open-largefile-probe" || "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-thread-probe" || "$PHASE" == "helios-io-probe" || "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime" || "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "tty-login" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "wiseowl-identity-phase-a" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
@@ -1412,6 +1432,9 @@ if [[ "$PHASE" == "wiseowl-trusted-session-readiness-v1" ]]; then
 fi
 if [[ "$PHASE" == "phase3.0" ]]; then
     cp "$QEMU_OUTPUT" target/timekeeping-phase3-serial.log
+fi
+if [[ "$PHASE" == "vfs-stat-failure" ]]; then
+    cp "$QEMU_OUTPUT" target/vfs-stat-failure-serial.log
 fi
 
 ALL_FOUND=true

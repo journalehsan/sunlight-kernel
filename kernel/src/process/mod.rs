@@ -251,6 +251,12 @@ pub struct Process {
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
     pub trusted_vfs_service: bool,
+    /// Boot-selected metadata profile for the service-mounted root and cwd `/`.
+    /// Withdrawable admission authority. Never inherited by children.
+    pub vfs_root_metadata: bool,
+    /// Sticky native StatPath routing choice. Withdrawal and exec must not
+    /// restore kernel traversal. New children start unselected.
+    pub vfs_stat_routed: bool,
     /// Kernel-provenance service identity key (`name_to_u64` of the registered
     /// service name), or 0 for user/unknown processes. Supplied to trusted
     /// brokers (e.g. sunlight-kv) so callers can be classified as
@@ -608,6 +614,8 @@ impl Process {
             trusted_service_manager: false,
             trusted_auth_broker: false,
             trusted_vfs_service: false,
+            vfs_root_metadata: false,
+            vfs_stat_routed: false,
             service_identity: 0,
             service_lookup_restrictions: None,
             mmap_next: 0,
@@ -850,6 +858,8 @@ impl Process {
             trusted_service_manager: false,
             trusted_auth_broker: false,
             trusted_vfs_service: false,
+            vfs_root_metadata: false,
+            vfs_stat_routed: false,
             service_identity: 0,
             service_lookup_restrictions: None,
             mmap_next: 0,

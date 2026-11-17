@@ -1,14 +1,71 @@
 # Userspace VFS migration
 
-Status: request/response codecs, operation-bound pending-operation model and service
-negotiation implemented. Namespace context framing and trusted, epoch-bound kernel
-service registration, kernel admission-identity capture/revalidation, kernel
-namespace-record/buffer preparation, a bounded resource-owning pending table with
-lifecycle retirement/explicit reap, and boot-lived remote retention bookkeeping
-are implemented; authenticated retention transport, file dispatch and continuations
-remain open.
-Normal file syscalls still use KERNEL_VFS. No runtime file routing or namespace
-ownership has changed. FS-1 kernel integration and its native IPC gate remain open.
+## Active cutover plan (2026-11-16)
+
+This plan supersedes the sequencing below where it makes later hardening a
+prerequisite for cutover. Completion means one runtime VFS in ring3 and no
+duplicate namespace or filesystem engine executing in ring0. Existing behavior,
+authorization and resource cleanup must survive the move. Advanced recovery,
+separate filesystem processes and optimization are follow-up work.
+
+1. **Inventory and deletion gate (started).** Run
+   `python3 tools/audit_vfs_cutover.py` to enumerate kernel namespace owners,
+   direct users and filesystem constructors. Initial inventory: 68 references,
+   including boot FAT parsing, storage helpers and native test fixtures.
+   `--check` must pass at completion. This conservative source audit includes
+   test-only code and needs manual review; it does not prove runtime routing.
+2. **Make the existing service namespace usable by syscalls.** Connect trusted
+   caller root/cwd policy to the service's actual mounted namespace, rather than
+   creating another isolated filesystem. Implement one authenticated stat round
+   trip with caller park/resume and output copying. Verify it natively without
+   kernel traversal. Keep the ordinary service loop working during this stage.
+3. **Move file and descriptor operations.** Route open/create, read/write,
+   seek/stat, truncate, close and duplication through service-owned open objects.
+   Preserve offsets, rights, unlink lifetime and exit/exec cleanup. Route special
+   secret/KV policy through the same namespace without weakening access checks.
+4. **Move remaining namespace and storage ownership.** Transfer directory,
+   metadata, mount and sync operations; put FAT parsing/cache ownership in ring3
+   over the device interface. Replace the kernel-generated boot file view.
+   Preserve existing root seed, fstab and persistent-volume behavior.
+5. **Remove kernel consumers and engines.** Migrate exec loading, scheduler
+   cleanup, native guest fixtures and storage tests. Order startup so the VFS
+   service boots from immutable image bytes before filesystem-dependent clients.
+   Delete KERNEL_VFS, its initialization, kernel filesystem constructors and
+   obsolete dispatch paths. Do not mask unsupported operations with a kernel
+   fallback. Keep device transport and descriptor bookkeeping in ring0.
+6. **Accept the cutover.** Run the source removal gate, kernel/service builds,
+   native filesystem and exec regressions, persistent-storage checks and existing
+   legacy IPC client checks. Demonstrate shared state between syscall and IPC
+   clients in the single service namespace. Record failures and remaining
+   hardening separately; no zero-feature negotiation or empty-channel test
+   counts as a completed migration.
+
+Required failure behavior for cutover: a dead/unavailable service fails or
+terminates affected requests without reviving a kernel filesystem, leaking their
+resources or leaving callers parked forever. Automatic service restart,
+cross-restart reconciliation, remote drain optimization and expanded adversarial
+race matrices are subsequent hardening work.
+
+The boot-loaded init image is now explicitly selected for a metadata-only root
+and cwd policy in the shared service mount table. The populated authenticated
+handoff passes natively. Native `StatPath` (61) now routes through the service
+for this selected caller, with kernel-side park/resume and the existing native
+metadata/error ABI. Routing stays selected after admission withdrawal or exec,
+so unavailable or revoked service authority cannot restore kernel traversal.
+Selected Linux stat/lstat/newfstatat now share this route for absolute paths and
+AT_FDCWD-relative paths. Unselected callers and other ordinary file syscalls
+still use KERNEL_VFS.
+Selected callers now provision their initial cwd through an authenticated
+snapshot and service-owned directory pins. A trusted service-side cwd transition
+primitive now replaces pins transactionally; copied syscall routing for live cwd
+transitions and arbitrary root profiles remain pending.
+
+Status: authenticated registration and copied retention, trusted selected-root
+provisioning, service-mounted metadata lookup, caller-owned publication and
+completion, guarded copyout, and exit/exec/cwd/credential withdrawal are
+implemented. Native StatPath uses this path for selected callers. General
+root/cwd profiles, broader syscall routing, open-object lifecycle, boot/storage
+migration and kernel filesystem deletion remain open.
 
 ## Roadmap phase tracking
 
@@ -17,20 +74,22 @@ milestone names below group related work; they do not imply completion of a phas
 
 | Phase | Work | Current state |
 | --- | --- | --- |
-| 1 | Namespace-service contract | Bounded stat context and envelope defined; isolated tmpfs directory pins implemented; runtime object retention remains open |
-| 2 | Authenticated kernel dispatch | Trusted registration, identity revalidation, kernel namespace-record/buffer preparation and userspace injection fence implemented; restricted mappings, publication/completion unwired |
-| 3 | Syscall continuations | Bounded pending table owns adapter-provided resources; kernel continuation and scheduler integration unimplemented |
-| 4 | One isolated pathname syscall | NOT RUN; no syscall selects the userspace namespace |
+| 1 | Namespace-service contract | Stat context, codecs and real service directory pins implemented |
+| 2 | Authenticated kernel dispatch | Selected-root provisioning, copied stat publication/completion and lifecycle delivery implemented |
+| 3 | Syscall continuations | Copied pilot and native StatPath park/resume, guarded copyout and retirement implemented |
+| 4 | One isolated pathname syscall | Selected native StatPath and Linux pathname stat route through the service; other callers remain on kernel paths |
 | 5 | Open-file lifecycle | Unimplemented |
-| 6 | Production root/mount namespace | Unimplemented; current service namespace remains separate |
+| 6 | Production root/mount namespace | Selected initial cwd is pinned in the shared service mount table; live cwd transitions and full cutover remain open |
 | 7 | Remaining namespace operations | Codecs only; execution unsupported |
-| 8 | Failure handling and kernel retirement | Local admission/pending retirement and explicit reap implemented; bounded remote ownership survives replacement with lifecycle abandonment; remote drain and release reconciliation remain open |
+| 8 | Failure handling and kernel retirement | Stat timeout/service-loss and exit/exec/cwd/credential withdrawal pass; full kernel ownership retirement remains open |
 
-The next native acceptance gate is a deliberately selected test process/root,
-authenticated stat dispatch, and completion without KERNEL_VFS traversal. A
-registration or negotiation pass cannot satisfy that gate. Root cutover follows
-the open-object, boot-dependency, and failure-handling gates; never fallback from a
-selected userspace namespace to the bootstrap resolver after an operation fails.
+The next work is authenticated copied chdir dispatch and kernel continuation
+integration for live cwd transitions, then root transitions and broader syscall routing,
+followed by service-owned open objects and remaining boot/storage dependencies.
+A registration or negotiation pass cannot satisfy runtime routing acceptance.
+Never fall back from a selected userspace namespace to the bootstrap resolver
+after an operation fails. The dated entries below preserve the earlier staging
+and acceptance history.
 
 ## Namespace-service v1 context contract
 
@@ -60,7 +119,7 @@ Group overflow fails admission; truncating the caller's groups is forbidden.
 | --- | --- | --- |
 | Endpoint/owner/incarnation/registration epoch | Kernel trusted-service registration | Kernel checks boot role, live owned endpoint, process incarnation and VM generation; retains registration |
 | Caller identity and uid/gid/groups | Kernel process records under lifecycle serialization | Kernel snapshots; server enforces search/ownership using snapshot, never an application identity claim |
-| Namespace ID/generation and root/directory objects | Server allocation, explicitly selected by kernel process binding | Server checks namespace membership and service epoch; kernel retains references for the request |
+| Namespace ID/generation and root/directory objects | Kernel allocates non-reusing scope for trusted provisioning; server allocates retained pair generation | Server checks scope membership and service epoch; kernel installs correlated receipt and retains references for the request |
 | Path | Caller bytes captured once by kernel | Codec checks UTF-8, NUL, length; server traverses without kernel pre-resolution |
 | Grants | Kernel admission and attenuation | Server intersects grant ceiling with permissions; uid zero does not bypass ceiling |
 | Request ID | Kernel boot-scoped checked allocator | Pending table selects exact request before validating completion; never reuse after exhaustion |
@@ -1347,3 +1406,1236 @@ held-lease/local-reference drain and pending-reap release reconciliation, proven
 remote registration drain, restricted mappings/quotas, publication/completion,
 park/resume and native lifecycle races remain outstanding. Dispatch stays disabled;
 KERNEL_VFS remains authoritative.
+
+### Registration-lived service runtime policy slice (2026-11-15)
+
+The service now keeps a `Runtime<64, 64, 4>` in its process-lived `State`.
+Registration policies are allocated lazily and fallibly; ordinary startup leaves
+the owner unbound because nameserver registration supplies no independently
+authenticated registration snapshot. No decoded frame can bind or provision this
+owner, and no ordinary IPC handler routes requests into it. Future provisioning
+must validate caller/service liveness and authority under lifecycle serialization;
+the component's identity arguments alone do not authenticate those facts.
+
+Trusted binding is idempotent for the exact active registration, preserving pins,
+request replay state, namespace generation and lease generation allocators.
+Replacement requires explicit retirement and a strictly newer epoch. Capacity
+and allocation are admitted before publishing the replacement or advancing the
+epoch watermark. The four registration slots retain retired policies even when
+their lease tables become empty: delayed retains must remain unable to resurrect
+policy, and lost release acknowledgements must remain retryable. Exhaustion fails
+closed. There is deliberately no slot reclamation or remote-drain acknowledgement.
+The existing service bump allocator is unchanged; allocation exhaustion can close
+admission before the logical registration capacity is reached.
+
+Trusted caller retirement matches PID, incarnation and VM generation across all
+owned epochs and withdraws matching policy bindings. Registration retirement
+matches the complete registration, permanently closes installation for that
+policy and withdraws every binding. Both preserve existing leases and their real
+directory pins. Retired epochs can process correlated releases and duplicate
+release retries; new retains cannot resolve withdrawn policy and receive the
+existing terminal refusal contract, with replay watermarks still enforced. A
+repeated old retirement cannot withdraw a replacement. These are serialized
+component operations; authenticated lifecycle event delivery is not wired yet.
+Service-process death does not preserve this userspace owner across a restart
+and provides no drain acknowledgement to the boot-lived kernel owner. Kernel
+obligations remain governed by the preceding remote-ownership slice.
+
+Five new host tests cover unbound rejection, invalid and idempotent binding,
+strict epoch progression, exact caller/registration matching, permanent policy
+retirement, delayed retain replies across replacement, abandoned-release
+reconciliation using the shared kernel ownership component, lost release
+acknowledgements, replacement immunity, retained metadata and fail-closed capacity
+including empty retired epochs and a zero-capacity owner. All 12 service tests,
+11 kernel adapter tests, 101 filesystem tests, 151 IPC tests and nine IPC
+integration tests pass. Kernel/IPC/service compilation, focused rustfmt and
+changed-file whitespace checks pass with existing dependency/service warnings.
+Logs: `target/vfs-service-runtime-tests.log`,
+`target/vfs-service-runtime-libraries.log`,
+`target/vfs-service-runtime-adapter.log`,
+`target/vfs-service-runtime-ipc-integration.log` and
+`target/vfs-service-runtime-check.log`. Allocation-failure injection is NOT RUN;
+capacity admission failure is exercised separately.
+
+The Phase 3.0 ring-3 fixture now uses the same runtime component for idempotent
+binding, caller/registration retirement, replacement and old-epoch release retry.
+It reports `registration policy lifecycle OK transport=fixture`. This fixture
+uses synthetic identities; it does not populate the ordinary service owner.
+The final-source Phase 3.0 QEMU gate passes in
+`target/vfs-service-runtime-phase30.log`; raw serial is preserved in
+`target/vfs-service-runtime-phase30-serial.log`. Implementation, host-test and
+expected-marker hashes in `target/vfs-service-runtime-source.sha256` were verified
+after the gate; kernel/ISO hashes are in
+`target/vfs-service-runtime-image.sha256`. This proves boot/filesystem regression
+and component execution in ring 3, not an authenticated retention exchange or
+native scheduler lifecycle race.
+
+Authenticated kernel-origin transport/envelope enforcement and lifecycle delivery,
+trusted provisioning, receipt-backed namespace installation, held-lease/local-user
+drain and pending-reap release reconciliation, proven remote registration drain,
+restricted mappings/quotas, publication/completion, park/resume and native
+lifecycle races remain outstanding. Dispatch stays disabled; KERNEL_VFS remains
+authoritative.
+
+### Receipt-backed kernel namespace and local drain slice (2026-11-15)
+
+The boot-lived kernel runtime now records bounded namespace preparation alongside
+each remote retain obligation. Preparation reserves a non-reusing boot-scoped
+namespace ID/generation, stores the full caller/credential/registration snapshot
+and attenuated grants, and returns the existing single-send retain frame. Failed
+or abandoned preparation never reuses a scope. Trusted service policy provisioning
+must precede publication; these component helpers neither provision policy nor
+authenticate identity arguments or messages.
+
+`install_retained` first correlates the success against the independently supplied
+registration and the pending retain. Malformed, stale, cross-scope and duplicate
+replies cannot install or consume preparation. A success installs only when the
+supplied revalidated live snapshot still matches every captured identity and
+credential field and the registration remains active. Caller/service retirement
+instead routes late success directly to release. Duplicate local bindings and
+local namespace capacity failure also record compensating release ownership
+before returning the installation error. Exact refusals reclaim both preparation
+and the corresponding remote obligation; timeout supplies no such proof.
+
+Installed directory records use the receipt's service-assigned pair generation,
+not backend inode numbers or the kernel scope generation. Both context object
+fields carry that pair identity: the root field selects its root member and the
+directory field its cwd member. Future service dispatch must validate the entire
+scope/registration and select the corresponding member of the retained pair.
+The new adapter tests use distinct real tmpfs directories and deliberately
+different scope and pair generations. No pathname is resolved in the kernel.
+
+A bounded runtime tracker retains each installed binding. Withdrawal invalidates
+admission; lifecycle hooks reconcile already drained bindings without sending IPC.
+Pending entries, terminal entries, reaped cleanup owners and retained preparation
+references continue pinning the same binding. Under runtime serialization, only
+an invalidated binding with the tracker as its sole strong owner may transition
+its lease to releasing. No weak references escape production code. Future cleanup
+workers must invoke the private reconciliation helper after dropping reaped
+resources and lifecycle guards. Reaping alone never proves drain. Reconciliation
+records retryable release state before dropping the tracker; lost sends and lost
+acknowledgements preserve it across replacement. A live binding remains held even
+after its pending requests drain. This is local reference drain, not proof of
+remote service-registration drain or future mapped-request transport drain.
+
+All 19 host adapter tests pass, including eight new tests combining the production
+kernel runtime, service runtime and real tmpfs directory pins with supplied
+identities. They cover pending/reaped ownership, explicit withdrawal, malformed and
+wrong-identity replies, changed credentials, compensation, exact refusals, both
+bounded capacities, late replies and held leases across replacement, and release
+retry after a lost acknowledgement. The existing namespace-policy test also checks
+scope allocation exhaustion. The first combined run failed because the fixture
+attempted a second service policy for an already provisioned caller; it is preserved
+in `target/vfs-receipt-adapter.log`. The corrected test explicitly withdraws the
+old service policy while retaining its old kernel binding, then verifies rejection
+and compensation at kernel installation. Final adapter results are in
+`target/vfs-receipt-adapter-final.log`.
+
+The 12 service, 101 filesystem and 151 IPC unit tests pass in
+`target/vfs-receipt-libraries.log`; 151 IPC unit tests and nine integration tests
+pass in `target/vfs-receipt-ipc-integration.log`. Kernel/IPC/service compilation
+passes in `target/vfs-receipt-check.log` with existing dependency/service warnings.
+Focused rustfmt and changed-file whitespace checks pass. Existing `Arc` allocation
+behavior is unchanged; allocation-failure injection is NOT RUN.
+
+The Phase 3.0 QEMU regression passes in `target/vfs-receipt-phase30.log`; raw serial
+is preserved in `target/vfs-receipt-phase30-serial.log`. Source and image hashes
+are recorded in `target/vfs-receipt-source.sha256` and
+`target/vfs-receipt-image.sha256`. The receipt installation/drain flow is exercised
+by host component tests only. Native authenticated retention, populated kernel
+receipt-backed bindings and scheduler lifecycle races are NOT RUN.
+
+Next implement authenticated kernel-origin retention transport/envelope enforcement,
+trusted scope provisioning and lifecycle delivery. Restricted mappings/quotas,
+publication/completion, park/resume, proven remote registration drain and native
+lifecycle races remain open. Dispatch stays disabled; KERNEL_VFS remains authoritative.
+
+### Authenticated copied retention control slice (2026-11-15)
+
+Native syscall 180 adds a service-only, fixed-size pull channel. SNAPSHOT returns
+exactly 40 little-endian bytes containing the active registration. NEXT copies
+one kernel-selected 112-byte retention frame; REPLY copies exactly 112 bytes into
+kernel memory before validation. Epoch zero is permitted only for SNAPSHOT;
+unknown operations, wrong lengths and nonzero reserved arguments fail closed.
+No SHM attachments, user-selected service endpoint, claimed sender identity or
+ordinary IPC badge establish authority on this channel. Negotiation still
+advertises zero executable features, and KERNEL_VFS remains authoritative.
+
+Scheduler -> broker -> runtime serialization authenticates the syscall caller's
+boot-stamped VFS role, live PID/incarnation/VM generation and continued endpoint
+ownership. The supplied epoch selects a retained registration; it cannot replace
+its owner identity. Old-epoch replies/releases may complete while that exact
+owner still lives and owns the endpoint, including after registration replacement.
+Service exit, exec, endpoint withdrawal and a replacement owner cannot inherit
+that channel. User copies occur outside these locks.
+
+Each registration has a bounded unsent-retain inventory admitted before namespace
+preparation. NEXT consumes retains once, in allocation order despite slot reuse.
+Only one retain may be delivered and awaiting a correlated reply per registration;
+this prevents concurrent service readers from processing higher IDs first after
+kernel unlock. A failed output copy or lost retain response preserves unknown
+ownership and blocks subsequent retains for that epoch. It does not authorize
+retransmission, cancellation, namespace installation or remote reclamation.
+Pending ownership remains until a correlated response or future proven drain.
+Releases remain available for retry, including while a retain awaits its reply.
+
+REPLY rejects retain replies that were never delivered through this channel and
+correlates the full frame against the independently authenticated registration.
+Before installation it rechecks the captured caller incarnation, VM generation,
+UID/GID and non-exiting state under the same lifecycle locks. Withdrawal or changed
+credentials turns late success into an owned release. Invalid replies preserve
+preparation; successful installation and compensation stop accepting retain
+replies. Release acknowledgements settle only the original owned receipt.
+
+The ordinary VFS process obtains an authenticated registration snapshot after its
+existing self-tests and lazily allocates its registration policy through the
+existing fallible owner. Binding itself grants no namespace policy. Its service
+loop polls at most 64 control exchanges per existing IPC turn. Ordinary IPC
+handlers do not route control frames. No production producer calls the private
+namespace staging helper: trusted scope provisioning and service wakeups must be
+implemented before enabling live retain publication. Caller/registration lifecycle
+delivery to userspace also remains unwired; local kernel withdrawal still applies.
+The service loop currently polls its active epoch only; retired-epoch servicing
+and restart reconciliation need integration before live provisioning is enabled.
+
+Five new kernel adapter tests exercise the actual control component using supplied
+scheduler/broker records, the service runtime and real tmpfs directory pins. They
+cover owner/role/endpoint/epoch rejection, malformed and undelivered replies,
+credential-change compensation, single installation, local-reference drain,
+retirement/replacement, lost release acknowledgements, retained obligations after
+a discarded fetch, allocation ordering after slot reuse, one in-flight retain and
+bounded admission. These are host component observations, not native user-copy
+fault injection or scheduler races. Two new IPC tests cover exact syscall envelopes
+and registration snapshot encoding, including valid endpoint zero.
+
+All 24 adapter, 153 IPC, 101 filesystem and 12 service unit tests pass, as do
+nine IPC integration tests. Logs: `target/vfs-copy-adapter-final.log`,
+`target/vfs-copy-libraries-final.log`, and
+`target/vfs-copy-ipc-integration.log`. The initial adapter compilation failure
+used an incorrect fallible tmpfs constructor in the new test fixture; it is
+preserved in `target/vfs-copy-adapter-initial.log`. The corrected fixture uses the
+existing infallible constructor. Kernel/IPC/service compilation passes in
+`target/vfs-copy-check-final.log` with existing dependency/service warnings.
+Focused rustfmt and changed-file whitespace checks pass.
+
+The Phase 3.0 QEMU regression passes in `target/vfs-copy-phase30.log`; raw serial is
+preserved in `target/vfs-copy-phase30-serial.log`. The real VFS process emits:
+
+```text
+[VFS-RPC] authenticated kernel registration snapshot OK transport=copy
+```
+
+That check performs repeated real snapshot syscalls, binds the service runtime,
+checks empty-channel polling and rejects an invalid zero epoch. Implementation,
+fixture and expected-marker hashes in `target/vfs-copy-source.sha256` were verified
+after the gate; artifact hashes are in `target/vfs-copy-image.sha256`. This proves
+the native snapshot/empty-copy boundary and boot regression, not a populated native
+retention exchange, untrusted native caller rejection, copy-fault injection or
+scheduler lifecycle races. Those native cases are NOT RUN.
+
+Next implement trusted scope provisioning, ordered userspace lifecycle delivery,
+retired-epoch servicing and service wakeups before enabling retain publication.
+Restricted mappings/quotas, file publication/completion, park/resume, proven remote
+registration drain and native lifecycle races remain open. Dispatch stays disabled;
+KERNEL_VFS remains authoritative.
+
+### Retained-epoch service polling slice (2026-11-16)
+
+The copied channel now supports STATUS with an exact 48-byte output: the full
+40-byte registration plus a canonical little-endian retirement bit. Epoch zero,
+wrong lengths, reserved arguments and noncanonical status encodings fail closed.
+The kernel resolves the retained epoch independently and authenticates the same
+live boot-stamped service role, PID/incarnation/VM identity and endpoint owner as
+NEXT/REPLY. Retired status remains queryable without an active registration while
+that exact owner and retained row survive. STATUS is read-only and retryable;
+a failed lookup or copy proves neither retirement nor drain.
+
+The ordinary service now uses a shared bounded polling component. Each existing
+IPC turn refreshes the authenticated active snapshot, retires the previous policy
+on a strictly newer snapshot, and lazily binds the replacement. Invalid snapshots
+cannot mutate policy. Replacement capacity/allocation failure leaves the old
+policy retired with its leases and replay state intact; later turns can retry
+binding. An authenticated retired status also retires a known policy when no
+replacement exists. Every retained policy gets up to 16 control exchanges per
+turn, at most 64 with the production four-policy inventory. Old release retries
+therefore cannot consume the replacement's polling budget. The service correlates
+status against the complete stored registration before requesting any frames.
+
+Service policies remain retained after the kernel collects a settled old row.
+Missing status causes that epoch to be skipped; it never authorizes service-row
+reclamation, replay-state reset or implicit reactivation. This is bounded
+same-process reconciliation of known registrations, not restart recovery or proof
+of remote registration drain. Endpoint withdrawal, exec and process replacement
+still close the old owner's channel. Caller retirement events and ordering between
+those events and retained requests remain unwired. A status read is not an ordered
+lifecycle delivery barrier.
+
+Host component tests exercise the production polling loop against the actual
+kernel control component and service policies with real tmpfs pins. They cover a
+populated retain/install, registration retirement and replacement, repeated old
+release acknowledgements lost before kernel acceptance, replacement refusal during
+those retries, final old release settlement, retained replay rows after kernel
+collection, retired status without an active registration, and full owner/role/
+endpoint rejection. Service tests also cover missing/mismatched status, monotonic
+snapshot observation, invalid snapshots, and fail-closed replacement capacity.
+
+All 26 adapter, 154 IPC, 101 filesystem and 14 service unit tests pass, as do nine
+IPC integration tests. Evidence: `target/vfs-epochs-adapter.log`,
+`target/vfs-epochs-libraries-final.log` and
+`target/vfs-epochs-ipc-integration.log`. Kernel/IPC/service compilation passes in
+`target/vfs-epochs-check.log` with existing dependency/service warnings. Focused
+rustfmt and changed-file whitespace checks pass. Allocation-failure injection is
+NOT RUN; bounded replacement capacity failure is covered separately.
+
+The final-source Phase 3.0 QEMU gate passes in `target/vfs-epochs-phase30.log`;
+raw serial is preserved in `target/vfs-epochs-phase30-serial.log`. The real service
+checks active status, rejects epoch zero, executes the shared empty polling loop,
+and emits:
+
+```text
+[VFS-RPC] authenticated registration status OK transport=copy
+```
+
+Implementation/fixture/expected-marker hashes in `target/vfs-epochs-source.sha256`
+were verified after the gate (`target/vfs-epochs-source-verified.log`); kernel/ISO
+hashes are in `target/vfs-epochs-image.sha256`. This proves native active-status
+and empty-loop execution plus boot/filesystem regression. Populated replacement,
+retired status/release exchanges, adversarial native caller rejection, copy-fault
+injection and scheduler lifecycle races are NOT RUN natively; populated exchanges
+remain host component evidence.
+
+Next implement trusted scope provisioning, ordered caller lifecycle delivery and
+service wakeups before enabling live retain publication. Restart reconciliation,
+receipt-backed remote registration drain, restricted mappings/quotas,
+publication/completion, park/resume and native lifecycle races remain open.
+Dispatch stays disabled; KERNEL_VFS remains authoritative.
+
+### Ordered caller retirement control slice (2026-11-16)
+
+The copied retention channel now carries canonical 112-byte CallerRetired and
+CallerRetiredAck frames (operations 6 and 7 inside NEXT/REPLY). They contain the
+full registration, exact caller PID/incarnation/VM generation and a nonzero
+registration-local event ID. Namespace and lease-generation words are reserved
+and must be zero. Existing syscall lengths, caller authentication and endpoint
+ownership checks apply; ordinary IPC and the ordinary lease request router
+cannot deliver lifecycle changes.
+
+Namespace preparation reserves one of 64 caller-delivery rows per registration
+before allocating a namespace or remote lease. Repeated scopes for one live
+caller share its row. Rows survive lease settlement and refusal because those
+outcomes do not prove that service policy pins are gone. Capacity or event-ID
+exhaustion closes new-caller preparation; no lifecycle event allocates memory or
+overwrites another caller. Future trusted provisioning must use this admission
+path and revalidate lifecycle identity before publication. The private generic
+retention fixtures are not a provisioning interface.
+
+Existing exit and successful-exec retirement hooks mark matching admitted
+callers in every retained epoch, alongside local withdrawal and lease abandonment.
+NEXT retries pending retirement events before any later retain or release.
+Only an exact independently authenticated acknowledgement of a delivered event
+opens that barrier and releases its caller slot. Discarded output copies and
+lost acknowledgements preserve the same event. Slot reuse consumes a fresh event
+ID; duplicate, undelivered, mismatched and stale acknowledgements cannot clear a
+replacement event. IDs correlate reservations; they do not establish a global
+chronological order among independent callers or across registration epochs.
+
+The shared service polling loop applies each authenticated retirement to exact
+caller policy bindings across its retained epochs before acknowledging it.
+Repeated delivery is idempotent and cannot withdraw another incarnation or VM
+generation. Existing lease pins and replay watermarks survive. A retain fetched
+before retirement may still complete, but kernel abandonment owns compensation
+and prevents namespace installation. A later queued retain encounters the
+withdrawn service policy after the barrier acknowledgement. Pending barriers
+and live caller-delivery rows also prevent local kernel epoch collection, even
+with no outstanding lease. Thus an exit after old-lease settlement still has a
+delivery destination. Retired epochs remain charged until their tracked callers
+retire and acknowledge, or a future authenticated drain closes those obligations;
+long-lived callers can exhaust replacement capacity. Service rows still require
+a separate proven remote drain before reclamation.
+Unacknowledged barriers deliberately defer release delivery too, preserving
+ownership rather than claiming progress or reclamation after a failed copy.
+
+Three new host adapter tests exercise the real kernel control component, shared
+service polling loop and tmpfs pins. They cover discarded event fetches, lost
+acknowledgements, full owner/caller/event correlation, undelivered and duplicate
+acks, already-fetched success compensation, later-retain refusal, bounded
+capacity after lease settlement, all 64 callers retiring without allocation,
+pending-event epoch retention, old/replacement polling fairness, PID reuse and
+fresh event IDs after slot reuse. IPC tests verify canonical lifecycle encoding;
+service tests verify origin separation, full registration matching, idempotent
+withdrawal and retained lease/new-incarnation preservation.
+
+All 29 adapter, 155 IPC, 101 filesystem and 15 service unit tests pass, as do nine
+IPC integration tests. Evidence: `target/vfs-lifecycle-adapter-final.log`,
+`target/vfs-lifecycle-libraries.log` and
+`target/vfs-lifecycle-ipc-integration.log`. Final kernel/IPC/service compilation
+passes in `target/vfs-lifecycle-check-final.log` with existing dependency/service
+warnings. Focused rustfmt and changed-file whitespace checks pass. The initial
+old empty-poll assertion failure is preserved in
+`target/vfs-lifecycle-adapter-initial.log`; old collection expectations after
+adding live caller obligations are preserved in
+`target/vfs-lifecycle-adapter-retention.log`. An intermediate test edit applied
+the new collection assertion to the wrong fixture; its failure is preserved in
+`target/vfs-lifecycle-adapter-fixture-correction.log`. The final fixtures retain
+the old local-reference drain and lease-settlement assertions, then separately
+require caller retirement delivery before old-epoch collection.
+
+The final-source Phase 3.0 QEMU regression passes in
+`target/vfs-lifecycle-phase30.log`, with raw serial in
+`target/vfs-lifecycle-phase30-serial.log`. Implementation/fixture/expected-marker
+hashes in `target/vfs-lifecycle-source.sha256` were verified after the gate in
+`target/vfs-lifecycle-source-verified.log`; kernel/ISO hashes are in
+`target/vfs-lifecycle-image.sha256`. The ordinary service still proves native
+authenticated active snapshot/status and empty polling. Populated lifecycle
+events, native event-copy faults, lost acknowledgements and exit/exec scheduler
+races are NOT RUN natively; those populated exchanges remain host component
+evidence. No native lifecycle marker or production namespace producer was added.
+
+Next implement trusted scope provisioning and service wakeups before enabling
+live retain publication. Restart reconciliation, receipt-backed remote
+registration drain, restricted mappings/quotas, publication/completion,
+park/resume and native lifecycle races remain open. Dispatch stays disabled;
+KERNEL_VFS remains authoritative.
+
+### Copied control service wakeup slice (2026-11-16)
+
+Pending caller-retirement barriers, deliverable unsent retains and retryable
+releases now provide level-triggered service wakeups. Blocking receive,
+nonblocking receive and reply-and-wait check for work after ordinary queued
+messages; blocking paths perform their last check under the same scheduler
+serialization as parking. The BSP scheduler tick also checks blocked receivers,
+using the existing IPC Ready-queue/reschedule path. Work arriving after a receiver
+parks therefore remains discoverable without another ordinary IPC request.
+The tick makes work eligible for a wake; this is not a measured dispatch-latency
+bound or proof that the task executed.
+
+Hints match the boot-trusted service role, non-exiting PID/incarnation/VM identity
+and a registered endpoint belonging to that exact owner. A receiver blocked on
+an outgoing call or holding an ordinary reply target is excluded. Work in an old
+epoch can wake a different replacement endpoint of the same owner, because the
+service polls its entire retained inventory. The receive syscall continues to
+authenticate endpoint receive ownership; the hint supplies no channel authority.
+Each copied operation independently authenticates its original epoch and endpoint,
+so a wake cannot restore a withdrawn endpoint or transfer an old owner's access.
+
+The payload-free `CONTROL_WAKEUP` hint uses no endpoint queue slots, allocations
+or caller reply target. The service recognizes its kernel-stamped zero badge and
+empty word/capability counts, runs its existing bounded authenticated polling loop,
+then receives again without replying to the hint. An ordinary caller's stamped
+nonzero PID badge prevents its lookalike label from bypassing ordinary handling.
+Neither the label nor its badge delivers or acknowledges a lifecycle event.
+
+Hint delivery coalesces retry eligibility across the owner's retained epochs for
+the current clock tick. A discarded hint or unacknowledged event/release remains
+eligible next tick; repeating receive within that tick cannot spin on the same
+obligation. Waking a parked task does not consume this budget before its receive
+retry. An unknown single-send retain is not retransmitted and alone causes no
+retry wake; live caller-delivery rows without pending retirement also cause none.
+There is no periodic userspace poll when the inventory has no deliverable work.
+Permanently unserviceable obligations can still cause bounded retry wakes until
+future drain/reconciliation resolves them; a failed authenticated poll proves
+neither progress nor reclamation.
+
+Four new host adapter tests cover both modeled sides of receive/park, repeated
+tick checks, hint coalescing, discarded hints/events, single-send retain blocking,
+release retries, full owner/endpoint rejection, outgoing-call/reply-target
+exclusion, old/replacement epochs and a changed replacement endpoint. They execute
+the production readiness and receiver-selection component with host process
+records. The harness substitutes a Ready-state setter for the native scheduler
+wakeup function: these tests do not exercise native Ready queues, IPIs, the actual
+IPC receive/reply-wait continuations or concurrent scheduler interleavings.
+A new IPC test covers hint label, badge and payload separation.
+
+All 33 adapter, 156 IPC, 101 filesystem and 15 service unit tests pass, along with
+nine IPC display integration tests. Logs: `target/vfs-wakeup-adapter-final.log`,
+`target/vfs-wakeup-libraries.log` and
+`target/vfs-wakeup-ipc-display-integration.log`. Kernel/IPC/service compilation
+passes in `target/vfs-wakeup-check-final.log` with existing warnings. Focused
+rustfmt, changed IPC-function formatting and changed-file whitespace checks pass.
+The initial adapter compilation failure (missing host message re-export and
+private sibling helpers) is preserved in `target/vfs-wakeup-adapter-initial.log`.
+An attempted nonexistent IPC test target is preserved in
+`target/vfs-wakeup-ipc-integration.log`; the actual display integration target
+passed separately as recorded above.
+
+The final-source Phase 3.0 QEMU regression passes in
+`target/vfs-wakeup-phase30.log`; raw serial is preserved in
+`target/vfs-wakeup-phase30-serial.log`. The existing native authenticated
+snapshot/status and empty-loop markers pass. Implementation/fixture hashes in
+`target/vfs-wakeup-source.sha256` were verified after the gate in
+`target/vfs-wakeup-source-verified.log`; kernel/ISO hashes are in
+`target/vfs-wakeup-image.sha256`. This proves the empty-channel boot/filesystem
+regression, not populated native wakeups. Queue-saturation progress, retry timing,
+populated receive/reply-wait continuations and exit/exec races are NOT RUN
+natively. Existing populated retention/lifecycle exchanges remain host component
+evidence. No production namespace producer or native lifecycle/wakeup-success
+marker was added.
+
+Next implement trusted scope provisioning with lifecycle revalidation before
+enabling live retain publication. Native populated wakeup/lifecycle verification,
+restart reconciliation, receipt-backed remote registration drain, restricted
+mappings/quotas, publication/completion and park/resume remain open. Dispatch
+stays disabled; KERNEL_VFS remains authoritative.
+
+### Live mounted-root traversal prerequisite (2026-11-16)
+
+The service's `namespace::stat_root` adapter now walks the existing mounted VFS
+component by component. It accepts repeated separators and `.`; `..` stops at the
+service root. Each parent is checked for directory type and caller search
+permission before processing the next component, including `.` and `..`.
+Consequently missing, non-directory or denied components cannot disappear through
+lexical normalization. Trailing separators require a directory. Mount selection
+continues through the live service VFS. The adapter explicitly rejects captured
+paths longer than 255 bytes, relative paths and embedded NUL, without truncation.
+It uses bounded stack storage for the normalized path.
+
+Host tests cover denied/missing components before `..`, non-directory traversal,
+root confinement, repeated separators, trailing separators, UTF-8 parent removal,
+mount crossing and oversized input. All 21 service library tests pass in
+`target/vfs-root-traversal-tests.log`; the service target check passes in
+`target/vfs-root-traversal-check.log`. The ownership inventory was rerun in
+`target/vfs-root-traversal-audit.log`. This is component evidence only; no native
+boot gate was run for this slice.
+
+This adapter still accepts only the live service root and the existing two-field
+`Credential`; it does not implement retained alternate roots/cwd, supplementary
+groups, authenticated syscall dispatch or RPC metadata provenance. Trusted scope
+provisioning and the authenticated stat park/resume round trip remain the next
+cutover work. KERNEL_VFS remains authoritative for file syscalls.
+
+### Shared mounted-service directory ownership and migration ceiling (2026-11-16)
+
+The production service now moves its existing mounted VFS into shared ownership.
+Legacy IPC operations and the `DirectoryNamespace` used by trusted provisioning
+share that exact table. Mounted directory pairs own real VFS handles and keep
+the table alive; close returns the existing per-mount open-handle accounting.
+`Vfs::handle_object_id` delegates to the retained backend handle and does not
+re-resolve its pathname. These IDs remain backend-local diagnostics, not RPC
+metadata provenance or authority. The separate boot-share adapter is unchanged.
+Isolated component fixtures still own small tmpfs backends; they are not used to
+construct production policy. No new kernel namespace or traversal path was added.
+
+Host tests cover shared metadata updates, rename/replacement without retargeting,
+backend lifetime and handle-count cleanup across a non-root mount. Existing
+protected boot mounts remain protected after pins close. All 22 service, 101
+filesystem, 156 IPC and 33 kernel-adapter tests pass. Evidence:
+`target/vfs-shared-namespace-tests-final.log`,
+`target/vfs-shared-namespace-libraries.log`, and
+`target/vfs-shared-namespace-adapter-final.log`. Kernel and service target checks
+pass in `target/vfs-shared-namespace-kernel-check-final.log` with existing warnings.
+
+The Phase 3.0 native gate passes in
+`target/vfs-shared-namespace-phase30-retry.log`; serial is preserved in
+`target/vfs-shared-namespace-phase30-serial.log`. A new ring-3 fixture installs a
+policy against the actual live mount table, changes ownership through the existing
+legacy handler, observes it through the retained pair, then releases its handles:
+
+```text
+[VFS-RPC] live mounted namespace pins shared with legacy handlers OK transport=fixture
+```
+
+This is live service ownership evidence with fixture identities, not authenticated
+kernel provisioning, a cross-process stat request, or syscall cutover. The first
+native run failed before retention fixture markers; its log is preserved in
+`target/vfs-shared-namespace-phase30.log`. The initial implementation allocated a
+full mount table for each isolated fixture against the service's 64 KiB bump heap.
+Keeping isolated fixtures on their small tmpfs backend resolves that regression.
+An initial host assertion incorrectly expected a protected boot mount to unmount;
+it is corrected to preserve that protection and verify handle accounting.
+
+`audit_vfs_cutover.py --no-growth` now compares exact path/category/code sites and
+multiplicity against `userspace-vfs-kernel-baseline.json`, ignoring line numbers.
+Deleting an owner cannot buy permission to add a different owner. Both the native
+boot test script and workspace checker enforce it before builds. Baseline entries
+should be removed during migration; do not add owners to make the guard pass.
+Two host guard tests pass in `target/vfs-shared-namespace-audit-tests.log`.
+The guard passes with zero additions in
+`target/vfs-shared-namespace-no-growth.log`. This remains a conservative source
+scan, not a Rust semantic analysis. Final `--check` deliberately still fails:
+68 ring-0 ownership references remain, recorded in
+`target/vfs-shared-namespace-removal-gate.log`.
+
+Next: authenticated, lifecycle-revalidated provisioning into this shared mount
+table, followed by stat publication/completion and atomic caller park/resume.
+Open-object operations, storage/exec consumers and removal of KERNEL_VFS remain
+required for cutover. File syscall dispatch remains unchanged in this slice.
+
+
+### Authenticated root-policy handoff (2026-11-16)
+
+The copied retention channel now has `AUTHORIZE_ROOT`, an exact 112-byte input
+operation. It validates the full pending retain against a separately staged
+kernel root-policy bit. Successful validation authorizes only the service's
+mounted `/` as both root and cwd; retain payloads cannot choose paths or grant
+that bit. The private trusted producer `queue_root_namespace` stages this
+profile; ordinary `queue_namespace` staging does not authorize it. No public
+caller-selection/provisioning syscall was added.
+
+Authorization requires the independently authenticated service/endpoint/epoch,
+an active non-retired registration, the exact delivered pending request and
+scope, no outstanding caller-retirement barrier, and a live caller with the
+original PID/incarnation/address-space/UID/GID. Neither unsent requests nor
+bound or settled receipts pass. User copies occur outside lifecycle locks.
+
+The production service loop now polls with `poll_root_control` against its shared
+mounted `DirectoryNamespace`. For a retain it independently authorizes the root
+profile, pins `/` twice, revalidates, and only then acquires the remote lease.
+A revalidation race withdraws the provisional pins. Final reply installation
+still revalidates kernel caller identity, with compensating release on a late
+race. Pin/allocation/profile failures use retention-table refusal accounting
+without consulting an older policy binding; replay failures never become false
+negative acknowledgements for potentially retained leases.
+
+Host adapter evidence now covers a populated control exchange with no service
+fixture policy installation: kernel staging, independent authorization, shared
+mounted-directory pins, retained reply, correlated kernel binding, caller
+retirement and final handle drain. It also covers retirement between pinning
+and revalidation, forged correlation fields, changed caller credentials and
+lifetimes, endpoint loss, unauthorized ordinary callers, unsent requests,
+ungranted profiles, continued progress after a refusal, and release of provisional
+pins when lease capacity is exhausted. Mounted host fixture
+construction lives in `tools/test_vfs_registration_host.py`, outside kernel boot
+sources; the no-growth ownership baseline remains unchanged at 68 references.
+
+Validation: 37 host registration/ownership adapter tests, 156 IPC tests and 23
+service tests pass. Kernel/service `cargo check` passes with existing warnings.
+`bash tools/test.sh phase3.0` passes, including authenticated copied registration
+status, shared mounted-directory fixtures and the legacy VFS IPC checks. Native
+log: `target/vfs-root-policy-phase30-final.log`. This is regression evidence,
+not a populated native root-policy or stat round-trip proof.
+Logs: `target/vfs-root-policy-adapter-final.log`,
+`target/vfs-root-policy-libraries-final.log`,
+`target/vfs-root-policy-check-final.log`, `target/vfs-root-policy-no-growth.log`.
+
+This completes the authenticated root-policy handoff consumer, not syscall
+cutover. The private root-profile producer is exercised by the host adapter;
+boot/process lifecycle code does not yet select or stage production callers.
+The native regression gate exercises the ordinary service loop without a
+populated root-profile exchange. Next wire a deliberately selected caller and
+its explicit root policy, then implement the authenticated stat publication,
+park/resume and result-copy path. Arbitrary cwd/root profiles remain unsupported;
+ordinary file syscalls still use the kernel VFS.
+
+
+### Boot caller selection and populated native root handoff (2026-11-16)
+
+The boot-loaded init image now carries the private `vfs_root_metadata` marker.
+This explicitly selects the service-mounted `/` for both root and cwd with only
+`LOOKUP_METADATA`; PID, image name, UID zero and ordinary IPC cannot select it.
+Both process constructors default the marker to false, so spawn and fork do not
+inherit it. Successful exec withdraws it with the other image-scoped roles.
+This is a provisioning pilot, not a file-syscall routing switch. It does not claim
+that init's kernel cwd or namespace has migrated.
+
+An authenticated active `SNAPSHOT` stages the profile under scheduler, broker and
+runtime serialization. It captures caller incarnation, VM generation and current
+credentials before queueing through the existing root-policy producer. Existing
+caller delivery records make the staging decision idempotent across pending,
+bound and refused work. A refusal is terminal for that caller in that service
+epoch; polling does not repeatedly allocate scopes or pin directories. Capacity
+failure before publication can retry on a subsequent snapshot. A replacement
+registration can provision a fresh non-reusing scope; retired epochs retain their
+existing cleanup obligations.
+
+The service startup probe now drains populated control work through the ordinary
+root-policy handler before checking for an empty channel. It must not consume a
+single-delivery retain with an empty-channel assertion. Kernel serial evidence
+is emitted only after a correlated retained reply installs a live binding for a
+selected process:
+
+```text
+[VFS-RPC] boot root policy installed caller=1 epoch=1 transport=copy
+```
+
+The Phase 3.0 gate now requires this marker. `bash tools/test.sh phase3.0` passes,
+including existing legacy IPC and shared namespace checks. Logs:
+`target/vfs-production-selection-phase30.log` and
+`target/vfs-production-selection-serial.log`. This is populated native
+provisioning evidence, not a native stat RPC or syscall cutover proof.
+
+Validation: 41 host adapter tests, 156 IPC tests and 23 service tests pass (220
+total). New adapter cases cover unauthenticated selection attempts, exact captured
+credentials, duplicate snapshots, credential races, full shared-root provisioning
+without fixture staging, pending-operation pin lifetime through retirement/reap,
+refusal without restaging, fresh scopes after replacement, and invalid/exiting
+caller identities. Kernel/service target checks pass with existing warnings.
+Logs: `target/vfs-production-selection-host-final.log`,
+`target/vfs-production-selection-libraries.log`,
+`target/vfs-production-selection-check.log`.
+
+The ownership audit still reports 68 references and zero additions in
+`target/vfs-production-selection-audit.log`. File syscalls still use KERNEL_VFS.
+Next implement authenticated stat publication/completion, atomic caller
+park/resume and validated result copying, including service-loss termination.
+Open descriptions, remaining namespace/storage/exec consumers and kernel VFS
+removal remain required for the migration acceptance gate.
+
+### Stat publication and continuation component (2026-11-16)
+
+Added a kernel-private, bounded stat publication component alongside the
+boot-lived pending table. Admission reserves a publication slot, checks the exact
+caller/VM and credentials and rejects an existing IPC or stat continuation.
+Fallible resource preparation finishes before publication and caller parking
+under scheduler/broker/runtime serialization. Prepared input remains owned by
+the quota-charged pending resources. The copied pull component checks the full
+registration, delivers IDs in allocation order and consumes delivery only after
+a successful bounded copy. Short destination buffers do not consume work.
+
+Service pull/completion wrappers authenticate the syscall-origin PID against the
+retained registration and endpoint owner. Completion requires a delivered request
+from the bound epoch; malformed bound replies become terminal, while wrong IDs,
+epochs and duplicates cannot replace a result. Validated metadata bytes are copied
+into retained output backing. Terminal wakeups match the caller incarnation and
+VM generation and run once. The existing BSP wake pass now discovers stat work
+for service hints and terminal caller continuations, including service loss.
+Exit/exec discards the matching continuation while leaving terminal resources
+for generic cleanup. Live continuations reserve their result until an exact
+caller-owned take; unrelated abandoned operations remain independently reapable.
+
+This is a host-validated continuation component, not an enabled native stat
+transport. No syscall invokes publication/pull/completion yet. The copied service
+syscall ABI, service dispatch loop, syscall continuation yield and validated user
+result copy remain required before a native stat round-trip test or any routing
+switch. In particular, the park operation must be followed by a scheduler yield
+when its future syscall entry is integrated. File syscalls still use KERNEL_VFS.
+
+Validation: 45 host adapter tests, 156 IPC tests and 23 service tests pass (224
+total). New cases cover atomic park/publication, preparation rollback, short-copy
+retry, exact input identity, single delivery, reply-before-delivery rejection,
+duplicate completion, malformed replies, service loss, replacement VM isolation,
+validated successful metadata retention and exact caller result ownership.
+Kernel/service target checks pass with existing warnings. Logs:
+`target/vfs-stat-publication-host.log`,
+`target/vfs-stat-publication-libraries-isolated.log`,
+`target/vfs-stat-publication-check-isolated.log`.
+The ownership audit remains at 68 references with zero additions in
+`target/vfs-stat-publication-audit.log`. QEMU was not rerun for this inactive
+component; the earlier populated root-policy boot evidence is unchanged.
+
+### Native authenticated root-stat pilot (2026-11-16)
+
+Syscall 181 now exposes a deliberately narrow root-metadata operation to the
+explicitly selected boot caller, plus service-only copied NEXT/COMPLETE operations.
+The caller supplies a result destination, never a PID, path, scope, credentials,
+endpoint or policy. The kernel publishes `Stat { path: "/" }` using the retained
+root profile. This is a separate pilot ABI; ordinary stat(61) and the other file
+syscalls continue using KERNEL_VFS. General pathname traversal is not enabled.
+
+Exact operation/epoch/size/reserved-argument checks precede dispatch. Service
+pull/completion authenticate the current process, endpoint and full registration
+independently of message bytes. Successful copied pulls establish kernel origin;
+ordinary IPC never enters the stat handler. Fixed bounded request packets carry
+an explicit initialized input length and zero padding. Replies carry four words
+and at most 56 initialized metadata bytes, with canonical unused padding.
+Malformed replies preserve the raw correlation ID so the bound delivered request
+can fail terminally without disturbing another operation. A failed pull copy
+retires the epoch instead of retransmitting uncertain work.
+
+The service drains stat work after retention control on normal IPC turns and
+kernel receive hints. It resolves the authenticated dispatch scope and opaque
+pair generation through live policy and retained directory leases, then reads
+the pinned root object. It accepts only root stat, metadata-only grants and the
+currently supported empty supplementary group set. Metadata provenance identifies
+the retained scope and root pair for this pilot; it is not an exported backend
+inode/handle identity. Filesystem mode type bits are removed because RPC metadata
+carries kind separately. Retired policies, withdrawn scopes and altered pair
+identities cannot supply successful metadata.
+
+Caller publication and parking remain atomic under scheduler/broker/runtime
+serialization. The syscall accounts the block, removes queued runnable copies
+and requests rescheduling. The userspace wrapper retries the same owned logical
+call only after wakeup, following the existing native IPC convention. Terminal
+results are checked before active-service lookup, so service loss remains
+observable. Nested IPC continuations keep their own blocked state. Completion
+resources survive lifecycle unlock; caller incarnation and VM generation are
+checked under the same scheduler guard as the final user-memory validation and
+copy. Caller exit/exec requests bounded cleanup on syscall return, with resource
+destruction outside lifecycle locks. Live callers retain their result ownership.
+
+Init exercises the pilot after its base-service spawn pass, allowing nameserver
+traffic to continue if root provisioning is not ready. The Phase 3.0 gate waits
+for the native result marker and requires correlated park, validated reply and
+successful kernel result-copy evidence:
+
+```text
+[VFS-RPC] root stat parked caller=1 request=1 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] native root stat caller resume/result copy OK transport=copy
+```
+
+Validation: 47 host adapter tests, 158 IPC tests and 23 service tests pass (228
+total), including the copied service round trip, altered retained-object refusal,
+post-retirement refusal, resource pin lifetime and nested IPC continuation
+isolation. Kernel/init/service target checks pass with existing warnings.
+`bash tools/test.sh phase3.0` passes, including the previous boot-root handoff and
+legacy VFS checks. Evidence: `target/vfs-stat-native-host-final.log`,
+`target/vfs-stat-native-libraries.log`, `target/vfs-stat-native-check-final.log`,
+`target/vfs-stat-native-phase30-final.log`, `target/vfs-stat-native-serial.log`.
+The ownership audit remains at 68 references with zero additions in
+`target/vfs-stat-native-audit.log`.
+
+Next extend authenticated stat to general paths with retained-root/cwd traversal,
+search permissions and stable object provenance, and prove native caller/service
+loss and VM-race behavior before enabling ordinary syscall routing. Open
+descriptions, remaining namespace/storage/exec consumers and kernel VFS removal
+remain required for migration acceptance. This pilot does not complete migration.
+
+### Authenticated pathname stat in retained profiles (2026-11-16)
+
+The copied stat pilot now accepts absolute and relative paths within the selected
+service root/cwd profile. Syscall 181's PATH_METADATA operation copies an exact
+UTF-8 pathname of 1–4095 bytes into kernel storage before publication. It accepts
+no caller, namespace, credential, endpoint or policy fields. Output remains a
+separate fixed 56-byte metadata record. Exact lengths and reserved arguments are
+validated; empty, NUL-containing, malformed UTF-8 and oversized inputs fail before
+admission. Retries must match the immutable admitted pathname, so a different
+request cannot consume an earlier call's result. The root-only operation remains
+available. Both use the same authenticated service pull/completion and caller
+continuation machinery.
+
+`Vfs::stat_beneath` authenticates retained directory handles against their live
+mount incarnation, current linked pathname and tmpfs inode identity under one
+exclusive mounted-VFS borrow. It does not authorize from a saved policy path or
+an unauthenticated `handle_path` observation. Renamed directories remain usable;
+a cwd moved outside the retained root is refused for relative lookup. Absolute
+lookup starts from the retained root independently of cwd. Overmounting an
+anchor cannot silently redirect its pin. Mount mutation and traversal share the
+service's namespace mutex.
+
+The component walker checks directory type and search permission using captured
+UID/GID before each component, including `.` and `..`. Parent traversal clamps
+at the retained root. Missing or non-directory intermediates cannot be erased by
+lexical cleanup; trailing slashes require a directory. The final file need not
+be readable merely to observe metadata. All temporary traversal paths use bounded
+stack buffers, avoiding cumulative allocation in the service's bump allocator.
+No supplementary-group support or symlink semantics are inferred.
+
+Successful metadata now carries mounted tmpfs provenance rather than the prior
+pilot's retained-pair placeholder: mount slot plus non-reusing mount incarnation,
+non-reusing inode ID plus one (including implicit root), and object generation
+one because inode IDs never reuse within a mount. These identities are local to
+the mounted namespace and must be interpreted with the authenticated service
+epoch; they do not claim global uniqueness across service restarts. FAT and other
+backends without this stable identity contract return EOPNOTSUPP. Policy and
+retention scope checks still precede traversal, and withdrawal closes admission.
+The service returns correlated ENOENT, ENOTDIR, EACCES, EINVAL, EBADF, ENOMEM and
+EOPNOTSUPP where applicable.
+
+The independent input/output contract is now explicit in `Pending::new_copied`
+and dispatch validation. A long immutable path does not require inflating the
+56-byte writable metadata region. The original combined-buffer pending
+constructor retains its previous validation contract. Boundary tests cover
+maximum-length copied frames and real kernel-adapter resource preparation.
+
+The native probe compares absolute and relative file metadata, verifies a
+service-only directory with UID/GID changed through legacy service handlers,
+checks root confinement and POSIX path errors, and places the final filename at
+the end of a 4095-byte path to detect truncation. The Phase 3.0 gate now waits for
+`[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy` in
+addition to the earlier root handoff and caller park/reply/result-copy evidence.
+
+Ordinary file syscalls, including stat(61), remain on KERNEL_VFS. The selected
+profile is the explicitly provisioned service root/cwd, not a migration of the
+process's kernel cwd. Native caller/service-loss and VM-race tests, profile
+lifecycle integration and ordinary syscall routing remain subsequent work.
+Open descriptions, remaining namespace/storage/exec consumers and final kernel
+VFS removal are still required for migration acceptance.
+
+Validation: 49 host adapter tests, 161 IPC tests, 24 service tests and 107 filesystem
+tests pass (341 total). The filesystem cases cover search permissions including
+captured GID, dot/dotdot ordering, renamed root/cwd anchors, cwd moved outside root,
+mount crossings, overmount refusal, inode identity across write/rename/recreation,
+simulated mount-incarnation replacement and FAT refusal. Copied adapter tests
+exercise kernel-captured credentials, maximum input, successful lookup and
+correlated EACCES/ENOENT/ENOTDIR completion. Kernel/init/service native builds and
+`bash tools/test.sh phase3.0` pass, including the maximum-length native path.
+Evidence: `target/vfs-path-host-final.log`, `target/vfs-path-libraries.log`,
+`target/vfs-path-fs.log`, `target/vfs-path-phase30-final.log`,
+`target/vfs-path-serial.log`. The ownership audit remains at 68 references and
+zero additions in `target/vfs-path-audit.log`.
+
+### Bounded stat waiting and native failure gate (2026-11-16)
+
+Authenticated pilot stats now have a five-second budget starting at publication.
+The BSP wake pass expires both undelivered and delivered requests through the
+existing single terminal transition. Service pulls, completions and caller
+retries also check elapsed ticks under lifecycle serialization; neither delivery
+nor retry renews the budget. Expiration returns ETIMEDOUT (110), wakes the exact
+caller once and keeps its result resources until consumption or lifecycle reap.
+A completed reply or caller/service retirement that already won remains terminal.
+Elapsed-tick arithmetic supports counter wraparound. Late replies cannot complete
+an expired request or replace a newer request's result. Timeout does not replay
+work or retire an otherwise live service; this pilot admits only metadata reads.
+
+`bash tools/test.sh vfs-stat-failure` builds init and VFS with an explicit
+`stat-failure-test` feature. Its injection handlers and invalid-copy wrapper are
+absent from normal images. After the ordinary native pathname probe, the test
+withholds a real authenticated reply until the caller times out, submits that
+late reply while a fresh request is waiting and verifies successful fresh
+metadata. It then consumes a real service pull into an invalid user destination,
+exercising the existing failed-copy epoch retirement path. The parked caller must
+resume with EIO and the following call must report unavailable provisioning,
+without falling back to kernel traversal. This proves native epoch-loss handling;
+it does not simulate killing or restarting the service process.
+
+Host cases cover deadline boundaries before/after delivery, exact caller-owned
+timeout consumption, fresh IDs and late replies, counter wraparound and terminal
+event ordering. Caller teardown is checked before delivery, after delivery and
+after completion against exit, VM replacement and process-incarnation replacement.
+Native caller exit/exec and VM replacement races remain a separate acceptance
+gate, followed by profile lifecycle integration and ordinary syscall routing.
+Ordinary file syscalls still use KERNEL_VFS; FAT lookup and open descriptions
+remain unsupported by the authenticated pilot.
+
+Validation: 52 host adapter tests, 161 IPC tests, 24 service tests and 107
+filesystem tests pass (344 total). The dedicated native failure gate passes,
+including a legacy IPC acknowledgement after the consumed-copy fault so its final
+marker cannot hide a stalled service loop. Evidence:
+`target/vfs-stat-failure-host-final.log`,
+`target/vfs-stat-failure-libraries.log`, `target/vfs-stat-failure-fs.log`,
+`target/vfs-stat-failure-native-final.log`,
+`target/vfs-stat-failure-serial.log`.
+The no-growth audit still reports 68 references and zero additions in
+`target/vfs-stat-failure-audit.log`.
+The ordinary `bash tools/test.sh phase3.0` gate also passes after rebuilding init
+and VFS without fault injection (`target/vfs-stat-failure-phase30.log`). Both
+native gates build the kernel and service images; existing build warnings remain.
+
+### Native stat output mapping mutation (2026-11-16)
+
+The dedicated `vfs-stat-failure` image now mutates a real cross-page user output
+mapping after the stat publication returns PENDING and before result collection.
+Unmapping the second page must reject the whole copy with the native failure
+sentinel and preserve the first-page canary. A second case replaces that page
+with a writable anonymous mapping at the same VA; collection must populate the
+current mapping with the expected metadata. Both cases release their mappings
+and verify a fresh stat succeeds, checking that failed copyout consumes the old
+completion without poisoning the service or caller continuation.
+
+This exercises mutation between publication and collection, including a reply
+that may already have completed. It does not force concurrent mutation inside
+copyout: scheduler serialization protects validation and copying. Same-VM page
+replacement is supported; it is distinct from exec replacing the address-space
+identity. Native caller exit/exec and concurrent VM replacement remain required
+acceptance work. Ordinary syscalls continue using KERNEL_VFS.
+
+Validation: 52 host adapter tests pass; the feature-enabled init builds. The
+ownership audit remains at 68 references and zero additions. Evidence:
+`target/vfs-vm-host.log`, `target/vfs-vm-build.log`, `target/vfs-vm-audit.log`.
+The dedicated QEMU failure gate passes with the new required marker
+`[VFS-RPC] native stat output unmap/remap atomic copy/recovery OK` plus all
+previous timeout and epoch-loss markers. Native evidence:
+`target/vfs-vm-native.log`, `target/vfs-stat-failure-serial.log`.
+
+### Native stat caller exit and exec retirement (2026-11-16)
+
+The dedicated `vfs-stat-failure` image now launches disposable embedded stat
+callers from boot init. A separate kernel feature, `vfs_stat_failure_test`, grants
+only init's direct `/bin/vfs-stat-caller` spawn the pilot metadata role. The
+fixture binary and this grant are absent from ordinary images. Its namespace is
+provisioned through the existing authenticated snapshot/root-policy path; no
+fixture supplies caller identity or namespace authority in a stat request.
+
+The service holds a real delivered reply until an explicit regression control
+releases it. A failed exec of a missing image must preserve the pending request,
+pilot permission and output canary; releasing that reply must produce the exact
+original metadata, followed by a successful fresh call. A caller that exits with
+a delivered request must leave the held reply uncompletable. Successful exec
+runs a replacement image at the same PID; that live replacement asks the service
+to reject the old reply before exiting and verifies its stat call returns
+NOT_READY because exec withdrew the pilot role. Init waits for each fixture's
+successful exit and checks fresh service metadata after every case. These use
+the production exit/exec retirement hooks and normal copied stat transport.
+
+This closes native caller exit/exec validation for delivered, outstanding stats.
+Undelivered and already-completed retirement orderings remain covered by host
+adapter tests. Concurrent VM replacement inside copyout remains acceptance work;
+this gate does not claim that race. Profile lifecycle integration and ordinary
+syscall routing remain subsequent work. Ordinary file syscalls still use
+KERNEL_VFS.
+
+Validation: 52 host adapter tests pass. The dedicated QEMU failure gate includes
+required failed-exec preservation, live exec-replacement denial and caller
+exit/exec recovery markers alongside all earlier failure checks. Evidence:
+`target/vfs-caller-host.log`, `target/vfs-caller-native-final.log`,
+`target/vfs-caller-serial.log`. The no-growth audit remains at 68 references and
+zero additions (`target/vfs-caller-audit.log`).
+The ordinary `bash tools/test.sh phase3.0` gate also passes after rebuilding init,
+VFS and the kernel without the stat fixture features
+(`target/vfs-caller-phase30.log`). Existing build warnings remain.
+
+### Native concurrent stat output mapping replacement (2026-11-16)
+
+The dedicated failure image now runs 32 rounds of stat result collection while
+an actual sibling native thread repeatedly unmaps and MAP_FIXED remaps the
+second page of a cross-page output buffer in the shared VM. Atomic handshakes
+require worker mapping progress before each collection and quiesce the worker
+before inspecting output. A successful copy must leave the exact metadata
+prefix in the stable first page; a failed copy must leave its entire canary
+unchanged. The second page may be replaced after successful copyout and is not
+used as evidence of a failed copy. Every round checks a fresh metadata request.
+The worker exits and is waited for before its stack, TLS and output are unmapped.
+
+This exercises production shared-VM mutation and scheduler-serialized copyout
+under native concurrency, extending the earlier sequential unmap/remap fixture.
+It is a bounded race stress gate, not an instruction-level forced interleaving
+inside the guarded page walk. Both deterministic mapping outcomes remain
+covered by the earlier fixture. The new module is compiled only with
+`stat-failure-test`; ordinary syscalls continue using KERNEL_VFS. Profile
+lifecycle integration and ordinary syscall routing remain subsequent work.
+
+Validation: 52 host adapter tests and the dedicated two-CPU QEMU failure gate
+pass, including the required marker
+`[VFS-RPC] native stat concurrent VM replacement atomic copy/recovery OK`.
+Evidence: `target/vfs-concurrent-host.log`, `target/vfs-concurrent-native.log`,
+`target/vfs-stat-failure-serial.log`. The no-growth audit remains at 68 references
+with zero additions (`target/vfs-concurrent-audit.log`).
+The ordinary Phase 3.0 gate also passes after rebuilding without fixture
+features (`target/vfs-concurrent-phase30.log`). Existing build warnings remain.
+
+
+### Root-profile withdrawal on cwd commit (2026-11-16)
+
+Successful native `chdir` now withdraws the selected caller's root-only pilot
+profile under the scheduler guard that commits cwd. It uses the scheduler's
+existing shared-resource ownership rule to cover all callers sharing that cwd,
+including a leader while a native std sibling performs `chdir`. Native threads
+with private cwd snapshots do not withdraw their parent's profile. Failed path
+lookup or directory validation preserves authority and outstanding results.
+Every successful `chdir`, including a return to `/`, conservatively withdraws;
+there is no automatic regrant or general cwd provisioning in this slice.
+
+Withdrawal retires local admission, pending requests and remote retain ownership,
+and queues the existing copied caller-retirement barrier. A parked stat owner is
+woken before its publication is discarded; nested IPC continuations retain their
+own wake ownership. Abandoned results are destroyed by syscall-return cleanup
+after lifecycle unlock. The service remains registered and unrelated callers
+continue making fresh requests. Root authorization now rechecks the caller's
+live pilot grant, including after a retirement barrier has been acknowledged:
+an old queued retain must not install policy for a still-live but withdrawn
+caller. Retained replies also recheck that grant and compensate late receipts.
+Final metadata copyout checks the grant again under the guarded user copy, so a
+completion taken just before sibling withdrawal cannot write stale output.
+
+The dedicated failure image adds disposable callers for failed `chdir`, private
+sibling cwd mutation, direct successful `chdir`, and shared sibling cwd mutation.
+They hold delivered replies across the transition, check exact preserved results
+or untouched output canaries, reject stale replies while the original caller is
+alive, and confirm that a service snapshot and return to `/` cannot regrant the
+profile. Init verifies fresh metadata after each fixture. Host coverage includes
+withdrawal before delivery, after delivery and after completion; nested IPC wake
+ownership; queued provisioning and late retained-receipt compensation; remote pin
+drain and prevention of snapshot regrant.
+
+This starts profile lifecycle integration with fail-closed cwd withdrawal.
+General root/cwd profiles, credential-change integration and ordinary syscall
+routing remain subsequent work. Ordinary file syscalls still use KERNEL_VFS.
+The existing concurrent VM gate remains bounded stress without forced
+instruction-level interleaving.
+
+Validation: 55 host adapter tests, the dedicated two-CPU QEMU failure gate and
+the ordinary Phase 3.0 gate pass. Evidence: `target/vfs-cwd-host.log`,
+`target/vfs-cwd-native.log`, `target/vfs-cwd-serial.log`,
+`target/vfs-cwd-phase30.log`. The no-growth ownership audit remains at 68
+references and zero additions (`target/vfs-cwd-audit.log`). Existing build
+warnings remain.
+
+
+### Root-profile withdrawal on credential commit (2026-11-16)
+
+Native `setuid` and `setgid` now withdraw the caller's root-only pilot profile
+when the authorized operation changes its UID or GID. Credential commit and
+withdrawal hold the same scheduler guard, so queued provisioning and guarded
+metadata copyout cannot retain authority across the transition. The existing
+withdrawal path retires pending requests, wakes pilot continuations and queues
+remote retirement without destroying resources under lifecycle locks.
+
+Successful no-op credential calls and denied calls preserve the profile. Current
+credentials are per-process, including native shared-cwd siblings; credential
+withdrawal therefore targets only the caller. Restoring old credentials cannot
+regrant the withdrawn profile. Exec and cwd withdrawal retain their existing
+behavior. General cwd provisioning and ordinary syscall routing remain pending.
+
+The host publication-phase matrix now also commits UID and GID changes before
+withdrawal. Native disposable callers cover unchanged credentials with a held
+result, UID and GID changes with a stale reply and untouched output canary,
+denied changes after dropping UID, and GID restoration without regrant. Init
+checks fresh metadata from its unaffected profile after each disposable caller.
+
+Validation: 55 host adapter tests (with the expanded publication-phase matrix),
+the two-CPU native failure gate and ordinary Phase 3.0 gate pass. Evidence:
+`target/vfs-credentials-host.log`, `target/vfs-credentials-native-retry.log`,
+`target/vfs-credentials-serial.log`, `target/vfs-credentials-phase30.log`.
+The first native attempt stalled in the pre-existing failed-exec fixture after
+rejecting its held reply, before reaching the credential cases; the complete
+retry passed. Its serial evidence is retained in
+`target/vfs-credentials-first-serial.log`. The no-growth ownership audit remains
+at 68 references and zero additions (`target/vfs-credentials-audit.log`).
+Focused rustfmt checks and `git diff --check` pass. Existing build warnings remain.
+
+
+### Selected native StatPath routing (2026-11-16)
+
+Native `StatPath` (61) now publishes metadata requests through the authenticated
+service path for boot init and the dedicated disposable regression callers.
+The syscall parks with the existing caller-owned publication and rewinds the
+native SYSCALL instruction on PENDING. On resume it consumes that publication,
+converts the validated service metadata to the existing 24-byte native record
+(including type bits in mode), and performs one guarded output copy. POSIX
+service errors are translated to native libc sentinels; timeout and terminal
+service failures produce native I/O failure. The copied pilot API remains
+available with its existing framing and PENDING contract.
+
+A separate sticky `vfs_stat_routed` choice survives cwd/credential withdrawal
+and successful exec. The withdrawable metadata grant still controls admission
+and guarded copyout. A withdrawn or unavailable selected caller receives native
+EAGAIN without entering KERNEL_VFS, including after restoring credentials or
+returning cwd to `/`. New children and sibling threads start unselected; only
+boot provenance or the feature-gated fixture launch selects this route. This
+slice does not provision general cwd profiles or migrate other callers, Linux
+stat, descriptors, or other file operations. Kernel filesystem ownership remains.
+
+Native acceptance compares ordinary libc stat against copied service metadata
+for absolute/relative files, a directory with fixture-specific UID/GID, and root
+clamping. It checks native empty/missing/not-directory errors, failed output
+copy and fresh-request recovery, timeout/resume, and service loss without
+fallback.
+Disposable cwd, credential and exec callers also issue ordinary StatPath while
+their profile is withdrawn and require EAGAIN with an untouched output canary.
+Host tests check the native record layout, type bits, metadata validation and
+POSIX-to-native error translation.
+
+Validation: 57 host adapter tests and the dedicated two-CPU QEMU failure gate
+pass. Evidence: `target/vfs-route-host.log`, `target/vfs-route-native.log`,
+`target/vfs-route-serial.log`. The no-growth ownership audit remains at 68
+references and zero additions (`target/vfs-route-audit.log`).
+The ordinary Phase 3.0 gate also passes after rebuilding without fixture
+features (`target/vfs-route-phase30.log`). Focused rustfmt checks and
+`git diff --check` pass. Existing build warnings remain.
+
+
+### Selected Linux pathname stat routing (2026-11-16)
+
+Linux `newfstatat`, including translated `stat` and `lstat`, now shares the
+selected native StatPath continuation and authenticated service lookup. Absolute
+paths ignore dirfd; relative AT_FDCWD paths use the retained service cwd directly,
+without kernel textual resolution. Relative directory-FD requests return
+EOPNOTSUPP because service-owned descriptors do not yet exist. Unsupported flags
+return EINVAL; AT_SYMLINK_NOFOLLOW is accepted for the current symlink-free
+backends. Empty paths return ENOENT; AT_EMPTY_PATH remains unsupported.
+
+The adapter emits Linux x86_64's 144-byte stat record, with service mount/object
+IDs instead of a pathname hash, captured ownership, type/mode, link count and
+size. These IDs retain the existing service-epoch scope and do not promise
+cross-restart identity. Signed size overflow returns EOVERFLOW. As in the prior
+compatibility implementation, timestamps are zero, block size is 4096 and block
+count is logical size rounded to 512 bytes. The service profile supplies no
+physical allocation or timestamp metadata. Full Linux filesystem semantics remain
+outside this metadata slice.
+
+Linux completion preserves POSIX errno values, including ETIMEDOUT; invalid
+copyout returns EFAULT. Output is copied under the same guarded caller/VM/grant
+check as native StatPath. Selected callers retain fail-closed routing after
+withdrawal, exec or service loss. Replayed stat/lstat calls restore the original
+argument registers before Linux syscall normalization runs again.
+
+Host tests cover record fields, reserved bytes, types and signed-size overflow.
+Native init exercises the normalized Linux entry for shared absolute/relative
+identity, metadata, pathname errors, unsupported FD/flag cases, failed copyout
+and recovery. The dedicated failure image additionally checks timeout/recovery,
+withdrawn cwd/credential/exec profiles and unavailable-service rejection with
+untouched output canaries. These fixtures invoke normalized entry 1026 from a
+native personality; they do not independently qualify Linux ELF entry translation.
+General root/cwd provisioning, service-owned open objects, other syscall routing
+and kernel filesystem retirement remain pending.
+
+Validation: 58 host adapter tests, Phase 3.0 and the dedicated two-CPU QEMU
+failure gate pass. Evidence: `target/vfs-linux-stat-host.log`,
+`target/vfs-linux-stat-phase30-final.log`, `target/vfs-linux-stat-native.log` and
+`target/vfs-linux-stat-serial.log`. The no-growth audit remains at 68 references
+and zero additions (`target/vfs-linux-stat-audit.log`). `git diff --check` passes.
+Existing build warnings remain.
+
+
+### Selected initial cwd provisioning (2026-11-16)
+
+The selected metadata profile now captures the caller's initial shared cwd under
+scheduler serialization, together with its identity and credentials. The copied
+service-only `INITIAL_CWD` control operation authenticates the exact delivered
+retain and returns a bounded, length-prefixed cwd record. No application-supplied
+path or ordinary IPC payload can select policy. Root remains `/`; arbitrary root
+profiles are not enabled. The existing root-only authorization operation still
+refuses nonroot cwd profiles.
+
+The service resolves this trusted provisioning path once in its shared mount
+table, pins the actual root and cwd objects, and rechecks the exact snapshot
+before retaining them. The kernel also checks cwd equality when accepting a late
+receipt, compensating mismatches instead of installing policy. Relative stat
+requests traverse from the retained object without a textual cwd prefix. Rename
+and recreation at the original spelling cannot redirect the retained cwd.
+Provisioning allocation or path lookup failure leaves no admitted namespace.
+
+This enables nonroot initial cwd for explicitly selected callers. It does not
+select ordinary descendants, preserve a profile across successful chdir, or
+regrant a withdrawn profile. Successful cwd/credential changes and exec retain
+the existing fail-closed withdrawal. Live service-owned cwd transitions,
+arbitrary roots, descriptor-relative lookup and open-file lifecycle remain open.
+
+Host coverage adds a complete nonroot handoff across a mounted filesystem,
+rename/recreation and relative lookup, plus staged-cwd mismatch and late-receipt
+compensation. Codec tests cover bounds, exact envelopes and malformed records.
+The dedicated native fixture starts a selected disposable caller in `/etc`,
+compares copied, native and Linux relative stat with absolute stat, then checks
+withdrawal on chdir. This still uses normalized Linux entry 1026, with the same
+Linux ELF qualification limit as the previous slice.
+
+
+Validation: 61 host adapter tests, 162 IPC library tests and 24 service library
+tests pass. The dedicated two-CPU QEMU failure gate and ordinary Phase 3.0 gate
+pass. Evidence: `target/vfs-initial-cwd-host.log`,
+`target/vfs-initial-cwd-libs.log`, `target/vfs-initial-cwd-native-final.log`,
+`target/vfs-initial-cwd-serial.log` and `target/vfs-initial-cwd-phase30.log`.
+The ownership audit remains at 68 references and zero additions
+(`target/vfs-initial-cwd-audit.log`). Focused rustfmt checks and
+`git diff --check` pass. Existing build warnings remain.
+
+
+### Service-side cwd transition primitive (2026-11-17)
+
+`Runtime::change_directory` now provides the trusted local lifecycle operation
+needed before routing live chdir. It requires the active authenticated
+registration, exact previous scope, same caller and namespace, a fresh
+registration-wide namespace generation, independently captured credentials and a
+serialized lifecycle revalidation callback. Ordinary IPC and copied stat requests
+cannot invoke it. This API is a service-side prerequisite, not a completed syscall
+cutover or a new source of authentication.
+
+The mounted VFS resolves relative paths from the retained cwd and absolute paths
+from the retained root, preserving rename identity, root containment, component
+search checks and mount traversal. Final directory type and search permission are
+checked before opening an independently owned replacement pair under the same
+VFS borrow. Partial opens and failed allocation drop provisional handles.
+
+Lookup failure preserves the old binding while consuming the attempted generation.
+Failed lifecycle revalidation withdraws old admission and drops the provisional
+pair. Successful publication replaces the binding without requiring another policy
+slot. Old leases preserve their exact objects for completion accounting and release,
+but stat dispatch against the old scope fails after replacement. Stale withdrawal
+cannot remove the replacement.
+
+The kernel still withdraws the selected profile on successful chdir. Wiring this
+primitive into an authenticated copied chdir request, park/resume, shared-process
+cwd synchronization and commit acknowledgement remains the next integration step.
+Service-owned descriptors and directory-FD-relative stat remain unimplemented;
+the latter continues to return EOPNOTSUPP.
+
+Validation: 61 host adapter tests and 298 library tests (108 filesystem, 162 IPC,
+28 service) pass, including five new transition/rollback tests. The dedicated
+two-CPU QEMU failure gate and ordinary Phase 3.0 gate pass as regression checks;
+they do not claim native coverage of the new local transition API. Evidence:
+`target/vfs-cwd-transition-host.log`, `target/vfs-cwd-transition-libs.log`,
+`target/vfs-cwd-transition-native.log`, `target/vfs-cwd-transition-serial.log`
+and `target/vfs-cwd-transition-phase30.log`. The ownership audit remains at 68
+references and zero additions (`target/vfs-cwd-transition-audit.log`). Focused
+rustfmt checks and `git diff --check` pass. Existing build warnings remain.

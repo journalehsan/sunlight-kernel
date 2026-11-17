@@ -663,9 +663,17 @@ edition = "2021"
 name = "sunlight-init"
 path = "src/main.rs"
 
+[[bin]]
+name = "vfs-stat-caller"
+path = "src/stat_caller.rs"
+required-features = ["stat-failure-test"]
+
 [dependencies]
 sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ipc = { path = "../../ipc" }
 
 [features]
 recovery-test = []
+
+# Fault injection only in the dedicated native stat failure gate.
+stat-failure-test = ["sunlight-ipc/stat-failure-test"]

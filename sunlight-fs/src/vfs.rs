@@ -1233,6 +1233,17 @@ impl<D: BlockDevice> Vfs<D> {
             .fstat_handle(local_handle)
     }
 
+    /// Backend-local identity of a retained object. The mount identity must be
+    /// carried separately; object numbers alone are not namespace authority.
+    pub fn handle_object_id(&self, handle: FileHandle) -> Result<Option<u64>, FsError> {
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
+        self.mounts[mount_idx]
+            .as_ref()
+            .ok_or(FsError::BadHandle)?
+            .fs
+            .handle_object_id(local_handle)
+    }
+
     pub fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
         let (mount_idx, local_path) = self.resolve_mount(path)?;
         self.mounts[mount_idx]
@@ -1820,3 +1831,6 @@ mod tests {
         assert_eq!(seen, 1);
     }
 }
+
+mod anchored;
+pub use anchored::ObjectMetadata;

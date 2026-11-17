@@ -18,8 +18,13 @@ from pathlib import Path
 from typing import Any, Iterable
 
 SCHEMA_VERSION = 1
-EXCLUDED_DIRS = {".git", ".threading-evidence", "target", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modules", "dist", "build", ".venv", "venv"}
-EXCLUDED_PREFIXES = ("vendor/", "third_party/", "third-party/", "external/")
+EXCLUDED_DIRS = {
+    ".git", ".claude", ".codex", ".cursor", ".agents", ".gapcode", ".aws",
+    "target", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+    "node_modules", "dist", "build", ".venv", "venv",
+}
+EVIDENCE_PATH_PREFIXES = ("docs/audit/",)
+VENDORED_DIRS = {"vendor", "third_party", "third-party", "external"}
 EXTENSIONS = {
     ".rs": ("Rust", "source"), ".pas": ("Pascal", "source"), ".pp": ("Pascal", "source"), ".p": ("Pascal", "source"),
     ".inc": ("Pascal", "source"), ".asm": ("Assembly", "source"), ".s": ("Assembly", "source"),
@@ -54,21 +59,46 @@ def tracked_paths(root: Path) -> list[str]:
     return [p.decode("utf-8", "surrogateescape") for p in proc.stdout.split(b"\0") if p]
 
 
-def filesystem_paths(root: Path) -> list[str]:
+def is_evidence(path: str) -> bool:
+    lower = path.lower().rstrip("/")
+    parts = lower.split("/")
+    return (
+        lower == "docs/audit"
+        or lower.startswith(EVIDENCE_PATH_PREFIXES)
+        or any(part == "evidence" or part.endswith("-evidence") for part in parts)
+    )
+
+
+def is_excluded(path: str, include_evidence: bool = False) -> bool:
+    lower = path.lower()
+    parts = lower.split("/")
+    if any(part in EXCLUDED_DIRS for part in parts):
+        return True
+    if not include_evidence and is_evidence(path):
+        return True
+    return any(marker in lower for marker in (".generated.", ".min.")) or lower.endswith((".pb.rs", "_generated.rs"))
+
+
+def is_vendored(path: str) -> bool:
+    return any(part in VENDORED_DIRS for part in path.lower().split("/"))
+
+
+def filesystem_paths(root: Path, include_evidence: bool = False) -> list[str]:
     paths = []
     for base, dirs, files in os.walk(root, followlinks=False):
-        dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_DIRS and not (Path(base) / d).is_symlink())
+        base_path = Path(base)
+        relative_base = base_path.relative_to(root).as_posix()
+        kept_dirs = []
+        for name in sorted(dirs):
+            relative_dir = name if relative_base == "." else f"{relative_base}/{name}"
+            if not is_excluded(relative_dir, include_evidence) and not (base_path / name).is_symlink():
+                kept_dirs.append(name)
+        dirs[:] = kept_dirs
         for name in files:
-            path = Path(base) / name
+            path = base_path / name
             if not path.is_symlink():
                 paths.append(path.relative_to(root).as_posix())
     return sorted(paths)
-
-
-def is_generated(path: str) -> bool:
-    lower = path.lower()
-    parts = lower.split("/")
-    return any(p in EXCLUDED_DIRS for p in parts) or any(x in lower for x in (".generated.", ".min.")) or lower.endswith((".pb.rs", "_generated.rs"))
 
 
 def read_counts(path: Path) -> tuple[int, int, bool, bool]:
@@ -97,7 +127,7 @@ def subsystem_for(path: str) -> str:
 
 
 def cargo_info(root: Path, paths: list[str]) -> tuple[int, int, list[str]]:
-    manifests = [p for p in paths if Path(p).name == "Cargo.toml" and not is_generated(p)]
+    manifests = [p for p in paths if Path(p).name == "Cargo.toml"]
     members: set[str] = set()
     for rel in manifests:
         if rel != "Cargo.toml":
@@ -131,14 +161,20 @@ def cargo_info(root: Path, paths: list[str]) -> tuple[int, int, list[str]]:
     return len(manifests), len(found), found
 
 
-def collect(root: Path, mode: str = "git", workers: int = 0, include_vendored: bool = False) -> dict[str, Any]:
-    paths = tracked_paths(root) if mode == "git" else filesystem_paths(root)
+def collect(root: Path, mode: str = "git", workers: int = 0, include_vendored: bool = False,
+            include_evidence: bool = False) -> dict[str, Any]:
+    paths = tracked_paths(root) if mode == "git" else filesystem_paths(root, include_evidence)
+    eligible_paths: list[str] = []
+    for rel in paths:
+        if is_excluded(rel, include_evidence):
+            continue
+        if is_vendored(rel) and not include_vendored:
+            continue
+        eligible_paths.append(rel)
     file_rows: list[dict[str, Any]] = []
     unreadable = binary = 0
-    for rel in paths:
-        vendored = rel.lower().startswith(EXCLUDED_PREFIXES)
-        if is_generated(rel) or (vendored and not include_vendored):
-            continue
+    for rel in eligible_paths:
+        vendored = is_vendored(rel)
         path = root / rel
         if not path.is_file() or path.is_symlink():
             continue
@@ -164,7 +200,7 @@ def collect(root: Path, mode: str = "git", workers: int = 0, include_vendored: b
                "third_party": vendored, "subsystem": subsystem_for(rel), "test_indicator": test_indicator}
         file_rows.append(row)
     # Keep the option explicit; sequential streaming wins for typical small source files.
-    cargo_count, workspace_crates, workspace_paths = cargo_info(root, paths)
+    cargo_count, workspace_crates, workspace_paths = cargo_info(root, eligible_paths)
     by_lang: dict[str, dict[str, int]] = collections.defaultdict(lambda: {"files": 0, "lines": 0, "nonblank_lines": 0})
     by_subsystem: dict[str, dict[str, int]] = collections.defaultdict(lambda: {"files": 0, "lines": 0, "nonblank_lines": 0})
     totals: dict[str, dict[str, int]] = collections.defaultdict(lambda: {"files": 0, "lines": 0, "nonblank_lines": 0})
@@ -194,7 +230,8 @@ def collect(root: Path, mode: str = "git", workers: int = 0, include_vendored: b
             modules[str(Path(row["path"]).parent)] += row["lines"]
     return {
         "schema_version": SCHEMA_VERSION, "date": dt.date.today().isoformat(), "project_day": project_day(root), "mode": mode,
-        "tracked_files": len(paths) if mode == "git" else None, "scanned_files": len(file_rows), "unreadable_or_binary_files": unreadable + binary,
+        "tracked_files": len(paths) if mode == "git" else None, "excluded_files": len(paths) - len(eligible_paths),
+        "scanned_files": len(file_rows), "unreadable_or_binary_files": unreadable + binary,
         "binary_files": binary, "unreadable_files": unreadable, "languages": dict(sorted(by_lang.items())),
         "categories": dict(sorted(totals.items())), "source": totals.get("source", {"files": 0, "lines": 0, "nonblank_lines": 0}),
         "documentation": {"markdown": docs_only, "docx_files": by_lang.get("Word documents", {}).get("files", 0), "docx_line_count": None},
@@ -248,8 +285,14 @@ def compare(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
 
 def human(data: dict[str, Any], details: bool = False, subsystems: bool = False) -> str:
     rust = data["rust"]
+    tracked = data["tracked_files"]
+    excluded = data.get("excluded_files", 0)
+    inventory = (
+        f"tracked files: {tracked:,}; {excluded:,} excluded as evidence, generated, or vendored"
+        if isinstance(tracked, int) else "filesystem mode"
+    )
     out = [f"SunlightOS Code Metrics — project day {data['project_day']['day']} ({data['date']})",
-           f"Source: {data['source']['lines']:,} lines across {data['source']['files']:,} files; tracked files: {data['tracked_files'] if data['tracked_files'] is not None else 'filesystem mode':,}" if isinstance(data['tracked_files'], int) else f"Source: {data['source']['lines']:,} lines across {data['source']['files']:,} files; filesystem mode",
+           f"Source: {data['source']['lines']:,} lines across {data['source']['files']:,} files; {inventory}",
            f"Rust: {rust['total']['lines']:,} lines / {rust['total']['files']:,} files; kernel {rust['kernel']['lines']:,} ({rust['kernel_percent_of_first_party']:.2f}% of first-party Rust), non-kernel {rust['non_kernel']['lines']:,} ({rust['non_kernel_to_kernel_ratio']}:1 non-kernel:kernel)",
            f"Cargo: {data['cargo']['manifest_count']:,} manifests; {data['cargo']['workspace_member_count']:,} workspace members",
            f"Docs: Markdown {data['documentation']['markdown']['lines']:,} lines / {data['documentation']['markdown']['files']:,} files; DOCX {data['documentation']['docx_files']:,} files (line count not estimated)",
@@ -277,6 +320,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--markdown", metavar="PATH", help="write a Markdown report")
     parser.add_argument("--mode", choices=("git", "filesystem"), default="git")
     parser.add_argument("--include-vendored", action="store_true", help="include vendor/third_party/external trees")
+    parser.add_argument("--include-evidence", action="store_true", help="include docs/audit and evidence snapshots")
     parser.add_argument("--workers", type=int, default=0, help="reserved; sequential streaming is used for small files")
     parser.add_argument("--save-snapshot", nargs="?", const="sunlightos-metrics.json", metavar="PATH")
     parser.add_argument("--compare", nargs=2, metavar=("OLD.json", "NEW.json"))
@@ -289,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, indent=2, sort_keys=True) if args.json else json.dumps(result, indent=2, sort_keys=True))
             return 0
         begin = time.perf_counter()
-        data = collect(root, args.mode, max(0, args.workers), args.include_vendored)
+        data = collect(root, args.mode, max(0, args.workers), args.include_vendored, args.include_evidence)
         elapsed = time.perf_counter() - begin
         if args.benchmark:
             try:

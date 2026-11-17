@@ -1,11 +1,12 @@
-//! Registration-lived trusted policy and retention routing for isolated tmpfs.
-//! No IPC route is installed. The integration must authenticate kernel origin,
-//! obtain `authenticated` independently of payloads, and serialize policy changes
+//! Registration-lived policy, root-stat and retention routing. Copied kernel
+//! channels authenticate dispatch; ordinary IPC cannot supply authority.
+//! Obtain `authenticated` independently of payloads and serialize policy changes
 //! with caller/service lifecycle. Never recreate this owner within an epoch.
 use crate::directory::{DirectoryNamespace, DirectoryPair};
 use alloc::sync::Arc;
 use sunlight_fs::{FileStat, FsError};
 use sunlight_ipc::vfs_rpc::{
+    lifecycle::Caller,
     registration::Registration,
     retention::{self, wire, Receipt, Scope, Table},
     ProtocolError,
@@ -18,6 +19,7 @@ pub enum Error {
     Scope,
     Capacity,
     Generation,
+    Retired,
     Filesystem(FsError),
     Retention(retention::Error<FsError>),
 }
@@ -35,6 +37,7 @@ pub struct Policy<const P: usize, const L: usize> {
     bindings: [Option<Binding>; P],
     last_generation: u64,
     leases: Table<Arc<DirectoryPair>, L>,
+    retired: bool,
 }
 
 impl<const P: usize, const L: usize> Policy<P, L> {
@@ -45,6 +48,7 @@ impl<const P: usize, const L: usize> Policy<P, L> {
             bindings: [const { None }; P],
             last_generation: 0,
             leases,
+            retired: false,
         })
     }
 
@@ -59,6 +63,9 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         root: &str,
         directory: &str,
     ) -> Result<(), Error> {
+        if self.retired {
+            return Err(Error::Retired);
+        }
         wire::PendingRetain::new(self.registration, scope, 1).map_err(Error::Protocol)?;
         if scope.namespace_generation <= self.last_generation {
             return Err(Error::Generation);
@@ -83,6 +90,50 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         Ok(())
     }
 
+    /// Trusted lifecycle transition only; ordinary request decoding cannot call
+    /// this API. The owner must authenticate credentials and serialize lifecycle
+    /// changes through revalidation. A false revalidation withdraws old admission.
+    /// Old leases keep their exact pair, but cannot dispatch after replacement.
+    pub(crate) fn change_directory(
+        &mut self,
+        old: Scope,
+        next: Scope,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        if self.retired {
+            return Err(Error::Retired);
+        }
+        wire::PendingRetain::new(self.registration, next, 1).map_err(Error::Protocol)?;
+        if old.caller != next.caller || old.namespace_id != next.namespace_id {
+            return Err(Error::Scope);
+        }
+        let slot = self
+            .bindings
+            .iter()
+            .position(|b| b.as_ref().is_some_and(|b| b.scope == old))
+            .ok_or(Error::Scope)?;
+        if next.namespace_generation <= self.last_generation {
+            return Err(Error::Generation);
+        }
+        // Failed attempts cannot reuse generations, including failed lookup.
+        self.last_generation = next.namespace_generation;
+        let pair = self.bindings[slot]
+            .as_ref()
+            .unwrap()
+            .pair
+            .change_directory(path, caller)
+            .map_err(Error::Filesystem)?;
+        let pair = Arc::try_new(pair).map_err(|_| Error::Filesystem(FsError::NoMemory))?;
+        if !revalidate() {
+            self.withdraw(old)?;
+            return Err(Error::Identity);
+        }
+        self.bindings[slot] = Some(Binding { scope: next, pair });
+        Ok(())
+    }
+
     /// Complete scope match prevents stale exit/exec teardown from withdrawing
     /// a replacement. Existing leases remain releasable after policy withdrawal.
     pub fn withdraw(&mut self, scope: Scope) -> Result<(), Error> {
@@ -93,6 +144,26 @@ impl<const P: usize, const L: usize> Policy<P, L> {
             .ok_or(Error::Scope)?;
         drop(self.bindings[slot].take());
         Ok(())
+    }
+
+    /// Trusted lifecycle event, serialized with requests and provisioning. Drop
+    /// admission pins for the exact caller, preserving all retained leases.
+    pub fn retire_caller(&mut self, caller: Caller) {
+        for binding in &mut self.bindings {
+            if binding.as_ref().is_some_and(|b| b.scope.caller == caller) {
+                drop(binding.take());
+            }
+        }
+    }
+
+    /// Permanently close provisioning and retain resolution for this epoch.
+    /// Keep the lease table and replay watermarks, including when empty, so late
+    /// retains cannot resurrect policy and lost release acks remain retryable.
+    pub fn retire(&mut self) {
+        self.retired = true;
+        for binding in &mut self.bindings {
+            drop(binding.take());
+        }
     }
 
     /// Structural request routing only. `authenticated` MUST come from a future
@@ -134,6 +205,99 @@ impl<const P: usize, const L: usize> Policy<P, L> {
                 .map_err(|_| Error::Identity),
             _ => Err(Error::Protocol(ProtocolError::Operation)),
         }
+    }
+
+    /// Consume a new retain without acquiring any lease. Use the retention
+    /// table so an identity failure/replay can never falsely deny an old lease.
+    pub(crate) fn refuse(
+        &mut self,
+        authenticated: Registration,
+        bytes: &[u8],
+    ) -> Result<wire::Frame, Error> {
+        let wire::Frame::Retain {
+            registration,
+            scope,
+            request_id,
+        } = wire::Frame::decode(bytes).map_err(Error::Protocol)?
+        else {
+            return Err(Error::Protocol(ProtocolError::Operation));
+        };
+        let request =
+            wire::PendingRetain::new(registration, scope, request_id).map_err(Error::Protocol)?;
+        self.leases
+            .retain_reply(authenticated, request, || Err(FsError::PermissionDenied))
+            .map_err(Error::Retention)
+    }
+
+    /// Retained-root/cwd stat dispatch. The copied kernel channel authenticates dispatch;
+    /// retained lease lookup binds numeric scope/object fields to real pins.
+    pub(crate) fn stat(
+        &self,
+        authenticated: Registration,
+        dispatch: &sunlight_ipc::vfs_rpc::context::Dispatch<'_>,
+    ) -> Result<sunlight_ipc::vfs_rpc::response::Metadata, Error> {
+        use sunlight_ipc::vfs_rpc::{
+            codec::Request,
+            context::LOOKUP_METADATA,
+            response::{Kind, Metadata, Provenance},
+        };
+        let context = dispatch.context;
+        if self.retired
+            || authenticated != self.registration
+            || context.service != authenticated.service()
+        {
+            return Err(Error::Identity);
+        }
+        let Request::Stat { path } = dispatch.request else {
+            return Err(Error::Scope);
+        };
+        if context.grants != LOOKUP_METADATA
+            || !context.groups.is_empty()
+            || context.namespace.root != context.namespace.directory
+        {
+            return Err(Error::Scope);
+        }
+        let scope = Scope {
+            caller: context.caller,
+            namespace_id: context.namespace.id,
+            namespace_generation: context.namespace.generation,
+        };
+        // Withdrawal closes admission, even when an outstanding lease still
+        // owns pins for late completion/release. Both records must be live.
+        if !self.bindings.iter().flatten().any(|b| b.scope == scope) {
+            return Err(Error::Scope);
+        }
+        let pair = self
+            .leases
+            .get_scope(authenticated, scope, context.namespace.root)
+            .map_err(|_| Error::Scope)?;
+        let object = pair
+            .stat(
+                path,
+                sunlight_fs::Credential {
+                    uid: context.uid,
+                    gid: context.gid,
+                },
+            )
+            .map_err(Error::Filesystem)?;
+        let stat = object.stat;
+        Ok(Metadata {
+            provenance: Provenance {
+                mount_id: object.mount_id,
+                mount_generation: object.mount_generation,
+                object_id: object.object_id,
+                object_generation: object.object_generation,
+            },
+            kind: match stat.file_type {
+                sunlight_fs::FileType::Directory => Kind::Directory,
+                sunlight_fs::FileType::File => Kind::File,
+            },
+            mode: stat.mode & 0o7777,
+            uid: stat.uid,
+            gid: stat.gid,
+            links: stat.nlinks,
+            size: stat.size as u64,
+        })
     }
 
     /// Diagnostics of retained objects, with no pathname lookup or new authority.

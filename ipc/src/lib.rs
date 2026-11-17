@@ -219,6 +219,10 @@ pub enum SunlightSyscall {
     VfsGrant = 164,
     /// Broker-owned Account session registration and lifecycle.
     AccountSession = 165,
+    /// Service-only copied VFS retention control channel.
+    VfsRetention = 180,
+    /// Copied metadata pilot for the explicitly provisioned service root.
+    VfsStat = 181,
     /// rdi=storage operation, rsi=index/device ID/mount ID, rdx=record/path.
     StorageCtl = 168,
     /// Paged ReadDir: r10 is the entry offset.

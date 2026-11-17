@@ -137,7 +137,7 @@ impl<R, const N: usize> Table<R, N> {
             .ok_or(PrepareError::Admission(AdmissionError::Exhausted))?;
         let transfer = Transfer::decode([super::VERSION, id, 0, output_bytes], output_bytes)
             .map_err(|error| PrepareError::Admission(AdmissionError::Protocol(error)))?;
-        let pending = Pending::new(caller, service, transfer, request)
+        let pending = Pending::new_copied(caller, service, transfer, request)
             .map_err(|error| PrepareError::Admission(AdmissionError::Protocol(error)))?;
         let resources = prepare(transfer).map_err(PrepareError::Resource)?;
         *slot = Some(Entry {
@@ -156,6 +156,24 @@ impl<R, const N: usize> Table<R, N> {
             .flatten()
             .find(|entry| entry.id == id)
             .map(|entry| entry.pending.state())
+    }
+
+    /// Borrow retained backing under the adapter's lifecycle serialization.
+    /// This grants no transport authority; the adapter must authenticate first.
+    pub fn resources(&self, id: u64) -> Option<&R> {
+        self.entries
+            .iter()
+            .flatten()
+            .find(|e| e.id == id)
+            .map(|e| &e.resources)
+    }
+
+    pub fn resources_mut(&mut self, id: u64) -> Option<&mut R> {
+        self.entries
+            .iter_mut()
+            .flatten()
+            .find(|e| e.id == id)
+            .map(|e| &mut e.resources)
     }
 
     /// Source is the authenticated transport identity, never reply payload data.
@@ -223,6 +241,16 @@ impl<R, const N: usize> Table<R, N> {
         })
     }
 
+    /// Terminal inventory lets adapters reserve caller-owned result delivery
+    /// while independently draining abandoned operations.
+    pub fn terminal_ids(&self) -> impl Iterator<Item = u64> + '_ {
+        self.entries
+            .iter()
+            .flatten()
+            .filter(|e| e.pending.state() != State::Waiting)
+            .map(|e| e.id)
+    }
+
     /// Drain terminal cleanup without a separate index of request IDs. Waiting
     /// entries remain owned even when interleaved with completed entries.
     pub fn reap_next(&mut self) -> Option<Retired<R>> {
@@ -269,6 +297,24 @@ mod tests {
             output: &[],
         }
     }
+    #[test]
+    fn copied_input_length_does_not_inflate_the_separate_output_region() {
+        let path_bytes = [b'/'; super::super::MAX_PATH_BYTES];
+        let path = core::str::from_utf8(&path_bytes).unwrap();
+        let mut table = Table::<(), 1>::new();
+        let transfer = table
+            .admit(CALLER, SERVICE, Request::Stat { path: &path }, BYTES, ())
+            .unwrap();
+        assert_eq!(transfer.words()[3], BYTES);
+        assert_eq!(
+            table.complete(SERVICE, reply(transfer.words()[1])),
+            Ok(State::Completed(super::super::Completion {
+                errno: 2,
+                output_bytes: 0
+            }))
+        );
+    }
+
     #[test]
     fn transactional_preparation_failure_and_capacity() {
         let mut table = Table::<u64, 1>::new();

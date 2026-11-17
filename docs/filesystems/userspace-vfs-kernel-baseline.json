@@ -1,0 +1,346 @@
+{
+  "version": 1,
+  "description": "Migration ceiling captured 2026-11-16. Remove entries as owners migrate; do not add new ring-0 owners to satisfy the guard. Final acceptance still requires --check.",
+  "findings": [
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "filesystem namespace construction",
+      "code": "fn validate_secret_parent<D: sunlight_block::BlockDevice>(vfs: &mut sunlight_fs::Vfs<D>) -> bool {"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "match crate::KERNEL_VFS.lock().as_mut() {"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/ipc/vfs_registration/namespace_tests.rs",
+      "category": "filesystem backend construction",
+      "code": "let mut fs = Tmpfs::with_limits(&[], TmpfsLimits::new(0, 4)).unwrap();"
+    },
+    {
+      "path": "kernel/src/ipc/vfs_registration/transport_tests.rs",
+      "category": "filesystem backend construction",
+      "code": "let namespace = DirectoryNamespace::new(sunlight_fs::Tmpfs::new(&[])).unwrap();"
+    },
+    {
+      "path": "kernel/src/ipc/vfs_registration/transport_tests.rs",
+      "category": "filesystem backend construction",
+      "code": "let namespace = DirectoryNamespace::new(sunlight_fs::Tmpfs::new(&[])).unwrap();"
+    },
+    {
+      "path": "kernel/src/ipc/vfs_registration/transport_tests.rs",
+      "category": "filesystem backend construction",
+      "code": "let namespace = DirectoryNamespace::new(sunlight_fs::Tmpfs::new(&[])).unwrap();"
+    },
+    {
+      "path": "kernel/src/ipc/vfs_registration/transport_tests.rs",
+      "category": "filesystem backend construction",
+      "code": "let namespace = DirectoryNamespace::new(sunlight_fs::Tmpfs::new(&[])).unwrap();"
+    },
+    {
+      "path": "kernel/src/ipc/vfs_registration/transport_tests.rs",
+      "category": "filesystem backend construction",
+      "code": "let namespace = DirectoryNamespace::new(sunlight_fs::Tmpfs::new(&[])).unwrap();"
+    },
+    {
+      "path": "kernel/src/ipc/vfs_registration/transport_tests.rs",
+      "category": "filesystem backend construction",
+      "code": "let namespace = DirectoryNamespace::new(sunlight_fs::Tmpfs::new(&[])).unwrap();"
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "kernel-global namespace",
+      "code": "pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> = spin::Mutex::new(None);"
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "filesystem namespace construction",
+      "code": "pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> = spin::Mutex::new(None);"
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "filesystem backend construction",
+      "code": "if sunlight_fat::Fat32::mount(view).is_some() {"
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "filesystem backend construction",
+      "code": "let mut fat = match sunlight_fat::Fat32::mount("
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "filesystem namespace construction",
+      "code": "let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();"
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "filesystem backend construction",
+      "code": ".mount_tmpfs(\"/\", sunlight_fs::Tmpfs::new(BOOT_INITRAMFS))"
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "filesystem backend construction",
+      "code": "match sunlight_fat::Fat32::mount(disk) {"
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "category": "kernel-global namespace",
+      "code": "*KERNEL_VFS.lock() = Some(vfs);"
+    },
+    {
+      "path": "kernel/src/memory/tmpfs.rs",
+      "category": "filesystem backend construction",
+      "code": "let mut fs = Tmpfs::with_limits(&[], TmpfsLimits::new(8192, 3))?;"
+    },
+    {
+      "path": "kernel/src/native_c_guest.rs",
+      "category": "kernel-global namespace",
+      "code": "crate::KERNEL_VFS"
+    },
+    {
+      "path": "kernel/src/native_c_guest.rs",
+      "category": "kernel-global namespace",
+      "code": "crate::KERNEL_VFS"
+    },
+    {
+      "path": "kernel/src/native_c_guest.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/native_c_guest.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/native_c_guest.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = crate::KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/native_c_guest.rs",
+      "category": "kernel-global namespace",
+      "code": "crate::KERNEL_VFS"
+    },
+    {
+      "path": "kernel/src/sched/mod.rs",
+      "category": "kernel-global namespace",
+      "code": "if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {"
+    },
+    {
+      "path": "kernel/src/storage.rs",
+      "category": "filesystem namespace construction",
+      "code": "pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Result<(), FsError> {"
+    },
+    {
+      "path": "kernel/src/storage.rs",
+      "category": "filesystem backend construction",
+      "code": "let fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))"
+    },
+    {
+      "path": "kernel/src/storage_partition_test.rs",
+      "category": "kernel-global namespace",
+      "code": "use crate::{KernelDisk, KERNEL_VFS};"
+    },
+    {
+      "path": "kernel/src/storage_partition_test.rs",
+      "category": "kernel-global namespace",
+      "code": "let mut guard = KERNEL_VFS.lock();"
+    },
+    {
+      "path": "kernel/src/storage_partition_test.rs",
+      "category": "filesystem backend construction",
+      "code": "let fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(disk, false))"
+    },
+    {
+      "path": "kernel/src/storage_partition_test.rs",
+      "category": "filesystem namespace construction",
+      "code": "let mut remounted: Vfs<KernelDisk> = Vfs::new();"
+    },
+    {
+      "path": "kernel/src/storage_partition_test.rs",
+      "category": "filesystem backend construction",
+      "code": "remounted.mount_ramfs(\"/\", sunlight_fs::RamFs::new(sunlight_fs::INITRAMFS))?;"
+    }
+  ]
+}

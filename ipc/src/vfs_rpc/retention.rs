@@ -1,4 +1,4 @@
-//! Bounded service-side directory retention contract; no transport is enabled.
+//! Bounded service-side directory retention contract and copied control API.
 //! The adapter must authenticate kernel origin and the complete registration
 //! from transport records, serialize operations, and resolve directories from
 //! trusted mount policy. Decoded numbers alone grant no authority. Keep this
@@ -7,6 +7,9 @@ use super::{lifecycle::Caller, registration::Registration};
 
 #[path = "retention/wire.rs"]
 pub mod wire;
+
+#[path = "retention/transport.rs"]
+pub mod transport;
 
 #[path = "retention/ownership.rs"]
 pub mod ownership;
@@ -179,6 +182,25 @@ impl<T, const N: usize> Table<T, N> {
             .flatten()
             .find(|entry| entry.receipt == receipt)
             .map(|entry| &entry.objects)
+            .ok_or(Error::Stale)
+    }
+
+    /// Resolve an opaque retained pair from an authenticated dispatch context.
+    /// Numeric context fields alone never authenticate the caller or transport.
+    pub fn get_scope(
+        &self,
+        authenticated: Registration,
+        scope: Scope,
+        generation: u64,
+    ) -> Result<&T, Error<core::convert::Infallible>> {
+        if authenticated != self.registration {
+            return Err(Error::Identity);
+        }
+        self.entries
+            .iter()
+            .flatten()
+            .find(|e| e.receipt.scope == scope && e.receipt.generation == generation)
+            .map(|e| &e.objects)
             .ok_or(Error::Stale)
     }
 

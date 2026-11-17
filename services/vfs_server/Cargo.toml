@@ -673,6 +673,8 @@ sunlight-fat = { path = "../../sunlight-fat" }
 heapless = "0.8"
 
 [features]
+# Fault injection only in the dedicated native stat failure gate.
+stat-failure-test = ["sunlight-ipc/stat-failure-test"]
 # Bounded rendezvous on real authorization requests; absent in normal images.
 production-grant-test = []
 

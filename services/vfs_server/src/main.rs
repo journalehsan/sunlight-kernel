@@ -179,8 +179,17 @@ impl BootFs {
 // Global state
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "stat-failure-test")]
+mod stat_failure_probe;
+
 struct State {
-    vfs: Vfs,
+    #[cfg(feature = "stat-failure-test")]
+    stat_failure: stat_failure_probe::Probe,
+    // Bound only through the service-only kernel snapshot syscall. Ordinary
+    // nameserver registration returns no trusted registration snapshot.
+    retention: sunlight_vfs_server::runtime::Runtime<64, 64, 4>,
+    vfs: alloc::sync::Arc<spin::Mutex<Vfs>>,
+    namespace: sunlight_vfs_server::directory::DirectoryNamespace,
     boot: Option<BootFs>,
     boot_mountpoint: Option<&'static str>,
     open_meta: [OpenMeta; OPEN_META_SLOTS],
@@ -225,12 +234,23 @@ pub extern "C" fn _start() -> ! {
     let mut boot = None;
     let boot_mountpoint = mount_from_fstab(&mut vfs, &mut boot);
 
+    let namespace = sunlight_vfs_server::directory::DirectoryNamespace::mounted(vfs)
+        .expect("service mounted namespace ownership");
     let mut state = State {
-        vfs,
+        #[cfg(feature = "stat-failure-test")]
+        stat_failure: stat_failure_probe::Probe::default(),
+        retention: sunlight_vfs_server::runtime::Runtime::new(),
+        vfs: namespace.shared(),
+        namespace,
         boot,
         boot_mountpoint,
         open_meta: [OpenMeta::EMPTY; OPEN_META_SLOTS],
     };
+    assert!(alloc::sync::Arc::ptr_eq(
+        &state.vfs,
+        &state.namespace.shared()
+    ));
+    assert!(state.retention.active().is_none());
 
     // Pre-seed /etc/resolv.conf so it is visible via ls/stat/readdir from early boot.
     // Content is a compatibility view; it will be refreshed from `resolved` on OPEN.
@@ -248,11 +268,84 @@ pub extern "C" fn _start() -> ! {
     // Bite 4: Shared memory grant self-test (exercises shm_alloc + large VFS read via DATA_SHARED + map/free)
     run_shm_tests(&mut state);
 
+    // This registration comes from a successful kernel copy, never an IPC
+    // badge or retention payload. Binding grants no namespace policy.
+    if let Some(registration) = sunlight_ipc::vfs_rpc::retention::transport::snapshot() {
+        if state.retention.bind(registration).is_ok() {
+            assert_eq!(
+                sunlight_ipc::vfs_rpc::retention::transport::snapshot(),
+                Some(registration)
+            );
+            // Snapshot can now stage the explicit boot caller's root profile.
+            // Consume populated control work through the ordinary handler;
+            // probing NEXT here would steal a single-delivery retain.
+            drain_retention(&mut state);
+            assert_eq!(
+                sunlight_ipc::vfs_rpc::retention::transport::next(registration.epoch),
+                Ok(None)
+            );
+            assert!(sunlight_ipc::vfs_rpc::retention::transport::next(0).is_err());
+            assert_eq!(
+                sunlight_ipc::vfs_rpc::retention::transport::status(registration.epoch),
+                Ok((registration, false))
+            );
+            assert!(sunlight_ipc::vfs_rpc::retention::transport::status(0).is_err());
+            debug_log("[VFS-RPC] authenticated kernel registration snapshot OK transport=copy");
+            drain_retention(&mut state);
+            assert_eq!(state.retention.active(), Some(registration));
+            debug_log("[VFS-RPC] authenticated registration status OK transport=copy");
+        }
+    }
+
     // IPC server loop
     let mut msg = ipc_recv(ep);
     loop {
+        drain_retention(&mut state);
+        drain_stats(&mut state);
+        if sunlight_ipc::vfs_rpc::retention::transport::is_control_wakeup(&msg) {
+            msg = ipc_recv(ep);
+            continue;
+        }
         let reply = handle_request(&mut state, msg);
         msg = ipc_reply_and_wait(ep, reply);
+    }
+}
+
+/// Bound the work per ordinary IPC turn or payload-free kernel receive hint.
+fn drain_retention(state: &mut State) {
+    state.retention.poll_root_control(
+        &mut sunlight_vfs_server::runtime::control::CopiedControl,
+        &state.namespace,
+    );
+}
+
+/// Copied stat work is kernel-origin only; legacy IPC cannot enter this path.
+fn drain_stats(state: &mut State) {
+    use sunlight_ipc::vfs_rpc::stat_transport as api;
+    let Some(registration) = state.retention.active() else { return; };
+    #[cfg(feature = "stat-failure-test")]
+    if state.stat_failure.fail_pull(registration.epoch) {
+        return;
+    }
+    for _ in 0..64 {
+        let Ok(Some(packet)) = api::next(registration.epoch) else { break; };
+        let Ok(input) = api::input(&packet) else { break; };
+        let reply = match state.retention.stat(registration, input) {
+            Ok(reply) => reply,
+            Err(_) => {
+                // Kernel input always contains the canonical dispatch header.
+                // A service-side policy failure completes that exact ID.
+                let Some(id) = input.get(8..16) else { break; };
+                let id = u64::from_le_bytes(id.try_into().unwrap());
+                let Ok(reply) = api::encode_reply(id, 5, &[]) else { break; };
+                reply
+            }
+        };
+        #[cfg(feature = "stat-failure-test")]
+        if state.stat_failure.withhold(registration.epoch, &reply) {
+            continue;
+        }
+        if !api::complete(registration.epoch, &reply) { break; }
     }
 }
 
@@ -333,6 +426,10 @@ fn read_seed_file(vfs: &mut Vfs, path: &str, out: &mut [u8]) -> usize {
 // ---------------------------------------------------------------------------
 
 fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
+    #[cfg(feature = "stat-failure-test")]
+    if let Some(reply) = state.stat_failure.arm(&msg) {
+        return reply;
+    }
     // Negotiation is read-only and grants no authority. File dispatch stays
     // disabled until authenticated kernel registration and continuations exist.
     if msg.label == sunlight_ipc::vfs_rpc::NEGOTIATE {
@@ -516,7 +613,8 @@ fn open_path(state: &mut State, path: &str) -> IpcMsg {
             None => error_reply(FsError::NotFound),
         }
     } else {
-        match state.vfs.open(path) {
+        let opened = state.vfs.lock().open(path);
+        match opened {
             Ok(handle) => {
                 let packed = pack_handle(MOUNT_RAM, handle);
                 remember_open(state, packed, path);
@@ -571,16 +669,17 @@ fn ensure_resolv_conf(state: &mut State) -> Result<(), ()> {
 
     // Create (or open existing) dynamic entry and overwrite content via trusted internal path.
     // This does not go through the restricted write_handle policy.
-    match state.vfs.create_file("/etc/resolv.conf", 0, 0, 0o644) {
+    let mut vfs = state.vfs.lock();
+    match vfs.create_file("/etc/resolv.conf", 0, 0, 0o644) {
         Ok(h) => {
-            let _ = state.vfs.write(h, 0, &lines);
-            let _ = state.vfs.close(h);
+            let _ = vfs.write(h, 0, &lines);
+            let _ = vfs.close(h);
         }
         Err(_) => {
             // If create fails for some reason, try open+write (in case it pre-existed read-only)
-            if let Ok(h) = state.vfs.open("/etc/resolv.conf") {
-                let _ = state.vfs.write(h, 0, &lines);
-                let _ = state.vfs.close(h);
+            if let Ok(h) = vfs.open("/etc/resolv.conf") {
+                let _ = vfs.write(h, 0, &lines);
+                let _ = vfs.close(h);
             }
         }
     }
@@ -614,7 +713,10 @@ fn read_handle(state: &mut State, raw: FileHandle, offset: usize, requested: usi
                     return error_reply(FsError::BadHandle);
                 }
             }
-            MOUNT_RAM => state.vfs.read(local, offset, &mut big_buf[..requested]),
+            MOUNT_RAM => state
+                .vfs
+                .lock()
+                .read(local, offset, &mut big_buf[..requested]),
             _ => return error_reply(FsError::BadHandle),
         }
     };
@@ -659,7 +761,7 @@ fn close_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
             },
             None => error_reply(FsError::BadHandle),
         },
-        MOUNT_RAM => match state.vfs.close(local) {
+        MOUNT_RAM => match state.vfs.lock().close(local) {
             Ok(()) => ok_reply(),
             Err(e) => error_reply(e),
         },
@@ -692,7 +794,11 @@ fn stat_path(state: &mut State, path: &str) -> IpcMsg {
             None => error_reply(FsError::NotFound),
         }
     } else {
-        match state.vfs.stat(path) {
+        match sunlight_vfs_server::namespace::stat_root(
+            &mut state.vfs.lock(),
+            path,
+            Credential { uid: 0, gid: 0 },
+        ) {
             Ok(stat) => ok_reply()
                 .word(1, stat.size as u64)
                 .word(2, file_type_code(stat.file_type)),
@@ -726,7 +832,7 @@ fn fstat_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
             },
             None => return error_reply(FsError::BadHandle),
         },
-        MOUNT_RAM => match state.vfs.fstat_handle(local) {
+        MOUNT_RAM => match state.vfs.lock().fstat_handle(local) {
             Ok(stat) => stat,
             Err(e) => return error_reply(e),
         },
@@ -748,7 +854,7 @@ fn write_handle(state: &mut State, raw: FileHandle, offset: usize, buf: &[u8]) -
 
     let (mount, local) = unpack_handle(raw);
     let write_res = match mount {
-        MOUNT_RAM => state.vfs.write(local, offset, buf),
+        MOUNT_RAM => state.vfs.lock().write(local, offset, buf),
         MOUNT_BOOT => return error_reply(FsError::ReadOnlyFilesystem),
         _ => return error_reply(FsError::BadHandle),
     };
@@ -770,7 +876,7 @@ fn mkdir_path(state: &mut State, path: &str, uid: u32, gid: u32, mode: u16) -> I
     if !decision.allowed {
         return error_reply(decision.error.unwrap_or(FsError::OperationNotPermitted));
     }
-    match state.vfs.mkdir(path, uid, gid, mode) {
+    match state.vfs.lock().mkdir(path, uid, gid, mode) {
         Ok(()) => ok_reply(),
         Err(e) => error_reply(e),
     }
@@ -806,7 +912,7 @@ fn chmod_path(state: &mut State, path: &str, mode: u16) -> IpcMsg {
     if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::Unsupported);
     }
-    match state.vfs.chmod(path, mode) {
+    match state.vfs.lock().chmod(path, mode) {
         Ok(()) => ok_reply(),
         Err(e) => error_reply(e),
     }
@@ -816,7 +922,7 @@ fn chown_path(state: &mut State, path: &str, uid: u32, gid: u32) -> IpcMsg {
     if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::Unsupported);
     }
-    match state.vfs.chown(path, uid, gid) {
+    match state.vfs.lock().chown(path, uid, gid) {
         Ok(()) => ok_reply(),
         Err(e) => error_reply(e),
     }
@@ -826,7 +932,7 @@ fn unlink_path(state: &mut State, path: &str) -> IpcMsg {
     if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::ReadOnlyFilesystem);
     }
-    match state.vfs.unlink(path) {
+    match state.vfs.lock().unlink(path) {
         Ok(()) => ok_reply(),
         Err(e) => error_reply(e),
     }
@@ -836,7 +942,7 @@ fn rename_path(state: &mut State, old: &str, new: &str) -> IpcMsg {
     if strip_boot_prefix(state, old).is_some() || strip_boot_prefix(state, new).is_some() {
         return error_reply(FsError::ReadOnlyFilesystem);
     }
-    match state.vfs.rename(old, new) {
+    match state.vfs.lock().rename(old, new) {
         Ok(()) => ok_reply(),
         Err(e) => error_reply(e),
     }
@@ -858,10 +964,11 @@ fn read_public_account(path: &str, offset: usize, out: &mut [u8]) -> Result<usiz
 /// Get user information by name from /etc/passwd
 fn getpwnam(state: &mut State, username: &str) -> IpcMsg {
     // Read /etc/passwd
-    match state.vfs.open("/etc/passwd") {
+    let opened = state.vfs.lock().open("/etc/passwd");
+    match opened {
         Ok(handle) => {
             let mut buf = [0u8; 8192];
-            let _ = state.vfs.close(handle);
+            let _ = state.vfs.lock().close(handle);
             match read_public_account("/etc/passwd", 0, &mut buf) {
                 Ok(n) => {
                     let passwd_data = core::str::from_utf8(&buf[..n]).unwrap_or("");
@@ -893,10 +1000,11 @@ fn getpwnam(state: &mut State, username: &str) -> IpcMsg {
 /// Get group information by gid from /etc/group
 fn getgrgid(state: &mut State, gid: u32) -> IpcMsg {
     // Read /etc/group
-    match state.vfs.open("/etc/group") {
+    let opened = state.vfs.lock().open("/etc/group");
+    match opened {
         Ok(handle) => {
             let mut buf = [0u8; 8192];
-            let _ = state.vfs.close(handle);
+            let _ = state.vfs.lock().close(handle);
             match read_public_account("/etc/group", 0, &mut buf) {
                 Ok(n) => match parse_group(&buf[..n]) {
                     (entries, count) => match entries[..count].iter().find(|e| e.gid == gid) {
@@ -917,10 +1025,11 @@ fn getgrgid(state: &mut State, gid: u32) -> IpcMsg {
 /// Get user information by uid from /etc/passwd
 fn getpwuid(state: &mut State, uid: u32) -> IpcMsg {
     // Read /etc/passwd
-    match state.vfs.open("/etc/passwd") {
+    let opened = state.vfs.lock().open("/etc/passwd");
+    match opened {
         Ok(handle) => {
             let mut buf = [0u8; 8192];
-            let _ = state.vfs.close(handle);
+            let _ = state.vfs.lock().close(handle);
             match read_public_account("/etc/passwd", 0, &mut buf) {
                 Ok(n) => {
                     let passwd_data = core::str::from_utf8(&buf[..n]).unwrap_or("");
@@ -984,7 +1093,7 @@ fn test_directory_retention() {
             Scope,
         },
     };
-    use sunlight_vfs_server::{directory::DirectoryNamespace, policy::Policy};
+    use sunlight_vfs_server::{directory::DirectoryNamespace, runtime::Runtime};
 
     let mut fs = Tmpfs::with_limits(&[], TmpfsLimits::new(0, 3)).unwrap();
     fs.mkdir("/root", 1, 2, mode::DIR_755).unwrap();
@@ -1009,9 +1118,11 @@ fn test_directory_retention() {
         namespace_generation: 9,
     };
     let mut owner = Ownership::<1>::new(registration).unwrap();
-    let mut policy = Policy::<1, 1>::new(registration).unwrap();
+    let mut policy = Runtime::<1, 1, 2>::new();
+    policy.bind(registration).unwrap();
+    policy.bind(registration).unwrap();
     policy
-        .install(scope, &namespace, "/root", "/root/cwd")
+        .install(registration, scope, &namespace, "/root", "/root/cwd")
         .unwrap();
     assert!(matches!(
         owner.prepare(scope).unwrap(),
@@ -1036,7 +1147,15 @@ fn test_directory_retention() {
     };
     // A lost publication keeps the real handles and the retry inventory owned.
     assert_eq!(owner.releases().next(), Some(Frame::Release(receipt)));
-    policy.withdraw(scope).unwrap();
+    policy.retire_caller(scope.caller);
+    policy.retire_registration(registration).unwrap();
+    let replacement = Registration {
+        epoch: registration.epoch + 1,
+        ..registration
+    };
+    policy.bind(replacement).unwrap();
+    policy.retire_registration(registration).unwrap();
+    assert_eq!(policy.active(), Some(replacement));
     drop(namespace);
     let metadata = policy.metadata(registration, receipt).unwrap();
     assert_eq!((metadata[1].1.uid, metadata[1].1.gid), (3, 4));
@@ -1067,6 +1186,71 @@ fn test_directory_retention() {
     ));
     debug_log("[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture");
     debug_log("[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture");
+    debug_log("[VFS-RPC] registration policy lifecycle OK transport=fixture");
+}
+
+/// Uses the actual service mount table and legacy handlers. Fixture identities
+/// deliberately do not claim authenticated kernel provisioning or dispatch.
+fn test_live_namespace_pins(state: &mut State) {
+    use sunlight_ipc::vfs_rpc::{
+        lifecycle::Caller,
+        registration::{EndpointOwner, Registration},
+        retention::{wire::Frame, wire::PendingRetain, Scope},
+    };
+    let registration = Registration {
+        owner: EndpointOwner {
+            endpoint: 0,
+            pid: 1,
+            incarnation: 1,
+            address_space_generation: 1,
+        },
+        epoch: 1,
+    };
+    let scope = Scope {
+        caller: Caller {
+            pid: 2,
+            incarnation: 1,
+            address_space_generation: 1,
+        },
+        namespace_id: 1,
+        namespace_generation: 1,
+    };
+    let before = state.vfs.lock().open_handle_count();
+    state
+        .vfs
+        .lock()
+        .mkdir("/tmp/vfs-pins", 0, 0, 0o755)
+        .unwrap();
+    let mut policy = sunlight_vfs_server::runtime::Runtime::<1, 1, 1>::new();
+    policy.bind(registration).unwrap();
+    policy
+        .install(registration, scope, &state.namespace, "/", "/tmp/vfs-pins")
+        .unwrap();
+    let request = PendingRetain::new(registration, scope, 1).unwrap();
+    let Frame::Retained(receipt) = policy
+        .request(registration, &request.request().encode().unwrap())
+        .unwrap()
+    else {
+        panic!("live namespace retain refused");
+    };
+    let retained = policy.metadata(registration, receipt).unwrap();
+    // Mutate through the existing IPC handler, observe through the retained pair.
+    assert_eq!(
+        chown_path(state, "/tmp/vfs-pins", 71, 72).words[0],
+        STATUS_OK
+    );
+    let changed = policy.metadata(registration, receipt).unwrap();
+    assert_eq!(retained[1].0, changed[1].0);
+    assert_eq!((changed[1].1.uid, changed[1].1.gid), (71, 72));
+    policy.retire_caller(scope.caller);
+    policy
+        .request(registration, &Frame::Release(receipt).encode().unwrap())
+        .unwrap();
+    drop(policy);
+    assert_eq!(state.vfs.lock().open_handle_count(), before);
+    debug_log(
+        "[VFS-RPC] live mounted namespace pins shared with legacy handlers OK transport=fixture",
+    );
 }
 
 fn run_phase30_tests(state: &mut State, ep: sunlight_ipc::EndpointId) {
@@ -1117,6 +1301,7 @@ fn run_phase30_tests(state: &mut State, ep: sunlight_ipc::EndpointId) {
     }
     debug_log("[VFS-RPC] negotiation handler OK dispatch=disabled");
     test_directory_retention();
+    test_live_namespace_pins(state);
     debug_log("[VFS]  Test open /etc/motd");
     let open_reply = handle_request(state, path_msg(VfsMsg::OPEN, "/etc/motd"));
     let motd = if open_reply.label == VfsMsg::REPLY && open_reply.words[0] == STATUS_OK {
@@ -1331,11 +1516,11 @@ fn run_phase37_tests(state: &mut State) {
     }
 
     // Stat /etc/shadow and /etc/passwd for permission tests
-    let shadow_stat = match state.vfs.stat("/etc/shadow") {
+    let shadow_stat = match state.vfs.lock().stat("/etc/shadow") {
         Ok(s) => s,
         Err(_) => return,
     };
-    let passwd_stat = match state.vfs.stat("/etc/passwd") {
+    let passwd_stat = match state.vfs.lock().stat("/etc/passwd") {
         Ok(s) => s,
         Err(_) => return,
     };

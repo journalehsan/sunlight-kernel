@@ -237,3 +237,28 @@ fn failed_installations_burn_generations_and_policy_capacity_is_independent() {
         Err(Error::Generation)
     );
 }
+
+#[test]
+fn explicit_refusal_preserves_replay_protection_and_existing_policy() {
+    let r = registration();
+    let s = scope();
+    let mut policy = Policy::<1, 2>::new(r).unwrap();
+    policy
+        .install(s, &namespace(), "/root", "/root/cwd")
+        .unwrap();
+    // Even an existing binding cannot grant a lease on this denied request.
+    assert!(matches!(
+        policy.refuse(r, &retain(s, 1)).unwrap(),
+        wire::Frame::Refused {
+            reason: wire::Refusal::Resolve,
+            ..
+        }
+    ));
+    assert!(policy.request(r, &retain(s, 1)).is_err());
+    let wire::Frame::Retained(receipt) = policy.request(r, &retain(s, 2)).unwrap() else {
+        panic!("new request must still use original policy")
+    };
+    // A replay can refer to an unknown successful lease: never emit a refusal.
+    assert!(policy.refuse(r, &retain(s, 2)).is_err());
+    assert!(policy.metadata(r, receipt).is_ok());
+}

@@ -1,4 +1,5 @@
-//! Transport contract for the userspace VFS migration (not yet dispatched).
+//! Transport contract for the userspace VFS migration. The root-stat pilot uses
+//! a copied channel; general file dispatch remains disabled.
 //! Four register words identify one bounded shared-memory payload. No raw user
 //! address or caller-supplied credential is authority. The kernel must bind the
 //! buffer capability and authenticated caller to the pending operation.
@@ -21,6 +22,8 @@ pub mod lifecycle;
 pub mod pending_table;
 #[path = "vfs_rpc/registration.rs"]
 pub mod registration;
+#[path = "vfs_rpc/stat_transport.rs"]
+pub mod stat_transport;
 #[path = "vfs_rpc/response.rs"]
 pub mod response;
 #[path = "vfs_rpc/retention.rs"]

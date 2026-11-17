@@ -1,7 +1,8 @@
 //! Kernel-owned preparation resources. No user mappings or transport authority.
 //! Constructors are kernel-private; numeric wire objects are never sufficient
-//! to acquire references. Service-side object retention is a future handshake.
-#![allow(dead_code)] // Runtime dispatch remains disabled.
+//! to acquire references. Receipt installation requires independently correlated
+//! retention success; these helpers do not authenticate transport.
+#![allow(dead_code)] // General file dispatch remains disabled; root-stat uses these resources.
 
 use super::vfs_registration::AdmissionIdentity;
 use alloc::{sync::Arc, vec::Vec};
@@ -12,6 +13,7 @@ use sunlight_ipc::vfs_rpc::{
     lifecycle::Caller,
     registration::Registration,
     response::METADATA_BYTES,
+    retention::{Receipt, Scope},
     ProtocolError,
 };
 
@@ -32,8 +34,8 @@ pub(super) enum Error {
 
 /// Local trusted-policy installation component. Keep one instance for the boot;
 /// serialize access with caller/service lifecycle validation. This is not a
-/// remote retain acknowledgement and must not be exposed as a syscall API.
-/// Object numbers must come from the future authenticated retain handshake.
+/// transport authenticator and must not be exposed as a syscall API. The runtime
+/// supplies correlated receipts; the numeric installer remains a local scaffold.
 pub(super) struct NamespacePolicy<const N: usize> {
     bindings: [Option<Arc<NamespaceBinding>>; N],
     next_generation: Option<u64>,
@@ -45,6 +47,60 @@ impl<const N: usize> NamespacePolicy<N> {
             bindings: [const { None }; N],
             next_generation: Some(1),
         }
+    }
+
+    /// Allocate a boot-unique scope before trusted service policy provisioning.
+    /// Failed/abandoned preparation burns this generation; it is never reused.
+    pub(super) fn reserve_scope(&mut self, identity: AdmissionIdentity) -> Result<Scope, Error> {
+        let generation = self.next_generation.ok_or(Error::NamespaceExhausted)?;
+        self.next_generation = generation.checked_add(1);
+        Ok(Scope {
+            caller: identity.caller,
+            namespace_id: generation,
+            namespace_generation: generation,
+        })
+    }
+
+    /// Only the runtime's correlated retain-success path may call this. Both
+    /// object fields name the receipt's pair generation: the root field selects
+    /// its root member and the directory field its cwd member, never an inode.
+    pub(super) fn install_receipt(
+        &mut self,
+        identity: AdmissionIdentity,
+        receipt: Receipt,
+        grants: u64,
+    ) -> Result<Arc<NamespaceBinding>, Error> {
+        if receipt.registration() != identity.registration
+            || receipt.scope().caller != identity.caller
+            || self
+                .bindings
+                .iter()
+                .flatten()
+                .any(|b| b.caller == identity.caller)
+        {
+            return Err(Error::StaleNamespace);
+        }
+        let slot = self
+            .bindings
+            .iter()
+            .position(Option::is_none)
+            .ok_or(Error::NamespaceCapacity)?;
+        let scope = receipt.scope();
+        let root = Directory::new(
+            identity.registration,
+            scope.namespace_id,
+            scope.namespace_generation,
+            receipt.generation(),
+        )?;
+        let directory = Directory::new(
+            identity.registration,
+            scope.namespace_id,
+            scope.namespace_generation,
+            receipt.generation(),
+        )?;
+        let binding = NamespaceBinding::new(identity.caller, root, directory, grants)?;
+        self.bindings[slot] = Some(Arc::clone(&binding));
+        Ok(binding)
     }
 
     /// Explicitly reject replacement: withdrawal must invalidate the old binding
@@ -145,8 +201,8 @@ impl<const N: usize> Drop for NamespacePolicy<N> {
     }
 }
 
-/// One kernel-owned record for an opaque directory object. The eventual
-/// service retain/release protocol must own its remote lifetime as well.
+/// One kernel-owned record for an opaque directory object. For receipt-backed
+/// bindings the runtime owns its remote lease until all local users drain.
 pub(super) struct Directory {
     registration: Registration,
     namespace_id: u64,
@@ -200,6 +256,12 @@ pub(super) struct NamespaceBinding {
 }
 
 impl NamespaceBinding {
+    /// Under runtime serialization, the runtime's final strong reference proves
+    /// local drain after withdrawal. No weak references escape production code.
+    pub(super) fn drained(binding: &Arc<Self>) -> bool {
+        !binding.live.load(Ordering::Acquire) && Arc::strong_count(binding) == 1
+    }
+
     fn new(
         caller: Caller,
         root: Arc<Directory>,
@@ -419,6 +481,16 @@ impl Resources {
         self.namespace.validate(self.identity).map(|_| ())
     }
 
+    pub(super) fn matches_stat_path(&self, path: &str) -> bool {
+        let mut groups = [0; sunlight_ipc::vfs_rpc::context::MAX_GROUPS];
+        sunlight_ipc::vfs_rpc::context::decode(&self.input, &mut groups)
+            .is_ok_and(|d| d.request == Request::Stat { path })
+    }
+
+    pub(super) fn caller(&self) -> Caller {
+        self.identity.caller
+    }
+
     pub(super) fn input(&self) -> &[u8] {
         &self.input
     }
@@ -522,6 +594,14 @@ mod tests {
             NamespacePolicy::<0>::new().install(id, 9, 10, 0),
             Err(Error::NamespaceCapacity)
         );
+        let mut reserved = NamespacePolicy::<1>::new();
+        reserved.next_generation = Some(u64::MAX);
+        assert_eq!(
+            reserved.reserve_scope(id).unwrap().namespace_generation,
+            u64::MAX
+        );
+        assert_eq!(reserved.reserve_scope(id), Err(Error::NamespaceExhausted));
+        assert!(reserved.lookup(id).is_err());
     }
 
     #[test]

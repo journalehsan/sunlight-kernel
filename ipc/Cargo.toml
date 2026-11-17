@@ -665,4 +665,5 @@ edition = "2021"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("sunlightos"))'] }
 
 [features]
+stat-failure-test = []
 experimental-fastlane-authority = []

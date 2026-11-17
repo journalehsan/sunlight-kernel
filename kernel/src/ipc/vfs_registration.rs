@@ -1,9 +1,10 @@
 //! Root-service binding is independent of nameserver strings and public SEND
 //! capabilities. Call with scheduler and broker lifecycle serialization held.
-use super::vfs_resources::{Error as ResourceError, NamespacePolicy, Resources};
+use super::vfs_resources::{Error as ResourceError, NamespaceBinding, NamespacePolicy, Resources};
 use super::IpcError;
 use crate::capability::CapabilityBroker;
 use crate::sched::Scheduler;
+use alloc::sync::Arc;
 use sunlight_ipc::vfs_rpc::registration::{EndpointOwner, Registry};
 use sunlight_ipc::vfs_rpc::{lifecycle::Caller, registration::Registration};
 use sunlight_ipc::vfs_rpc::{
@@ -11,7 +12,7 @@ use sunlight_ipc::vfs_rpc::{
     retention::{
         ownership::{Error as OwnershipError, Ownership, Retained},
         wire::{Frame, Refusal},
-        Scope,
+        Receipt, Scope,
     },
     Transfer,
 };
@@ -25,6 +26,51 @@ struct RemoteRegistration {
     registration: Registration,
     retired: bool,
     ownership: Ownership<REMOTE_LEASES>,
+    local: [Option<LocalLease>; REMOTE_LEASES],
+    unsent: [Option<Frame>; REMOTE_LEASES],
+    delivered: Option<u64>,
+    callers: [Option<CallerDelivery>; REMOTE_LEASES],
+    last_caller_id: u64,
+    last_wake_tick: Option<u64>,
+}
+
+/// Capacity is reserved before namespace preparation, including callers whose
+/// leases later settle. Thus exit/exec never needs allocation or drops an event.
+struct CallerDelivery {
+    caller: Caller,
+    id: u64,
+    retired: bool,
+    delivered: bool,
+}
+
+enum LocalLease {
+    Preparing {
+        id: u64,
+        identity: AdmissionIdentity,
+        scope: Scope,
+        grants: u64,
+        root_policy: bool,
+        initial_cwd: Option<alloc::string::String>,
+    },
+    Bound {
+        receipt: Receipt,
+        binding: Arc<NamespaceBinding>,
+    },
+}
+
+impl LocalLease {
+    fn id(&self) -> u64 {
+        match self {
+            Self::Preparing { id, .. } => *id,
+            Self::Bound { receipt, .. } => receipt.request_id(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum NamespaceRetentionError {
+    Resource(ResourceError),
+    Ownership(OwnershipError),
 }
 
 /// One boot-lived owner and serialization point for registration, local namespace
@@ -32,6 +78,7 @@ struct RemoteRegistration {
 /// owner on replacement: namespace generations and RPC IDs are boot-scoped;
 /// retention IDs are registration-scoped and old owners survive retirement.
 struct Runtime {
+    publications: [Option<stat::Publication>; 64],
     registry: Registry,
     namespaces: NamespacePolicy<64>,
     pending: Table<Resources, 64>,
@@ -41,6 +88,7 @@ struct Runtime {
 impl Runtime {
     const fn new() -> Self {
         Self {
+            publications: [const { None }; 64],
             registry: Registry::new(),
             namespaces: NamespacePolicy::new(),
             pending: Table::new(),
@@ -72,22 +120,181 @@ impl Runtime {
             registration,
             retired: false,
             ownership: Ownership::new(registration).expect("validated VFS registration"),
+            local: [const { None }; REMOTE_LEASES],
+            unsent: [None; REMOTE_LEASES],
+            delivered: None,
+            callers: [const { None }; REMOTE_LEASES],
+            last_caller_id: 0,
+            last_wake_tick: None,
         });
         Ok(registration)
     }
 
+    /// Component preparation only: the identity and grants require trusted
+    /// provisioning and lifecycle revalidation before publication. Store the
+    /// complete snapshot before returning the single-send retain frame.
+    #[allow(dead_code)]
+    fn prepare_namespace(
+        &mut self,
+        identity: AdmissionIdentity,
+        grants: u64,
+    ) -> Result<Frame, NamespaceRetentionError> {
+        use NamespaceRetentionError::{Ownership, Resource};
+        if self.registry.active() != Some(identity.registration)
+            || grants & !sunlight_ipc::vfs_rpc::context::LOOKUP_METADATA != 0
+        {
+            return Err(Resource(ResourceError::StaleNamespace));
+        }
+        let remote = self
+            .remote
+            .iter_mut()
+            .flatten()
+            .find(|r| r.registration == identity.registration)
+            .ok_or(Ownership(OwnershipError::State))?;
+        let slot = remote
+            .local
+            .iter()
+            .position(Option::is_none)
+            .ok_or(Ownership(OwnershipError::Capacity))?;
+        let caller_slot = remote
+            .callers
+            .iter()
+            .position(|c| c.as_ref().is_some_and(|c| c.caller == identity.caller));
+        if caller_slot.is_some_and(|i| remote.callers[i].as_ref().unwrap().retired) {
+            return Err(Ownership(OwnershipError::State));
+        }
+        let new_caller = if caller_slot.is_none() {
+            let slot = remote
+                .callers
+                .iter()
+                .position(Option::is_none)
+                .ok_or(Ownership(OwnershipError::Capacity))?;
+            let id = remote
+                .last_caller_id
+                .checked_add(1)
+                .ok_or(Ownership(OwnershipError::Capacity))?;
+            Some((slot, id))
+        } else {
+            None
+        };
+        let scope = self.namespaces.reserve_scope(identity).map_err(Resource)?;
+        let frame = remote.ownership.prepare(scope).map_err(Ownership)?;
+        if let Some((slot, id)) = new_caller {
+            remote.callers[slot] = Some(CallerDelivery {
+                caller: identity.caller,
+                id,
+                retired: false,
+                delivered: false,
+            });
+            remote.last_caller_id = id;
+        }
+        let Frame::Retain { request_id: id, .. } = frame else {
+            unreachable!()
+        };
+        remote.local[slot] = Some(LocalLease::Preparing {
+            id,
+            identity,
+            scope,
+            grants,
+            root_policy: false,
+            initial_cwd: None,
+        });
+        Ok(frame)
+    }
+
+    /// Transport must authenticate registration independently and capture
+    /// `live` under lifecycle locks (None means no longer authorized). A decoded
+    /// reply supplies neither. Malformed replies preserve all preparation state.
+    /// Installation failure owns a retryable release before returning the error.
+    #[allow(dead_code)]
+    fn install_retained(
+        &mut self,
+        authenticated: Registration,
+        id: u64,
+        bytes: &[u8],
+        live: Option<AdmissionIdentity>,
+    ) -> Result<Option<Frame>, NamespaceRetentionError> {
+        use NamespaceRetentionError::{Ownership, Resource};
+        let remote = self
+            .remote
+            .iter_mut()
+            .flatten()
+            .find(|r| r.registration == authenticated)
+            .ok_or(Ownership(OwnershipError::State))?;
+        let slot = remote
+            .local
+            .iter()
+            .position(|l| l.as_ref().is_some_and(|l| l.id() == id))
+            .ok_or(Ownership(OwnershipError::State))?;
+        let Some(LocalLease::Preparing {
+            identity,
+            scope,
+            grants,
+            ..
+        }) = remote.local[slot]
+        else {
+            return Err(Ownership(OwnershipError::State));
+        };
+        match remote
+            .ownership
+            .retained(id, authenticated, bytes)
+            .map_err(Ownership)?
+        {
+            Retained::Release(frame) => {
+                remote.local[slot] = None;
+                Ok(Some(frame))
+            }
+            Retained::Install(receipt) => {
+                // Ownership correlation already checked the full receipt scope.
+                assert_eq!(receipt.scope(), scope);
+                remote.local[slot] = None;
+                if live != Some(identity) || self.registry.active() != Some(authenticated) {
+                    return remote.ownership.release(id).map(Some).map_err(Ownership);
+                }
+                match self.namespaces.install_receipt(identity, receipt, grants) {
+                    Ok(binding) => {
+                        remote.local[slot] = Some(LocalLease::Bound { receipt, binding });
+                        Ok(None)
+                    }
+                    Err(error) => {
+                        remote.ownership.release(id).map_err(Ownership)?;
+                        Err(Resource(error))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Bounded local reconciliation, never IPC. Withdrawal closes admission;
+    /// terminal pending resources and explicit reap owners continue pinning the
+    /// binding. Release becomes retryable only after their final reference drops.
+    #[allow(dead_code)]
+    fn reconcile_namespaces(&mut self) {
+        for remote in self.remote.iter_mut().flatten() {
+            for slot in &mut remote.local {
+                if let Some(LocalLease::Bound { receipt, binding }) = slot {
+                    if NamespaceBinding::drained(binding) {
+                        remote
+                            .ownership
+                            .release(receipt.request_id())
+                            .expect("installed VFS lease remains held until local drain");
+                        *slot = None;
+                    }
+                }
+            }
+        }
+    }
+
     fn collect_remote(&mut self) {
         for slot in &mut self.remote {
-            if slot
-                .as_ref()
-                .is_some_and(|r| r.retired && r.ownership.outstanding() == 0)
-            {
+            if slot.as_ref().is_some_and(|r| {
+                r.retired && r.ownership.outstanding() == 0 && r.callers.iter().all(Option::is_none)
+            }) {
                 *slot = None;
             }
         }
     }
 
-    #[allow(dead_code)] // No authenticated retention transport is wired yet.
     fn remote_owner(
         &mut self,
         registration: Registration,
@@ -139,6 +346,18 @@ impl Runtime {
         let reason = self
             .remote_owner(authenticated)?
             .refused(id, authenticated, bytes)?;
+        if let Some(remote) = self
+            .remote
+            .iter_mut()
+            .flatten()
+            .find(|r| r.registration == authenticated)
+        {
+            for slot in &mut remote.local {
+                if slot.as_ref().is_some_and(|l| l.id() == id) {
+                    *slot = None;
+                }
+            }
+        }
         self.collect_remote();
         Ok(reason)
     }
@@ -170,21 +389,63 @@ impl Runtime {
                 remote.ownership.abandon_all();
             }
         }
+        self.reconcile_namespaces();
         self.collect_remote();
     }
 
     fn retire_process(&mut self, expected: Caller) {
-        self.namespaces.retire_caller(expected);
-        self.pending.retire_caller(expected);
-        // Include quarantined old registrations, not only the active service.
-        for remote in self.remote.iter_mut().flatten() {
-            remote.ownership.abandon_caller(expected);
-        }
+        self.retire_caller_profile(expected);
         if let Some(active) = self.registry.active() {
             if owner_matches(active.owner, expected) {
                 self.retire_registration(active);
             }
         }
+    }
+
+    fn retire_caller_profile(&mut self, expected: Caller) {
+        self.namespaces.retire_caller(expected);
+        self.pending.retire_caller(expected);
+        CLEANUP_PENDING.store(true, core::sync::atomic::Ordering::Release);
+        // Exit/exec or profile withdrawal discards the continuation, leaving
+        // terminal resources for cleanup after lifecycle serialization ends.
+        for slot in &mut self.publications {
+            if slot.as_ref().is_some_and(|p| p.identity.caller == expected) {
+                *slot = None;
+            }
+        }
+        // Include quarantined old registrations, not only the active service.
+        for remote in self.remote.iter_mut().flatten() {
+            remote.ownership.abandon_caller(expected);
+            for caller in remote.callers.iter_mut().flatten() {
+                if caller.caller == expected {
+                    caller.retired = true;
+                }
+            }
+        }
+        self.reconcile_namespaces();
+    }
+
+    /// A live cwd or credential change discards the pilot continuation, but must wake its
+    /// owner before removing publication bookkeeping. The next call observes
+    /// withdrawn authority. Never wake a nested IPC operation on its behalf.
+    fn withdraw_root_profile(&mut self, idx: usize, sched: &mut Scheduler) {
+        if !sched.processes[idx].vfs_root_metadata {
+            return;
+        }
+        sched.processes[idx].vfs_root_metadata = false;
+        let caller = process_identity(&sched.processes[idx]);
+        if self
+            .publications
+            .iter()
+            .flatten()
+            .any(|p| p.identity.caller == caller)
+            && sched.processes[idx].state == crate::process::ProcessState::BlockedOnIpc
+            && sched.processes[idx].pending_call.is_none()
+            && sched.processes[idx].ipc_reply_target.is_none()
+        {
+            super::wake_terminal(sched, idx);
+        }
+        self.retire_caller_profile(caller);
     }
 
     fn retire_endpoint(&mut self, endpoint: u32, owner: Caller) {
@@ -195,7 +456,8 @@ impl Runtime {
         }
     }
 
-    /// Local preparation only. No publication, mappings or remote lease exists.
+    /// Local preparation only, without publication or mappings. Receipt-backed
+    /// bindings pin their existing remote lease through the pending resources.
     /// Call only after process/credential revalidation under lifecycle locks.
     #[allow(dead_code)] // Awaiting authenticated dispatch integration.
     fn admit_stat(
@@ -220,7 +482,22 @@ fn owner_matches(owner: EndpointOwner, caller: Caller) -> bool {
         && owner.address_space_generation == caller.address_space_generation
 }
 
+static CLEANUP_PENDING: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 static RUNTIME: spin::Mutex<Runtime> = spin::Mutex::new(Runtime::new());
+
+#[path = "vfs_registration/stat.rs"]
+mod stat;
+#[path = "vfs_registration/transport.rs"]
+mod transport;
+pub(crate) use stat::{
+    complete_stat, copy_failed as stat_copy_failed, stat_call as stat_path_call, take_stat,
+    Error as StatError, StatCall,
+};
+pub(crate) use transport::{control, initial_cwd};
+
+#[path = "vfs_registration/wakeup.rs"]
+mod wakeup;
+pub(super) use wakeup::{take_control_wakeup, wake_control_receivers};
 
 /// Capture from a retained process record under SCHEDULER, never a wire PID.
 pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
@@ -234,9 +511,17 @@ pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
 /// Call at termination commit or successful live exec, holding SCHEDULER.
 /// Revokes local admission and terminalizes matching pending requests, retaining
 /// their resources until explicit reap, and abandons matching pending retains.
-/// Remote ownership survives retirement. No remote drain, IPC or VM cleanup.
+/// Queue bounded copied-channel barriers for callers admitted by namespace
+/// preparation. Remote ownership survives retirement. No synchronous IPC,
+/// remote drain or VM cleanup occurs here.
 pub(crate) fn retire_process(expected: Caller) {
     RUNTIME.lock().retire_process(expected);
+}
+
+/// Hold SCHEDULER across the cwd or credential commit and profile withdrawal.
+/// Resource destruction is deferred to syscall-return cleanup after unlock.
+pub(crate) fn withdraw_root_profile(idx: usize, sched: &mut Scheduler) {
+    RUNTIME.lock().withdraw_root_profile(idx, sched);
 }
 
 /// Called after authenticated endpoint destruction, still holding SCHEDULER.
@@ -336,11 +621,47 @@ pub(super) fn admit_stat(
 
 /// Move one terminal entry to cleanup ownership. The runtime guard is released
 /// before returning. Drop/deliver the result only after releasing any scheduler
-/// and broker guards as well. This is local-only: future published operations
-/// additionally require remote release/drain before their resources can be freed.
+/// and broker guards as well. Returned resources pin receipt-backed bindings
+/// until dropped; invoke reconcile_namespaces afterwards. Future published,
+/// mapped operations additionally require their transport/mapping drain.
 #[allow(dead_code)]
 pub(super) fn reap_next() -> Option<Retired<Resources>> {
-    RUNTIME.lock().pending.reap_next()
+    let mut runtime = RUNTIME.lock();
+    // Published continuations own terminal delivery; independently drain
+    // abandoned operations without stealing a live caller's result.
+    let id = runtime
+        .pending
+        .terminal_ids()
+        .find(|id| !runtime.publications.iter().flatten().any(|p| p.id == *id));
+    let Some(id) = id else {
+        CLEANUP_PENDING.store(false, core::sync::atomic::Ordering::Release);
+        return None;
+    };
+    let retired = runtime.pending.reap(id)?;
+    Some(retired)
+}
+
+/// Syscall-return cleanup, outside scheduler/broker guards. The fast path is
+/// one atomic read; caller retirement requests a bounded drain. Live published
+/// continuations retain their results for the caller rather than this worker.
+pub(crate) fn cleanup_abandoned() {
+    if !CLEANUP_PENDING.load(core::sync::atomic::Ordering::Acquire) {
+        return;
+    }
+    for _ in 0..64 {
+        let Some(retired) = reap_next() else {
+            break;
+        };
+        drop(retired);
+        reconcile_namespaces();
+    }
+}
+
+/// Result delivery and abandoned cleanup call after dropping reaped resources
+/// and lifecycle guards. Record release obligations without sending or waiting.
+#[allow(dead_code)]
+pub(crate) fn reconcile_namespaces() {
+    RUNTIME.lock().reconcile_namespaces();
 }
 
 fn live_registration(
@@ -399,6 +720,10 @@ pub(super) fn register(
         .map(|_| ())
         .map_err(|_| IpcError::InvalidCapability)
 }
+
+#[cfg(test)]
+#[path = "vfs_registration/namespace_tests.rs"]
+mod namespace_tests;
 
 #[cfg(test)]
 mod tests {

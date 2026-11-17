@@ -23,6 +23,17 @@ pub enum Refusal {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Frame {
+    /// Trusted copied-channel lifecycle barrier. Namespace words are reserved.
+    CallerRetired {
+        registration: Registration,
+        caller: Caller,
+        event_id: u64,
+    },
+    CallerRetiredAck {
+        registration: Registration,
+        caller: Caller,
+        event_id: u64,
+    },
     Retain {
         registration: Registration,
         scope: Scope,
@@ -40,6 +51,30 @@ pub enum Frame {
 impl Frame {
     pub fn encode(self) -> Result<[u8; FRAME_BYTES], ProtocolError> {
         let (op, registration, scope, request_id, generation) = match self {
+            Self::CallerRetired {
+                registration,
+                caller,
+                event_id,
+            }
+            | Self::CallerRetiredAck {
+                registration,
+                caller,
+                event_id,
+            } => (
+                if matches!(self, Self::CallerRetired { .. }) {
+                    6
+                } else {
+                    7
+                },
+                registration,
+                Scope {
+                    caller,
+                    namespace_id: 0,
+                    namespace_generation: 0,
+                },
+                event_id,
+                0,
+            ),
             Self::Retain {
                 registration,
                 scope,
@@ -88,11 +123,20 @@ impl Frame {
         if w[0] != VERSION {
             return Err(ProtocolError::Version);
         }
-        if !(1..=5).contains(&w[1]) {
+        if !(1..=7).contains(&w[1]) {
             return Err(ProtocolError::Operation);
         }
-        // Endpoint zero is valid; all other identity/correlation words are nonzero.
-        if w[3..13].contains(&0) || (w[1] == 1) != (w[13] == 0) {
+        // Endpoint zero is valid. Identity and correlation words are nonzero;
+        // lifecycle records reserve the namespace and lease-generation words.
+        let lifecycle = w[1] >= 6;
+        if w[3..10].contains(&0)
+            || w[12] == 0
+            || if lifecycle {
+                w[10] != 0 || w[11] != 0 || w[13] != 0
+            } else {
+                w[10..12].contains(&0) || (w[1] == 1) != (w[13] == 0)
+            }
+        {
             return Err(ProtocolError::Encoding);
         }
         let registration = Registration {
@@ -120,6 +164,16 @@ impl Frame {
             generation: w[13],
         };
         Ok(match w[1] {
+            6 => Self::CallerRetired {
+                registration,
+                caller: scope.caller,
+                event_id: w[12],
+            },
+            7 => Self::CallerRetiredAck {
+                registration,
+                caller: scope.caller,
+                event_id: w[12],
+            },
             1 => Self::Retain {
                 registration,
                 scope,
@@ -261,6 +315,36 @@ mod tests {
             11,
         )
         .unwrap()
+    }
+    #[test]
+    fn lifecycle_frames_require_exact_identity_event_and_reserved_words() {
+        let p = pending();
+        for frame in [
+            Frame::CallerRetired {
+                registration: p.registration,
+                caller: p.scope.caller,
+                event_id: 1,
+            },
+            Frame::CallerRetiredAck {
+                registration: p.registration,
+                caller: p.scope.caller,
+                event_id: 1,
+            },
+        ] {
+            let bytes = frame.encode().unwrap();
+            assert_eq!(Frame::decode(&bytes), Ok(frame));
+            for word in [3, 4, 5, 6, 7, 8, 9, 12] {
+                let mut invalid = bytes;
+                invalid[word * 8..word * 8 + 8].fill(0);
+                assert!(Frame::decode(&invalid).is_err());
+            }
+            for word in [10, 11, 13] {
+                let mut invalid = bytes;
+                invalid[word * 8] = 1;
+                assert!(Frame::decode(&invalid).is_err());
+            }
+            assert!(Frame::decode(&bytes[..FRAME_BYTES - 1]).is_err());
+        }
     }
     fn receipt(p: PendingRetain) -> Receipt {
         Table::<(), 1>::new(p.registration)

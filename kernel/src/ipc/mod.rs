@@ -9,6 +9,13 @@ pub(crate) mod reply_race_test;
 pub mod message;
 mod vfs_registration;
 mod vfs_resources;
+pub(crate) use vfs_registration::cleanup_abandoned as cleanup_vfs_abandoned;
+pub(crate) use vfs_registration::reconcile_namespaces as reconcile_vfs_namespaces;
+pub(crate) use vfs_registration::control as vfs_retention_control;
+pub(crate) use vfs_registration::initial_cwd as vfs_initial_cwd;
+pub(crate) use vfs_registration::withdraw_root_profile as withdraw_vfs_root_profile;
+pub(crate) use vfs_registration::{stat_path_call, take_stat as vfs_take_stat,
+    complete_stat as vfs_complete_stat, stat_copy_failed, StatCall, StatError};
 
 pub(crate) use vfs_registration::{
     process_identity as vfs_process_identity, retire_endpoint as retire_vfs_endpoint,
@@ -1629,6 +1636,13 @@ pub fn handle_ipc_recv(
         );
         return Ok(msg.msg);
     }
+    if let Some(msg) =
+        vfs_registration::take_control_wakeup(&sched.processes[idx], endpoint_id, sched.global_tick)
+    {
+        sched.processes[idx].ipc_next_deadline_tick = None;
+        sched.processes[idx].ipc_recv_deadline = None;
+        return Ok(msg);
+    }
     bus.block_on_recv(endpoint_id, receiver_pid, sched);
     Err(IpcError::WouldBlock)
 }
@@ -1653,7 +1667,12 @@ pub fn handle_ipc_try_recv(
         return Err(IpcError::InvalidArgument);
     }
     let Some(msg) = bus.pop_pending(endpoint_id) else {
-        return Err(IpcError::WouldBlock);
+        return vfs_registration::take_control_wakeup(
+            &sched.processes[idx],
+            endpoint_id,
+            sched.global_tick,
+        )
+        .ok_or(IpcError::WouldBlock);
     };
     set_reply_target(sched, receiver_pid, endpoint_id, msg.call);
     Ok(msg.msg)
@@ -1937,6 +1956,7 @@ pub fn handle_ipc_reply_wait(
         deliver_reply_to_current_target(server_pid, reply, sched, caps, bus)?;
     }
 
+    let now_tick = sched.global_tick;
     if let Some(server) = sched.process_mut_by_pid(server_pid) {
         if let Some(msg) = bus.pop_pending(endpoint_id) {
             server.ipc_reply_target = msg.call.map(|call| IpcReplyTarget { endpoint_id, call });
@@ -1950,6 +1970,12 @@ pub fn handle_ipc_reply_wait(
                 msg.call.map_or(msg.msg.words[0], |c| c.generation),
             );
             return Ok(msg.msg);
+        }
+
+        if let Some(msg) = vfs_registration::take_control_wakeup(server, endpoint_id, now_tick) {
+            server.ipc_endpoint = Some(endpoint_id);
+            server.pending_reply_wait = None;
+            return Ok(msg);
         }
 
         if server.pending_reply_wait.is_none() {
@@ -2033,6 +2059,7 @@ pub fn clear_next_ipc_deadline(caller_pid: usize, sched: &mut Scheduler) {
 /// Called from the BSP scheduler tick. Generation comparisons are the stale
 /// deadline rejection: a deadline can terminate only the operation that armed it.
 pub fn expire_deadlines(sched: &mut Scheduler, now_tick: u64) {
+    vfs_registration::wake_control_receivers(sched, now_tick);
     for idx in 0..sched.processes.len() {
         let Some((generation, _deadline)) = sched.processes[idx].ipc_deadline else {
             continue;

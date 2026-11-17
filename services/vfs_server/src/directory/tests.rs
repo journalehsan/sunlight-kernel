@@ -1,5 +1,5 @@
 use super::*;
-use sunlight_fs::{mode, TmpfsLimits};
+use sunlight_fs::{mode, FileSystem, TmpfsLimits};
 use sunlight_ipc::vfs_rpc::{
     lifecycle::Caller,
     registration::{EndpointOwner, Registration},
@@ -44,7 +44,7 @@ fn pins_follow_real_directory_objects_and_observe_live_metadata() {
     let pair = namespace.pin("/root", "/root/cwd").unwrap();
     let before = pair.metadata().unwrap();
     {
-        let mut fs = namespace.filesystem.lock();
+        let mut fs = namespace.isolated().lock();
         fs.rename("/root", "/moved").unwrap();
         fs.mkdir("/root", 11, 12, mode::DIR_755).unwrap();
         fs.mkdir("/root/cwd", 13, 14, mode::DIR_755).unwrap();
@@ -60,14 +60,14 @@ fn pins_follow_real_directory_objects_and_observe_live_metadata() {
     assert_ne!(replacement.metadata().unwrap()[1].0, after[1].0);
     // Removing another dynamic inode shifts backend indexes; handles follow.
     {
-        let mut fs = namespace.filesystem.lock();
+        let mut fs = namespace.isolated().lock();
         let file = fs.create_file("/gone", 0, 0, mode::FILE_644).unwrap();
         fs.close(file).unwrap();
         fs.mkdir("/later", 0, 0, mode::DIR_755).unwrap();
     }
     let later = namespace.pin("/", "/later").unwrap();
     let later_metadata = later.metadata().unwrap();
-    namespace.filesystem.lock().unlink("/gone").unwrap();
+    namespace.isolated().lock().unlink("/gone").unwrap();
     assert_eq!(later.metadata().unwrap(), later_metadata);
     assert_eq!(pair.metadata().unwrap(), after);
 }
@@ -86,7 +86,7 @@ fn policy_rejects_escapes_and_files_and_rolls_back_partial_acquisition() {
     ] {
         assert!(namespace.pin(root, directory).is_err());
     }
-    let mut fs = namespace.filesystem.lock();
+    let mut fs = namespace.isolated().lock();
     let file = fs.create_file("/root/file", 0, 0, mode::FILE_644).unwrap();
     fs.close(file).unwrap();
     drop(fs);
@@ -104,14 +104,14 @@ fn policy_rejects_escapes_and_files_and_rolls_back_partial_acquisition() {
     let pairs: alloc::vec::Vec<_> = (0..15)
         .map(|_| namespace.pin("/root", "/root/cwd").unwrap())
         .collect();
-    let spare = namespace.filesystem.lock().open("/").unwrap();
+    let spare = namespace.isolated().lock().open("/").unwrap();
     for _ in 0..64 {
         assert!(matches!(
             namespace.pin("/root", "/root/cwd"),
             Err(FsError::TooManyOpenFiles)
         ));
     }
-    namespace.filesystem.lock().close(spare).unwrap();
+    namespace.isolated().lock().close(spare).unwrap();
     let last = namespace.pin("/root", "/root/cwd").unwrap();
     drop(last);
     drop(pairs);
@@ -122,7 +122,7 @@ fn policy_rejects_escapes_and_files_and_rolls_back_partial_acquisition() {
 #[test]
 fn real_pins_survive_lost_replies_release_and_registration_drain() {
     let namespace = namespace();
-    let weak = Arc::downgrade(&namespace.filesystem);
+    let weak = Arc::downgrade(namespace.isolated());
     let registration = registration();
     let mut table = Table::<DirectoryPair, 1>::new(registration).unwrap();
     let pending = wire::PendingRetain::new(registration, scope(), 1).unwrap();
@@ -208,9 +208,9 @@ fn policy_retains_installed_objects_after_pathname_replacement() {
     policy
         .install(scope(), &namespace, "/root", "/root/cwd")
         .unwrap();
-    let weak = Arc::downgrade(&namespace.filesystem);
+    let weak = Arc::downgrade(namespace.isolated());
     {
-        let mut fs = namespace.filesystem.lock();
+        let mut fs = namespace.isolated().lock();
         fs.rename("/root", "/moved").unwrap();
         fs.mkdir("/root", 11, 12, mode::DIR_755).unwrap();
         fs.mkdir("/root/cwd", 13, 14, mode::DIR_755).unwrap();
@@ -249,4 +249,50 @@ fn policy_retains_installed_objects_after_pathname_replacement() {
             .unwrap();
     }
     assert!(weak.upgrade().is_none());
+}
+
+#[test]
+fn mounted_pins_share_legacy_state_and_account_for_open_handles() {
+    let mut vfs = Vfs::new();
+    vfs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();
+    vfs.mkdir("/volume", 0, 0, mode::DIR_755).unwrap();
+    vfs.mount_tmpfs("/volume", Tmpfs::new(&[])).unwrap();
+    vfs.mkdir("/volume/cwd", 7, 8, mode::DIR_700).unwrap();
+    let mount_id = vfs.mount_info(1).unwrap().id;
+    let namespace = DirectoryNamespace::mounted(vfs).unwrap();
+    let legacy = namespace.shared();
+    let pair = namespace.pin("/", "/volume/cwd").unwrap();
+    assert_eq!(legacy.lock().open_handle_count(), 2);
+    let before = pair.metadata().unwrap();
+    legacy
+        .lock()
+        .rename("/volume/cwd", "/volume/moved")
+        .unwrap();
+    legacy
+        .lock()
+        .mkdir("/volume/cwd", 9, 10, mode::DIR_755)
+        .unwrap();
+    legacy.lock().chown("/volume/moved", 11, 12).unwrap();
+    let after = pair.metadata().unwrap();
+    assert_eq!(before[1].0, after[1].0);
+    assert_eq!((after[1].1.uid, after[1].1.gid), (11, 12));
+    assert_ne!(
+        after[1].0,
+        namespace
+            .pin("/", "/volume/cwd")
+            .unwrap()
+            .metadata()
+            .unwrap()[1]
+            .0
+    );
+    assert!(legacy.lock().unmount(mount_id).is_err());
+    drop(namespace);
+    assert_eq!(pair.metadata().unwrap(), after);
+    drop(pair);
+    assert_eq!(legacy.lock().open_handle_count(), 0);
+    // Boot mounts remain protected after pins are released.
+    assert_eq!(
+        legacy.lock().unmount(mount_id),
+        Err(FsError::OperationNotPermitted)
+    );
 }

@@ -1,0 +1,30 @@
+[VFS-RPC] boot root policy installed caller=1 epoch=1 transport=copy
+[VFS-RPC] native root stat caller resume/result copy OK transport=copy
+[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy
+[VFS-RPC] native late stat reply rejected after timeout
+[VFS-RPC] native stat timeout/resume/new request OK
+[VFS-RPC] native stat output unmap/remap atomic copy/recovery OK
+[VFS-RPC] native stat concurrent VM replacement atomic copy/recovery OK
+[VFS-RPC] native stat failed exec preserves continuation OK
+[VFS-RPC] native stat exec replacement denied old continuation OK
+[VFS-RPC] native stat failed chdir preserves profile/result OK
+[VFS-RPC] native stat private sibling cwd preserves profile/result OK
+[VFS-RPC] native stat chdir withdraws profile/stale reply OK
+[VFS-RPC] native stat shared sibling cwd withdraws profile OK
+[VFS-RPC] native stat caller exit/exec stale reply/fresh recovery OK
+[VFS-RPC] native consumed pull copy fault retired service epoch
+[VFS-RPC] native stat service loss/resume/no fallback OK
+[VFS-RPC] native stat unchanged credentials preserve profile/result OK
+[VFS-RPC] native stat setuid withdraws profile/stale reply OK
+[VFS-RPC] native stat setgid withdraws profile/no regrant OK
+
+[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK
+[VFS-RPC] native StatPath timeout/resume/recovery OK
+[VFS-RPC] native StatPath service loss/no kernel fallback OK
+[VFS-RPC] native StatPath withdrawn profile/no kernel fallback OK
+
+[VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK
+[VFS-RPC] Linux stat withdrawn profile/no kernel fallback OK
+[VFS-RPC] Linux stat timeout/resume/recovery OK
+[VFS-RPC] Linux stat service loss/no kernel fallback OK
+[VFS-RPC] initial nonroot cwd native/Linux stat and withdrawal OK

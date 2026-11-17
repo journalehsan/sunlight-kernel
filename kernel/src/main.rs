@@ -897,6 +897,10 @@ pub extern "C" fn _start() -> ! {
             process::spawn::map_user_stack(&mut init, &mut pmm, hhdm_offset)
                 .expect("init stack mapping failed");
             init.init_context(entry, layout::USER_STACK_TOP);
+            // Explicit image-scoped migration pilot: root and cwd are the
+            // service-mounted `/`, with metadata lookup authority only.
+            init.vfs_root_metadata = true;
+            init.vfs_stat_routed = true;
             init.set_initial_args(capability::SPAWN_TOKEN.0, 0, 0, 0);
             // Release PMM before taking the scheduler lock. Every other path in
             // the kernel (timer_rust, reap_process_resources, the spawn syscall)

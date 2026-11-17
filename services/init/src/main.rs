@@ -179,9 +179,47 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
     // reply was lost. Finished never permits restart; only its exact reap does.
     let mut monitor = sunlight_ipc::supervision::BootstrapMonitor::default();
     let mut next_probe = 0;
+    let mut root_stat_verified = false;
+    let mut path_stat_verified = false;
     loop {
         if let Some(msg) = ipc_recv_timeout(ep, 100) {
             ipc_reply(handle_nameserver_msg(&mut registry, msg));
+        }
+        if !root_stat_verified {
+            use sunlight_ipc::vfs_rpc::{response::Kind, stat_transport as api};
+            match api::root_metadata() {
+                Ok(metadata) if metadata.kind == Kind::Directory && metadata.links > 0 => {
+                    root_stat_verified = true;
+                    debug_log(
+                        "[VFS-RPC] native root stat caller resume/result copy OK transport=copy",
+                    );
+                }
+                Err(api::NOT_READY) => {} // Provisioning can follow this turn.
+                _ => {
+                    root_stat_verified = true;
+                    debug_log("[VFS-RPC] ERROR native root stat failed");
+                }
+            }
+        }
+        if root_stat_verified && !path_stat_verified {
+            path_stat_verified = true;
+            if verify_service_stat_paths() {
+                debug_log(
+                    "[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy",
+                );
+                verify_native_stat_path();
+                #[cfg(feature = "stat-failure-test")]
+                {
+                    let cap = registry
+                        .iter()
+                        .find(|r| r.name == name_to_u64("vfs") && r.is_live())
+                        .expect("live VFS probe service")
+                        .public_cap;
+                    verify_stat_failures(cap);
+                }
+            } else {
+                debug_log("[VFS-RPC] ERROR native path stat failed");
+            }
         }
         use sunlight_ipc::supervision::{self as own, BootstrapAction};
         let now = sunlight_ipc::monotonic_millis();
@@ -214,6 +252,288 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         }
     }
 }
+
+/// Exercise authenticated service-only metadata plus ordinary path semantics.
+/// The pinned-directory fixture exists in the service's live namespace.
+fn verify_service_stat_paths() -> bool {
+    use sunlight_ipc::vfs_rpc::{response::Kind, stat_transport as api};
+    let Ok(absolute) = api::stat("/etc/motd") else {
+        return false;
+    };
+    let Ok(relative) = api::stat("etc/./motd") else {
+        return false;
+    };
+    if absolute != relative || absolute.kind != Kind::File || absolute.size == 0 {
+        return false;
+    }
+    // Put the target name at the end of a maximum-size input: truncation would
+    // return root metadata and must fail this comparison.
+    let mut long = [b'/'; api::MAX_LOOKUP_PATH];
+    let suffix = b"etc/motd";
+    let start = long.len() - suffix.len();
+    long[start..].copy_from_slice(suffix);
+    if api::stat(core::str::from_utf8(&long).unwrap()) != Ok(absolute) {
+        return false;
+    }
+
+    let Ok(fixture) = api::stat("/tmp/vfs-pins") else {
+        return false;
+    };
+    if fixture.kind != Kind::Directory || fixture.uid != 71 || fixture.gid != 72 {
+        return false;
+    }
+    let Ok(root) = api::root_metadata() else {
+        return false;
+    };
+    let Ok(clamped) = api::stat("../../../../") else {
+        return false;
+    };
+    absolute.provenance != fixture.provenance
+        && root == clamped
+        && api::stat("/etc/.vfs-stat-missing") == Err((-2i64) as u64)
+        && api::stat("/etc/motd/..") == Err((-20i64) as u64)
+        && api::stat("/etc/motd/") == Err((-20i64) as u64)
+}
+
+fn verify_native_stat_path() {
+    use sunlight_ipc::vfs_rpc::{response::Kind, stat_transport as api};
+    for path in ["/etc/motd", "etc/./motd", "/tmp/vfs-pins", "../../../../"] {
+        let expected = api::stat(path).unwrap();
+        let actual = sunlight_libc::stat(path.as_bytes()).expect("native StatPath");
+        assert_eq!(actual.size, expected.size);
+        assert_eq!(actual.uid, expected.uid);
+        assert_eq!(actual.gid, expected.gid);
+        assert_eq!(actual.mode & 0o7777, expected.mode);
+        let kind = if expected.kind == Kind::File {
+            0o100000
+        } else {
+            0o040000
+        };
+        assert_eq!(actual.mode & 0o170000, kind);
+        assert_eq!(actual.file_type, expected.kind as u8);
+        assert_eq!(actual.nlinks, expected.links);
+    }
+    assert!(matches!(
+        sunlight_libc::stat(b"/etc/.vfs-stat-missing"),
+        Err(sunlight_libc::Errno::NoEntry)
+    ));
+    assert!(matches!(
+        sunlight_libc::stat(b"/etc/motd/.."),
+        Err(sunlight_libc::Errno::NotDir)
+    ));
+    assert!(matches!(
+        sunlight_libc::stat(b""),
+        Err(sunlight_libc::Errno::Inval)
+    ));
+    // Copy failure must consume its completion and permit a fresh request.
+    assert_eq!(
+        unsafe { sunlight_libc::sys::syscall2(61, b"/etc/motd\0".as_ptr() as u64, 0) },
+        u64::MAX
+    );
+    assert!(sunlight_libc::stat(b"/etc/motd").is_ok());
+    verify_linux_service_stat();
+    debug_log("[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK");
+}
+
+// Invoke the normalized Linux entry from native init; Linux personalities also
+// reach this handler through stat/lstat/newfstatat translation.
+fn verify_linux_service_stat() {
+    let call = |path: &[u8], fd: i32, flags: u64, output: &mut [u8; 144]| unsafe {
+        sunlight_libc::sys::syscall4(
+            1026,
+            fd as u64,
+            path.as_ptr() as u64,
+            output.as_mut_ptr() as u64,
+            flags,
+        )
+    };
+    let mut absolute = [0; 144];
+    let mut relative = [0; 144];
+    assert_eq!(call(b"/etc/motd\0", -1, 0, &mut absolute), 0);
+    assert_eq!(call(b"etc/./motd\0", -100, 0x100, &mut relative), 0);
+    assert_eq!(absolute, relative);
+    let metadata = sunlight_ipc::vfs_rpc::stat_transport::stat("/etc/motd").unwrap();
+    assert_eq!(&absolute[..8], &metadata.provenance.mount_id.to_le_bytes());
+    assert_eq!(
+        &absolute[8..16],
+        &metadata.provenance.object_id.to_le_bytes()
+    );
+    assert_eq!(&absolute[48..56], &metadata.size.to_le_bytes());
+    assert_eq!(&absolute[28..32], &metadata.uid.to_le_bytes());
+    let mut canary = [0xa5; 144];
+    for (path, fd, flags, errno) in [
+        (b"/etc/.vfs-stat-missing\0".as_slice(), -100, 0, 2),
+        (b"/etc/motd/..\0".as_slice(), -100, 0, 20),
+        (b"\0".as_slice(), -100, 0, 2),
+        (b"etc/motd\0".as_slice(), 5, 0, 95),
+        (b"/etc/motd\0".as_slice(), -100, 0x1000, 22),
+    ] {
+        assert_eq!(call(path, fd, flags, &mut canary), 0u64.wrapping_sub(errno));
+        assert_eq!(canary, [0xa5; 144]);
+    }
+    assert_eq!(
+        unsafe {
+            sunlight_libc::sys::syscall4(
+                1026,
+                (-100i64) as u64,
+                b"/etc/motd\0".as_ptr() as u64,
+                0,
+                0,
+            )
+        },
+        (-14i64) as u64
+    );
+    assert_eq!(call(b"/etc/motd\0", -100, 0, &mut relative), 0);
+    debug_log("[VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK");
+}
+
+#[cfg(feature = "stat-failure-test")]
+fn verify_stat_failures(cap: CapabilityToken) {
+    use sunlight_ipc::vfs_rpc::stat_transport as api;
+    let arm = |mode| {
+        let reply = ipc_call(cap, IpcMsg::with_label(0x53544641).word(0, mode));
+        assert_eq!(reply.words[0], 0);
+    };
+    let original = api::stat("/etc/motd").expect("original metadata");
+    arm(1);
+    let start = sunlight_ipc::monotonic_millis();
+    assert_eq!(api::stat("/etc/motd"), Err(api::TIMED_OUT));
+    let elapsed = sunlight_ipc::monotonic_millis().saturating_sub(start);
+    assert!((4900..15000).contains(&elapsed));
+    // The service sends the saved late reply while this new ID is waiting.
+    assert_eq!(api::stat("/etc/motd"), Ok(original));
+    debug_log("[VFS-RPC] native stat timeout/resume/new request OK");
+    arm(1);
+    assert!(matches!(
+        sunlight_libc::stat(b"/etc/motd"),
+        Err(sunlight_libc::Errno::Failed)
+    ));
+    assert!(sunlight_libc::stat(b"/etc/motd").is_ok());
+    debug_log("[VFS-RPC] native StatPath timeout/resume/recovery OK");
+    arm(1);
+    let mut linux_output = [0xa5; 144];
+    let linux_stat = |output: &mut [u8; 144]| unsafe {
+        sunlight_libc::sys::syscall4(
+            1026,
+            (-100i64) as u64,
+            b"/etc/motd\0".as_ptr() as u64,
+            output.as_mut_ptr() as u64,
+            0,
+        )
+    };
+    assert_eq!(linux_stat(&mut linux_output), (-110i64) as u64);
+    assert_eq!(linux_output, [0xa5; 144]);
+    assert_eq!(linux_stat(&mut linux_output), 0);
+    debug_log("[VFS-RPC] Linux stat timeout/resume/recovery OK");
+    verify_stat_output_vm(original);
+    stat_vm_race::verify(original);
+    verify_stat_caller_lifecycle(cap, original);
+    arm(2);
+    assert_eq!(api::stat("/etc/motd"), Err(api::IO_ERROR));
+    // No fallback to the still-present kernel filesystem after epoch loss.
+    assert_eq!(api::stat("/etc/motd"), Err(api::NOT_READY));
+    assert!(matches!(
+        sunlight_libc::stat(b"/etc/motd"),
+        Err(sunlight_libc::Errno::Again)
+    ));
+    linux_output.fill(0xa5);
+    assert_eq!(linux_stat(&mut linux_output), (-11i64) as u64);
+    assert_eq!(linux_output, [0xa5; 144]);
+    debug_log("[VFS-RPC] Linux stat service loss/no kernel fallback OK");
+    debug_log("[VFS-RPC] native StatPath service loss/no kernel fallback OK");
+    arm(3); // Wait for the service's post-fault log and legacy receive loop.
+    debug_log("[VFS-RPC] native stat service loss/resume/no fallback OK");
+}
+
+/// Mutate real user mappings after publication and before result collection.
+/// The reply may win before mutation; both orderings must validate at copy time.
+#[cfg(feature = "stat-failure-test")]
+fn verify_stat_output_vm(original: sunlight_ipc::vfs_rpc::response::Metadata) {
+    use sunlight_ipc::vfs_rpc::stat_transport as api;
+    use sunlight_libc::mman::*;
+    const PAGE: usize = 4096;
+    const BYTES: usize = 56;
+    for remap in [false, true] {
+        let base = mmap(
+            core::ptr::null_mut(),
+            2 * PAGE,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS,
+            -1,
+            0,
+        )
+        .expect("stat output mapping");
+        // A cross-page destination detects writes performed before validating
+        // the entire output range. Keep the first page as a canary.
+        let output = unsafe { base.add(PAGE - BYTES / 2) };
+        unsafe {
+            core::ptr::write_bytes(output, 0xa5, BYTES);
+        }
+        assert_eq!(
+            unsafe { api::probe_stat_attempt("/etc/motd", output as u64) },
+            api::PENDING
+        );
+        let second = unsafe { base.add(PAGE) };
+        munmap(second, PAGE).expect("withdraw output page");
+        if remap {
+            assert_eq!(
+                mmap(
+                    second,
+                    PAGE,
+                    PROT_READ | PROT_WRITE,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                    -1,
+                    0
+                )
+                .expect("replace output page"),
+                second
+            );
+        }
+        let result = loop {
+            let result = unsafe { api::probe_stat_attempt("/etc/motd", output as u64) };
+            if result != api::PENDING {
+                break result;
+            }
+            sunlight_ipc::process_yield();
+        };
+        if remap {
+            assert_eq!(result, 0);
+            // Copy through an owned array rather than creating an unaligned reference.
+            let mut bytes = [0; BYTES];
+            unsafe {
+                core::ptr::copy_nonoverlapping(output, bytes.as_mut_ptr(), BYTES);
+            }
+            use sunlight_ipc::vfs_rpc::{
+                codec::Request,
+                response::{Reply, ReplyContract},
+                Completion,
+            };
+            assert_eq!(
+                ReplyContract::for_request(Request::Stat { path: "/etc/motd" })
+                    .unwrap()
+                    .validate(
+                        Completion {
+                            errno: 0,
+                            output_bytes: BYTES as u64
+                        },
+                        &bytes
+                    ),
+                Ok(Reply::Metadata(original))
+            );
+            munmap(second, PAGE).expect("release replacement output");
+        } else {
+            assert_eq!(result, u64::MAX);
+            let prefix = unsafe { core::slice::from_raw_parts(output, BYTES / 2) };
+            assert!(prefix.iter().all(|b| *b == 0xa5));
+        }
+        munmap(base, PAGE).expect("release output canary");
+        assert_eq!(api::stat("/etc/motd"), Ok(original));
+    }
+    debug_log("[VFS-RPC] native stat output unmap/remap atomic copy/recovery OK");
+}
+
+#[cfg(feature = "stat-failure-test")]
+mod stat_vm_race;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct RegistryEntry {
@@ -459,4 +779,55 @@ fn name_to_u64(name: &str) -> u64 {
     } else {
         hash
     }
+}
+
+/// Fresh process identities exercise the real scheduler exit and exec hooks.
+#[cfg(feature = "stat-failure-test")]
+fn verify_stat_caller_lifecycle(
+    cap: CapabilityToken,
+    original: sunlight_ipc::vfs_rpc::response::Metadata,
+) {
+    use sunlight_ipc::vfs_rpc::stat_transport as api;
+    let mut digits = [0u8; 20];
+    let mut number = cap.0;
+    let mut start = digits.len();
+    loop {
+        start -= 1;
+        digits[start] = b'0' + (number % 10) as u8;
+        number /= 10;
+        if number == 0 {
+            break;
+        }
+    }
+    for mode in [
+        b"initial-cwd".as_slice(),
+        b"failed-exec".as_slice(),
+        b"exit".as_slice(),
+        b"exec".as_slice(),
+        b"failed-chdir".as_slice(),
+        b"private-chdir".as_slice(),
+        b"chdir".as_slice(),
+        b"shared-chdir".as_slice(),
+        b"same-credentials".as_slice(),
+        b"setuid".as_slice(),
+        b"setgid".as_slice(),
+    ] {
+        let pid = sunlight_libc::spawn(
+            b"/bin/vfs-stat-caller",
+            &[b"vfs-stat-caller", mode, &digits[start..]],
+            None,
+        )
+        .expect("native stat caller");
+        assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
+        if mode == b"exit" {
+            // Exit has discarded the original caller. Exec tests rejection
+            // inside the live replacement image, before that image exits.
+            assert_eq!(
+                ipc_call(cap, IpcMsg::with_label(0x53544641).word(0, 6)).words[0],
+                0
+            );
+        }
+        assert_eq!(api::stat("/etc/motd"), Ok(original));
+    }
+    debug_log("[VFS-RPC] native stat caller exit/exec stale reply/fresh recovery OK");
 }

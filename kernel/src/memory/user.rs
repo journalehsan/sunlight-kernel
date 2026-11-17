@@ -225,9 +225,7 @@ fn back_demand_page(
         )
     } {
         Ok(_) => Ok(()),
-        Err(crate::process::mmap::MmapError::NoMemory) => {
-            Err(UserMemoryError::AllocationFailed)
-        }
+        Err(crate::process::mmap::MmapError::NoMemory) => Err(UserMemoryError::AllocationFailed),
         Err(crate::process::mmap::MmapError::SwappedUnsupported) => {
             Err(UserMemoryError::SwappedUnsupported)
         }
@@ -331,9 +329,22 @@ pub unsafe fn copy_from_current_raw(
 }
 
 pub fn copy_to_current(address: u64, source: &[u8]) -> Result<(), UserMemoryError> {
+    copy_to_current_checked(address, source, |_| true)
+}
+
+/// Validate retained operation identity under the same scheduler guard as the
+/// page walk and copy. No user result may cross an exec/VM incarnation change.
+pub fn copy_to_current_checked(
+    address: u64,
+    source: &[u8],
+    validate: impl FnOnce(&Process) -> bool,
+) -> Result<(), UserMemoryError> {
     let range = UserRange::new(address, source.len())?;
     let hhdm = current_hhdm()?;
     let scheduler = crate::sched::SCHEDULER.lock();
+    if !validate(scheduler.current_process()) {
+        return Err(UserMemoryError::InvalidAddress);
+    }
     copy_to_process(scheduler.current_process(), hhdm, range, source)
 }
 

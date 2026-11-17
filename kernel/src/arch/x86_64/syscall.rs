@@ -1018,8 +1018,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 if frame.rdi == 0 { p.cpu_mask = u64::MAX; }
                 sched::request_park_after_sysret();
                 0
-            } else { u64::MAX }
-        },
+            } else {
+                u64::MAX
+            }
+        }
         22 => thread_spawn(frame, false),
         #[cfg(feature = "scheduler_guest_bench")]
         0x5342 => crate::scheduler_bench_diag::syscall(frame.rdi, frame.rsi),
@@ -1149,6 +1151,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         163 => sys_io_port_write(frame),
         164 => sys_vfs_grant(frame),
         165 => sys_account_session(frame),
+        180 => sys_vfs_retention(frame),
+        181 => sys_vfs_stat(frame),
         // Hardware identity + thermal sensors (read-only; gated by process name).
         133 => sys_system_identity(frame),
         134 => sys_thermal_sensors(frame),
@@ -1195,7 +1199,18 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1023 => sys_linux_pipe2(frame),
         1024 => sys_linux_socketpair(frame),
         1025 => sys_linux_unlinkat(frame),
-        1026 => sys_linux_newfstatat(frame),
+        1026 => {
+            let resume = frame.rcx;
+            let result = sys_linux_newfstatat(frame);
+            if linux_compat && frame.rcx != resume {
+                // stat/lstat normalization changed these registers. Replay must
+                // enter translation with the original Linux argument layout.
+                [
+                    frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9,
+                ] = original_args;
+            }
+            result
+        }
         1027 => reject_linux_wait4(),
         1028 => sys_linux_openat(frame),
         1029 => sys_linux_uname(frame),
@@ -1348,6 +1363,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
             }
         }
     }
+
+    // Release abandoned copied VFS resources outside lifecycle locks. Caller
+    // retirement schedules this work; live continuations keep their results.
+    crate::ipc::cleanup_vfs_abandoned();
 
     // Deliver pending signals before returning to user space
     let post_signal = crate::sched::with_scheduler(|sched| {
@@ -2947,9 +2966,11 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     crate::sched::t3r_fixture::placement(&sched, &mut thread, arg);
     #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
     crate::sched::t4a_fixture::placement(&sched, &mut thread, arg);
-    if thread.account_membership.is_some_and(|reference|
-        !crate::capability::CAP_BROKER.lock().session_allocation_live(
-            reference, crate::timekeeping::global_ticks())) {
+    if thread.account_membership.is_some_and(|reference| {
+        !crate::capability::CAP_BROKER
+            .lock()
+            .session_allocation_live(reference, crate::timekeeping::global_ticks())
+    }) {
         return u64::MAX - 1;
     }
     let published = sched.publish_thread(slot, thread, current_cpu);
@@ -3357,9 +3378,11 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     if crate::process::thread_admission::checkpoint("publication").is_err() {
         return linux_errno(12);
     }
-    if child.account_membership.is_some_and(|reference|
-        !crate::capability::CAP_BROKER.lock().session_allocation_live(
-            reference, crate::timekeeping::global_ticks())) {
+    if child.account_membership.is_some_and(|reference| {
+        !crate::capability::CAP_BROKER
+            .lock()
+            .session_allocation_live(reference, crate::timekeeping::global_ticks())
+    }) {
         return linux_errno(1);
     }
     // The prevalidated parent store is done before the child can be runnable.
@@ -4035,8 +4058,11 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let ppid = parent.pid;
     let inherited_membership = parent.account_membership;
     let inherited_system_allocation = parent.system_allocation;
-    if inherited_membership.is_some_and(|reference| !crate::capability::CAP_BROKER.lock()
-        .session_allocation_live(reference, crate::timekeeping::global_ticks())) {
+    if inherited_membership.is_some_and(|reference| {
+        !crate::capability::CAP_BROKER
+            .lock()
+            .session_allocation_live(reference, crate::timekeeping::global_ticks())
+    }) {
         return u64::MAX;
     }
     let uid = parent.uid;
@@ -4145,6 +4171,20 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs, false,
     ) {
         Ok(_) => {
+            #[cfg(feature = "vfs_stat_failure_test")]
+            {
+                // Only boot init can select the embedded regression caller.
+                // Exec still withdraws this role through the production path.
+                child.vfs_root_metadata = ppid == 1
+                    && sched.current_process().vfs_root_metadata
+                    && path_str == "/bin/vfs-stat-caller";
+                child.vfs_stat_routed = child.vfs_root_metadata;
+                if child.vfs_root_metadata
+                    && argv_bytes.get(1).is_some_and(|mode| mode.as_slice() == b"initial-cwd")
+                {
+                    child.cwd = alloc::string::String::from("/etc");
+                }
+            }
             child.nice = crate::process::spawn::initial_embedded_nice(path_str, uid);
             #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
             if uid == 0 && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok() {
@@ -4308,7 +4348,9 @@ fn spawn_service_capability(path: &str, uid: u32) -> u64 {
         return 0;
     }
     match path {
-        "/bin/storagectl" | "/usr/bin/storagectl" => crate::ipc::ServiceCapability::StorageAdmin.bit(),
+        "/bin/storagectl" | "/usr/bin/storagectl" => {
+            crate::ipc::ServiceCapability::StorageAdmin.bit()
+        }
         "/bin/sunlightctl" | "/usr/bin/sunlightctl" => {
             crate::ipc::ServiceCapability::ServiceLifecycle.bit()
         }
@@ -5031,6 +5073,13 @@ fn sys_setuid(frame: &mut SyscallFrame) -> u64 {
             current_uid,
             new_uid
         );
+        // Credentials are per-process, even for native shared-cwd siblings.
+        // Commit and withdrawal share the scheduler guard; stale copyout and
+        // queued provisioning cannot observe a changed but still-live grant.
+        if current_uid != new_uid {
+            let idx = sched.current_process_index().unwrap_or(0);
+            crate::ipc::withdraw_vfs_root_profile(idx, &mut sched);
+        }
         0
     } else {
         crate::serial_println!(
@@ -5063,6 +5112,13 @@ fn sys_setgid(frame: &mut SyscallFrame) -> u64 {
             current_gid,
             new_gid
         );
+        // Credentials are per-process, even for native shared-cwd siblings.
+        // Commit and withdrawal share the scheduler guard; stale copyout and
+        // queued provisioning cannot observe a changed but still-live grant.
+        if current_gid != new_gid {
+            let idx = sched.current_process_index().unwrap_or(0);
+            crate::ipc::withdraw_vfs_root_profile(idx, &mut sched);
+        }
         0
     } else {
         crate::serial_println!(
@@ -5822,6 +5878,15 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
 
     crate::sched::with_scheduler(|s| {
         s.current_shared_process_mut().cwd = alloc::string::String::from(abs_path);
+        // Initial-cwd profiles cannot represent live cwd transitions yet.
+        // Commit and revoke under one scheduler guard, including a leader
+        // whose stat is parked while a sibling changes their shared cwd.
+        let owner = s.shared_process_index(s.current_process_index().unwrap_or(0));
+        for idx in 0..s.processes.len() {
+            if s.shared_process_index(idx) == owner {
+                crate::ipc::withdraw_vfs_root_profile(idx, s);
+            }
+        }
     });
     crate::serial_println!("[HELIOS] chdir({}) -> ok", abs_path);
     0
@@ -5898,6 +5963,205 @@ fn username_for_uid(uid: u32) -> &'static str {
         0 => "root",
         1000 => "user",
         _ => "",
+    }
+}
+
+/// Copied metadata pilot within the provisioned root/cwd.
+fn sys_vfs_stat(frame: &mut SyscallFrame) -> u64 {
+    use ::sunlight_ipc::vfs_rpc::{response::METADATA_BYTES, stat_transport as api};
+    let mut path_bytes = [0; api::MAX_LOOKUP_PATH];
+    let path = if frame.rdi == api::PATH_METADATA {
+        let Some(length) = api::path_length(frame.rdx, frame.r9, [frame.r10, frame.r12]) else {
+            return api::INVALID;
+        };
+        if let Err(error) = copy_from_user(frame.r8, &mut path_bytes[..length]) {
+            return error;
+        }
+        match core::str::from_utf8(&path_bytes[..length]) {
+            Ok(path) if !path.as_bytes().contains(&0) => path,
+            _ => return api::INVALID,
+        }
+    } else {
+        if api::copy_length(
+            frame.rdi,
+            frame.r8,
+            frame.rdx,
+            [frame.r9, frame.r10, frame.r12],
+        )
+        .is_none()
+        {
+            return api::INVALID;
+        }
+        "/"
+    };
+    match frame.rdi {
+        api::ROOT_METADATA | api::PATH_METADATA => {
+            let result = {
+                let mut sched = crate::sched::SCHEDULER.lock();
+                let caps = crate::capability::CAP_BROKER.lock();
+                let pid = sched.current_pid();
+                let result = crate::ipc::stat_path_call(pid, path, &mut sched, &caps);
+                if matches!(result, Ok(crate::ipc::StatCall::Pending)) {
+                    sched.account_and_apply_churn_penalty();
+                    let tick = sched.global_tick;
+                    if let Some(idx) = sched.current_process_index() {
+                        sched.processes[idx].block_start_tick = tick;
+                        sched.remove_from_ready_queues(idx);
+                    }
+                }
+                result
+            };
+            match result {
+                Ok(crate::ipc::StatCall::Pending) => {
+                    crate::sched::request_reschedule();
+                    api::PENDING
+                }
+                Ok(crate::ipc::StatCall::Complete(mut completion)) => {
+                    let caller = completion.caller();
+                    let result = match completion.bytes() {
+                        Ok(bytes) => {
+                            crate::memory::user::copy_to_current_checked(frame.rsi, &bytes, |p| {
+                                !p.is_exiting()
+                                    && p.vfs_root_metadata
+                                    && crate::ipc::vfs_process_identity(p) == caller
+                            })
+                            .map(|_| 0)
+                            .unwrap_or_else(user_memory_failure)
+                        }
+                        Err(error) => error,
+                    };
+                    // Completion owns resources beyond all lifecycle and copy
+                    // guards; releasing the final namespace pin records cleanup.
+                    drop(completion);
+                    crate::ipc::reconcile_vfs_namespaces();
+                    crate::serial_println!(
+                        "[VFS-RPC] root stat result caller={} status={:#x}",
+                        caller.pid,
+                        result
+                    );
+                    result
+                }
+                Err(crate::ipc::StatError::Prepare) | Err(crate::ipc::StatError::Identity) => {
+                    api::NOT_READY
+                }
+                Err(_) => api::IO_ERROR,
+            }
+        }
+        api::NEXT => {
+            let mut packet = [0; api::PACKET_BYTES];
+            let (pid, result) = {
+                let sched = crate::sched::SCHEDULER.lock();
+                let caps = crate::capability::CAP_BROKER.lock();
+                let pid = sched.current_pid();
+                (
+                    pid,
+                    crate::ipc::vfs_take_stat(pid, frame.r8, &mut packet[8..], &sched, &caps),
+                )
+            };
+            match result {
+                Ok(Some((_, length))) => {
+                    packet[..8].copy_from_slice(&(length as u64).to_le_bytes());
+                    if let Err(error) = copy_to_user(frame.rsi, &packet) {
+                        let mut sched = crate::sched::SCHEDULER.lock();
+                        let caps = crate::capability::CAP_BROKER.lock();
+                        crate::ipc::stat_copy_failed(pid, frame.r8, &mut sched, &caps);
+                        return error;
+                    }
+                    0
+                }
+                Ok(None) => api::EMPTY,
+                Err(_) => api::INVALID,
+            }
+        }
+        api::COMPLETE => {
+            let mut bytes = [0; api::REPLY_BYTES];
+            if let Err(error) = copy_from_user(frame.rsi, &mut bytes) {
+                return error;
+            }
+            // Preserve the raw correlation ID even for malformed output lengths
+            // or padding. Only the authenticated bound request can be failed.
+            let mut words = [0; 4];
+            for (word, chunk) in words.iter_mut().zip(bytes[..32].chunks_exact(8)) {
+                *word = u64::from_le_bytes(chunk.try_into().unwrap());
+            }
+            let reply = api::decode_reply(&bytes).unwrap_or(
+                ::sunlight_ipc::vfs_rpc::response::ReplyMessage {
+                    label: ::sunlight_ipc::vfs_rpc::REPLY,
+                    words,
+                    word_count: 4,
+                    cap_count: 1,
+                    output: &bytes[32..32 + METADATA_BYTES],
+                },
+            );
+            let mut sched = crate::sched::SCHEDULER.lock();
+            let caps = crate::capability::CAP_BROKER.lock();
+            let pid = sched.current_pid();
+            match crate::ipc::vfs_complete_stat(pid, frame.r8, reply, &mut sched, &caps) {
+                Ok(()) => 0,
+                Err(_) => api::INVALID,
+            }
+        }
+        _ => api::INVALID,
+    }
+}
+
+/// Syscall 180: service-only, exact-size copied retention frames. User copies never occur
+/// under scheduler/broker/runtime locks. No user-selected target or capability.
+fn sys_vfs_retention(frame: &mut SyscallFrame) -> u64 {
+    use ::sunlight_ipc::vfs_rpc::retention::{transport as api, wire::FRAME_BYTES};
+    let length = match api::copy_length(
+        frame.rdi,
+        frame.r8,
+        frame.rdx,
+        [frame.r9, frame.r10, frame.r12],
+    ) {
+        Some(length) => length,
+        _ => return u64::MAX,
+    };
+    let mut input = [0; FRAME_BYTES];
+    if api::has_input(frame.rdi) {
+        if let Err(error) = copy_from_user(frame.rsi, &mut input) {
+            return error;
+        }
+    }
+    if frame.rdi == api::INITIAL_CWD {
+        let result = {
+            let sched = crate::sched::SCHEDULER.lock();
+            let caps = crate::capability::CAP_BROKER.lock();
+            crate::ipc::vfs_initial_cwd(sched.current_pid(), frame.r8, &input, &sched, &caps)
+        };
+        return match result {
+            Ok(bytes) => match copy_to_user(frame.rsi, &bytes) {
+                Ok(()) => 0,
+                Err(error) => error,
+            },
+            Err(_) => u64::MAX,
+        };
+    }
+    let result = {
+        let sched = crate::sched::SCHEDULER.lock();
+        let caps = crate::capability::CAP_BROKER.lock();
+        crate::ipc::vfs_retention_control(
+            sched.current_pid(),
+            frame.rdi,
+            frame.r8,
+            if api::has_input(frame.rdi) {
+                &input
+            } else {
+                &[]
+            },
+            &sched,
+            &caps,
+        )
+    };
+    match result {
+        Ok(Some(bytes)) => match copy_to_user(frame.rsi, &bytes[..length]) {
+            Ok(()) => 0,
+            Err(error) => error,
+        },
+        Ok(None) if frame.rdi == api::NEXT => api::EMPTY,
+        Ok(None) => 0,
+        Err(_) => u64::MAX,
     }
 }
 
@@ -8442,7 +8706,9 @@ fn sys_native_send(frame: &mut SyscallFrame) -> u64 {
     let handle = {
         let sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process().fd_table.get(fd) {
-            Some(entry) if entry.handle.is_socket() || entry.handle.is_inet_socket() => entry.handle,
+            Some(entry) if entry.handle.is_socket() || entry.handle.is_inet_socket() => {
+                entry.handle
+            }
             Some(_) => return ERR_EBADF,
             None => return ERR_EBADF,
         }
@@ -8465,7 +8731,9 @@ fn sys_native_recv(frame: &mut SyscallFrame) -> u64 {
     let handle = {
         let sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process().fd_table.get(fd) {
-            Some(entry) if entry.handle.is_socket() || entry.handle.is_inet_socket() => entry.handle,
+            Some(entry) if entry.handle.is_socket() || entry.handle.is_inet_socket() => {
+                entry.handle
+            }
             Some(_) => return ERR_EBADF,
             None => return ERR_EBADF,
         }
@@ -8545,6 +8813,29 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
 
     if flags & !sunlight_compat_linux::abi::AT_SYMLINK_NOFOLLOW != 0 {
         return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+
+    if crate::sched::SCHEDULER
+        .lock()
+        .current_process()
+        .vfs_stat_routed
+    {
+        let bytes = match read_user_cstr(frame.rsi, USER_PATH_MAX) {
+            Ok(bytes) => bytes,
+            Err(_) => return linux_errno(14),
+        };
+        let path = match core::str::from_utf8(&bytes) {
+            Ok(path) => path,
+            Err(_) => return linux_errno(22),
+        };
+        if path.is_empty() {
+            return linux_errno(2);
+        }
+        // Service directory references cannot be synthesized from kernel FDs.
+        if !path.starts_with('/') && dirfd != sunlight_compat_linux::abi::AT_FDCWD {
+            return linux_errno(95);
+        }
+        return sys_service_stat(frame, path, true);
     }
 
     let path = match linux_resolve_at(dirfd, frame.rsi) {
@@ -9380,6 +9671,16 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
         Err(_) => return ERR_EINVAL,
     };
 
+    // The route is sticky across profile withdrawal and exec. A selected
+    // caller must never recover kernel traversal when service admission fails.
+    if crate::sched::SCHEDULER
+        .lock()
+        .current_process()
+        .vfs_stat_routed
+    {
+        return sys_service_stat_path(frame, path);
+    }
+
     let stat = {
         let mut guard = crate::KERNEL_VFS.lock();
         let Some(vfs) = guard.as_mut() else {
@@ -9405,6 +9706,98 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
         return error;
     }
     0
+}
+
+/// Native StatPath uses the same owned request and guarded completion as the
+/// copied pilot, but resumes inside the kernel so its ABI never exposes PENDING.
+fn sys_service_stat_path(frame: &mut SyscallFrame, path: &str) -> u64 {
+    if path.is_empty() {
+        return ERR_EINVAL;
+    }
+    sys_service_stat(frame, path, false)
+}
+
+fn sys_service_stat(frame: &mut SyscallFrame, path: &str, linux: bool) -> u64 {
+    let result = {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let caps = crate::capability::CAP_BROKER.lock();
+        let pid = sched.current_pid();
+        let result = crate::ipc::stat_path_call(pid, path, &mut sched, &caps);
+        if matches!(result, Ok(crate::ipc::StatCall::Pending)) {
+            sched.account_and_apply_churn_penalty();
+            let tick = sched.global_tick;
+            if let Some(idx) = sched.current_process_index() {
+                sched.processes[idx].block_start_tick = tick;
+                sched.remove_from_ready_queues(idx);
+            }
+        }
+        result
+    };
+    match result {
+        Ok(crate::ipc::StatCall::Pending) => {
+            frame.rcx = frame.rcx.saturating_sub(2);
+            crate::sched::request_reschedule();
+            frame.rax
+        }
+        Ok(crate::ipc::StatCall::Complete(mut completion)) => {
+            let caller = completion.caller();
+            let mut record = [0; 144];
+            let encoded = if linux {
+                completion.linux_bytes().map(|bytes| {
+                    record = bytes;
+                    144
+                })
+            } else {
+                completion.native_bytes().map(|bytes| {
+                    record[..24].copy_from_slice(&bytes);
+                    24
+                })
+            };
+            let output = if linux { frame.rdx } else { frame.rsi };
+            let result = match encoded {
+                Ok(length) => {
+                    crate::memory::user::copy_to_current_checked(output, &record[..length], |p| {
+                        !p.is_exiting()
+                            && p.vfs_root_metadata
+                            && crate::ipc::vfs_process_identity(p) == caller
+                    })
+                    .map(|_| 0)
+                    .unwrap_or_else(|error| {
+                        if linux {
+                            linux_errno(14)
+                        } else {
+                            user_memory_failure(error)
+                        }
+                    })
+                }
+                Err(error) => error,
+            };
+            drop(completion);
+            crate::ipc::reconcile_vfs_namespaces();
+            result
+        }
+        Err(crate::ipc::StatError::Identity) | Err(crate::ipc::StatError::Prepare) => {
+            if linux {
+                linux_errno(11)
+            } else {
+                u64::MAX - 1
+            }
+        }
+        Err(crate::ipc::StatError::Capacity) => {
+            if linux {
+                linux_errno(12)
+            } else {
+                ERR_ENOMEM
+            }
+        }
+        Err(_) => {
+            if linux {
+                linux_errno(5)
+            } else {
+                ERR_EIO
+            }
+        }
+    }
 }
 
 /// Syscall: Mkdir (62)
@@ -10678,7 +11071,13 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
         };
         match vfs.fstat_handle(VfsHandle(vfs_handle)) {
             Ok(s) => s,
-            Err(error) => return if is_linux { linux_from_fs(error) } else { fs_error_raw(error) },
+            Err(error) => {
+                return if is_linux {
+                    linux_from_fs(error)
+                } else {
+                    fs_error_raw(error)
+                }
+            }
         }
     };
 
@@ -13741,13 +14140,20 @@ fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
     #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
     if frame.rdi==40 {
         return match crate::capability::hybrid_race::retire_current(frame.r10) {
-            Ok(v) => {frame.rsi=v;0}, Err(e) => e as u64
+            Ok(v) => {
+                frame.rsi = v;
+                0
+            }
+            Err(e) => e as u64,
         };
     }
     #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
     if matches!(frame.rdi, 37..=39) {
         let mut sched = crate::sched::SCHEDULER.lock();
-        let h = Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx };
+        let h = Handle {
+            token: CapabilityToken(frame.rsi),
+            generation: frame.rdx,
+        };
         let result = if frame.rdi == 37 {
             crate::capability::hybrid_race::arm(&sched,h,frame.r10)
         } else if frame.rdi == 39 {
@@ -13756,12 +14162,25 @@ fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
             sched.fastlane_mapping_sweep();
             crate::capability::hybrid_race::inventory(&mut sched,h)
         };
-        return match result { Ok(v) => { frame.rsi=v; 0 }, Err(e) => e as u64 };
+        return match result {
+            Ok(v) => {
+                frame.rsi = v;
+                0
+            }
+            Err(e) => e as u64,
+        };
     }
     #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
     if (31..=36).contains(&frame.rdi) {
         let mut sched = crate::sched::SCHEDULER.lock();
-        let result = sched.fastlane_contract(Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.rdi, frame.r10);
+        let result = sched.fastlane_contract(
+            Handle {
+                token: CapabilityToken(frame.rsi),
+                generation: frame.rdx,
+            },
+            frame.rdi,
+            frame.r10,
+        );
         sched.fastlane_mapping_sweep();
         return match result {
             Ok(value) => { frame.rsi = value; 0 }

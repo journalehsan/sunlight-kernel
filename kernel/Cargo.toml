@@ -691,6 +691,8 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+# Native stat caller fixtures; absent from ordinary images.
+vfs_stat_failure_test = []
 # Opt-in disposable-device qualification; halts before FAT/VFS probing.
 sfs5a-test = []
 sfs5b1-test = ["sfs5a-test"]

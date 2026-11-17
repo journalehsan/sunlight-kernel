@@ -84,7 +84,35 @@ impl Pending {
         request: Request<'_>,
     ) -> Result<Self, ProtocolError> {
         let contract = ReplyContract::for_request(request)?;
-        if transfer.words()[3] < contract.buffer_bytes() as u64 {
+        Self::with_contract(caller, service, transfer, contract, contract.buffer_bytes())
+    }
+
+    /// Separate immutable input and writable output. The adapter must retain
+    /// the input independently; transfer words bound only the result allocation.
+    pub fn new_copied(
+        caller: Caller,
+        service: Service,
+        transfer: Transfer,
+        request: Request<'_>,
+    ) -> Result<Self, ProtocolError> {
+        let contract = ReplyContract::for_request(request)?;
+        Self::with_contract(
+            caller,
+            service,
+            transfer,
+            contract,
+            contract.output_capacity,
+        )
+    }
+
+    fn with_contract(
+        caller: Caller,
+        service: Service,
+        transfer: Transfer,
+        contract: ReplyContract,
+        required: usize,
+    ) -> Result<Self, ProtocolError> {
+        if transfer.words()[3] < required as u64 {
             return Err(ProtocolError::Bounds);
         }
         Ok(Self {
