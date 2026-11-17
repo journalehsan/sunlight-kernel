@@ -202,6 +202,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-voice-recorder --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-empires --features native --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release

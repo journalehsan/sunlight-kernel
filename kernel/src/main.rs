@@ -362,6 +362,8 @@ static SUNLIGHT_WIDGET_GALLERY_ELF_BYTES: &[u8] =
 // Silicon Echoes: 1993: native graphical narrative-game vertical slice.
 static SILICON_ECHOES_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/silicon-echoes");
+static SUNLIGHT_EMPIRES_ELF_BYTES: &[u8] =
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-empires");
 // Sunlight Files: native file manager.
 static SUNLIGHT_FILES_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-sunlightos/release/sunlight-files");

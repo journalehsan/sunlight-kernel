@@ -258,6 +258,12 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         executable: b"/bin/sunlight-api-lab",
     },
     ApplicationRegistryEntry {
+        canonical_id: "sunlight-empires",
+        display_name: "Sunlight Empires",
+        aliases: aliases![("en", "empires")],
+        executable: b"/bin/sunlight-empires",
+    },
+    ApplicationRegistryEntry {
         canonical_id: "silicon-echoes",
         display_name: "Silicon Echoes",
         aliases: aliases![("en", "silicon")],

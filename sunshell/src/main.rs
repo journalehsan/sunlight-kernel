@@ -3102,6 +3102,8 @@ mod sunlight {
                 | b"tasks"
                 | b"task-manager"
                 | b"sunlight-tasks"
+                | b"sunlight-empires"
+                | b"empires"
                 | b"silicon-echoes"
                 | b"silicon"
         )

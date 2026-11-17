@@ -314,6 +314,7 @@ name = "silicon-echoes"
 path = "src/main.rs"
 
 [dependencies]
+sunlight-game = { path = "../sunlight-game" }
 sun-font = { path = "../sun-font" }
 sunlight-audio = { path = "../sunlight-audio" }
 sunlight-audiod = { path = "../services/sunlight-audiod" }

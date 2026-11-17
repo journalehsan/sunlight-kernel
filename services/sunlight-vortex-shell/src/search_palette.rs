@@ -194,6 +194,14 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         category: "Games",
     },
     SearchEntry {
+        app_id: AppId::Empires,
+        title: "Sunlight Empires",
+        aliases: &["empires", "rts"],
+        keywords: &["game", "strategy", "civilization"],
+        action: SearchAction::LaunchApp(AppId::Empires),
+        category: "Games",
+    },
+    SearchEntry {
         app_id: AppId::SiliconEchoes,
         title: "Silicon Echoes: 1993",
         aliases: &["silicon", "echoes", "1993"],
@@ -378,6 +386,7 @@ fn app_id_token(id: AppId) -> &'static str {
         AppId::ApiLab => "apilab",
         AppId::Mines => "mines",
         AppId::SiliconEchoes => "siliconechoes",
+        AppId::Empires => "sunlightempires",
         AppId::Welcome => "welcome",
         AppId::WiseOwl => "wiseowl",
         AppId::MelodyMina => "melodymina",

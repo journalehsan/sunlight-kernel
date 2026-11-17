@@ -261,6 +261,8 @@ static ICON_WRITER_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.svg");
 static ICON_RABBIT_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.svg");
+static ICON_EMPIRES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/empires-symbolic.svg");
 static ICON_SILICON_ECHOES_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.svg");
 static ICON_VOICE_RECORDER_SVG: &[u8] =
@@ -491,6 +493,7 @@ impl DockTheme {
             | AppId::WiseOwl
             | AppId::MelodyMina
             | AppId::VoiceRecorder
+            | AppId::Empires
             | AppId::DocumentViewer => None,
         }
     }
@@ -615,6 +618,7 @@ pub(crate) enum AppId {
     MelodyMina,
     VoiceRecorder,
     DocumentViewer,
+    Empires,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -2016,6 +2020,7 @@ impl VortexShell {
                     "Document Viewer",
                     AppId::DocumentViewer,
                 ),
+                DockAppState::new(AppId::Empires, "Sunlight Empires", AppId::Empires),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2325,6 +2330,7 @@ impl VortexShell {
             AppId::ApiLab => AppStateAppId::ApiLab,
             AppId::Mines => AppStateAppId::Mines,
             AppId::SiliconEchoes => AppStateAppId::SiliconEchoes,
+            AppId::Empires => AppStateAppId::Empires,
             AppId::Welcome => AppStateAppId::Welcome,
             AppId::WiseOwl => AppStateAppId::WiseOwl,
             AppId::MelodyMina => AppStateAppId::MelodyMina,
@@ -2365,6 +2371,7 @@ impl VortexShell {
             AppId::ApiLab => "/bin/sunlight-api-lab",
             AppId::Mines => "/Applications/SunlightMines.sunapp",
             AppId::SiliconEchoes => "/bin/silicon-echoes",
+            AppId::Empires => "/bin/sunlight-empires",
             AppId::Welcome => "/bin/welcome",
             AppId::WiseOwl => "/bin/wiseowl",
             AppId::MelodyMina => "/bin/melody-mina",
@@ -2390,6 +2397,7 @@ impl VortexShell {
             AppId::ApiLab => b"sunlight-api-lab",
             AppId::Mines => b"sunlight-mines",
             AppId::SiliconEchoes => b"silicon-echoes",
+            AppId::Empires => b"/bin/sunlight-empires",
             AppId::Welcome => b"welcome",
             AppId::WiseOwl => b"wiseowl",
             // Use the stable native path for dock launches. This remains
@@ -2419,6 +2427,7 @@ impl VortexShell {
             AppId::ApiLab => "app=sunlight-api-lab",
             AppId::Mines => "app=sunlight-mines",
             AppId::SiliconEchoes => "app=silicon-echoes",
+            AppId::Empires => "app=sunlight-empires",
             AppId::Welcome => "app=welcome",
             AppId::WiseOwl => "app=wiseowl",
             AppId::MelodyMina => "app=melody-mina",
@@ -2430,7 +2439,7 @@ impl VortexShell {
     fn app_allows_multiple_instances(app_id: AppId) -> bool {
         matches!(
             app_id,
-            AppId::Calendar | AppId::Chronos | AppId::Mines | AppId::SiliconEchoes
+            AppId::Calendar | AppId::Chronos | AppId::Mines | AppId::SiliconEchoes | AppId::Empires
         )
     }
 
@@ -4047,6 +4056,7 @@ impl VortexShell {
             AppId::ApiLab => Some(ICON_API_LAB_SVG),
             AppId::Mines => Some(ICON_GENERIC_APP_SVG),
             AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_SVG),
+            AppId::Empires => Some(ICON_EMPIRES_SVG),
             AppId::Welcome => Some(ICON_GENERIC_APP_SVG),
             AppId::WiseOwl => Some(ICON_GENERIC_APP_SVG),
             AppId::MelodyMina => Some(ICON_MELODY_MINA_SVG),
@@ -6549,6 +6559,7 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_SVG),
         "sunlight-docview" | "docview" | "document-viewer" => Some(ICON_DOCUMENT_VIEWER_SVG),
         "melody-mina" | "melody" | "music-player" => Some(ICON_MELODY_MINA_SVG),
+        "sunlight-empires" | "empires" => Some(ICON_EMPIRES_SVG),
         "silicon-echoes" | "silicon" => Some(ICON_SILICON_ECHOES_SVG),
         "rappid-rabbit" | "rabbit" | "internet-web-browser" | "web-browser" => {
             Some(ICON_GENERIC_APP_SVG)

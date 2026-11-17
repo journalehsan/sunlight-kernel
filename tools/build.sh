@@ -99,6 +99,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-empires --features native --release
 bash tools/build_svg_apps.sh -p sunlight-files
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release

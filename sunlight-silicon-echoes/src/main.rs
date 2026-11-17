@@ -2710,7 +2710,7 @@ impl App for SiliconEchoesApp {
             Event::Tick => {
                 let now = monotonic_millis();
                 let presentation_changed = self.mode == Mode::Play && self.presentation.tick(now);
-                if now.saturating_sub(self.last_tick_ms) >= 90 {
+                if sunlight_game::frame_due(now, self.last_tick_ms, 90) {
                     self.last_tick_ms = now;
                     return true;
                 }

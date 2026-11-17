@@ -1456,6 +1456,13 @@ login_timeout_seconds = 30
     ),
     // Silicon Echoes: 1993: native graphical narrative game.
     RamEntry::file(
+        "/bin/sunlight-empires",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-empires\n",
+    ),
+    RamEntry::file(
         "/bin/silicon-echoes",
         0,
         0,
@@ -2207,6 +2214,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         b"#!/sunlight/sunlight-writer\n",
     ),
     // Silicon Echoes: 1993: native graphical narrative game.
+    RamEntry::file(
+        "/usr/bin/sunlight-empires",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-empires\n",
+    ),
     RamEntry::file(
         "/usr/bin/silicon-echoes",
         0,

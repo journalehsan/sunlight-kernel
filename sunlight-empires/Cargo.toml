@@ -1,0 +1,26 @@
+[package]
+name = "sunlight-empires"
+version = "0.2.8632-alpha.2"
+
+
+
+edition = "2021"
+description = "Deterministic native 2D RTS foundation for SunlightOS"
+
+[features]
+default = []
+native = ["dep:sunlight-libc", "dep:sunlight-ipc", "dep:sunlight-ui", "dep:sun-font"]
+
+[[bin]]
+name = "sunlight-empires"
+path = "src/main.rs"
+required-features = ["native"]
+test = false
+bench = false
+
+[dependencies]
+sunlight-game = { path = "../sunlight-game" }
+sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"], optional = true }
+sunlight-ipc = { path = "../ipc", optional = true }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"], optional = true }
+sun-font = { path = "../sun-font", optional = true }

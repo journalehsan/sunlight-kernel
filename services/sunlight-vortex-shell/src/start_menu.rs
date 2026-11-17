@@ -46,6 +46,8 @@ static ICON_RABBIT_SVG: &[u8] =
 static ICON_API_LAB_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.svg");
 static ICON_MINES_SVG: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.svg");
+static ICON_EMPIRES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/empires-symbolic.svg");
 static ICON_SILICON_ECHOES_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.svg");
 static ICON_WELCOME_SVG: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.svg");
@@ -72,7 +74,7 @@ fn icon(bytes: &'static [u8]) -> Option<IconImage> {
     IconImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 20;
+const APP_CATALOG_LEN: usize = 21;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -245,6 +247,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         name: "Sunlight Mines",
         category: "Games",
         icon_bytes: Some(ICON_MINES_SVG),
+        available: true,
+    },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::Empires),
+        name: "Sunlight Empires",
+        category: "Games",
+        icon_bytes: Some(ICON_EMPIRES_SVG),
         available: true,
     },
     AppCatalogEntry {
@@ -1793,6 +1802,22 @@ mod tests {
     };
 
     #[test]
+    fn empires_search_launches_native_game() {
+        let layout = compute_layout(800, 600, "empires", &[], StartMenuPage::Home, 0);
+        let tile = layout.search_results.get(0).expect("Empires search result");
+        let mut menu = super::StartMenuState::new();
+        menu.open_menu();
+        for ch in "empires".chars() {
+            menu.handle_event(super::Event::Key(ch), 800, 600, &[], 0);
+        }
+        let (_, action) = menu.handle_event(
+            super::Event::Click {x: tile.rect.x + 1, y: tile.rect.y + 1},
+            800, 600, &[], 1,
+        );
+        assert!(matches!(action, super::StartMenuAction::Launch(AppId::Empires)));
+    }
+
+    #[test]
     fn pdf_search_launches_document_viewer() {
         let layout = compute_layout(1280, 900, "pdf", &[], StartMenuPage::Home, 0);
         let tile = layout
@@ -1902,7 +1927,7 @@ mod tests {
     fn all_apps_pagination_handles_empty_and_partial_pages() {
         assert_eq!(page_count(0, ALL_APPS_PAGE_CAP), 0);
         assert_eq!(page_count(ALL_APPS_PAGE_CAP, ALL_APPS_PAGE_CAP), 1);
-        assert_eq!(page_count(APP_CATALOG_LEN, ALL_APPS_PAGE_CAP), 1);
+        assert_eq!(page_count(APP_CATALOG_LEN, ALL_APPS_PAGE_CAP), 2);
         assert_eq!(page_count(ALL_APPS_PAGE_CAP + 1, ALL_APPS_PAGE_CAP), 2);
     }
 

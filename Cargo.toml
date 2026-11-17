@@ -119,6 +119,8 @@ members = [
     "chronos-core",
     "sunlight-chronos",
     "sunlight-silicon-echoes",
+    "sunlight-empires",
+    "sunlight-game",
     "sunlight-shell-appstate",
     "mezzoctl",
     "wiseowl-memory",

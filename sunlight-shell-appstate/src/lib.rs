@@ -62,7 +62,7 @@ mod tests;
 
 /// Number of distinct launchable SunlightOS apps tracked by the shell.
 /// Mirrors the size of `VortexShell.apps: [DockAppState; APP_COUNT]`.
-pub const APP_COUNT: usize = 20;
+pub const APP_COUNT: usize = 21;
 
 /// Maximum processes tracked per app. Covers the multi-instance apps the shell
 /// permits today (Calendar, Chronos, Mines, SiliconEchoes — at most a few
@@ -110,6 +110,7 @@ pub enum AppId {
     MelodyMina = 17,
     VoiceRecorder = 18,
     DocumentViewer = 19,
+    Empires = 20,
 }
 
 impl AppId {
@@ -136,6 +137,7 @@ impl AppId {
             AppId::MelodyMina,
             AppId::VoiceRecorder,
             AppId::DocumentViewer,
+            AppId::Empires,
         ]
     }
 
@@ -542,6 +544,7 @@ impl RunningAppRegistry {
                 AppEntry::new(AppId::MelodyMina),
                 AppEntry::new(AppId::VoiceRecorder),
                 AppEntry::new(AppId::DocumentViewer),
+                AppEntry::new(AppId::Empires),
             ],
             next_launch_id: 1,
             next_instance_id: 1,
