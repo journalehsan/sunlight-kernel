@@ -18,6 +18,8 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             pid: 3,
             trusted_vfs_service: true,
             vfs_root_metadata: false,
+            vfs_boot_root: false,
+            vfs_file_routed: false,
             cwd: alloc::string::String::from("/"),
             exiting: false,
             uid: 0,
@@ -235,4 +237,41 @@ fn old_work_wakes_a_different_replacement_endpoint_of_the_same_owner() {
     assert!(runtime
         .take_control_wakeup(&sched.processes[0], 9, 11)
         .is_some());
+}
+
+#[test]
+fn metadata_ack_quiets_hints_but_later_file_owner_exit_wakes_again() {
+    let (mut runtime, sched, identity) = setup();
+    runtime.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+    runtime.next_control(identity.registration).unwrap();
+    // Isolate lifecycle readiness from retain/release readiness.
+    runtime.retire_caller_profile(identity.caller);
+    let metadata = runtime
+        .next_control(identity.registration)
+        .unwrap()
+        .unwrap();
+    assert!(matches!(metadata, Frame::CallerRetired { .. }));
+    let remote = runtime.remote[0].as_mut().unwrap();
+    let caller = remote.callers[0].as_mut().unwrap();
+    caller.metadata_acked = true;
+    assert!(!remote.control_ready(20));
+    assert!(runtime
+        .take_control_wakeup(&sched.processes[0], 0, 20)
+        .is_none());
+    runtime.retire_process(identity.caller);
+    assert!(runtime
+        .take_control_wakeup(&sched.processes[0], 0, 21)
+        .is_some());
+    let event = runtime
+        .next_control(identity.registration)
+        .unwrap()
+        .unwrap();
+    assert!(matches!(event, Frame::FileOwnerRetired { .. }));
+    assert!(runtime
+        .take_control_wakeup(&sched.processes[0], 0, 21)
+        .is_none());
+    assert!(runtime
+        .take_control_wakeup(&sched.processes[0], 0, 22)
+        .is_some());
+    assert_eq!(runtime.next_control(identity.registration), Ok(Some(event)));
 }

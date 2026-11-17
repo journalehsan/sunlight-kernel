@@ -6,11 +6,11 @@
 [VFS-RPC] native stat output unmap/remap atomic copy/recovery OK
 [VFS-RPC] native stat concurrent VM replacement atomic copy/recovery OK
 [VFS-RPC] native stat failed exec preserves continuation OK
-[VFS-RPC] native stat exec replacement denied old continuation OK
+[VFS-RPC] native stat exec replacement rejects old continuation/fresh profile OK
 [VFS-RPC] native stat failed chdir preserves profile/result OK
 [VFS-RPC] native stat private sibling cwd preserves profile/result OK
-[VFS-RPC] native stat chdir withdraws profile/stale reply OK
-[VFS-RPC] native stat shared sibling cwd withdraws profile OK
+[VFS-RPC] native copied chdir continuation/cwd commit/stat recovery OK
+[VFS-RPC] native copied shared sibling chdir/cwd commit/stat recovery OK
 [VFS-RPC] native stat caller exit/exec stale reply/fresh recovery OK
 [VFS-RPC] native consumed pull copy fault retired service epoch
 [VFS-RPC] native stat service loss/resume/no fallback OK
@@ -27,4 +27,14 @@
 [VFS-RPC] Linux stat withdrawn profile/no kernel fallback OK
 [VFS-RPC] Linux stat timeout/resume/recovery OK
 [VFS-RPC] Linux stat service loss/no kernel fallback OK
-[VFS-RPC] initial nonroot cwd native/Linux stat and withdrawal OK
+[VFS-RPC] initial nonroot cwd native/Linux stat and live chdir OK
+
+[VFS-RPC] native repeated chdir releases service heap/pins OK
+
+[VFS-RPC] native root narrowing rollback/confinement/cwd reset/heap cleanup OK
+[VFS-RPC] spawn/exec inherit narrowed root and independent leases OK
+[VFS-RPC] withdrawn parent spawn remains selected without regrant OK
+[VFS-RPC] native copied file open/read/write/seek/stat/dup/close OK
+[VFS-RPC] native copied file exec transfer/cloexec close OK
+
+[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture

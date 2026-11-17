@@ -6,7 +6,10 @@ use crate::capability::CapabilityBroker;
 use crate::sched::Scheduler;
 use alloc::sync::Arc;
 use sunlight_ipc::vfs_rpc::registration::{EndpointOwner, Registry};
-use sunlight_ipc::vfs_rpc::{lifecycle::Caller, registration::Registration};
+use sunlight_ipc::vfs_rpc::{
+    lifecycle::{Caller, RequestIds},
+    registration::Registration,
+};
 use sunlight_ipc::vfs_rpc::{
     pending_table::{PrepareError, Retired, Table},
     retention::{
@@ -34,13 +37,30 @@ struct RemoteRegistration {
     last_wake_tick: Option<u64>,
 }
 
+// Registration construction currently uses a 32-KiB kernel stack. Keep room
+// for the register/caller frames; inline handoff receipts exceed that budget.
+const _: () = assert!(core::mem::size_of::<RemoteRegistration>() <= 28 * 1024);
+
 /// Capacity is reserved before namespace preparation, including callers whose
-/// leases later settle. Thus exit/exec never needs allocation or drops an event.
+/// leases later settle. Metadata acknowledgement preserves this row until a
+/// separate file-owner exit/exec acknowledgement. Teardown needs no allocation.
 struct CallerDelivery {
     caller: Caller,
     id: u64,
     retired: bool,
     delivered: bool,
+    metadata_acked: bool,
+    file_retired: bool,
+    file_delivered: bool,
+    /// Set before old-image retirement and cleared after all surviving
+    /// descriptor transfers are published. The file-owner barrier waits.
+    file_transfer_pending: bool,
+}
+
+impl CallerDelivery {
+    fn pending(&self) -> bool {
+        (self.retired && !self.metadata_acked) || self.file_retired
+    }
 }
 
 enum LocalLease {
@@ -51,6 +71,7 @@ enum LocalLease {
         grants: u64,
         root_policy: bool,
         initial_cwd: Option<alloc::string::String>,
+        derivation: Option<Inheritance>,
     },
     Bound {
         receipt: Receipt,
@@ -79,6 +100,9 @@ enum NamespaceRetentionError {
 /// retention IDs are registration-scoped and old owners survive retirement.
 struct Runtime {
     publications: [Option<stat::Publication>; 64],
+    chdirs: [Option<chdir::Call>; 64],
+    file_publications: [Option<file::Publication>; 64],
+    file_ids: RequestIds,
     registry: Registry,
     namespaces: NamespacePolicy<64>,
     pending: Table<Resources, 64>,
@@ -89,6 +113,9 @@ impl Runtime {
     const fn new() -> Self {
         Self {
             publications: [const { None }; 64],
+            chdirs: [const { None }; 64],
+            file_publications: [const { None }; 64],
+            file_ids: RequestIds::new(),
             registry: Registry::new(),
             namespaces: NamespacePolicy::new(),
             pending: Table::new(),
@@ -139,6 +166,15 @@ impl Runtime {
         identity: AdmissionIdentity,
         grants: u64,
     ) -> Result<Frame, NamespaceRetentionError> {
+        self.prepare_namespace_inner(identity, grants, None)
+    }
+
+    fn prepare_namespace_inner(
+        &mut self,
+        identity: AdmissionIdentity,
+        grants: u64,
+        previous: Option<Scope>,
+    ) -> Result<Frame, NamespaceRetentionError> {
         use NamespaceRetentionError::{Ownership, Resource};
         if self.registry.active() != Some(identity.registration)
             || grants & !sunlight_ipc::vfs_rpc::context::LOOKUP_METADATA != 0
@@ -177,7 +213,10 @@ impl Runtime {
         } else {
             None
         };
-        let scope = self.namespaces.reserve_scope(identity).map_err(Resource)?;
+        let mut scope = self.namespaces.reserve_scope(identity).map_err(Resource)?;
+        if let Some(previous) = previous {
+            scope.namespace_id = previous.namespace_id;
+        }
         let frame = remote.ownership.prepare(scope).map_err(Ownership)?;
         if let Some((slot, id)) = new_caller {
             remote.callers[slot] = Some(CallerDelivery {
@@ -185,6 +224,10 @@ impl Runtime {
                 id,
                 retired: false,
                 delivered: false,
+                metadata_acked: false,
+                file_retired: false,
+                file_delivered: false,
+                file_transfer_pending: false,
             });
             remote.last_caller_id = id;
         }
@@ -198,6 +241,7 @@ impl Runtime {
             grants,
             root_policy: false,
             initial_cwd: None,
+            derivation: None,
         });
         Ok(frame)
     }
@@ -381,8 +425,14 @@ impl Runtime {
         if !self.registry.retire(expected) {
             return;
         }
+        for c in self.chdirs.iter_mut().flatten() {
+            if c.identity.registration == expected && c.result.is_none() {
+                c.result = Some(5);
+            }
+        }
         self.namespaces.retire_registration(expected);
         self.pending.retire_service(expected.service());
+        self.retire_file_registration(expected);
         for remote in self.remote.iter_mut().flatten() {
             if remote.registration == expected {
                 remote.retired = true;
@@ -395,6 +445,15 @@ impl Runtime {
 
     fn retire_process(&mut self, expected: Caller) {
         self.retire_caller_profile(expected);
+        // Reserved before namespace admission and retained after metadata ack:
+        // exit/exec needs neither allocation nor still-live metadata authority.
+        for remote in self.remote.iter_mut().flatten() {
+            for caller in remote.callers.iter_mut().flatten() {
+                if caller.caller == expected {
+                    caller.file_retired = true;
+                }
+            }
+        }
         if let Some(active) = self.registry.active() {
             if owner_matches(active.owner, expected) {
                 self.retire_registration(active);
@@ -403,8 +462,30 @@ impl Runtime {
     }
 
     fn retire_caller_profile(&mut self, expected: Caller) {
+        if let Some(registration) = self
+            .chdirs
+            .iter()
+            .flatten()
+            .find(|c| c.waiter == expected && c.identity.caller != expected && c.result.is_none())
+            .map(|c| c.identity.registration)
+        {
+            // The worker can die after the service provisionally changed its
+            // owner's policy. Retire the epoch rather than regrant a possibly
+            // different object from the owner's saved cwd spelling.
+            self.retire_registration(registration);
+        }
+        for slot in &mut self.chdirs {
+            if let Some(c) = slot {
+                if c.waiter == expected {
+                    *slot = None;
+                } else if c.identity.caller == expected && c.result.is_none() {
+                    c.result = Some(125);
+                }
+            }
+        }
         self.namespaces.retire_caller(expected);
         self.pending.retire_caller(expected);
+        self.retire_file_publications(expected);
         CLEANUP_PENDING.store(true, core::sync::atomic::Ordering::Release);
         // Exit/exec or profile withdrawal discards the continuation, leaving
         // terminal resources for cleanup after lifecycle serialization ends.
@@ -432,16 +513,40 @@ impl Runtime {
         if !sched.processes[idx].vfs_root_metadata {
             return;
         }
+        let expected = process_identity(&sched.processes[idx]);
+        for c in self
+            .chdirs
+            .iter()
+            .flatten()
+            .filter(|c| c.identity.caller == expected)
+        {
+            if let Some(waiter) = sched
+                .processes
+                .iter()
+                .position(|p| process_identity(p) == c.waiter && !p.is_exiting())
+            {
+                if sched.processes[waiter].state == crate::process::ProcessState::BlockedOnIpc
+                    && sched.processes[waiter].pending_call.is_none()
+                    && sched.processes[waiter].ipc_reply_target.is_none()
+                {
+                    super::wake_terminal(sched, waiter);
+                }
+            }
+        }
         sched.processes[idx].vfs_root_metadata = false;
         let caller = process_identity(&sched.processes[idx]);
-        if self
+        if (self
             .publications
             .iter()
             .flatten()
             .any(|p| p.identity.caller == caller)
+            || self
+                .chdirs
+                .iter()
+                .flatten()
+                .any(|p| p.identity.caller == caller))
             && sched.processes[idx].state == crate::process::ProcessState::BlockedOnIpc
             && sched.processes[idx].pending_call.is_none()
-            && sched.processes[idx].ipc_reply_target.is_none()
         {
             super::wake_terminal(sched, idx);
         }
@@ -485,15 +590,30 @@ fn owner_matches(owner: EndpointOwner, caller: Caller) -> bool {
 static CLEANUP_PENDING: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 static RUNTIME: spin::Mutex<Runtime> = spin::Mutex::new(Runtime::new());
 
+#[path = "vfs_registration/chdir.rs"]
+mod chdir;
+#[path = "vfs_registration/file.rs"]
+mod file;
 #[path = "vfs_registration/stat.rs"]
 mod stat;
+pub(crate) use chdir::{
+    chdir_call, context as chdir_context, finish as chdir_finish, resume as chdir_resume,
+};
+#[path = "vfs_registration/inheritance.rs"]
+mod inheritance;
 #[path = "vfs_registration/transport.rs"]
 mod transport;
+pub(crate) use file::{
+    file_call as vfs_file_call, wake_file_callers as vfs_wake_file_callers, FileCall,
+    FileCompletion, FileOperation,
+};
+use inheritance::Inheritance;
+pub(crate) use inheritance::{capture_inheritance, provision_inheritance};
 pub(crate) use stat::{
     complete_stat, copy_failed as stat_copy_failed, stat_call as stat_path_call, take_stat,
     Error as StatError, StatCall,
 };
-pub(crate) use transport::{control, initial_cwd};
+pub(crate) use transport::{control, file_control, initial_cwd, FileControl};
 
 #[path = "vfs_registration/wakeup.rs"]
 mod wakeup;
@@ -516,6 +636,64 @@ pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
 /// remote drain or VM cleanup occurs here.
 pub(crate) fn retire_process(expected: Caller) {
     RUNTIME.lock().retire_process(expected);
+}
+
+/// Reserve the file-owner barrier before old-image retirement. Every surviving
+/// non-CLOEXEC service descriptor must be transferred before it may run.
+pub(crate) fn expect_file_transfer(expected: Caller) {
+    RUNTIME.lock().expect_file_transfer(expected);
+}
+
+/// Publication is complete; pending transfer replies still gate the barrier.
+pub(crate) fn finish_file_transfer(expected: Caller) {
+    RUNTIME.lock().finish_file_transfer(expected);
+}
+
+/// Publish kernel-origin ownership transfers for surviving descriptors. The old
+/// caller is intentionally no longer live; the active registration and exact
+/// token are the only authority. Returns the number of published requests.
+pub(crate) fn transfer_file_owner(
+    old: Caller,
+    new: Caller,
+    tokens: &[(u64, u64)],
+    sched: &mut Scheduler,
+    caps: &CapabilityBroker,
+) -> usize {
+    let mut runtime = RUNTIME.lock();
+    let Some(registration) = live_registration(&mut runtime, sched, caps) else {
+        return 0;
+    };
+    let mut published = 0;
+    for &(token, epoch) in tokens {
+        if epoch != registration.epoch {
+            continue;
+        }
+        if runtime
+            .publish_file_transfer(registration, old, new, token, sched.global_tick)
+            .is_ok()
+        {
+            published += 1;
+        }
+    }
+    published
+}
+
+/// Publish a fire-and-forget close for a descriptor whose final kernel
+/// reference was just dropped. The caller has already consumed the fd, so this
+/// never parks it and never retransmits. Returns whether a request was queued.
+pub(crate) fn close_file_owner(
+    caller: Caller,
+    token: u64,
+    sched: &mut Scheduler,
+    caps: &CapabilityBroker,
+) -> bool {
+    let mut runtime = RUNTIME.lock();
+    let Some(registration) = live_registration(&mut runtime, sched, caps) else {
+        return false;
+    };
+    runtime
+        .publish_file_close(registration, caller, token, sched.global_tick)
+        .is_ok()
 }
 
 /// Hold SCHEDULER across the cwd or credential commit and profile withdrawal.

@@ -16,6 +16,12 @@ impl Probe {
         }
         if msg.word_count == 1 && msg.cap_count == 0 {
             match msg.words[0] {
+                8 => {
+                    return Some(IpcMsg::with_label(msg.label).word(
+                        0,
+                        sunlight_libc::alloc::heap_stats().requested_user_bytes as u64,
+                    ))
+                }
                 5 => {
                     return Some(
                         IpcMsg::with_label(msg.label).word(0, u64::from(self.late.is_some())),

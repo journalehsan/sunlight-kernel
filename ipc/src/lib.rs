@@ -223,6 +223,9 @@ pub enum SunlightSyscall {
     VfsRetention = 180,
     /// Copied metadata pilot for the explicitly provisioned service root.
     VfsStat = 181,
+    /// UID-zero selected caller: narrow the service metadata root and reset cwd.
+    /// This is not full chroot confinement; other file operations remain unmigrated.
+    VfsNarrowRoot = 182,
     /// rdi=storage operation, rsi=index/device ID/mount ID, rdx=record/path.
     StorageCtl = 168,
     /// Paged ReadDir: r10 is the entry offset.

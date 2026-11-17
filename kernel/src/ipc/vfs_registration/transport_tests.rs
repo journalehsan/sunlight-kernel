@@ -31,6 +31,8 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 pid: 3,
                 trusted_vfs_service: true,
                 vfs_root_metadata: false,
+                vfs_boot_root: false,
+                vfs_file_routed: false,
                 cwd: alloc::string::String::from("/"),
                 exiting: false,
                 state: crate::sched::ProcessState::Running,
@@ -46,6 +48,8 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 pid: 10,
                 trusted_vfs_service: false,
                 vfs_root_metadata: false,
+                vfs_boot_root: false,
+                vfs_file_routed: false,
                 cwd: alloc::string::String::from("/"),
                 exiting: false,
                 state: crate::sched::ProcessState::Running,
@@ -342,6 +346,19 @@ fn copied_control_installs_once_and_releases_only_after_local_drain() {
         call(&mut kernel, &sched, &caps, 3, api::REPLY, reg.epoch, &ack),
         Ok(None)
     );
+    let event = call(&mut kernel, &sched, &caps, 3, api::NEXT, reg.epoch, &[])
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        Frame::decode(&event).unwrap(),
+        Frame::FileOwnerRetired { .. }
+    ));
+    let ack = service
+        .control_request(reg, &event)
+        .unwrap()
+        .encode()
+        .unwrap();
+    call(&mut kernel, &sched, &caps, 3, api::REPLY, reg.epoch, &ack).unwrap();
     assert_eq!(
         call(&mut kernel, &sched, &caps, 3, api::NEXT, reg.epoch, &[]),
         Ok(None)
@@ -653,7 +670,7 @@ fn caller_delivery_capacity_precedes_preparation_and_retired_epoch_collection() 
     assert!(kernel.remote_owner(reg).is_ok());
     let mut service = Service::<1, 1, 1>::new();
     service.bind(reg).unwrap();
-    for turn in 0..4 {
+    for turn in 0..8 {
         service.poll_control(&mut Channel {
             kernel: &mut kernel,
             sched: &sched,
@@ -662,7 +679,7 @@ fn caller_delivery_capacity_precedes_preparation_and_retired_epoch_collection() 
             old_epoch: reg.epoch,
             attempts: [0; 2],
         });
-        if turn < 3 {
+        if turn < 7 {
             assert!(kernel.remote_owner(reg).is_ok());
         }
     }
@@ -697,7 +714,9 @@ impl sunlight_vfs_server::runtime::control::Control for Channel<'_> {
         if self.lose_ack
             && matches!(
                 Frame::decode(bytes),
-                Ok(Frame::Released(_) | Frame::CallerRetiredAck { .. })
+                Ok(Frame::Released(_)
+                    | Frame::CallerRetiredAck { .. }
+                    | Frame::FileOwnerRetiredAck { .. })
             )
         {
             return true;
@@ -962,6 +981,7 @@ fn status_authenticates_retired_epoch_without_an_active_registration() {
 fn root_policy_authorization_requires_staging_delivery_and_live_identity() {
     let (mut kernel, mut sched, mut caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     let r = identity.registration;
     kernel
         .queue_root_namespace(identity, LOOKUP_METADATA)
@@ -1110,6 +1130,7 @@ fn initial_cwd_handoff_pins_nonroot_object_across_rename_and_mounts() {
     let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     sched.processes[1].cwd = alloc::string::String::from("/work/cwd");
     let namespace = crate::mounted_cwd_namespace(identity.uid, identity.gid);
     let shared = namespace.shared();
@@ -1160,6 +1181,7 @@ fn initial_cwd_handoff_pins_nonroot_object_across_rename_and_mounts() {
 fn initial_cwd_authorization_and_late_receipt_recheck_exact_staged_directory() {
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     sched.processes[1].cwd = alloc::string::String::from("/work");
     call(&mut kernel, &sched, &caps, 3, api::SNAPSHOT, 0, &[]).unwrap();
     let bytes = kernel
@@ -1222,6 +1244,7 @@ fn initial_cwd_lookup_refusal_drops_provisional_root_and_is_not_retried() {
     for directory in ["/missing", "/file", "/not/../canonical"] {
         let (mut kernel, mut sched, caps, identity) = setup();
         sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
         sched.processes[1].cwd = alloc::string::String::from(directory);
         let namespace = crate::mounted_namespace();
         let shared = namespace.shared();
@@ -1326,6 +1349,7 @@ fn copied_root_policy_pins_live_mounts_and_revalidates_before_retaining() {
     for raced in [false, true] {
         let (mut kernel, mut sched, caps, identity) = setup();
         sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
         let r = identity.registration;
         let namespace = crate::mounted_namespace();
         let shared = namespace.shared();
@@ -1397,6 +1421,7 @@ fn denied_root_profile_settles_without_pins_and_allows_later_work() {
         .all(|r| r.delivered.is_none()));
     drop(control);
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     kernel
         .queue_root_namespace(identity, LOOKUP_METADATA)
         .unwrap();
@@ -1422,6 +1447,7 @@ fn denied_root_profile_settles_without_pins_and_allows_later_work() {
 fn root_policy_refusal_releases_provisional_pins_when_lease_capacity_is_zero() {
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     let r = identity.registration;
     let namespace = crate::mounted_namespace();
     let shared = namespace.shared();
@@ -1462,6 +1488,7 @@ fn production_selection_uses_boot_marker_once_and_captures_credentials() {
     call(&mut kernel, &sched, &caps, 3, api::SNAPSHOT, 0, &[]).unwrap();
     assert!(kernel.next_control(r).unwrap().is_none());
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     // Unauthenticated snapshot must not stage a selected caller either.
     assert!(call(&mut kernel, &sched, &caps, 10, api::SNAPSHOT, 0, &[]).is_err());
     assert!(kernel.next_control(r).unwrap().is_none());
@@ -1502,6 +1529,7 @@ fn production_selected_caller_completes_shared_root_handoff_without_fixture_stag
     let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     let namespace = crate::mounted_namespace();
     let shared = namespace.shared();
     let initial = shared.lock().open_handle_count();
@@ -1555,6 +1583,7 @@ fn production_selected_caller_completes_shared_root_handoff_without_fixture_stag
 fn production_refusal_is_not_retried_and_replacement_gets_a_new_scope() {
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     let r = identity.registration;
     call(&mut kernel, &sched, &caps, 3, api::SNAPSHOT, 0, &[]).unwrap();
     let frame = kernel.next_control(r).unwrap().unwrap();
@@ -1598,6 +1627,7 @@ fn production_selection_skips_exiting_and_zero_lifetime_records() {
     for field in 0..4 {
         let (mut kernel, mut sched, caps, _) = setup();
         sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
         match field {
             0 => sched.processes[1].exiting = true,
             1 => sched.processes[1].pid = 0,
@@ -1623,6 +1653,7 @@ fn copied_stat_round_trip_uses_retained_root_and_owns_result_through_resume() {
     let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     let namespace = crate::mounted_namespace();
     let shared = namespace.shared();
     let initial = shared.lock().open_handle_count();
@@ -1722,6 +1753,7 @@ fn copied_path_stat_uses_kernel_credentials_and_returns_correlated_posix_errors(
     let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     let namespace = crate::mounted_namespace();
     {
         let shared = namespace.shared();
@@ -1797,6 +1829,7 @@ fn cwd_withdrawal_drains_remote_profile_and_snapshot_cannot_regrant() {
     let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
     let (mut kernel, mut sched, caps, identity) = setup();
     sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
     let namespace = crate::mounted_namespace();
     let shared = namespace.shared();
     let initial = shared.lock().open_handle_count();
@@ -1848,6 +1881,7 @@ fn cwd_withdrawal_before_or_during_provisioning_cannot_install_a_late_receipt() 
         let (mut kernel, mut sched, caps, identity) = setup();
         let r = identity.registration;
         sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
         let namespace = crate::mounted_namespace();
         let shared = namespace.shared();
         let initial = shared.lock().open_handle_count();
@@ -1892,4 +1926,1339 @@ fn cwd_withdrawal_before_or_during_provisioning_cannot_install_a_late_receipt() 
         assert_eq!(shared.lock().open_handle_count(), initial);
         assert!(!sched.processes[1].vfs_root_metadata);
     }
+}
+
+struct CwdChannel<'a> {
+    kernel: &'a mut Runtime,
+    sched: &'a mut Scheduler,
+    caps: &'a CapabilityBroker,
+    reject_commit: bool,
+}
+impl sunlight_vfs_server::runtime::control::Control for CwdChannel<'_> {
+    fn derive_source(&mut self, epoch: u64, bytes: &[u8; FRAME_BYTES]) -> Option<Receipt> {
+        let r = authenticate(self.kernel, 3, epoch, self.sched, self.caps).ok()?;
+        self.kernel.authorize_derivation(r, bytes, self.sched).ok()
+    }
+    fn snapshot(&mut self) -> Option<Registration> {
+        let r = self.kernel.registry.active()?;
+        self.kernel.stage_selected_roots(r, self.sched);
+        Some(r)
+    }
+    fn status(&mut self, epoch: u64) -> Result<(Registration, bool), ()> {
+        let r = self
+            .kernel
+            .remote
+            .iter()
+            .flatten()
+            .find(|r| r.registration.epoch == epoch)
+            .ok_or(())?;
+        Ok((r.registration, r.retired))
+    }
+    fn next(&mut self, epoch: u64) -> Result<Option<[u8; FRAME_BYTES]>, ()> {
+        control_runtime(self.kernel, 3, api::NEXT, epoch, &[], self.sched, self.caps)
+            .map_err(|_| ())
+    }
+    fn reply(&mut self, epoch: u64, bytes: &[u8; FRAME_BYTES]) -> bool {
+        if self.reject_commit {
+            if let Ok(Frame::Retained(receipt)) = Frame::decode(bytes) {
+                let derived = self.kernel.remote.iter().flatten().flat_map(|r| r.local.iter().flatten()).any(|l| matches!(l,
+                    LocalLease::Preparing { id, derivation: Some(_), .. } if *id == receipt.request_id()));
+                if derived {
+                    let p = self
+                        .sched
+                        .processes
+                        .iter_mut()
+                        .find(|p| process_identity(p) == receipt.scope().caller)
+                        .unwrap();
+                    p.uid += 1;
+                }
+            }
+        }
+        control_runtime(
+            self.kernel,
+            3,
+            api::REPLY,
+            epoch,
+            bytes,
+            self.sched,
+            self.caps,
+        )
+        .is_ok()
+    }
+    fn initial_cwd(
+        &mut self,
+        epoch: u64,
+        bytes: &[u8; FRAME_BYTES],
+    ) -> Option<[u8; api::CWD_BYTES]> {
+        let r = authenticate(self.kernel, 3, epoch, self.sched, self.caps).ok()?;
+        api::encode_cwd(self.kernel.authorize_root(r, bytes, self.sched).ok()?).ok()
+    }
+    fn chdir(
+        &mut self,
+        epoch: u64,
+        bytes: &[u8; FRAME_BYTES],
+    ) -> Option<[u8; sunlight_ipc::vfs_rpc::chdir_transport::CONTEXT_BYTES]> {
+        super::super::chdir::context_runtime(self.kernel, 3, epoch, bytes, self.sched, self.caps)
+            .ok()
+    }
+    fn finish_chdir(
+        &mut self,
+        epoch: u64,
+        bytes: &[u8; FRAME_BYTES],
+        errno: u64,
+        cwd: &str,
+    ) -> bool {
+        use sunlight_ipc::vfs_rpc::chdir_transport as cwd_api;
+        let mut packet = [0; cwd_api::FINISH_BYTES];
+        packet[..FRAME_BYTES].copy_from_slice(bytes);
+        packet[FRAME_BYTES..FRAME_BYTES + 8].copy_from_slice(&errno.to_le_bytes());
+        packet[FRAME_BYTES + 8..].copy_from_slice(&api::encode_cwd(cwd).unwrap());
+        if self.reject_commit {
+            self.sched.processes[1].uid += 1;
+        }
+        super::super::chdir::finish_runtime(self.kernel, 3, epoch, &packet, self.sched, self.caps)
+            .is_ok()
+    }
+}
+
+#[test]
+fn copied_chdir_rotates_scope_commits_cwd_and_preserves_lookup_failures() {
+    use super::super::chdir::chdir_call_runtime;
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    let (mut kernel, mut sched, caps, identity) = setup();
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    sched.processes[1].cwd = alloc::string::String::from("/work/cwd");
+    let namespace = crate::mounted_cwd_namespace(identity.uid, identity.gid);
+    let mut service = Service::<1, 8, 1>::new();
+    service.poll_root_control(
+        &mut CwdChannel {
+            kernel: &mut kernel,
+            sched: &mut sched,
+            caps: &caps,
+            reject_commit: false,
+        },
+        &namespace,
+    );
+    let before = kernel.namespaces.lookup(identity).unwrap();
+    let old = before.validate(identity).unwrap();
+    for (path, errno) in [("missing", 2), ("data", 20)] {
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, path, &mut sched, &caps),
+            Ok(None)
+        );
+        assert_eq!(
+            sched.processes[1].state,
+            crate::sched::ProcessState::BlockedOnIpc
+        );
+        // Captured request cannot be substituted while parked.
+        assert!(chdir_call_runtime(&mut kernel, 10, "/", &mut sched, &caps).is_err());
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        assert_eq!(sched.processes[1].state, crate::sched::ProcessState::Ready);
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, path, &mut sched, &caps),
+            Ok(Some(errno))
+        );
+        assert_eq!(
+            kernel
+                .namespaces
+                .lookup(identity)
+                .unwrap()
+                .validate(identity),
+            Ok(old)
+        );
+        assert_eq!(sched.processes[1].cwd, "/work/cwd");
+    }
+    namespace
+        .shared()
+        .lock()
+        .rename("/work/cwd", "/work/moved")
+        .unwrap();
+    // Resolve from the retained directory object after rename, including mounts.
+    for (path, expected) in [(".", "/work/moved"), ("..", "/work"), ("/", "/")] {
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, path, &mut sched, &caps),
+            Ok(None)
+        );
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, path, &mut sched, &caps),
+            Ok(Some(0))
+        );
+        assert_eq!(sched.processes[1].cwd, expected);
+        assert!(
+            kernel
+                .namespaces
+                .lookup(identity)
+                .unwrap()
+                .validate(identity)
+                .unwrap()
+                .generation
+                > old.generation
+        );
+    }
+    assert!(before.validate(identity).is_err());
+    drop(before);
+    kernel.reconcile_namespaces();
+    service.poll_root_control(
+        &mut CwdChannel {
+            kernel: &mut kernel,
+            sched: &mut sched,
+            caps: &caps,
+            reject_commit: false,
+        },
+        &namespace,
+    );
+    assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+    // The replacement can dispatch from the new pinned cwd immediately.
+    let transfer = kernel.admit_stat(identity, "work/moved/data").unwrap();
+    let input = kernel
+        .pending
+        .resources(transfer.words()[1])
+        .unwrap()
+        .input();
+    let reply = service.stat(identity.registration, input).unwrap();
+    assert_eq!(
+        sunlight_ipc::vfs_rpc::stat_transport::decode_reply(&reply)
+            .unwrap()
+            .words[2],
+        0
+    );
+    kernel.pending.retire_caller(identity.caller);
+    drop(kernel.pending.reap(transfer.words()[1]));
+}
+
+#[test]
+fn copied_directory_and_root_authentication_lifecycle_timeout_and_no_replay() {
+    use super::super::chdir::context_runtime;
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    use sunlight_ipc::vfs_rpc::chdir_transport::Kind;
+    for kind in [Kind::Directory, Kind::Root] {
+        let chdir_call_runtime = |runtime: &mut Runtime,
+                                  pid,
+                                  path: &str,
+                                  sched: &mut Scheduler,
+                                  caps: &CapabilityBroker| {
+            super::super::chdir::transition_call_runtime(runtime, pid, path, kind, sched, caps)
+        };
+        for delivered in [false, true] {
+            let (mut kernel, mut sched, caps, mut identity) = setup();
+            if kind == Kind::Root {
+                identity.uid = 0;
+                sched.processes[1].uid = 0;
+            }
+            sched.processes[1].vfs_root_metadata = true;
+            sched.processes[1].vfs_boot_root = true;
+            let namespace = crate::mounted_namespace();
+            let mut service = Service::<1, 8, 1>::new();
+            service.poll_root_control(
+                &mut CwdChannel {
+                    kernel: &mut kernel,
+                    sched: &mut sched,
+                    caps: &caps,
+                    reject_commit: false,
+                },
+                &namespace,
+            );
+            assert_eq!(
+                chdir_call_runtime(&mut kernel, 10, "/", &mut sched, &caps),
+                Ok(None)
+            );
+            let mut late = None;
+            if delivered {
+                let bytes = kernel
+                    .next_control(identity.registration)
+                    .unwrap()
+                    .unwrap()
+                    .encode()
+                    .unwrap();
+                assert!(context_runtime(
+                    &mut kernel,
+                    10,
+                    identity.registration.epoch,
+                    &bytes,
+                    &sched,
+                    &caps
+                )
+                .is_err());
+                assert!(context_runtime(
+                    &mut kernel,
+                    3,
+                    identity.registration.epoch + 1,
+                    &bytes,
+                    &sched,
+                    &caps
+                )
+                .is_err());
+                assert!(context_runtime(
+                    &mut kernel,
+                    3,
+                    identity.registration.epoch,
+                    &bytes,
+                    &sched,
+                    &caps
+                )
+                .is_ok());
+                late = Some(bytes);
+                let mut wrong = bytes;
+                wrong[FRAME_BYTES - 1] ^= 1;
+                assert!(context_runtime(
+                    &mut kernel,
+                    3,
+                    identity.registration.epoch,
+                    &wrong,
+                    &sched,
+                    &caps
+                )
+                .is_err());
+            }
+            sched.global_tick = 5 * crate::timekeeping::TICK_HZ;
+            kernel.poll_chdirs(&mut sched, 5 * crate::timekeeping::TICK_HZ);
+            assert_eq!(sched.processes[1].state, crate::sched::ProcessState::Ready);
+            assert_eq!(
+                chdir_call_runtime(&mut kernel, 10, "/", &mut sched, &caps),
+                Ok(Some(110))
+            );
+            sched.processes[1].state = crate::sched::ProcessState::Running;
+            assert!(chdir_call_runtime(&mut kernel, 10, "/", &mut sched, &caps).is_err());
+            assert!(kernel.namespaces.lookup(identity).is_err());
+            assert_eq!(sched.processes[1].cwd, "/");
+            if let Some(bytes) = late {
+                let refusal = service
+                    .control_request(identity.registration, &bytes)
+                    .unwrap()
+                    .encode()
+                    .unwrap();
+                kernel
+                    .control_reply(identity.registration, &refusal, &sched)
+                    .unwrap();
+            }
+            service.poll_root_control(
+                &mut CwdChannel {
+                    kernel: &mut kernel,
+                    sched: &mut sched,
+                    caps: &caps,
+                    reject_commit: false,
+                },
+                &namespace,
+            );
+            assert_eq!(namespace.shared().lock().open_handle_count(), 0);
+            assert_eq!(
+                kernel
+                    .remote
+                    .iter()
+                    .flatten()
+                    .map(|r| r.ownership.outstanding())
+                    .sum::<usize>(),
+                0
+            );
+        }
+    }
+}
+
+#[test]
+fn copied_directory_and_root_rejected_commit_releases_provisional_service_lease() {
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    use sunlight_ipc::vfs_rpc::chdir_transport::Kind;
+    for kind in [Kind::Directory, Kind::Root] {
+        let chdir_call_runtime = |runtime: &mut Runtime,
+                                  pid,
+                                  path: &str,
+                                  sched: &mut Scheduler,
+                                  caps: &CapabilityBroker| {
+            super::super::chdir::transition_call_runtime(runtime, pid, path, kind, sched, caps)
+        };
+        let (mut kernel, mut sched, caps, mut identity) = setup();
+        if kind == Kind::Root {
+            identity.uid = 0;
+            sched.processes[1].uid = 0;
+        }
+        sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
+        let namespace = crate::mounted_cwd_namespace(identity.uid, identity.gid);
+        let mut service = Service::<1, 8, 1>::new();
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, "/work/cwd", &mut sched, &caps),
+            Ok(None)
+        );
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: true,
+            },
+            &namespace,
+        );
+        assert_eq!(sched.processes[1].cwd, "/");
+        // The original lease remains kernel-owned; the provisional pair is gone.
+        assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+        kernel.poll_chdirs(&mut sched, 5 * crate::timekeeping::TICK_HZ);
+        assert_eq!(sched.processes[1].state, crate::sched::ProcessState::Ready);
+    }
+}
+
+#[test]
+fn copied_directory_and_root_lease_exhaustion_restores_old_policy_and_cwd() {
+    use super::super::chdir::resume_runtime;
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    use sunlight_ipc::vfs_rpc::chdir_transport::Kind;
+    for kind in [Kind::Directory, Kind::Root] {
+        let chdir_call_runtime = |runtime: &mut Runtime,
+                                  pid,
+                                  path: &str,
+                                  sched: &mut Scheduler,
+                                  caps: &CapabilityBroker| {
+            super::super::chdir::transition_call_runtime(runtime, pid, path, kind, sched, caps)
+        };
+        let (mut kernel, mut sched, caps, mut identity) = setup();
+        if kind == Kind::Root {
+            identity.uid = 0;
+            sched.processes[1].uid = 0;
+        }
+        sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
+        let namespace = crate::mounted_cwd_namespace(identity.uid, identity.gid);
+        // The old lease consumes the only slot. A transition may pin provisionally
+        // but cannot retain it; both sides must preserve the old directory.
+        let mut service = Service::<1, 1, 1>::new();
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        let mut path = alloc::string::String::from("/work/cwd");
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, &path, &mut sched, &caps),
+            Ok(None)
+        );
+        path.clear();
+        path.push_str("/different-user-bytes");
+        // A nested syscall origin cannot steal the parked operation.
+        assert!(resume_runtime(&mut kernel, 10, (1, 2), kind, &mut sched).is_err());
+        let other_kind = if kind == Kind::Root {
+            Kind::Directory
+        } else {
+            Kind::Root
+        };
+        assert!(resume_runtime(&mut kernel, 10, (0, 0), other_kind, &mut sched).is_err());
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        // Completion consumes the captured operation without rereading user bytes.
+        assert_eq!(
+            resume_runtime(&mut kernel, 10, (0, 0), kind, &mut sched),
+            Ok(Some(Some(12)))
+        );
+        assert_eq!(sched.processes[1].cwd, "/");
+        assert!(kernel.namespaces.lookup(identity).is_ok());
+        assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+        let transfer = kernel.admit_stat(identity, "work/cwd/data").unwrap();
+        let input = kernel
+            .pending
+            .resources(transfer.words()[1])
+            .unwrap()
+            .input();
+        let reply = service.stat(identity.registration, input).unwrap();
+        assert_eq!(
+            sunlight_ipc::vfs_rpc::stat_transport::decode_reply(&reply)
+                .unwrap()
+                .words[2],
+            0
+        );
+        kernel.pending.retire_caller(identity.caller);
+        drop(kernel.pending.reap(transfer.words()[1]));
+    }
+}
+
+#[test]
+fn copied_directory_and_root_service_loss_wakes_once_and_respects_nested_ipc() {
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    use sunlight_ipc::vfs_rpc::chdir_transport::Kind;
+    for kind in [Kind::Directory, Kind::Root] {
+        let chdir_call_runtime = |runtime: &mut Runtime,
+                                  pid,
+                                  path: &str,
+                                  sched: &mut Scheduler,
+                                  caps: &CapabilityBroker| {
+            super::super::chdir::transition_call_runtime(runtime, pid, path, kind, sched, caps)
+        };
+        let (mut kernel, mut sched, caps, mut identity) = setup();
+        if kind == Kind::Root {
+            identity.uid = 0;
+            sched.processes[1].uid = 0;
+        }
+        sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
+        let namespace = crate::mounted_namespace();
+        let mut service = Service::<1, 8, 1>::new();
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, "/", &mut sched, &caps),
+            Ok(None)
+        );
+        sched.processes[1].pending_call = Some(());
+        kernel.retire_registration(identity.registration);
+        kernel.poll_chdirs(&mut sched, 0);
+        assert_eq!(
+            sched.processes[1].state,
+            crate::sched::ProcessState::BlockedOnIpc
+        );
+        sched.processes[1].pending_call = None;
+        kernel.poll_chdirs(&mut sched, 0);
+        assert_eq!(sched.processes[1].state, crate::sched::ProcessState::Ready);
+        sched.processes[1].state = crate::sched::ProcessState::BlockedOnIpc;
+        kernel.poll_chdirs(&mut sched, 0);
+        assert_eq!(
+            sched.processes[1].state,
+            crate::sched::ProcessState::BlockedOnIpc
+        );
+        assert_eq!(
+            chdir_call_runtime(&mut kernel, 10, "/", &mut sched, &caps),
+            Ok(Some(5))
+        );
+    }
+}
+
+#[test]
+fn copied_root_narrowing_resets_cwd_and_keeps_exact_mounted_root_after_rename() {
+    use super::super::chdir::transition_call_runtime;
+    use sunlight_ipc::vfs_rpc::chdir_transport::Kind;
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    let (mut kernel, mut sched, caps, mut identity) = setup();
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    sched.processes[1].uid = 0;
+    identity.uid = 0;
+    sched.processes[1].cwd = alloc::string::String::from("/work/cwd");
+    let namespace = crate::mounted_cwd_namespace(0, identity.gid);
+    let mut service = Service::<1, 8, 1>::new();
+    service.poll_root_control(
+        &mut CwdChannel {
+            kernel: &mut kernel,
+            sched: &mut sched,
+            caps: &caps,
+            reject_commit: false,
+        },
+        &namespace,
+    );
+    let old = kernel.namespaces.lookup(identity).unwrap();
+    for (path, errno) in [("missing", 2), ("data", 20), (".", 0)] {
+        assert_eq!(
+            transition_call_runtime(&mut kernel, 10, path, Kind::Root, &mut sched, &caps),
+            Ok(None)
+        );
+        // The same pathname cannot substitute a different operation kind.
+        assert!(
+            transition_call_runtime(&mut kernel, 10, path, Kind::Directory, &mut sched, &caps)
+                .is_err()
+        );
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        assert_eq!(
+            transition_call_runtime(&mut kernel, 10, path, Kind::Root, &mut sched, &caps),
+            Ok(Some(errno))
+        );
+        assert_eq!(
+            sched.processes[1].cwd,
+            if errno == 0 { "/" } else { "/work/cwd" }
+        );
+        if errno != 0 {
+            assert!(old.validate(identity).is_ok());
+        }
+    }
+    assert!(old.validate(identity).is_err());
+    drop(old);
+    namespace
+        .shared()
+        .lock()
+        .rename("/work/cwd", "/work/moved")
+        .unwrap();
+    namespace
+        .shared()
+        .lock()
+        .mkdir("/work/cwd", 0, 0, 0o755)
+        .unwrap();
+    // Absolute and relative requests stay inside the exact retained root.
+    for (path, errno) in [("/data", 0), ("../../data", 0), ("/work/moved/data", 2)] {
+        let transfer = kernel.admit_stat(identity, path).unwrap();
+        let reply = service
+            .stat(
+                identity.registration,
+                kernel
+                    .pending
+                    .resources(transfer.words()[1])
+                    .unwrap()
+                    .input(),
+            )
+            .unwrap();
+        assert_eq!(
+            sunlight_ipc::vfs_rpc::stat_transport::decode_reply(&reply)
+                .unwrap()
+                .words[2],
+            errno
+        );
+        kernel.pending.retire_caller(identity.caller);
+        drop(kernel.pending.reap(transfer.words()[1]));
+    }
+    // Live cwd and subsequent root transitions stay beneath the narrowed root.
+    for kind in [Kind::Directory, Kind::Root] {
+        assert_eq!(
+            transition_call_runtime(&mut kernel, 10, "../..", kind, &mut sched, &caps),
+            Ok(None)
+        );
+        service.poll_root_control(
+            &mut CwdChannel {
+                kernel: &mut kernel,
+                sched: &mut sched,
+                caps: &caps,
+                reject_commit: false,
+            },
+            &namespace,
+        );
+        assert_eq!(
+            transition_call_runtime(&mut kernel, 10, "../..", kind, &mut sched, &caps),
+            Ok(Some(0))
+        );
+        assert_eq!(sched.processes[1].cwd, "/");
+    }
+    kernel.reconcile_namespaces();
+    service.poll_root_control(
+        &mut CwdChannel {
+            kernel: &mut kernel,
+            sched: &mut sched,
+            caps: &caps,
+            reject_commit: false,
+        },
+        &namespace,
+    );
+    assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+}
+
+#[test]
+fn copied_root_requires_selected_profile_and_independent_uid_zero_authority() {
+    use super::super::chdir::{context_runtime, transition_call_runtime};
+    use sunlight_ipc::vfs_rpc::chdir_transport::{decode_context, Kind};
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    let (mut kernel, mut sched, caps, mut identity) = setup();
+    sched.processes[1].uid = 0;
+    assert!(transition_call_runtime(&mut kernel, 10, "/", Kind::Root, &mut sched, &caps).is_err());
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    sched.processes[1].uid = identity.uid;
+    assert_eq!(
+        transition_call_runtime(&mut kernel, 10, "/", Kind::Root, &mut sched, &caps),
+        Ok(Some(13))
+    );
+    assert!(kernel.chdirs.iter().all(Option::is_none));
+    sched.processes[1].uid = 0;
+    identity.uid = 0;
+    let namespace = crate::mounted_cwd_namespace(0, identity.gid);
+    let mut service = Service::<1, 8, 1>::new();
+    service.poll_root_control(
+        &mut CwdChannel {
+            kernel: &mut kernel,
+            sched: &mut sched,
+            caps: &caps,
+            reject_commit: false,
+        },
+        &namespace,
+    );
+    assert_eq!(
+        transition_call_runtime(&mut kernel, 10, "/work", Kind::Root, &mut sched, &caps),
+        Ok(None)
+    );
+    let retain = kernel
+        .next_control(identity.registration)
+        .unwrap()
+        .unwrap()
+        .encode()
+        .unwrap();
+    assert!(kernel
+        .authorize_root(identity.registration, &retain, &sched)
+        .is_err());
+    assert!(context_runtime(
+        &mut kernel,
+        10,
+        identity.registration.epoch,
+        &retain,
+        &sched,
+        &caps
+    )
+    .is_err());
+    let bytes = context_runtime(
+        &mut kernel,
+        3,
+        identity.registration.epoch,
+        &retain,
+        &sched,
+        &caps,
+    )
+    .unwrap();
+    assert_eq!(decode_context(&bytes).unwrap().kind, Kind::Root);
+    sched.processes[1].uid = 1;
+    assert!(context_runtime(
+        &mut kernel,
+        3,
+        identity.registration.epoch,
+        &retain,
+        &sched,
+        &caps
+    )
+    .is_err());
+    sched.processes[1].uid = 0;
+    let context = decode_context(&bytes).unwrap();
+    let Frame::Retain { scope, .. } = Frame::decode(&retain).unwrap() else {
+        panic!()
+    };
+    service
+        .change_root(
+            identity.registration,
+            context.old,
+            scope,
+            context.path,
+            sunlight_fs::Credential {
+                uid: context.uid,
+                gid: context.gid,
+            },
+            || true,
+        )
+        .unwrap();
+    let retained = service
+        .request(identity.registration, &retain)
+        .unwrap()
+        .encode()
+        .unwrap();
+    // Ordinary retention replies cannot bypass the transaction's finish checks.
+    assert!(kernel
+        .control_reply(identity.registration, &retained, &sched)
+        .is_err());
+    use sunlight_ipc::vfs_rpc::chdir_transport::FINISH_BYTES;
+    let mut packet = [0; FINISH_BYTES];
+    packet[..FRAME_BYTES].copy_from_slice(&retained);
+    packet[FRAME_BYTES + 8..].copy_from_slice(&api::encode_cwd("/service/global/root").unwrap());
+    assert!(super::super::chdir::finish_runtime(
+        &mut kernel,
+        3,
+        identity.registration.epoch,
+        &packet,
+        &mut sched,
+        &caps
+    )
+    .is_err());
+    packet[FRAME_BYTES + 8..].copy_from_slice(&api::encode_cwd("/").unwrap());
+    assert!(super::super::chdir::finish_runtime(
+        &mut kernel,
+        3,
+        identity.registration.epoch,
+        &packet,
+        &mut sched,
+        &caps
+    )
+    .is_ok());
+    // Acknowledgement and stale context are single-use.
+    assert!(super::super::chdir::finish_runtime(
+        &mut kernel,
+        3,
+        identity.registration.epoch,
+        &packet,
+        &mut sched,
+        &caps
+    )
+    .is_err());
+    assert!(context_runtime(
+        &mut kernel,
+        3,
+        identity.registration.epoch,
+        &retain,
+        &sched,
+        &caps
+    )
+    .is_err());
+    assert_eq!(sched.processes[1].cwd, "/");
+}
+
+fn poll_inheritance<const P: usize, const L: usize>(
+    kernel: &mut Runtime,
+    sched: &mut Scheduler,
+    caps: &CapabilityBroker,
+    service: &mut Service<P, L, 1>,
+    namespace: &DirectoryNamespace,
+) {
+    service.poll_root_control(
+        &mut CwdChannel {
+            kernel,
+            sched,
+            caps,
+            reject_commit: false,
+        },
+        namespace,
+    );
+}
+
+fn bound_receipt(kernel: &Runtime, caller: Caller) -> Receipt {
+    kernel
+        .remote
+        .iter()
+        .flatten()
+        .flat_map(|r| r.local.iter().flatten())
+        .find_map(|l| match l {
+            LocalLease::Bound { receipt, .. } if receipt.scope().caller == caller => Some(*receipt),
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn copied_spawn_snapshot_survives_parent_retirement_rename_and_recreation() {
+    let (mut kernel, mut sched, caps, identity) = setup();
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    sched.processes[1].cwd = alloc::string::String::from("/work/cwd");
+    let namespace = crate::mounted_cwd_namespace(identity.uid, identity.gid);
+    let mut service = Service::<4, 8, 1>::new();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    let source_receipt = bound_receipt(&kernel, identity.caller);
+    let expected = service
+        .metadata(identity.registration, source_receipt)
+        .unwrap();
+    let source = kernel.capture_inheritance(identity).unwrap();
+    let mut child = setup().1.processes.remove(1);
+    child.pid = 20;
+    child.foreground.incarnation = 21;
+    child.address_space.generation = 22;
+    child.vfs_root_metadata = true;
+    child.cwd = alloc::string::String::from("/work/cwd");
+    let child_identity = AdmissionIdentity {
+        caller: process_identity(&child),
+        ..identity
+    };
+    sched.processes.push(child);
+    kernel
+        .queue_inheritance(source, child_identity, "/work/cwd")
+        .unwrap();
+    // The source's policy can disappear before service delivery. Its exact lease
+    // must remain held until the child has acquired independent ownership.
+    sched.processes[1].exiting = true;
+    kernel.retire_process(identity.caller);
+    {
+        let shared = namespace.shared();
+        let mut fs = shared.lock();
+        fs.rename("/work/cwd", "/work/moved").unwrap();
+        fs.mkdir("/work/cwd", identity.uid, identity.gid, 0o755)
+            .unwrap();
+    }
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    assert!(kernel.namespaces.lookup(identity).is_err());
+    assert!(kernel.namespaces.lookup(child_identity).is_ok());
+    let receipt = bound_receipt(&kernel, child_identity.caller);
+    assert_eq!(
+        service.metadata(identity.registration, receipt).unwrap(),
+        expected
+    );
+    // Reconcile the released snapshot, then prove child exit owns the last pins.
+    kernel.reconcile_namespaces();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    assert!(service
+        .metadata(identity.registration, source_receipt)
+        .is_err());
+    assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+    sched.processes[2].exiting = true;
+    kernel.retire_process(child_identity.caller);
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    assert_eq!(namespace.shared().lock().open_handle_count(), 0);
+}
+
+#[test]
+fn copied_exec_derives_new_vm_after_old_caller_barrier_without_reusing_admission() {
+    let (mut kernel, mut sched, caps, identity) = setup();
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    let namespace = crate::mounted_namespace();
+    let mut service = Service::<1, 8, 1>::new();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    let source = kernel.capture_inheritance(identity).unwrap();
+    let expected = service
+        .metadata(
+            identity.registration,
+            bound_receipt(&kernel, identity.caller),
+        )
+        .unwrap();
+    kernel.retire_process(identity.caller);
+    sched.processes[1].address_space.generation += 1;
+    let next = AdmissionIdentity {
+        caller: process_identity(&sched.processes[1]),
+        ..identity
+    };
+    kernel.queue_inheritance(source, next, "/").unwrap();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    assert!(kernel.namespaces.lookup(identity).is_err());
+    assert!(kernel.namespaces.lookup(next).is_ok());
+    assert_eq!(
+        service
+            .metadata(identity.registration, bound_receipt(&kernel, next.caller))
+            .unwrap(),
+        expected
+    );
+    assert!(kernel.capture_inheritance(identity).is_none());
+}
+
+#[test]
+fn copied_derivation_refuses_changed_destination_and_capacity_without_root_regrant() {
+    for fault in 0..5 {
+        let (mut kernel, mut sched, caps, identity) = setup();
+        sched.processes[1].vfs_root_metadata = true;
+        sched.processes[1].vfs_boot_root = true;
+        let namespace = crate::mounted_namespace();
+        let mut service = Service::<1, 8, 1>::new();
+        poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+        let source = kernel.capture_inheritance(identity).unwrap();
+        let mut child = setup().1.processes.remove(1);
+        child.pid = 20;
+        child.vfs_root_metadata = true;
+        let next = AdmissionIdentity {
+            caller: process_identity(&child),
+            ..identity
+        };
+        sched.processes.push(child);
+        kernel.queue_inheritance(source, next, "/").unwrap();
+        match fault {
+            0 => sched.processes[2].uid += 1,
+            1 => sched.processes[2].cwd = alloc::string::String::from("/changed"),
+            2 => sched.processes[2].address_space.generation += 1,
+            3 => {
+                sched.processes[2].exiting = true;
+                kernel.retire_process(next.caller);
+            }
+            _ => (), // live source occupies the sole service policy slot
+        }
+        poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+        assert!(kernel.namespaces.lookup(next).is_err());
+        assert!(kernel.namespaces.lookup(identity).is_ok());
+        // Restoring the record cannot silently turn derivation into initial `/`.
+        sched.processes[2].uid = identity.uid;
+        sched.processes[2].cwd = alloc::string::String::from("/");
+        sched.processes[2].address_space.generation = next.caller.address_space_generation;
+        poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+        assert!(kernel.namespaces.lookup(next).is_err());
+        assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+    }
+}
+
+#[test]
+fn copied_derivation_authenticates_delivery_and_compensates_late_credentials() {
+    let (mut kernel, mut sched, caps, identity) = setup();
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    let namespace = crate::mounted_namespace();
+    let mut service = Service::<2, 8, 1>::new();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    let source = kernel.capture_inheritance(identity).unwrap();
+    let mut child = setup().1.processes.remove(1);
+    child.pid = 20;
+    child.vfs_root_metadata = true;
+    let next = AdmissionIdentity {
+        caller: process_identity(&child),
+        ..identity
+    };
+    sched.processes.push(child);
+    kernel.queue_inheritance(source, next, "/").unwrap();
+    let request = kernel
+        .remote
+        .iter()
+        .flatten()
+        .flat_map(|r| r.unsent.iter().flatten())
+        .next()
+        .unwrap()
+        .encode()
+        .unwrap();
+    assert!(call(
+        &mut kernel,
+        &sched,
+        &caps,
+        3,
+        api::DERIVE_SOURCE,
+        identity.registration.epoch,
+        &request
+    )
+    .is_err());
+    // A later receipt races the independently captured destination credentials.
+    service.poll_root_control(
+        &mut CwdChannel {
+            kernel: &mut kernel,
+            sched: &mut sched,
+            caps: &caps,
+            reject_commit: true,
+        },
+        &namespace,
+    );
+    assert!(kernel.namespaces.lookup(next).is_err());
+    assert!(call(
+        &mut kernel,
+        &sched,
+        &caps,
+        20,
+        api::DERIVE_SOURCE,
+        identity.registration.epoch,
+        &request
+    )
+    .is_err());
+    assert!(call(
+        &mut kernel,
+        &sched,
+        &caps,
+        3,
+        api::DERIVE_SOURCE,
+        identity.registration.epoch + 1,
+        &request
+    )
+    .is_err());
+    sched.processes[2].exiting = true;
+    kernel.retire_process(next.caller);
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+    assert!(kernel.namespaces.lookup(identity).is_ok());
+}
+
+#[test]
+fn copied_derivation_service_retirement_drains_snapshot_without_installing_child() {
+    let (mut kernel, mut sched, caps, identity) = setup();
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    let namespace = crate::mounted_namespace();
+    let mut service = Service::<2, 8, 1>::new();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    let source = kernel.capture_inheritance(identity).unwrap();
+    let mut child = setup().1.processes.remove(1);
+    child.pid = 20;
+    child.vfs_root_metadata = true;
+    let next = AdmissionIdentity {
+        caller: process_identity(&child),
+        ..identity
+    };
+    sched.processes.push(child);
+    kernel.queue_inheritance(source, next, "/").unwrap();
+    kernel.retire_registration(identity.registration);
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    assert!(kernel.namespaces.lookup(next).is_err());
+    assert_eq!(namespace.shared().lock().open_handle_count(), 0);
+    assert_eq!(
+        kernel
+            .remote
+            .iter()
+            .flatten()
+            .next()
+            .unwrap()
+            .ownership
+            .outstanding(),
+        0
+    );
+}
+
+#[test]
+fn service_replacement_cannot_reprovision_a_derived_caller_at_boot_root() {
+    let (mut kernel, mut sched, caps, identity) = setup();
+    sched.processes[1].vfs_root_metadata = true;
+    sched.processes[1].vfs_boot_root = true;
+    let namespace = crate::mounted_namespace();
+    let mut service = Service::<2, 8, 1>::new();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    let source = kernel.capture_inheritance(identity).unwrap();
+    let mut child = setup().1.processes.remove(1);
+    child.pid = 20;
+    child.vfs_root_metadata = true;
+    let next = AdmissionIdentity {
+        caller: process_identity(&child),
+        ..identity
+    };
+    assert!(!child.vfs_boot_root);
+    sched.processes.push(child);
+    kernel.queue_inheritance(source, next, "/").unwrap();
+    poll_inheritance(&mut kernel, &mut sched, &caps, &mut service, &namespace);
+    assert!(kernel.namespaces.lookup(next).is_ok());
+    kernel.retire_registration(identity.registration);
+    let replacement = kernel.register(identity.registration.owner).unwrap();
+    assert_ne!(replacement.epoch, identity.registration.epoch);
+    kernel.stage_selected_roots(replacement, &sched);
+    assert!(!kernel
+        .remote
+        .iter()
+        .flatten()
+        .filter(|r| r.registration == replacement)
+        .flat_map(|r| r.unsent.iter().flatten())
+        .any(|f| matches!(f,
+            Frame::Retain { scope, .. } if scope.caller == next.caller)));
+    assert!(kernel
+        .namespaces
+        .lookup(AdmissionIdentity {
+            registration: replacement,
+            ..next
+        })
+        .is_err());
+}
+
+#[test]
+fn file_owner_exit_survives_metadata_ack_and_closes_only_exact_lifetime() {
+    use sunlight_vfs_server::open::Access;
+    let (mut kernel, sched, caps, identity) = setup();
+    let reg = identity.registration;
+    let mut service = Service::<4, 4, 2>::new();
+    service.bind(reg).unwrap();
+    let namespace = crate::mounted_namespace();
+    {
+        let shared = namespace.shared();
+        let mut fs = shared.lock();
+        let h = fs
+            .create_file_exclusive("/data", identity.uid, identity.gid, 0o600)
+            .unwrap();
+        fs.write(h, 0, b"data").unwrap();
+        fs.close(h).unwrap();
+    }
+    kernel.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+    let retain = call(&mut kernel, &sched, &caps, 3, api::NEXT, reg.epoch, &[])
+        .unwrap()
+        .unwrap();
+    let Frame::Retain { scope, .. } = Frame::decode(&retain).unwrap() else {
+        panic!()
+    };
+    service.install(reg, scope, &namespace, "/", "/").unwrap();
+    let reply = service.request(reg, &retain).unwrap();
+    let Frame::Retained(receipt) = reply else {
+        panic!()
+    };
+    call(
+        &mut kernel,
+        &sched,
+        &caps,
+        3,
+        api::REPLY,
+        reg.epoch,
+        &reply.encode().unwrap(),
+    )
+    .unwrap();
+    let token = service
+        .open_file(
+            reg,
+            receipt,
+            "data",
+            sunlight_fs::Credential {
+                uid: identity.uid,
+                gid: identity.gid,
+            },
+            Access::ReadWrite,
+            || true,
+        )
+        .unwrap();
+    let duplicate = service.duplicate_file(reg, identity.caller, token).unwrap();
+
+    // Live credential/profile withdrawal delivers only the metadata barrier.
+    kernel.retire_caller_profile(identity.caller);
+    let event = call(&mut kernel, &sched, &caps, 3, api::NEXT, reg.epoch, &[])
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        Frame::decode(&event).unwrap(),
+        Frame::CallerRetired { .. }
+    ));
+    let ack = service
+        .control_request(reg, &event)
+        .unwrap()
+        .encode()
+        .unwrap();
+    call(&mut kernel, &sched, &caps, 3, api::REPLY, reg.epoch, &ack).unwrap();
+    assert_eq!(
+        service.read_file(reg, identity.caller, token, &mut [0; 1]),
+        Ok(1)
+    );
+    service.poll_control(&mut Channel {
+        kernel: &mut kernel,
+        sched: &sched,
+        caps: &caps,
+        lose_ack: false,
+        old_epoch: reg.epoch,
+        attempts: [0; 2],
+    });
+    assert_eq!(namespace.shared().lock().open_handle_count(), 1);
+    assert_eq!(kernel.next_control(reg), Ok(None));
+    // Metadata acknowledgement cannot discard the future exit obligation.
+    assert_eq!(
+        kernel.remote[0]
+            .as_ref()
+            .unwrap()
+            .callers
+            .iter()
+            .flatten()
+            .count(),
+        1
+    );
+    for caller in [
+        Caller {
+            pid: identity.caller.pid + 1,
+            ..identity.caller
+        },
+        Caller {
+            incarnation: identity.caller.incarnation + 1,
+            ..identity.caller
+        },
+        Caller {
+            address_space_generation: identity.caller.address_space_generation + 1,
+            ..identity.caller
+        },
+    ] {
+        kernel.retire_process(caller);
+        assert_eq!(kernel.next_control(reg), Ok(None));
+    }
+    kernel.retire_process(identity.caller); // Exit or successful exec's old VM.
+    kernel.retire_process(identity.caller);
+    let retirement = Frame::FileOwnerRetired {
+        registration: reg,
+        caller: identity.caller,
+        event_id: 1,
+    };
+    let retirement_ack = Frame::FileOwnerRetiredAck {
+        registration: reg,
+        caller: identity.caller,
+        event_id: 1,
+    }
+    .encode()
+    .unwrap();
+    assert!(call(
+        &mut kernel,
+        &sched,
+        &caps,
+        3,
+        api::REPLY,
+        reg.epoch,
+        &retirement_ack
+    )
+    .is_err());
+    for _ in 0..2 {
+        // Lost event copies retry exactly.
+        assert_eq!(kernel.next_control(reg), Ok(Some(retirement)));
+    }
+    for word in 2..10 {
+        // Exact registration, owner PID, incarnation and VM.
+        let mut wrong = retirement_ack;
+        wrong[word * 8] ^= 32;
+        assert!(call(&mut kernel, &sched, &caps, 3, api::REPLY, reg.epoch, &wrong).is_err());
+    }
+    let mut wrong_id = retirement_ack;
+    wrong_id[96] = 2;
+    assert!(call(
+        &mut kernel,
+        &sched,
+        &caps,
+        3,
+        api::REPLY,
+        reg.epoch,
+        &wrong_id
+    )
+    .is_err());
+    assert!(call(
+        &mut kernel,
+        &sched,
+        &caps,
+        10,
+        api::REPLY,
+        reg.epoch,
+        &retirement_ack
+    )
+    .is_err());
+    assert!(call(&mut kernel, &sched, &caps, 3, api::REPLY, reg.epoch, &ack).is_err());
+    for _ in 0..2 {
+        // Lost acknowledgements repeat idempotent service cleanup.
+        assert_eq!(
+            service
+                .control_request(reg, &retirement.encode().unwrap())
+                .unwrap()
+                .encode()
+                .unwrap(),
+            retirement_ack
+        );
+        assert_eq!(kernel.next_control(reg), Ok(Some(retirement)));
+    }
+    assert!(service.stat_file(reg, identity.caller, token).is_err());
+    assert!(service.stat_file(reg, identity.caller, duplicate).is_err());
+    assert_eq!(namespace.shared().lock().open_handle_count(), 0); // Metadata lease already released.
+    call(
+        &mut kernel,
+        &sched,
+        &caps,
+        3,
+        api::REPLY,
+        reg.epoch,
+        &retirement_ack,
+    )
+    .unwrap();
+    assert!(call(
+        &mut kernel,
+        &sched,
+        &caps,
+        3,
+        api::REPLY,
+        reg.epoch,
+        &retirement_ack
+    )
+    .is_err());
+    // Release delivery is separate and remains charged until acknowledged.
+    kernel.reconcile_namespaces();
+    service.poll_control(&mut Channel {
+        kernel: &mut kernel,
+        sched: &sched,
+        caps: &caps,
+        lose_ack: false,
+        old_epoch: reg.epoch,
+        attempts: [0; 2],
+    });
+    assert_eq!(namespace.shared().lock().open_handle_count(), 0);
 }

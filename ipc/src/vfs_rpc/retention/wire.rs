@@ -23,13 +23,25 @@ pub enum Refusal {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Frame {
-    /// Trusted copied-channel lifecycle barrier. Namespace words are reserved.
+    /// Metadata admission withdrawal, including live credential/profile changes.
+    /// Preserves open files. Namespace words are reserved.
     CallerRetired {
         registration: Registration,
         caller: Caller,
         event_id: u64,
     },
     CallerRetiredAck {
+        registration: Registration,
+        caller: Caller,
+        event_id: u64,
+    },
+    /// Exact process lifetime ended (exit/exec), distinct from metadata withdrawal.
+    FileOwnerRetired {
+        registration: Registration,
+        caller: Caller,
+        event_id: u64,
+    },
+    FileOwnerRetiredAck {
         registration: Registration,
         caller: Caller,
         event_id: u64,
@@ -60,11 +72,23 @@ impl Frame {
                 registration,
                 caller,
                 event_id,
+            }
+            | Self::FileOwnerRetired {
+                registration,
+                caller,
+                event_id,
+            }
+            | Self::FileOwnerRetiredAck {
+                registration,
+                caller,
+                event_id,
             } => (
-                if matches!(self, Self::CallerRetired { .. }) {
-                    6
-                } else {
-                    7
+                match self {
+                    Self::CallerRetired { .. } => 6,
+                    Self::CallerRetiredAck { .. } => 7,
+                    Self::FileOwnerRetired { .. } => 8,
+                    Self::FileOwnerRetiredAck { .. } => 9,
+                    _ => unreachable!(),
                 },
                 registration,
                 Scope {
@@ -123,7 +147,7 @@ impl Frame {
         if w[0] != VERSION {
             return Err(ProtocolError::Version);
         }
-        if !(1..=7).contains(&w[1]) {
+        if !(1..=9).contains(&w[1]) {
             return Err(ProtocolError::Operation);
         }
         // Endpoint zero is valid. Identity and correlation words are nonzero;
@@ -170,6 +194,16 @@ impl Frame {
                 event_id: w[12],
             },
             7 => Self::CallerRetiredAck {
+                registration,
+                caller: scope.caller,
+                event_id: w[12],
+            },
+            8 => Self::FileOwnerRetired {
+                registration,
+                caller: scope.caller,
+                event_id: w[12],
+            },
+            9 => Self::FileOwnerRetiredAck {
                 registration,
                 caller: scope.caller,
                 event_id: w[12],
@@ -326,6 +360,16 @@ mod tests {
                 event_id: 1,
             },
             Frame::CallerRetiredAck {
+                registration: p.registration,
+                caller: p.scope.caller,
+                event_id: 1,
+            },
+            Frame::FileOwnerRetired {
+                registration: p.registration,
+                caller: p.scope.caller,
+                event_id: 1,
+            },
+            Frame::FileOwnerRetiredAck {
                 registration: p.registration,
                 caller: p.scope.caller,
                 event_id: 1,

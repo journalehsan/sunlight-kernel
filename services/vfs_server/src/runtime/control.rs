@@ -8,6 +8,45 @@ use sunlight_ipc::vfs_rpc::{
 /// Implementations must obtain identity/lifecycle evidence independently of
 /// request payloads. Ordinary IPC must never implement this trusted interface.
 pub trait Control {
+    fn derive_source(
+        &mut self,
+        _epoch: u64,
+        _bytes: &[u8; FRAME_BYTES],
+    ) -> Option<sunlight_ipc::vfs_rpc::retention::Receipt> {
+        None
+    }
+    fn chdir(
+        &mut self,
+        _epoch: u64,
+        _bytes: &[u8; FRAME_BYTES],
+    ) -> Option<[u8; sunlight_ipc::vfs_rpc::chdir_transport::CONTEXT_BYTES]> {
+        None
+    }
+    fn finish_chdir(
+        &mut self,
+        _epoch: u64,
+        _reply: &[u8; FRAME_BYTES],
+        _errno: u64,
+        _cwd: &str,
+    ) -> bool {
+        false
+    }
+    /// Pull the oldest copied file request for one independently authenticated
+    /// registration. Repeating the call returns the same request until its
+    /// exact reply is accepted, which lets the service revalidate publication.
+    fn file_next(
+        &mut self,
+        _epoch: u64,
+    ) -> Result<Option<[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES]>, ()> {
+        Err(())
+    }
+    fn file_reply(
+        &mut self,
+        _epoch: u64,
+        _bytes: &[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES],
+    ) -> bool {
+        false
+    }
     fn snapshot(&mut self) -> Option<Registration>;
     fn status(&mut self, epoch: u64) -> Result<(Registration, bool), ()>;
     fn next(&mut self, epoch: u64) -> Result<Option<[u8; FRAME_BYTES]>, ()>;
@@ -28,6 +67,43 @@ pub trait Control {
 
 pub struct CopiedControl;
 impl Control for CopiedControl {
+    fn derive_source(
+        &mut self,
+        epoch: u64,
+        bytes: &[u8; FRAME_BYTES],
+    ) -> Option<sunlight_ipc::vfs_rpc::retention::Receipt> {
+        transport::derive_source(epoch, bytes)
+    }
+    fn chdir(
+        &mut self,
+        epoch: u64,
+        bytes: &[u8; FRAME_BYTES],
+    ) -> Option<[u8; sunlight_ipc::vfs_rpc::chdir_transport::CONTEXT_BYTES]> {
+        sunlight_ipc::vfs_rpc::chdir_transport::context(epoch, bytes)
+    }
+    fn finish_chdir(
+        &mut self,
+        epoch: u64,
+        reply: &[u8; FRAME_BYTES],
+        errno: u64,
+        cwd: &str,
+    ) -> bool {
+        sunlight_ipc::vfs_rpc::chdir_transport::finish(epoch, reply, errno, cwd)
+    }
+    fn file_next(
+        &mut self,
+        epoch: u64,
+    ) -> Result<Option<[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES]>, ()> {
+        sunlight_ipc::vfs_rpc::file_transport::next(epoch)
+    }
+    fn file_reply(
+        &mut self,
+        epoch: u64,
+        bytes: &[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES],
+    ) -> bool {
+        sunlight_ipc::vfs_rpc::file_transport::reply(epoch, bytes)
+    }
+
     fn initial_cwd(
         &mut self,
         epoch: u64,
@@ -92,6 +168,12 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
                 let Ok(Some(bytes)) = control.next(registration.epoch) else {
                     break;
                 };
+                if let Some(context) = control.chdir(registration.epoch, &bytes) {
+                    if !self.chdir_control(control, registration, &bytes, &context) {
+                        break;
+                    }
+                    continue;
+                }
                 let result = if let Some(namespace) = namespace {
                     self.root_control_request(control, registration, namespace, &bytes)
                 } else {
@@ -107,7 +189,129 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
                     break;
                 }
             }
+            for _ in 0..8 {
+                let Ok(Some(bytes)) = control.file_next(registration.epoch) else {
+                    break;
+                };
+                let Some(reply) = self.file_request(control, registration, &bytes) else {
+                    break;
+                };
+                if !control.file_reply(registration.epoch, &reply) {
+                    break;
+                }
+            }
         }
+    }
+
+    fn chdir_control(
+        &mut self,
+        control: &mut impl Control,
+        authenticated: Registration,
+        bytes: &[u8; FRAME_BYTES],
+        context: &[u8; sunlight_ipc::vfs_rpc::chdir_transport::CONTEXT_BYTES],
+    ) -> bool {
+        use super::wire::Frame;
+        use crate::policy::Error;
+        use sunlight_fs::FsError;
+        let Ok(Frame::Retain {
+            registration,
+            scope,
+            ..
+        }) = Frame::decode(bytes)
+        else {
+            return false;
+        };
+        if registration != authenticated {
+            return false;
+        }
+        let Ok(c) = sunlight_ipc::vfs_rpc::chdir_transport::decode_context(context) else {
+            return false;
+        };
+        // Revalidation is independent of the retain payload and happens before
+        // publication. The finish syscall rechecks lifecycle at kernel commit.
+        let mut saved = self
+            .policy_mut(authenticated)
+            .and_then(|p| p.save_directory(c.old))
+            .ok();
+        let change = match c.kind {
+            sunlight_ipc::vfs_rpc::chdir_transport::Kind::Directory => Self::change_directory,
+            sunlight_ipc::vfs_rpc::chdir_transport::Kind::Root => Self::change_root,
+        };
+        let changed = change(
+            self,
+            authenticated,
+            c.old,
+            scope,
+            c.path,
+            sunlight_fs::Credential {
+                uid: c.uid,
+                gid: c.gid,
+            },
+            || control.chdir(authenticated.epoch, bytes).as_ref() == Some(context),
+        );
+        let errno_for = |error: &Error| match error {
+            Error::Filesystem(FsError::NotFound) => 2,
+            Error::Filesystem(FsError::NotDir) => 20,
+            Error::Filesystem(FsError::PermissionDenied | FsError::OperationNotPermitted) => 13,
+            Error::Filesystem(FsError::InvalidPath) => 22,
+            Error::Filesystem(FsError::NoMemory) => 12,
+            Error::Filesystem(FsError::Unsupported) => 95,
+            _ => 5,
+        };
+        let mut errno = changed.as_ref().err().map_or(0, errno_for);
+        let prepared = if changed.is_ok() {
+            self.policy_mut(authenticated)
+                .and_then(|p| p.cwd(scope))
+                .and_then(|cwd| self.request(authenticated, bytes).map(|reply| (reply, cwd)))
+        } else {
+            self.policy_mut(authenticated)
+                .and_then(|p| p.refuse(authenticated, bytes))
+                .map(|reply| (reply, alloc::string::String::from("/")))
+        };
+        let (reply, cwd) = match prepared {
+            Ok((reply, cwd)) => {
+                if changed.is_ok() && !matches!(reply, Frame::Retained(_)) {
+                    if let Some(saved) = saved.take() {
+                        self.policy_mut(authenticated)
+                            .unwrap()
+                            .restore_directory(scope, saved);
+                    }
+                    errno = 12;
+                }
+                (reply, cwd)
+            }
+            Err(error) if changed.is_ok() => {
+                // Failure obtaining a representable getcwd result must leave
+                // the old policy intact. Refusal owns replay accounting.
+                if let Some(saved) = saved.take() {
+                    self.policy_mut(authenticated)
+                        .unwrap()
+                        .restore_directory(scope, saved);
+                }
+                errno = errno_for(&error);
+                let Ok(reply) = self
+                    .policy_mut(authenticated)
+                    .and_then(|p| p.refuse(authenticated, bytes))
+                else {
+                    return false;
+                };
+                (reply, alloc::string::String::from("/"))
+            }
+            Err(_) => return false,
+        };
+        let Ok(encoded) = reply.encode() else {
+            return false;
+        };
+        let retained = matches!(reply, Frame::Retained(_));
+        let accepted = control.finish_chdir(authenticated.epoch, &encoded, errno, &cwd);
+        if !accepted || !retained {
+            let _ = self.withdraw(authenticated, scope);
+            if let Frame::Retained(receipt) = reply {
+                // A rejected commit cannot leak the provisional remote lease.
+                let _ = self.request(authenticated, &Frame::Release(receipt).encode().unwrap());
+            }
+        }
+        accepted
     }
 
     fn root_control_request(
@@ -127,6 +331,21 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
         {
             if registration != authenticated {
                 return Err(Error::Identity);
+            }
+            if let Some(source) = control.derive_source(authenticated.epoch, bytes) {
+                let installed =
+                    self.policy_mut(authenticated)?
+                        .derive_retained_caller(source, scope, || {
+                            control.derive_source(authenticated.epoch, bytes) == Some(source)
+                        });
+                if installed.is_err() {
+                    return self.policy_mut(authenticated)?.refuse(authenticated, bytes);
+                }
+                let result = self.request(authenticated, bytes);
+                if !matches!(result, Ok(Frame::Retained(_))) {
+                    self.withdraw(authenticated, scope)?;
+                }
+                return result;
             }
             let Some(profile) = control.initial_cwd(authenticated.epoch, bytes) else {
                 return self.policy_mut(authenticated)?.refuse(authenticated, bytes);
@@ -165,17 +384,31 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
         bytes: &[u8],
     ) -> Result<super::wire::Frame, crate::policy::Error> {
         use super::wire::Frame;
+        let frame = Frame::decode(bytes).map_err(crate::policy::Error::Protocol)?;
         if let Frame::CallerRetired {
             registration,
             caller,
             event_id,
-        } = Frame::decode(bytes).map_err(crate::policy::Error::Protocol)?
+        }
+        | Frame::FileOwnerRetired {
+            registration,
+            caller,
+            event_id,
+        } = frame
         {
             if registration != authenticated {
                 return Err(crate::policy::Error::Identity);
             }
             self.policy_mut(authenticated)?;
             self.retire_caller(caller);
+            if matches!(frame, Frame::FileOwnerRetired { .. }) {
+                self.retire_file_owner(caller);
+                return Ok(Frame::FileOwnerRetiredAck {
+                    registration,
+                    caller,
+                    event_id,
+                });
+            }
             return Ok(Frame::CallerRetiredAck {
                 registration,
                 caller,

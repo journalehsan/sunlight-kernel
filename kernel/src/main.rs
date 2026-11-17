@@ -900,6 +900,7 @@ pub extern "C" fn _start() -> ! {
             // Explicit image-scoped migration pilot: root and cwd are the
             // service-mounted `/`, with metadata lookup authority only.
             init.vfs_root_metadata = true;
+            init.vfs_boot_root = true;
             init.vfs_stat_routed = true;
             init.set_initial_args(capability::SPAWN_TOKEN.0, 0, 0, 0);
             // Release PMM before taking the scheduler lock. Every other path in

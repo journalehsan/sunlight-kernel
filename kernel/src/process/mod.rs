@@ -251,12 +251,19 @@ pub struct Process {
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
     pub trusted_vfs_service: bool,
-    /// Boot-selected metadata profile for the service-mounted root and cwd `/`.
-    /// Withdrawable admission authority. Never inherited by children.
+    /// Withdrawable metadata admission, selected by boot provenance or an
+    /// authenticated retained-object spawn/exec handoff.
     pub vfs_root_metadata: bool,
+    /// Boot provenance for initial `/` provisioning. Derived profiles never
+    /// acquire this role, so service replacement cannot widen their roots.
+    pub vfs_boot_root: bool,
     /// Sticky native StatPath routing choice. Withdrawal and exec must not
-    /// restore kernel traversal. New children start unselected.
+    /// restore kernel traversal. Selected parents pass this choice to children.
     pub vfs_stat_routed: bool,
+    /// Sticky native regular-file routing choice for explicitly selected
+    /// callers. Descriptor inheritance and close-on-exec transfer are not yet
+    /// implemented, so this stays off until a caller is proven to survive it.
+    pub vfs_file_routed: bool,
     /// Kernel-provenance service identity key (`name_to_u64` of the registered
     /// service name), or 0 for user/unknown processes. Supplied to trusted
     /// brokers (e.g. sunlight-kv) so callers can be classified as
@@ -615,7 +622,9 @@ impl Process {
             trusted_auth_broker: false,
             trusted_vfs_service: false,
             vfs_root_metadata: false,
+            vfs_boot_root: false,
             vfs_stat_routed: false,
+            vfs_file_routed: false,
             service_identity: 0,
             service_lookup_restrictions: None,
             mmap_next: 0,
@@ -859,7 +868,9 @@ impl Process {
             trusted_auth_broker: false,
             trusted_vfs_service: false,
             vfs_root_metadata: false,
+            vfs_boot_root: false,
             vfs_stat_routed: false,
+            vfs_file_routed: false,
             service_identity: 0,
             service_lookup_restrictions: None,
             mmap_next: 0,

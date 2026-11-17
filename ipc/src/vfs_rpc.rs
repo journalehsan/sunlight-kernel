@@ -24,6 +24,9 @@ pub mod pending_table;
 pub mod registration;
 #[path = "vfs_rpc/stat_transport.rs"]
 pub mod stat_transport;
+pub mod chdir_transport;
+#[path = "vfs_rpc/file_transport.rs"]
+pub mod file_transport;
 #[path = "vfs_rpc/response.rs"]
 pub mod response;
 #[path = "vfs_rpc/retention.rs"]

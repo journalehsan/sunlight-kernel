@@ -5,5 +5,6 @@ extern crate alloc;
 
 pub mod directory;
 pub mod namespace;
+pub mod open;
 pub mod policy;
 pub mod runtime;

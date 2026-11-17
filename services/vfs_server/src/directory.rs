@@ -97,6 +97,21 @@ impl DirectoryNamespace {
 }
 
 impl DirectoryPair {
+    pub fn cwd(&self) -> Result<alloc::string::String, FsError> {
+        let mut bytes = [0; 4096];
+        let len = match &self.filesystem {
+            Backend::Mounted(fs) => fs
+                .lock()
+                .cwd_beneath(self.root, self.directory, &mut bytes)?,
+            Backend::Isolated(_) => return Err(FsError::Unsupported),
+        };
+        let text = core::str::from_utf8(&bytes[..len]).map_err(|_| FsError::InvalidPath)?;
+        let mut cwd = alloc::string::String::new();
+        cwd.try_reserve_exact(len).map_err(|_| FsError::NoMemory)?;
+        cwd.push_str(text);
+        Ok(cwd)
+    }
+
     /// Prepare a replacement from retained objects, with caller search checks.
     /// Existing pairs and leases keep their own handles until explicitly dropped.
     pub fn change_directory(
@@ -118,6 +133,27 @@ impl DirectoryPair {
         })
     }
 
+    /// Trusted root-policy narrowing. Reset cwd to the new root so no retained
+    /// relative anchor can reach the old namespace outside that root.
+    pub fn change_root(
+        &self,
+        path: &str,
+        caller: sunlight_fs::Credential,
+    ) -> Result<Self, FsError> {
+        let (root, directory) = match &self.filesystem {
+            Backend::Mounted(fs) => {
+                fs.lock()
+                    .pin_root_beneath(self.root, self.directory, path, caller)?
+            }
+            Backend::Isolated(_) => return Err(FsError::Unsupported),
+        };
+        Ok(Self {
+            filesystem: self.filesystem.clone(),
+            root,
+            directory,
+        })
+    }
+
     /// Traverse under the same mounted namespace lock used by mutation and pin
     /// lifetime. Isolated retention fixtures do not supply a mount identity.
     pub fn stat(
@@ -129,6 +165,29 @@ impl DirectoryPair {
             Backend::Mounted(fs) => fs
                 .lock()
                 .stat_beneath(self.root, self.directory, path, caller),
+            Backend::Isolated(_) => Err(FsError::Unsupported),
+        }
+    }
+
+    pub(crate) fn open_file(
+        &self,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        read: bool,
+        write: bool,
+    ) -> Result<crate::open::File, FsError> {
+        match &self.filesystem {
+            Backend::Mounted(fs) => {
+                let handle = fs.lock().open_file_beneath(
+                    self.root,
+                    self.directory,
+                    path,
+                    caller,
+                    read,
+                    write,
+                )?;
+                Ok(crate::open::File::new(Arc::clone(fs), handle))
+            }
             Backend::Isolated(_) => Err(FsError::Unsupported),
         }
     }

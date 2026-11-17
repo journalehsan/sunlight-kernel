@@ -33,6 +33,8 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             pid: 10,
             trusted_vfs_service: false,
             vfs_root_metadata: false,
+            vfs_boot_root: false,
+            vfs_file_routed: false,
             cwd: alloc::string::String::from("/"),
             exiting: false,
             uid: 1000,
@@ -227,6 +229,48 @@ fn successful_metadata_is_owned_until_exact_caller_takes_result() {
     // Taking the result frees the continuation slot for a later call.
     sched.processes[0].state = ProcessState::Running;
     assert!(runtime.publish_stat(identity, "/", &mut sched).is_ok());
+}
+
+#[test]
+fn server_stat_preserves_inbound_reply_obligation_through_resume() {
+    let _guard = super::super::super::vfs_resources::TEST_LEDGER_LOCK.lock();
+    let (mut runtime, mut sched, identity) = setup();
+    sched.processes[0].ipc_reply_target = Some(());
+    let id = runtime
+        .publish_stat(identity, "/bin/sunlight-files", &mut sched)
+        .unwrap()
+        .words()[1];
+    assert_eq!(sched.processes[0].state, ProcessState::BlockedOnIpc);
+    assert!(sched.processes[0].ipc_reply_target.is_some());
+    runtime
+        .take_stat(identity.registration, &mut [0; 8192])
+        .unwrap()
+        .unwrap();
+    runtime
+        .complete_stat(identity.registration, reply(id))
+        .unwrap();
+    runtime.wake_stat_callers(&mut sched);
+    assert_eq!(sched.processes[0].state, ProcessState::Ready);
+    assert!(runtime.reap_stat(identity.caller, id).is_some());
+    assert!(sched.processes[0].ipc_reply_target.is_some());
+}
+
+#[test]
+fn server_stat_withdrawal_wakes_without_consuming_client_reply() {
+    let _guard = super::super::super::vfs_resources::TEST_LEDGER_LOCK.lock();
+    let (mut runtime, mut sched, identity) = setup();
+    sched.processes[0].vfs_root_metadata = true;
+    sched.processes[0].ipc_reply_target = Some(());
+    let id = runtime
+        .publish_stat(identity, "/bin/sunlight-tasks", &mut sched)
+        .unwrap()
+        .words()[1];
+    runtime.withdraw_root_profile(0, &mut sched);
+    assert_eq!(sched.processes[0].state, ProcessState::Ready);
+    assert!(sched.processes[0].ipc_reply_target.is_some());
+    assert!(!sched.processes[0].vfs_root_metadata);
+    assert!(runtime.publications.iter().all(Option::is_none));
+    drop(runtime.pending.reap(id).unwrap());
 }
 
 #[test]
@@ -441,6 +485,7 @@ fn profile_withdrawal_discards_each_publication_phase_and_wakes_only_its_continu
             for nested in [false, true] {
                 let (mut runtime, mut sched, identity) = setup();
                 sched.processes[0].vfs_root_metadata = true;
+                sched.processes[0].vfs_boot_root = true;
                 let id = runtime
                     .publish_stat(identity, "/probe", &mut sched)
                     .unwrap()

@@ -64,6 +64,33 @@ impl<D: BlockDevice> Vfs<D> {
             .map(|(_, metadata)| metadata)
     }
 
+    /// Open an existing regular file under retained anchors. Search, access
+    /// checks and handle acquisition share this exclusive borrow. The returned
+    /// handle owns the inode independently of subsequent unlink or rename.
+    pub fn open_file_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+        read: bool,
+        write: bool,
+    ) -> Result<FileHandle, FsError> {
+        if !read && !write {
+            return Err(FsError::InvalidPath);
+        }
+        let (resolved, metadata) = self.resolve_beneath(root, cwd, path, caller)?;
+        if metadata.stat.file_type != FileType::File {
+            return Err(FsError::IsDir);
+        }
+        if (read && !check_permission(&metadata.stat, &caller, PermCheck::Read))
+            || (write && !check_permission(&metadata.stat, &caller, PermCheck::Write))
+        {
+            return Err(FsError::PermissionDenied);
+        }
+        self.open(resolved.as_str())
+    }
+
     /// Acquire an independently owned root/cwd pair for a cwd transition.
     /// Traversal, final search permission, and both opens share one exclusive
     /// VFS borrow. Failure closes any provisional handle; old anchors stay live.
@@ -74,6 +101,57 @@ impl<D: BlockDevice> Vfs<D> {
         path: &str,
         caller: Credential,
     ) -> Result<(FileHandle, FileHandle), FsError> {
+        self.pin_pair_beneath(root, cwd, path, caller, false)
+    }
+
+    /// Narrow the retained root to a searched directory and reset cwd to it.
+    /// Both returned handles are independently owned; the previous cwd cannot
+    /// survive outside the new confinement boundary.
+    pub fn pin_root_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+    ) -> Result<(FileHandle, FileHandle), FsError> {
+        self.pin_pair_beneath(root, cwd, path, caller, true)
+    }
+
+    /// Recover cwd relative to the retained root, authenticating both anchors
+    /// under the same borrow as the containment check.
+    pub fn cwd_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        output: &mut [u8],
+    ) -> Result<usize, FsError> {
+        let root = self.lookup_anchor(root)?;
+        let cwd = self.lookup_anchor(cwd)?;
+        if !beneath(root.as_str(), cwd.as_str()) {
+            return Err(FsError::PermissionDenied);
+        }
+        let relative = if root.as_str() == cwd.as_str() {
+            "/"
+        } else if root.as_str() == "/" {
+            cwd.as_str()
+        } else {
+            &cwd.as_str()[root.len..]
+        };
+        if output.len() < relative.len() {
+            return Err(FsError::InvalidPath);
+        }
+        output[..relative.len()].copy_from_slice(relative.as_bytes());
+        Ok(relative.len())
+    }
+
+    fn pin_pair_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+        replace_root: bool,
+    ) -> Result<(FileHandle, FileHandle), FsError> {
         let (resolved, metadata) = self.resolve_beneath(root, cwd, path, caller)?;
         if metadata.stat.file_type != FileType::Directory {
             return Err(FsError::NotDir);
@@ -81,7 +159,11 @@ impl<D: BlockDevice> Vfs<D> {
         if !check_permission(&metadata.stat, &caller, PermCheck::Execute) {
             return Err(FsError::PermissionDenied);
         }
-        let root_path = self.lookup_anchor(root)?;
+        let root_path = if replace_root {
+            resolved.clone()
+        } else {
+            self.lookup_anchor(root)?
+        };
         let new_root = self.open(root_path.as_str())?;
         match self.open(resolved.as_str()) {
             Ok(directory) => Ok((new_root, directory)),

@@ -4,7 +4,8 @@ use super::*;
 use sunlight_ipc::vfs_rpc::retention::{transport as api, wire::FRAME_BYTES};
 
 impl Runtime {
-    /// Production selection comes solely from boot image provenance. Called
+    /// Initial root selection comes solely from boot image provenance. Derived
+    /// callers already have a staged attempt and must never enter this route. Called
     /// under scheduler -> broker -> runtime serialization, before NEXT can
     /// expose work. Caller delivery records retain the one-attempt decision
     /// after refusal as well as success, preventing a failing service from
@@ -14,7 +15,7 @@ impl Runtime {
             return;
         }
         for (idx, process) in sched.processes.iter().enumerate() {
-            if !process.vfs_root_metadata || process.is_exiting() {
+            if !process.vfs_root_metadata || !process.vfs_boot_root || process.is_exiting() {
                 continue;
             }
             let caller = process_identity(process);
@@ -60,6 +61,15 @@ impl Runtime {
         identity: AdmissionIdentity,
         grants: u64,
     ) -> Result<(), NamespaceRetentionError> {
+        self.queue_namespace_inner(identity, grants, None)
+    }
+
+    pub(super) fn queue_namespace_inner(
+        &mut self,
+        identity: AdmissionIdentity,
+        grants: u64,
+        previous: Option<Scope>,
+    ) -> Result<(), NamespaceRetentionError> {
         let index = self
             .remote
             .iter()
@@ -75,7 +85,7 @@ impl Runtime {
             .iter()
             .position(Option::is_none)
             .ok_or(NamespaceRetentionError::Ownership(OwnershipError::Capacity))?;
-        let frame = self.prepare_namespace(identity, grants)?;
+        let frame = self.prepare_namespace_inner(identity, grants, previous)?;
         self.remote[index].as_mut().unwrap().unsent[slot] = Some(frame);
         Ok(())
     }
@@ -155,7 +165,7 @@ impl Runtime {
             .find(|r| r.registration == registration && !r.retired)
             .ok_or(IpcError::InvalidCapability)?;
         if remote.delivered != Some(request_id)
-            || remote.callers.iter().flatten().any(|c| c.retired)
+            || remote.callers.iter().flatten().any(CallerDelivery::pending)
         {
             return Err(IpcError::InvalidCapability);
         }
@@ -179,6 +189,7 @@ impl Runtime {
             process_identity(p) == identity.caller
                 && !p.is_exiting()
                 && p.vfs_root_metadata
+                && p.vfs_boot_root
                 && p.uid == identity.uid
                 && p.gid == identity.gid
                 && sched.processes[sched.shared_process_index(idx)].cwd == *directory
@@ -192,8 +203,12 @@ impl Runtime {
         &mut self,
         registration: Registration,
     ) -> Result<Option<Frame>, IpcError> {
-        let remote = self
-            .remote
+        let Runtime {
+            remote,
+            file_publications,
+            ..
+        } = self;
+        let remote = remote
             .iter_mut()
             .flatten()
             .find(|r| r.registration == registration)
@@ -205,11 +220,37 @@ impl Runtime {
             .callers
             .iter_mut()
             .flatten()
-            .filter(|c| c.retired)
+            .filter(|c| c.retired && !c.metadata_acked)
             .min_by_key(|c| c.id)
         {
             caller.delivered = true;
             return Ok(Some(Frame::CallerRetired {
+                registration,
+                caller: caller.caller,
+                event_id: caller.id,
+            }));
+        }
+        // File lifetime delivery survives metadata acknowledgement. It uses a
+        // distinct opcode/ack so credential withdrawal cannot close files.
+        // Surviving non-CLOEXEC descriptors must be rekeyed first: the barrier
+        // waits for both the publication gap and every pending transfer reply.
+        let transfer_pending = |caller| {
+            file_publications.iter().flatten().any(|publication| {
+                publication.op == sunlight_ipc::vfs_rpc::file_transport::TRANSFER
+                    && publication.identity.caller == caller
+                    && !publication.replied
+            })
+        };
+        if let Some(caller) = remote
+            .callers
+            .iter_mut()
+            .flatten()
+            .filter(|c| c.file_retired && !c.file_transfer_pending)
+            .filter(|c| !transfer_pending(c.caller))
+            .min_by_key(|c| c.id)
+        {
+            caller.file_delivered = true;
+            return Ok(Some(Frame::FileOwnerRetired {
                 registration,
                 caller: caller.caller,
                 event_id: caller.id,
@@ -251,8 +292,14 @@ impl Runtime {
             registration,
             caller,
             event_id,
+        }
+        | Frame::FileOwnerRetiredAck {
+            registration,
+            caller,
+            event_id,
         } = decoded
         {
+            let file_ack = matches!(decoded, Frame::FileOwnerRetiredAck { .. });
             if registration != authenticated {
                 return Err(IpcError::InvalidCapability);
             }
@@ -267,11 +314,22 @@ impl Runtime {
                 .iter()
                 .position(|c| {
                     c.as_ref().is_some_and(|c| {
-                        c.retired && c.delivered && c.caller == caller && c.id == event_id
+                        c.caller == caller
+                            && c.id == event_id
+                            && if file_ack {
+                                c.file_retired && c.file_delivered && c.metadata_acked
+                            } else {
+                                c.retired && c.delivered && !c.metadata_acked
+                            }
                     })
                 })
                 .ok_or(IpcError::InvalidCapability)?;
-            remote.callers[slot] = None;
+            if file_ack {
+                remote.callers[slot] = None;
+            } else {
+                // Keep the lifetime reservation until independent exit/exec.
+                remote.callers[slot].as_mut().unwrap().metadata_acked = true;
+            }
             self.collect_remote();
             return Ok(());
         }
@@ -296,7 +354,11 @@ impl Runtime {
             .flatten()
             .find(|r| r.registration == authenticated)
             .ok_or(IpcError::InvalidCapability)?;
-        if remote.delivered != Some(id) {
+        if remote.delivered != Some(id)
+            || self.chdirs.iter().flatten().any(|c| {
+                c.id == id && c.identity.registration == authenticated && c.result.is_none()
+            })
+        {
             return Err(IpcError::InvalidCapability);
         }
         let live = remote
@@ -317,10 +379,10 @@ impl Runtime {
                 sched.processes.iter().enumerate().any(|(idx, p)| {
                     process_identity(p) == identity.caller
                         && !p.is_exiting()
-                        && (!*root_policy || p.vfs_root_metadata)
+                        && (!*root_policy || (p.vfs_root_metadata && p.vfs_boot_root))
                         && p.uid == identity.uid
                         && p.gid == identity.gid
-                        && (!*root_policy
+                        && (directory.is_none()
                             || *directory
                                 == Some(
                                     sched.processes[sched.shared_process_index(idx)]
@@ -330,6 +392,34 @@ impl Runtime {
                 })
             })
             .map(|(identity, _, _)| identity);
+        let live = if remote.local.iter().flatten().any(|l| {
+            matches!(l,
+            LocalLease::Preparing { id: pending, derivation: Some(_), .. } if *pending == id)
+        }) {
+            let request = remote
+                .local
+                .iter()
+                .flatten()
+                .find_map(|l| match l {
+                    LocalLease::Preparing {
+                        id: pending, scope, ..
+                    } if *pending == id => Some(Frame::Retain {
+                        registration: authenticated,
+                        scope: *scope,
+                        request_id: id,
+                    }),
+                    _ => None,
+                })
+                .unwrap()
+                .encode()
+                .unwrap();
+            live.filter(|_| {
+                self.authorize_derivation(authenticated, &request, sched)
+                    .is_ok()
+            })
+        } else {
+            live
+        };
         let result = match decoded {
             Frame::Retained(_) => self
                 .install_retained(authenticated, id, bytes, live)
@@ -372,6 +462,9 @@ impl Runtime {
                 remote.delivered = None;
             }
         }
+        // Settling a derivation drops its source reference; publish any newly
+        // drained source lease release before the next service pull.
+        self.reconcile_namespaces();
         result.map_err(|_| IpcError::InvalidCapability)
     }
 }
@@ -408,6 +501,40 @@ pub(super) fn authenticate(
         return Err(IpcError::InvalidCapability);
     }
     Ok(registration)
+}
+
+/// Copied file-channel pull/reply. The service authenticates through the same
+/// independently captured registration as the retention channel. The buffer is
+/// copied to and from user memory by the syscall before reaching this point.
+pub(crate) enum FileControl {
+    Empty,
+    Filled,
+    Acked,
+}
+
+pub(crate) fn file_control(
+    pid: usize,
+    operation: u64,
+    epoch: u64,
+    bytes: &mut [u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES],
+    sched: &mut Scheduler,
+    caps: &CapabilityBroker,
+) -> Result<FileControl, IpcError> {
+    use sunlight_ipc::vfs_rpc::file_transport as file;
+    let mut runtime = RUNTIME.lock();
+    let registration = authenticate(&mut runtime, pid, epoch, sched, caps)?;
+    match operation {
+        file::NEXT => match runtime.next_file(registration, bytes) {
+            Ok(Some(_)) => Ok(FileControl::Filled),
+            Ok(None) => Ok(FileControl::Empty),
+            Err(_) => Err(IpcError::InvalidCapability),
+        },
+        file::REPLY => runtime
+            .reply_file(registration, bytes, sched)
+            .map(|_| FileControl::Acked)
+            .map_err(|_| IpcError::InvalidCapability),
+        _ => Err(IpcError::InvalidCapability),
+    }
 }
 
 /// Hold scheduler -> broker throughout. The PID comes from syscall entry.
@@ -483,6 +610,12 @@ fn control_runtime(
             .next_control(registration)?
             .map(|f| f.encode().map_err(|_| IpcError::InvalidCapability))
             .transpose(),
+        api::DERIVE_SOURCE => {
+            Frame::Retained(runtime.authorize_derivation(registration, input, sched)?)
+                .encode()
+                .map(Some)
+                .map_err(|_| IpcError::InvalidCapability)
+        }
         api::AUTHORIZE_ROOT => {
             if runtime.authorize_root(registration, input, sched)? != "/" {
                 return Err(IpcError::InvalidCapability);

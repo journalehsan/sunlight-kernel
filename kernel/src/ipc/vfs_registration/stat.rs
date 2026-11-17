@@ -78,7 +78,6 @@ impl Runtime {
         let process = &sched.processes[idx];
         if process.state != ProcessState::Running
             || process.pending_call.is_some()
-            || process.ipc_reply_target.is_some()
             || self
                 .publications
                 .iter()
@@ -200,12 +199,11 @@ impl Runtime {
                 .iter()
                 .position(|p| process_identity(p) == publication.identity.caller && !p.is_exiting())
             {
-                // A signal handler can issue a nested IPC call. Its continuation
-                // owns the blocked state until that IPC completes; stat must not
-                // wake or consume another operation's continuation.
-                if sched.processes[idx].pending_call.is_some()
-                    || sched.processes[idx].ipc_reply_target.is_some()
-                {
+                // An outbound call owns its own blocked continuation. An
+                // inbound reply target only records a server's obligation to
+                // its client; stat may run while servicing that request and
+                // must leave the reply target intact.
+                if sched.processes[idx].pending_call.is_some() {
                     continue;
                 }
                 if sched.processes[idx].state == ProcessState::BlockedOnIpc {
@@ -277,6 +275,7 @@ pub(super) fn wake_stat_callers(sched: &mut Scheduler, now_tick: u64) {
     let mut runtime = RUNTIME.lock();
     runtime.expire_stats(now_tick);
     runtime.wake_stat_callers(sched);
+    runtime.poll_chdirs(sched, now_tick);
 }
 
 #[cfg(test)]
@@ -334,12 +333,13 @@ pub(crate) fn stat_call(
         .iter()
         .position(|p| p.pid == pid && !p.is_exiting() && p.vfs_root_metadata)
         .ok_or(Error::Identity)?;
-    if sched.processes[idx].pending_call.is_some()
-        || sched.processes[idx].ipc_reply_target.is_some()
-    {
+    if sched.processes[idx].pending_call.is_some() {
         return Err(Error::Busy);
     }
     let caller = process_identity(&sched.processes[idx]);
+    if RUNTIME.lock().chdir_busy(idx, sched) {
+        return Err(Error::Busy);
+    }
     {
         let mut runtime = RUNTIME.lock();
         runtime.expire_stats(sched.global_tick);

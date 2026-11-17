@@ -201,6 +201,24 @@ impl FileHandle {
     pub fn unix_socket_index(self) -> u32 {
         self.0 & 0x00FF_FFFF
     }
+
+    /// Descriptor backed by a service-owned description. The index names a
+    /// kernel table row holding the opaque service token; the token alone never
+    /// grants authority, and no backend handle number is exposed to userspace.
+    const SERVICE_FLAG: u32 = 0x0040_0000;
+    const SERVICE_INDEX_MASK: u32 = 0x003F_FFFF;
+
+    pub fn service(index: u32) -> Self {
+        Self(Self::SERVICE_FLAG | (index & Self::SERVICE_INDEX_MASK))
+    }
+
+    pub fn is_service(self) -> bool {
+        (self.0 & 0xFFC0_0000) == Self::SERVICE_FLAG
+    }
+
+    pub fn service_index(self) -> u32 {
+        self.0 & Self::SERVICE_INDEX_MASK
+    }
 }
 
 fn retain_socket(handle: FileHandle) {
@@ -270,6 +288,15 @@ pub struct FileDescriptor {
     pub release_backend: bool,
 }
 
+/// Result of a descriptor replacement. `service_close` is the exact service
+/// token whose final kernel reference was displaced and must now be closed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DupResult {
+    pub fd: i32,
+    pub displaced: Option<FileHandle>,
+    pub service_close: Option<(u64, u64)>,
+}
+
 impl FileDescriptor {
     pub fn current_offset(&self) -> usize {
         DESCRIPTIONS.lock()[self.description as usize]
@@ -327,6 +354,75 @@ fn release_description(idx: u32) -> bool {
     } else {
         false
     }
+}
+
+/// Kernel-side identity of one service-owned description. Duplicates and fork
+/// inherit the same row and refcount; only the final kernel reference may send
+/// a service close. The token never appears in the descriptor number itself.
+struct ServiceDescription {
+    token: u64,
+    epoch: u64,
+    refs: usize,
+}
+
+static SERVICE_DESCRIPTIONS: Mutex<Vec<Option<ServiceDescription>>> = Mutex::new(Vec::new());
+
+fn new_service_description(token: u64, epoch: u64) -> Option<u32> {
+    if token == 0 || epoch == 0 {
+        return None;
+    }
+    let mut pool = SERVICE_DESCRIPTIONS.lock();
+    let item = ServiceDescription {
+        token,
+        epoch,
+        refs: 0,
+    };
+    if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
+        *slot = Some(item);
+        return Some(idx as u32);
+    }
+    pool.try_reserve(1).ok()?;
+    let idx = pool.len();
+    pool.push(Some(item));
+    Some(idx as u32)
+}
+
+fn retain_service(handle: FileHandle) {
+    if handle.is_service() {
+        SERVICE_DESCRIPTIONS.lock()[handle.service_index() as usize]
+            .as_mut()
+            .expect("live service description")
+            .refs += 1;
+    }
+}
+
+/// Release one kernel reference. Returns true when it was the final reference
+/// and the caller now owns a service close for the returned token.
+fn release_service(handle: FileHandle) -> bool {
+    if !handle.is_service() {
+        return true;
+    }
+    let mut pool = SERVICE_DESCRIPTIONS.lock();
+    let item = pool[handle.service_index() as usize]
+        .as_mut()
+        .expect("live service description");
+    item.refs -= 1;
+    if item.refs == 0 {
+        pool[handle.service_index() as usize] = None;
+        true
+    } else {
+        false
+    }
+}
+
+/// Opaque identity used only to build a trusted close request. Reading it never
+/// grants authority and it must never be copied to userspace.
+pub(crate) fn service_description(index: u32) -> Option<(u64, u64)> {
+    SERVICE_DESCRIPTIONS
+        .lock()
+        .get(index as usize)?
+        .as_ref()
+        .map(|item| (item.token, item.epoch))
 }
 
 /// File descriptor table for a process (max 256 open fds)
@@ -445,11 +541,15 @@ impl FdTable {
             retain_socket(handle);
             retain_pipe(handle);
             retain_endpoint_socket(handle);
+            retain_service(handle);
             idx
         } else {
             new_description(flags)
         };
         retain_eventfd(handle);
+        if shared_description.is_none() {
+            retain_service(handle);
+        }
         self.entries[slot] = Some(FileDescriptor {
             fd,
             handle,
@@ -461,6 +561,28 @@ impl FdTable {
         });
 
         Ok(fd)
+    }
+
+    /// Install an fd backed by a service-owned description. The kernel row
+    /// owns one reference; `dup`/fork share it and only the final close may
+    /// release the service object.
+    pub fn open_service(
+        &mut self,
+        token: u64,
+        epoch: u64,
+        rights: CapRights,
+        flags: u32,
+    ) -> Result<i32, FdError> {
+        let index = new_service_description(token, epoch).ok_or(FdError::NoSlots)?;
+        let handle = FileHandle::service(index);
+        match self.open(handle, rights, flags) {
+            Ok(fd) => Ok(fd),
+            Err(error) => {
+                // No reference was acquired before the failing admission step.
+                SERVICE_DESCRIPTIONS.lock()[index as usize] = None;
+                Err(error)
+            }
+        }
     }
 
     /// Close a file descriptor
@@ -481,7 +603,11 @@ impl FdTable {
         }
         let mut entry = self.entries[fd as usize].take().ok_or(FdError::InvalidFd)?;
         let last = release_description(entry.description);
-        entry.release_backend = !entry.handle.is_vfs() || last;
+        entry.release_backend = if entry.handle.is_service() {
+            last && release_service(entry.handle)
+        } else {
+            !entry.handle.is_vfs() || last
+        };
         release_eventfd(entry.handle);
         Ok(entry)
     }
@@ -501,7 +627,14 @@ impl FdTable {
                 handles[idx] = entry.take().and_then(|descriptor| {
                     let last = release_description(descriptor.description);
                     release_eventfd(descriptor.handle);
-                    (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
+                    if descriptor.handle.is_service() {
+                        // The exit/exec file-owner barrier owns the service
+                        // close; the kernel only drops its reference here.
+                        let _ = release_service(descriptor.handle);
+                        None
+                    } else {
+                        (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
+                    }
                 });
             }
         }
@@ -516,7 +649,12 @@ impl FdTable {
             handles[idx] = entry.take().and_then(|descriptor| {
                 let last = release_description(descriptor.description);
                 release_eventfd(descriptor.handle);
-                (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
+                if descriptor.handle.is_service() {
+                    let _ = release_service(descriptor.handle);
+                    None
+                } else {
+                    (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
+                }
             });
         }
         handles
@@ -528,6 +666,26 @@ impl FdTable {
             return None;
         }
         self.entries[fd as usize].as_ref()
+    }
+
+    /// Collect each distinct service row once. Duplicates and threads share a
+    /// row by index, so transfer must be published per row, not per descriptor.
+    pub fn service_tokens(&self, out: &mut [(u64, u64); 256]) -> usize {
+        let mut count = 0;
+        for entry in self.entries.iter().flatten() {
+            if !entry.handle.is_service() {
+                continue;
+            }
+            let Some(description) = service_description(entry.handle.service_index()) else {
+                continue;
+            };
+            if out[..count].iter().any(|known| known.0 == description.0) {
+                continue;
+            }
+            out[count] = description;
+            count += 1;
+        }
+        count
     }
 
     pub fn contains_eventfd(&self, idx: u32) -> bool {
@@ -605,10 +763,12 @@ impl FdTable {
         retain_socket(handle);
         retain_pipe(handle);
         retain_endpoint_socket(handle);
+        retain_service(handle);
         if let Some(displaced) = self.entries[fd as usize] {
             release_eventfd(displaced.handle);
             release_endpoint_socket(displaced.handle);
             release_description(displaced.description);
+            let _ = release_service(displaced.handle);
             if displaced.handle.is_pipe() {
                 super::pipe::pipe_close_end(
                     displaced.handle.pipe_index(),
@@ -649,6 +809,7 @@ impl FdTable {
         let displaced = entry.handle;
         release_eventfd(displaced);
         release_endpoint_socket(displaced);
+        let _ = release_service(displaced);
         if displaced.is_pipe() {
             super::pipe::pipe_close_end(displaced.pipe_index(), displaced.pipe_is_write());
         } else if displaced.is_socket() {
@@ -719,18 +880,13 @@ impl FdTable {
     /// a different object. The caller must close that handle exactly once.
     /// `old_fd == new_fd` is a no-op that returns `(new_fd, None)` if valid.
     /// The new descriptor does not inherit close-on-exec.
-    pub fn dup2(&mut self, old_fd: i32, new_fd: i32) -> Result<(i32, Option<FileHandle>), FdError> {
+    pub fn dup2(&mut self, old_fd: i32, new_fd: i32) -> Result<DupResult, FdError> {
         self.dup2_with_cloexec(old_fd, new_fd, false, true)
     }
 
     /// Linux `dup3`: like `dup2`, but `old_fd == new_fd` is an error and the
     /// new descriptor's close-on-exec bit is set from `cloexec`.
-    pub fn dup3(
-        &mut self,
-        old_fd: i32,
-        new_fd: i32,
-        cloexec: bool,
-    ) -> Result<(i32, Option<FileHandle>), FdError> {
+    pub fn dup3(&mut self, old_fd: i32, new_fd: i32, cloexec: bool) -> Result<DupResult, FdError> {
         self.dup2_with_cloexec(old_fd, new_fd, cloexec, false)
     }
 
@@ -740,29 +896,45 @@ impl FdTable {
         new_fd: i32,
         cloexec: bool,
         allow_same: bool,
-    ) -> Result<(i32, Option<FileHandle>), FdError> {
+    ) -> Result<DupResult, FdError> {
         if new_fd < 0 || new_fd >= 256 {
             return Err(FdError::InvalidFd);
         }
         if old_fd == new_fd {
             if allow_same {
                 let _ = self.get(old_fd).ok_or(FdError::InvalidFd)?;
-                return Ok((new_fd, None));
+                return Ok(DupResult {
+                    fd: new_fd,
+                    displaced: None,
+                    service_close: None,
+                });
             }
             return Err(FdError::InvalidFd);
         }
         let orig = *self.get(old_fd).ok_or(FdError::InvalidFd)?;
 
         const O_CLOEXEC: u32 = 0x0008_0000;
+        let mut service_close = None;
         let displaced = self.entries[new_fd as usize].take().and_then(|descriptor| {
             release_eventfd(descriptor.handle);
             let last = release_description(descriptor.description);
-            (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
+            if descriptor.handle.is_service() {
+                // Only the final kernel reference owns the service close. The
+                // caller sends it after the replacement descriptor is installed.
+                let description = service_description(descriptor.handle.service_index());
+                if release_service(descriptor.handle) {
+                    service_close = description;
+                }
+                None
+            } else {
+                (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
+            }
         });
         retain_eventfd(orig.handle);
         retain_socket(orig.handle);
         retain_pipe(orig.handle);
         retain_endpoint_socket(orig.handle);
+        retain_service(orig.handle);
         retain_description(orig.description);
         let mut flags = orig.flags & !O_CLOEXEC;
         if cloexec {
@@ -777,7 +949,11 @@ impl FdTable {
             description: orig.description,
             release_backend: true,
         });
-        Ok((new_fd, displaced))
+        Ok(DupResult {
+            fd: new_fd,
+            displaced,
+            service_close,
+        })
     }
 
     /// Deep-copy this table into a new heap allocation.
@@ -797,6 +973,7 @@ impl FdTable {
                     retain_socket(entry.handle);
                     retain_pipe(entry.handle);
                     retain_endpoint_socket(entry.handle);
+                    retain_service(entry.handle);
                     retain_description(entry.description);
                 }
             }
@@ -830,6 +1007,7 @@ impl FdTable {
             retain_socket(entry.handle);
             retain_pipe(entry.handle);
             retain_endpoint_socket(entry.handle);
+            retain_service(entry.handle);
             retain_description(entry.description);
         }
     }
@@ -974,14 +1152,16 @@ mod tests {
         let mut table = FdTable::new();
         let old = table.open(FileHandle::vfs(7), READ, 0x0008_0000).unwrap();
         let occupied = table.open(FileHandle::vfs(8), READ, 0).unwrap();
-        let (new_fd, displaced) = table.dup2(old, occupied).unwrap();
-        assert_eq!(new_fd, occupied);
-        assert_eq!(displaced, Some(FileHandle::vfs(8)));
-        assert_eq!(table.get(new_fd).unwrap().handle, FileHandle::vfs(7));
-        assert_eq!(table.get(new_fd).unwrap().flags & 0x0008_0000, 0);
-        let (same, none) = table.dup2(old, old).unwrap();
-        assert_eq!(same, old);
-        assert_eq!(none, None);
+        let result = table.dup2(old, occupied).unwrap();
+        assert_eq!(result.fd, occupied);
+        assert_eq!(result.displaced, Some(FileHandle::vfs(8)));
+        assert_eq!(result.service_close, None);
+        assert_eq!(table.get(result.fd).unwrap().handle, FileHandle::vfs(7));
+        assert_eq!(table.get(result.fd).unwrap().flags & 0x0008_0000, 0);
+        let same = table.dup2(old, old).unwrap();
+        assert_eq!(same.fd, old);
+        assert_eq!(same.displaced, None);
+        assert_eq!(same.service_close, None);
     }
 
     #[test]
@@ -1015,12 +1195,37 @@ mod tests {
         assert_eq!(table.dup3(old, old, true), Err(FdError::InvalidFd));
 
         let occupied = table.open(FileHandle::vfs(8), READ, 0).unwrap();
-        let (new_fd, displaced) = table.dup3(old, occupied, true).unwrap();
-        assert_eq!(new_fd, occupied);
-        assert_eq!(displaced, Some(FileHandle::vfs(8)));
-        assert_eq!(table.get(new_fd).unwrap().handle, FileHandle::vfs(7));
-        assert_eq!(table.get(new_fd).unwrap().flags & 0x0008_0000, 0x0008_0000);
+        let result = table.dup3(old, occupied, true).unwrap();
+        assert_eq!(result.fd, occupied);
+        assert_eq!(result.displaced, Some(FileHandle::vfs(8)));
+        assert_eq!(result.service_close, None);
+        assert_eq!(table.get(result.fd).unwrap().handle, FileHandle::vfs(7));
+        assert_eq!(
+            table.get(result.fd).unwrap().flags & 0x0008_0000,
+            0x0008_0000
+        );
         assert_eq!(table.get(old).unwrap().flags & 0x0008_0000, 0);
+    }
+
+    #[test]
+    fn dup2_displacing_the_final_service_reference_returns_its_close_token() {
+        let mut table = FdTable::new();
+        let old = table.open(FileHandle::vfs(7), READ, 0).unwrap();
+        let service = table
+            .open_service(77, 88, READ, 0)
+            .expect("service descriptor");
+        let result = table.dup2(old, service).unwrap();
+        assert_eq!(result.fd, service);
+        assert_eq!(result.displaced, None);
+        assert_eq!(result.service_close, Some((77, 88)));
+        assert_eq!(table.get(service).unwrap().handle, FileHandle::vfs(7));
+
+        // A second service descriptor sharing the row keeps the close deferred.
+        let first = table.open_service(91, 92, READ, 0).unwrap();
+        let second = table.dup(first).unwrap();
+        let result = table.dup2(old, second).unwrap();
+        assert_eq!(result.service_close, None);
+        assert_eq!(table.get(first).unwrap().handle.is_service(), true);
     }
 }
 

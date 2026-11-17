@@ -56,15 +56,24 @@ Selected Linux stat/lstat/newfstatat now share this route for absolute paths and
 AT_FDCWD-relative paths. Unselected callers and other ordinary file syscalls
 still use KERNEL_VFS.
 Selected callers now provision their initial cwd through an authenticated
-snapshot and service-owned directory pins. A trusted service-side cwd transition
-primitive now replaces pins transactionally; copied syscall routing for live cwd
-transitions and arbitrary root profiles remain pending.
+snapshot and service-owned directory pins. Copied authenticated chdir now
+replaces pins transactionally for selected callers,
+with kernel continuation and synchronized shared-process cwd commit. Selected
+UID-zero callers can narrow their service metadata root through native
+`VfsNarrowRoot` (182), resetting shared cwd to `/` through the same authenticated
+commit. Selected native and embedded/session spawn callers and successful exec
+now derive independent metadata bindings from an exact retained source lease.
+Service-local regular-file descriptions now own handles and shared offsets.
+Distinct authenticated copied exit/exec barriers now tear down file owners while
+metadata withdrawal preserves established descriptions. File syscall dispatch
+remains outside the authenticated copied profile.
 
 Status: authenticated registration and copied retention, trusted selected-root
-provisioning, service-mounted metadata lookup, caller-owned publication and
-completion, guarded copyout, and exit/exec/cwd/credential withdrawal are
-implemented. Native StatPath uses this path for selected callers. General
-root/cwd profiles, broader syscall routing, open-object lifecycle, boot/storage
+provisioning, retained-object spawn/exec inheritance, service-mounted metadata
+lookup, caller-owned publication and completion, guarded copyout, and
+exit/exec/cwd/credential withdrawal are implemented. Native StatPath uses this
+path for selected callers. Thread-specific provisioning, broader syscall
+routing, copied open-object dispatch and syscall descriptor integration, boot/storage
 migration and kernel filesystem deletion remain open.
 
 ## Roadmap phase tracking
@@ -78,14 +87,20 @@ milestone names below group related work; they do not imply completion of a phas
 | 2 | Authenticated kernel dispatch | Selected-root provisioning, copied stat publication/completion and lifecycle delivery implemented |
 | 3 | Syscall continuations | Copied pilot and native StatPath park/resume, guarded copyout and retirement implemented |
 | 4 | One isolated pathname syscall | Selected native StatPath and Linux pathname stat route through the service; other callers remain on kernel paths |
-| 5 | Open-file lifecycle | Unimplemented |
-| 6 | Production root/mount namespace | Selected initial cwd is pinned in the shared service mount table; live cwd transitions and full cutover remain open |
+| 5 | Open-file lifecycle | Service-local regular-file descriptions and copied owner teardown implemented; copied file operations and syscall descriptors remain open |
+| 6 | Production root/mount namespace | Selected initial cwd, copied live chdir, metadata-root narrowing and spawn/exec inheritance use service directory pins; thread-specific provisioning and full cutover remain open |
 | 7 | Remaining namespace operations | Codecs only; execution unsupported |
 | 8 | Failure handling and kernel retirement | Stat timeout/service-loss and exit/exec/cwd/credential withdrawal pass; full kernel ownership retirement remains open |
 
-The next work is authenticated copied chdir dispatch and kernel continuation
-integration for live cwd transitions, then root transitions and broader syscall routing,
-followed by service-owned open objects and remaining boot/storage dependencies.
+Service-side retained-object caller derivation and root narrowing are implemented
+as trusted lifecycle primitives. Root narrowing uses an authenticated copied
+kernel continuation for selected UID-zero callers. Kernel spawn/exec provisioning
+now authenticates a retained-lease snapshot that survives source withdrawal.
+Service-local open objects and distinct copied owner teardown now provide the
+ownership core. The next integration work is copied file operation dispatch and
+syscall descriptor ownership, followed by remaining
+namespace/storage operations and removal of kernel filesystem engines. Copied live chdir is integrated for the selected
+root profile; this does not complete the overall cutover.
 A registration or negotiation pass cannot satisfy runtime routing acceptance.
 Never fall back from a selected userspace namespace to the bootstrap resolver
 after an operation fails. The dated entries below preserve the earlier staging
@@ -2639,3 +2654,474 @@ they do not claim native coverage of the new local transition API. Evidence:
 and `target/vfs-cwd-transition-phase30.log`. The ownership audit remains at 68
 references and zero additions (`target/vfs-cwd-transition-audit.log`). Focused
 rustfmt checks and `git diff --check` pass. Existing build warnings remain.
+
+
+### Copied authenticated chdir and cwd commit (2026-11-17)
+
+Selected native chdir and its existing Linux translation enter a kernel-owned,
+bounded continuation before pathname resolution. The kernel copies the path once,
+parks the actual calling thread, and queues a fresh retain scope in the same
+namespace. The service obtains the old scope, credentials and captured path from
+an independently authenticated copied control query, rather than ordinary IPC.
+It resolves from retained directory objects, pins the replacement, and returns a
+correlated retained receipt and cwd spelling through a dedicated finish syscall.
+
+The finish syscall validates service ownership, exact retain delivery, caller/VM,
+credentials and the prior shared cwd under scheduler/broker/runtime locks. It
+replaces the local namespace binding and commits the shared cwd before returning
+its acknowledgement. The service keeps exclusive runtime access through this
+acknowledgement; rejected commits release provisional pins. Old leases drain via
+the existing release protocol. Lookup and retention-capacity failures preserve
+the old cwd and binding. A failure obtaining a representable cwd spelling also
+rolls back the provisional policy.
+
+Shared workers use the selected shared owner's profile while their own identity
+owns parking and result delivery. Other independently provisioned sibling profiles
+are withdrawn atomically at commit; broader provisioning of those profiles remains
+open. A stat continuation in the same shared process makes new chdir admission
+return EAGAIN, preserving the existing owned stat result. After admission, stat
+and other cwd transitions serialize against that transaction. Continuation origin
+correlation prevents a nested syscall from stealing the result, and resumption
+consumes the captured operation without rereading mutable pathname bytes.
+
+Timeout or service loss fails waiting calls without kernel traversal or mutation
+replay. An uncertain timeout retires the service registration; recovery is a later
+step. Caller/VM/credential withdrawal cancels admission, and authenticated late
+retention replies still own compensation and release. Terminal delivery wakes a
+caller once and respects an outstanding nested IPC continuation. The ordinary
+service IPC loop continues to use the same mounted namespace. The service now
+uses the existing reclaiming libc allocator instead of its non-freeing 64-KiB
+bump heap. Grant-test heap inventory reports live requested bytes. The native
+cwd stress gate compares live service heap usage before and after 64 pairs of
+transitions, after draining old leases.
+
+Validation: 66 host adapter tests and 299 library tests (108 filesystem, 163 IPC,
+28 service) pass. The two-CPU native failure/stress gate and ordinary Phase 3.0
+boot gate pass. The stress test verifies 64 pairs of transitions without live
+service heap growth. Evidence: `target/vfs-chdir-host.log`,
+`target/vfs-chdir-libs.log`, `target/vfs-chdir-native.log`,
+`target/vfs-chdir-serial.log`, `target/vfs-chdir-phase30.log`, and
+`target/vfs-chdir-audit.log`. Focused rustfmt and `git diff --check` pass.
+The ownership audit remains at 68 references with zero additions; this milestone
+does not remove kernel engines or implement service-owned open files.
+
+
+### Retained caller derivation and root-policy narrowing (2026-11-17)
+
+`Runtime::derive_caller` now provides the trusted service-side prerequisite for
+broader caller provisioning. It requires the active authenticated registration,
+an exact live parent scope, a distinct child identity in the same namespace,
+a fresh registration-wide generation, policy capacity and serialized lifecycle
+revalidation of both callers. The child owns a separately withdrawable binding
+to the exact parent directory pair. It does not resolve the parent's cwd spelling
+again, inherit credentials, or select kernel syscall routing. Failed revalidation
+publishes no child policy and consumes the attempted generation. Capacity refusal
+preserves existing callers and remains retryable. Parent transitions and withdrawal
+do not change a previously derived child's objects or admission.
+
+`Runtime::change_root` narrows an existing caller's root beneath its retained
+root/cwd using independently captured search credentials and trusted root-policy
+authorization. This is a local lifecycle operation, not a POSIX chroot syscall.
+It resets cwd to the new root, avoiding a relative anchor outside confinement.
+Lookup, final directory/search checks and both replacement opens run under one
+VFS borrow. Scope/generation validation, rollback, lifecycle withdrawal and old
+lease drainage use the same policy machinery as cwd transitions. Mount crossing
+and rename identity are preserved; stale scopes cannot withdraw the replacement.
+
+Mounted cwd reporting now authenticates both retained anchors, checks containment
+and returns a root-relative spelling. Renamed roots and mounted roots therefore
+do not expose the service-global path; an escaped or overmounted cwd fails closed.
+
+Coverage includes child identity/scope/epoch rejection, generation replay,
+revalidation and policy capacity; independent parent/child cleanup; per-request
+credentials; rename/recreation; root clamping and mounted roots; failed lookup,
+search denial, non-directory targets, partial handle exhaustion and stale teardown.
+The copied kernel provisioning protocol, spawn/exec caller selection and root
+commit continuation remain the next integration work. Ordinary IPC cannot invoke
+these primitives. Service-owned files and kernel engine retirement remain open.
+
+Validation: 66 host adapter tests and 306 library tests (110 filesystem, 163 IPC,
+33 service) pass. The dedicated two-CPU QEMU failure/stress gate passes as a
+regression check, including repeated chdir heap/pin reclamation. The new local
+APIs are covered by host tests; this does not claim native copied provisioning
+or root-transition coverage. Evidence: `target/vfs-root-provision-host.log`,
+`target/vfs-root-provision-libs.log`, `target/vfs-root-provision-native.log`,
+`target/vfs-root-provision-serial.log` and `target/vfs-root-provision-audit.log`.
+The ordinary Phase 3.0 boot gate also passes after rebuilding without fixture
+features (`target/vfs-root-provision-phase30.log`). The ownership audit remains
+at 68 references with zero additions. Focused rustfmt and `git diff --check` pass.
+Existing build warnings remain.
+
+
+### Copied metadata-root narrowing and cwd reset (2026-11-17)
+
+Native `VfsNarrowRoot` (182) accepts a captured NUL-terminated UTF-8 pathname
+in rdi and returns the native chdir status ABI. Only an already provisioned
+selected UID-zero shared owner and a UID-zero calling thread may begin the transaction;
+root-policy authority is checked independently from service filesystem search.
+The syscall never enters the kernel resolver. This narrows the service metadata
+profile; it is not POSIX chroot or complete process confinement. Open and other
+unmigrated filesystem operations still use kernel paths. No Linux chroot entry
+is enabled by this slice.
+
+The existing bounded cwd continuation now captures a directory/root operation
+kind. Copied context uses a 72-byte header: the prior 64 bytes followed by a
+u64 kind (0 directory, 1 root), then the bounded pathname and zero padding.
+Unknown kinds and non-exact syscall envelopes fail. The kernel derives kind
+from the syscall, not caller memory or ordinary IPC. Context queries authenticate
+the exact delivered retain, active service registration, prior scope, caller/VM,
+credentials and shared cwd. Resume correlates kind as well as syscall origin,
+so a nested directory syscall cannot consume a root result or the reverse.
+
+The service invokes retained-object `change_root`, retaining the narrowed root
+and resetting cwd to that root under exclusive runtime access. Finish revalidates
+lifecycle and requires the reported cwd to be exactly `/` before installing the
+replacement receipt and committing shared cwd. Failed lookup and lease exhaustion
+preserve the prior scope and cwd. Rejected or late commits compensate provisional
+leases; stale replies cannot bypass finish through ordinary retention control.
+Timeout/service loss, sibling withdrawal and old-lease drainage share the existing
+cwd transaction machinery. Retained roots survive rename/recreation and mounted
+roots report paths relative to their boundary.
+
+Broader kernel caller derivation, spawn/exec selection and service-owned open
+objects remain subsequent work. Existing selected callers keep fail-closed
+metadata routing after withdrawal; the migration still retains kernel engines.
+
+
+Validation: 68 host adapter tests and 306 library tests (110 filesystem, 163 IPC,
+33 service) pass. The copied-channel host failure matrix now runs both directory
+and root operations through authentication, timeout, rejected commit, lease
+exhaustion and service loss. Additional coverage verifies UID-zero authorization,
+operation-kind correlation, mounted-root rename/recreation, root clamping,
+mandatory `/` commit spelling, stale context and duplicate finish rejection.
+The two-CPU native failure/stress gate passes with root narrowing, rollback,
+root-relative native/Linux metadata, cwd reset and 64 repeated root transitions
+without live service heap growth. The ordinary Phase 3.0 boot gate passes after
+rebuilding without fixture features. Evidence: `target/vfs-root-wire-host.log`,
+`target/vfs-root-wire-libs.log`, `target/vfs-root-wire-native.log`,
+`target/vfs-root-wire-serial.log`, `target/vfs-root-wire-phase30.log` and
+`target/vfs-root-wire-audit.log`. The ownership audit remains at 68 references
+with zero additions. Focused rustfmt and `git diff --check` pass. Existing build
+warnings remain.
+
+
+### Copied retained-object spawn/exec caller provisioning (2026-11-17)
+
+Native spawn and embedded/session launch inherit selected metadata routing from
+the authenticated launching task's shared owner. A live admitted source yields
+a snapshot of its exact retained root/cwd lease and grant ceiling. The child gets
+a fresh scope in the same namespace, independently captured credentials, and a
+separately withdrawable policy. Successful exec captures that snapshot before
+old-image retirement and provisions the new VM identity after image commit.
+Failed exec leaves the old profile intact. Image provenance roles still withdraw.
+Old continuations cannot deliver into the replacement VM.
+
+Service-only retention control operation `DERIVE_SOURCE` (8) returns the exact
+source receipt for an independently staged, delivered retain. It validates the
+service registration and destination identity, VM, credentials, admission and
+shared cwd. The service derives only from the corresponding live retained lease,
+rechecks the copied context before publishing, and the kernel revalidates again
+before accepting the child receipt. Ordinary IPC and an application-supplied
+receipt cannot invoke derivation. Initial-root authorization rejects derived
+preparations, including after a derivation fails. A separate `vfs_boot_root`
+provenance bit gates initial-root staging. Derived profiles and exec replacements
+never acquire it, and successful cwd/root transitions clear it. Replacing a
+service epoch therefore cannot silently widen those profiles back to `/`.
+
+The source binding has a strong local reference until preparation settles. Parent
+exit, exec, root/cwd transitions or credential withdrawal may retire source policy
+without releasing that lease prematurely. The service can derive from its pinned
+pair after the source retirement barrier; no cwd pathname is resolved again.
+Rename/recreation cannot redirect inheritance. Settling the preparation drops
+the snapshot and reconciles drained source leases. The destination owns its own
+lease, lifecycle retirement and compensation obligations. Refused or stale
+receipts never install admission; late successes own compensating release.
+Snapshots retain only the binding reference and retrieve its receipt from the
+existing bound row. A compile-time registration-size ceiling leaves headroom on
+the 32-KiB kernel stack used during registration construction.
+
+A selected source with no live admission (including pending provisioning,
+withdrawal, capacity refusal or service loss) passes on sticky fail-closed routing
+without new authority. The child receives EAGAIN on metadata operations and is
+not silently reprovisioned at `/`. Provisioning remains asynchronous; a runnable
+child/replacement may receive EAGAIN until its service turn completes. This does
+not make spawn/exec loading use the service: executable bytes and other unmigrated
+file operations still use their existing bootstrap/kernel paths. Shared workers
+continue to use their shared owner's profile; independent private-thread and
+Linux thread provisioning are outside this slice.
+
+Host coverage includes source retirement before delivery, exec VM replacement,
+rename/recreation, destination credential/cwd/VM changes, capacity refusal,
+authenticated delivery, stale epoch/owner rejection, late-receipt compensation,
+service-replacement rejection of initial-root regrant, independent teardown and final pin reclamation. Service tests verify exact-lease
+lifetime, revalidation, generation replay, namespace boundaries and retirement.
+Native acceptance spawns a child beneath a narrowed root, then execs that child,
+checks continued root confinement and independent parent admission, rejects the
+old held exec completion, and checks children of withdrawn profiles stay selected.
+
+Validation: 74 host adapter tests and 308 library tests (110 filesystem, 163 IPC,
+35 service) pass. The two-CPU native failure/stress gate passes with narrowed-root
+spawn/exec inheritance, stale exec completion rejection, withdrawn-parent child
+routing, and existing root/cwd heap/pin stress. The ordinary Phase 3.0 boot gate
+passes after rebuilding without fixture features. Evidence:
+`target/vfs-inherit-host.log`, `target/vfs-inherit-libs.log`,
+`target/vfs-inherit-native.log`, `target/vfs-inherit-serial.log`,
+`target/vfs-inherit-phase30.log`, and `target/vfs-inherit-audit.log`.
+The ownership audit remains at 68 references with zero additions. Focused rustfmt
+and `git diff --check` pass. Existing build warnings remain. Service-owned open
+objects and kernel filesystem retirement remain subsequent work.
+
+
+### Service-local regular-file descriptions (2026-11-17)
+
+The service runtime now owns a bounded regular-file description table in each
+registration entry. Trusted local preparation opens an existing regular file
+relative to the exact live retained root/cwd receipt, checks directory search and
+final requested read/write permissions, and revalidates lifecycle before token
+publication. Traversal, access checks and backend acquisition occur under the
+shared mounted-VFS lock. Rename/recreation cannot redirect the retained anchors;
+escaped or hidden anchors, directories and unsupported backends fail closed.
+Failed preparation and allocation drop their provisional handle.
+
+Tokens are monotonic within their exact registration, never backend handle
+numbers. Every descriptor operation also checks the full authenticated caller
+PID, incarnation and VM generation. Each epoch has L descriptor rows separate
+from its L retained-lease rows. Duplicate rows share one reference-counted
+description, its access mode and serialized offset. Separate opens have separate
+offsets. Read/write enforce the established access mode and check offset
+arithmetic; seek rejects negative/overflowed positions without changing the old
+offset. Fstat and truncate-to-zero use the retained handle, without resolving a
+pathname. Truncate preserves the offset. Unlink and pathname replacement leave
+an open inode usable until its final description closes. Capacity refusal,
+stale tokens and duplicate close do not release another description.
+
+Metadata admission withdrawal preserves established open descriptions. The
+existing copied `CallerRetired` frame represents metadata-profile withdrawal as
+well as exit/exec; using it for file teardown would incorrectly close files on
+credential withdrawal. A separate trusted local `retire_file_owner` operation
+closes every description for the exact old owner identity, while registration
+retirement closes all descriptions in that epoch. Runtime destruction also
+reclaims every remaining backend handle. A future copied file channel must
+provide distinct authenticated file-owner lifetime delivery before publication
+is enabled for syscall clients.
+
+This slice supplies service-local ownership primitives, not authenticated file
+syscall routing. The copied dispatch profile remains metadata-only and does not
+grant file-open rights through a metadata receipt. Ordinary IPC does not call
+these primitives. Create/append/open flags, directory descriptors, secret/KV
+policy routing, descriptor inheritance and close-on-exec behavior, copied file
+publication/compensation, syscall descriptor bookkeeping and file-owner lifecycle
+transport remain subsequent integration work. Existing executable loading and
+unmigrated file syscalls retain their current paths; kernel engines remain.
+
+Host tests cover independent/shared offsets, access rights, exact caller and
+epoch checks, seek overflow, capacity refusal, rejected publication, released
+receipts, token nonreuse, retained-anchor rename/overmount behavior, unlink and
+replacement, metadata withdrawal, explicit owner teardown, registration
+replacement and final runtime destruction. The ring3 mounted-namespace fixture
+checks duplicate offsets, unlinked-inode lifetime and independent file-owner
+teardown using the real service namespace and allocator. Its identities are
+fixture values and do not claim authenticated copied file dispatch.
+
+Validation: 74 host adapter tests and 317 library tests (112 filesystem, 163 IPC,
+42 service) pass. The native VFS failure/stress gate and ordinary Phase 3.0 boot
+gate pass, both requiring the new ring3 fixture marker. The native file check is
+service-local and does not qualify a copied file syscall route. Evidence:
+`target/vfs-open-host.log`, `target/vfs-open-libs.log`,
+`target/vfs-open-native.log`, `target/vfs-open-serial.log`,
+`target/vfs-open-phase30.log` and `target/vfs-open-audit.log`.
+The no-growth ownership audit passes at 68 references. Focused rustfmt and
+`git diff --check` pass. Existing dependency warnings remain.
+
+
+### Copied file-owner lifetime delivery (2026-11-17)
+
+This next ownership-integration slice adds `FileOwnerRetired` and
+`FileOwnerRetiredAck` to the existing authenticated copied retention/control
+channel (wire opcodes 8 and 9). Their exact registration, caller PID,
+incarnation, address-space generation and nonzero event ID are correlated
+independently from the metadata-withdrawal opcodes. Reserved namespace and
+lease-generation words must be zero. Ordinary lease requests and ordinary IPC
+cannot invoke file-owner teardown.
+
+Kernel exit/termination and successful exec's old-image retirement mark a
+separate file-owner obligation in every retained registration. The existing
+preallocated caller row now survives metadata acknowledgement until its exact
+file-owner acknowledgement. Thus exit after credential/profile withdrawal still
+closes descriptions without requiring an allocation or a live metadata binding.
+The bounded 64-row inventory charges live owners even after their namespace
+leases settle; exhaustion refuses new namespace admission before publication.
+IDs remain monotonic when a fully acknowledged row is reused. Retired epochs
+remain charged until both lifecycle obligations and all remote leases settle.
+
+The service first handles the existing metadata barrier, preserving files, and
+then closes all descriptions for the exact retired file owner on the distinct
+barrier. Duplicate delivery is idempotent. Lost event copies and lost reply
+copies leave the same barrier retryable ahead of later retains. Undelivered,
+wrong-kind, stale-event, foreign-owner and foreign-registration acknowledgements
+do not discharge it. Wakeups remain active for pending file teardown but become
+quiet after metadata-only acknowledgement when no other work is ready. A new
+incarnation or VM generation retains its independently opened files.
+
+This delivers the file-owner lifetime prerequisite identified in the preceding
+slice. It does not enable copied file operations or change syscall descriptor
+routing. Open/duplicate publication compensation, immutable copied I/O,
+continuations, descriptor inheritance/close-on-exec, and special secret/KV
+routing remain next. Failed exec still preserves the old owner; successful exec
+currently tears down all descriptions belonging to the old service owner. Future
+descriptor migration must explicitly transfer surviving non-CLOEXEC entries
+before that old-owner barrier.
+
+Host validation: 76 adapter tests and 318 library tests (112 filesystem, 163 IPC,
+43 service) pass. Coverage includes metadata acknowledgement followed by later
+exit, release-independent owner lifetime, exact old-VM teardown, unchanged files
+of another lifetime, lost copies/acks, undelivered/wrong-kind/stale acknowledgements,
+full registration/caller correlation, duplicate teardown, preallocated capacity,
+retired-epoch drain and wakeup quiet/retry behavior. The source no-growth audit
+passes at 68 references; focused rustfmt and `git diff --check` pass. Evidence:
+`target/vfs-file-owner-host.log`, `target/vfs-file-owner-libs.log` and
+`target/vfs-file-owner-audit.log`. Copied file syscall routing remains unqualified.
+
+The native VFS failure/stress gate passes on an unchanged rerun, including the
+existing exit/exec, credential-withdrawal, root/inheritance, repeated-chdir and
+service-local file fixtures. The first run stopped at a held-reply/failed-exec
+check with a rejected completion; its serial evidence is retained at
+`target/vfs-file-owner-native-first-serial.log`. Passing gate evidence:
+`target/vfs-file-owner-native.log` and `target/vfs-file-owner-serial.log`.
+These native checks qualify regression behavior; file operations themselves
+remain service-local and do not qualify copied file syscall dispatch.
+The ordinary Phase 3.0 boot gate also passes; evidence:
+`target/vfs-file-owner-phase30.log`. Existing dependency warnings remain.
+
+
+### Copied file operations and syscall descriptor integration (2026-11-17)
+
+This slice adds the copied file-operation channel and wires the descriptor
+syscalls onto the service-owned descriptions, but leaves routing disabled.
+
+The channel is a fixed-size copied frame: a 22-word (176-byte) header plus a
+4096-byte payload, 4272 bytes total. Operations are Open, Read, Write, Seek,
+Fstat, Truncate-to-zero, Close and Duplicate, with separate channel
+pull/reply opcodes reusing the existing copied retention syscall. Every frame
+carries the full registration and caller PID/incarnation/VM-generation identity,
+the request id, the opaque token, the operation arguments and the payload
+length. Only Open carries namespace/receipt correlation and caller uid/gid; the
+descriptor operations must leave those words zero, because once a description is
+open the exact authenticated caller and token are the only authority. Decode is
+total: version, operation, identity, reserved words, payload length and fully
+zeroed padding are all validated, and the reply is rejected unless it names the
+exact authenticated request, caller and operation.
+
+The service decodes one independently authenticated frame and dispatches it
+through the existing service-local description API; ordinary IPC never reaches
+that path regardless of frame contents. The pull/reply control operations are
+driven from the poll loop with a bounded per-poll budget. Open still runs its
+independent revalidation and returns a monotonic per-registration token; a
+failed revalidation drops the provisional backend handle before publication.
+
+Kernel descriptors name a kernel-side service row that holds only the opaque
+token and epoch. Duplicate and fork share that row and a reference count; the
+token is never a descriptor number and is never copied to userspace. Only the
+final kernel reference may issue a copied Close, and an explicit close(2) of the
+last reference does so. Exit, exec and close-on-exec drop the kernel reference
+but intentionally emit no kernel-side close: the existing `FileOwnerRetired`
+barrier owns that teardown, so withdrawal and teardown stay distinct.
+
+The native and Linux `open`, `read`, `write`, `lseek`, `fstat` and `close`
+syscalls route a service-backed descriptor onto the copied channel when, and
+only when, the caller has been admitted. Admission parks the caller in
+`BlockedOnIpc`, leaves the scheduler before any user copy, and resumes on the
+exact completion; a failed user copy never retransmits an executed operation.
+Write copies `min(count, 4096)` bytes from user memory into a kernel buffer
+before admission. Fstat promotes the native 24-byte record to the Linux x86_64
+144-byte layout for compat callers; no worked pointer, length or credential
+field is trusted from userspace. Publication now performs the same atomic
+park-and-publish transition as the stat and chdir channels, and the shared
+expiry/wake path bounds each request and delivers each terminal result once.
+
+Routing is gated on `Process::vfs_file_routed`, which remains false: `init` is
+not marked routed and no caller reaches the copied file channel, so `KERNEL_VFS`
+stays authoritative for every live open. Enabling it requires descriptor
+inheritance and close-on-exec transfer, because surviving non-CLOEXEC rows must
+be transferred before the old-owner barrier runs. Create, append, exclusive,
+truncate and directory opens fail closed (errno 95) on the routed path; `pread64`
+and `pwrite64` stay on the kernel path; directory descriptors, secret/KV routing
+and descriptor transfer remain subsequent work. A `dup2` that displaces a
+service descriptor still defers that close to the owner barrier rather than
+closing immediately; this is intentionally left to the descriptor-inheritance
+slice.
+
+Validation: 80 host adapter tests (including four kernel-side file-channel tests
+covering park-and-publish, idempotent pull, exact-caller/exact-op reply
+rejection, single result take, timeout terminality and non-retransmission, retire
+and the Open receipt/credential rules) and 325 library tests (112 filesystem, 167
+IPC, 46 service) pass. The service-side tests route a real copied request through
+the poll-loop control and prove shared-offset duplicate/close, access-mode
+refusal, foreign-registration rejection and owner/registration teardown.
+Evidence: `target/vfs-file-op-host.log`, `target/vfs-file-op-libs.log` and
+`target/vfs-file-op-audit.log`. The no-growth ownership audit passes at 68
+references; focused rustfmt and `git diff --check` pass. Existing dependency
+warnings remain. The ordinary Phase 3.0 boot gate and the native VFS
+failure/stress gate pass unchanged with the existing
+`service open objects shared offset/unlink/teardown OK transport=fixture`
+marker; evidence: `target/vfs-file-op-phase30.log` and
+`target/vfs-file-op-native.log`. These checks compile and cover the routed
+branches but do not exercise them at runtime: with routing disabled there is no
+native copied file syscall route, so copied file syscall dispatch remains
+unqualified.
+
+### Descriptor inheritance and close-on-exec transfer (2026-11-17)
+
+This slice adds the descriptor-lifetime prerequisite for enabling copied file
+routing. It does not enable routing: `Process::vfs_file_routed` remains false and
+`KERNEL_VFS` stays authoritative for every live open.
+
+The copied file channel gains a kernel-origin `TRANSFER` operation (8). Its
+22-word header names the exact old caller and token; its 24-byte payload names
+the replacement caller as PID, incarnation and VM generation. Decode requires a
+nonzero token, zero reserved/namespace/receipt/credential words and a fully
+nonzero replacement identity. The service rekeys only when the old and new
+identities are either the same process lifetime (same PID and incarnation, new
+VM generation after exec) or the same address space (thread/fork sharing). It
+never moves a description to an unrelated process. The token, shared
+description, access mode, offset and backend pin are preserved; the old caller
+immediately stops naming the description.
+
+Successful exec captures the old caller before image commit. The kernel sets a
+file-transfer obligation before old-image retirement, then publishes one
+`TRANSFER` per distinct surviving service row after the new VM is installed.
+Only non-CLOEXEC rows survive `take_cloexec_handles`; CLOEXEC rows drop their
+kernel reference and remain owned by the existing `FileOwnerRetired` barrier.
+The barrier is gated on both the publication gap and every pending transfer
+reply. A transfer timeout is terminal: the slot is released, no retransmission
+occurs, and the barrier closes anything left untransferred (fail closed). This
+ordering prevents the service from observing an empty transfer set or closing a
+row that is about to be rekeyed. The replacement caller's ordinary namespace
+lease is still provisioned by the existing exec inheritance path.
+
+`dup2`/`dup3` now return the exact displaced service token when the replacement
+drops the final kernel reference. The syscall installs the new descriptor first,
+then sends a copied `Close`; earlier references still defer to the owner
+barrier. This removes the previous unconditional deferral for displaced service
+descriptors.
+
+Validation: 83 host adapter tests (including three new kernel-side tests for
+barrier gating, transfer timeout and unrelated-owner rejection) and 168 IPC plus
+47 service library tests pass. The service test rekeys a real copied description,
+proves old-owner `BadHandle`, continuation of the shared offset by the new owner
+and survival of old-owner teardown. The kernel checks clean. Evidence:
+`target/vfs-descriptor-transfer-host.log`,
+`target/vfs-descriptor-transfer-ipc.log`,
+`target/vfs-descriptor-transfer-service.log` and
+`target/vfs-descriptor-transfer-check.log`. The ordinary Phase 3.0 boot gate and
+the native VFS failure/stress gate pass with the existing
+`service open objects shared offset/unlink/teardown OK transport=fixture`
+marker; evidence: `target/vfs-descriptor-transfer-phase30.log` and
+`target/vfs-descriptor-transfer-native.log`.
+
+Remaining boundaries: thread/fork transfer publication is not wired even though
+the service relation accepts same-address-space moves; fork remains rejected.
+Create/append/exclusive/truncate/directory opens still fail closed on the routed
+path, `pread64`/`pwrite64` remain on the kernel path, and directory descriptors,
+secret/KV routing and actual routing enablement remain subsequent work. Because
+routing is still disabled, no native copied file syscall route is claimed.

@@ -1,0 +1,231 @@
+//! Service-owned regular-file descriptions. This is a trusted lifecycle API,
+//! not an ordinary IPC handle interface. Tokens alone never confer authority.
+use alloc::sync::Arc;
+use spin::Mutex;
+use sunlight_fs::{FileHandle, FileStat, FsError, Vfs};
+use sunlight_ipc::vfs_rpc::lifecycle::{Caller, RequestIds};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Access {
+    Read,
+    Write,
+    ReadWrite,
+}
+impl Access {
+    pub(crate) fn read(self) -> bool {
+        matches!(self, Self::Read | Self::ReadWrite)
+    }
+    pub(crate) fn write(self) -> bool {
+        matches!(self, Self::Write | Self::ReadWrite)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Seek {
+    Start(u64),
+    Current(i64),
+    End(i64),
+}
+
+/// Private backend ownership; only final description destruction closes it.
+pub(crate) struct File {
+    filesystem: Arc<Mutex<Vfs>>,
+    handle: FileHandle,
+}
+impl File {
+    pub(crate) fn new(filesystem: Arc<Mutex<Vfs>>, handle: FileHandle) -> Self {
+        Self { filesystem, handle }
+    }
+}
+impl Drop for File {
+    fn drop(&mut self) {
+        self.filesystem
+            .lock()
+            .close(self.handle)
+            .expect("private open handle remains owned");
+    }
+}
+struct Description {
+    file: File,
+    access: Access,
+    offset: usize,
+}
+struct Entry {
+    owner: Caller,
+    token: u64,
+    description: Arc<Mutex<Description>>,
+}
+
+/// Each registration has a bounded descriptor inventory and a nonreusing token
+/// allocator. Duplicates own separate rows and share one offset and backend pin.
+pub(crate) struct Table<const N: usize> {
+    entries: [Option<Entry>; N],
+    ids: RequestIds,
+}
+impl<const N: usize> Table<N> {
+    pub(crate) const fn new() -> Self {
+        Self {
+            entries: [const { None }; N],
+            ids: RequestIds::new(),
+        }
+    }
+    pub(crate) fn capacity(&self) -> Result<(), FsError> {
+        if self.entries.iter().any(Option::is_none) {
+            Ok(())
+        } else {
+            Err(FsError::TooManyOpenFiles)
+        }
+    }
+    pub(crate) fn insert(
+        &mut self,
+        owner: Caller,
+        file: File,
+        access: Access,
+    ) -> Result<u64, FsError> {
+        self.capacity()?;
+        let description = Arc::try_new(Mutex::new(Description {
+            file,
+            access,
+            offset: 0,
+        }))
+        .map_err(|_| FsError::NoMemory)?;
+        self.publish(owner, description)
+    }
+    fn publish(
+        &mut self,
+        owner: Caller,
+        description: Arc<Mutex<Description>>,
+    ) -> Result<u64, FsError> {
+        let slot = self
+            .entries
+            .iter()
+            .position(Option::is_none)
+            .ok_or(FsError::TooManyOpenFiles)?;
+        let token = self.ids.allocate().ok_or(FsError::TooManyOpenFiles)?;
+        self.entries[slot] = Some(Entry {
+            owner,
+            token,
+            description,
+        });
+        Ok(token)
+    }
+    fn index(&self, owner: Caller, token: u64) -> Result<usize, FsError> {
+        self.entries
+            .iter()
+            .position(|entry| {
+                entry
+                    .as_ref()
+                    .is_some_and(|e| e.owner == owner && e.token == token)
+            })
+            .ok_or(FsError::BadHandle)
+    }
+    fn description(&self, owner: Caller, token: u64) -> Result<&Mutex<Description>, FsError> {
+        Ok(&self.entries[self.index(owner, token)?]
+            .as_ref()
+            .unwrap()
+            .description)
+    }
+    pub(crate) fn duplicate(&mut self, owner: Caller, token: u64) -> Result<u64, FsError> {
+        let index = self.index(owner, token)?;
+        let description = Arc::clone(&self.entries[index].as_ref().unwrap().description);
+        self.publish(owner, description)
+    }
+    pub(crate) fn close(&mut self, owner: Caller, token: u64) -> Result<(), FsError> {
+        let index = self.index(owner, token)?;
+        self.entries[index] = None;
+        Ok(())
+    }
+    /// Re-key one description to a replacement owner. The token and shared
+    /// description (offset and backend pin) are preserved. The caller must have
+    /// independently established that the new owner is the same process after
+    /// exec or a thread in the same address space.
+    pub(crate) fn transfer(
+        &mut self,
+        owner: Caller,
+        token: u64,
+        new_owner: Caller,
+    ) -> Result<u64, FsError> {
+        if owner == new_owner {
+            return Err(FsError::InvalidPath);
+        }
+        let index = self.index(owner, token)?;
+        self.entries[index].as_mut().unwrap().owner = new_owner;
+        Ok(token)
+    }
+    pub(crate) fn retire_caller(&mut self, owner: Caller) {
+        for entry in &mut self.entries {
+            if entry.as_ref().is_some_and(|e| e.owner == owner) {
+                *entry = None;
+            }
+        }
+    }
+    pub(crate) fn clear(&mut self) {
+        for entry in &mut self.entries {
+            *entry = None;
+        }
+    }
+    pub(crate) fn read(
+        &self,
+        owner: Caller,
+        token: u64,
+        output: &mut [u8],
+    ) -> Result<usize, FsError> {
+        let mut d = self.description(owner, token)?.lock();
+        if !d.access.read() {
+            return Err(FsError::PermissionDenied);
+        }
+        d.offset
+            .checked_add(output.len())
+            .ok_or(FsError::InvalidPath)?;
+        let count = d
+            .file
+            .filesystem
+            .lock()
+            .read(d.file.handle, d.offset, output)?;
+        d.offset += count;
+        Ok(count)
+    }
+    pub(crate) fn write(&self, owner: Caller, token: u64, input: &[u8]) -> Result<usize, FsError> {
+        let mut d = self.description(owner, token)?.lock();
+        if !d.access.write() {
+            return Err(FsError::PermissionDenied);
+        }
+        d.offset
+            .checked_add(input.len())
+            .ok_or(FsError::InvalidPath)?;
+        let count = d
+            .file
+            .filesystem
+            .lock()
+            .write(d.file.handle, d.offset, input)?;
+        d.offset += count;
+        Ok(count)
+    }
+    pub(crate) fn stat(&self, owner: Caller, token: u64) -> Result<FileStat, FsError> {
+        let d = self.description(owner, token)?.lock();
+        let result = d.file.filesystem.lock().fstat_handle(d.file.handle);
+        result
+    }
+    pub(crate) fn truncate(&self, owner: Caller, token: u64) -> Result<(), FsError> {
+        let d = self.description(owner, token)?.lock();
+        if !d.access.write() {
+            return Err(FsError::PermissionDenied);
+        }
+        let result = d.file.filesystem.lock().truncate(d.file.handle);
+        result
+    }
+    pub(crate) fn seek(&self, owner: Caller, token: u64, seek: Seek) -> Result<usize, FsError> {
+        let mut d = self.description(owner, token)?.lock();
+        let position = match seek {
+            Seek::Start(offset) => i128::from(offset),
+            Seek::Current(delta) => d.offset as i128 + i128::from(delta),
+            Seek::End(delta) => {
+                d.file.filesystem.lock().fstat_handle(d.file.handle)?.size as i128
+                    + i128::from(delta)
+            }
+        };
+        let position = usize::try_from(position).map_err(|_| FsError::InvalidPath)?;
+        d.offset = position;
+        Ok(position)
+    }
+}

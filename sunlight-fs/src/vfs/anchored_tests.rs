@@ -3,6 +3,67 @@ use crate::Tmpfs;
 const OWNER: Credential = Credential { uid: 42, gid: 42 };
 const OTHER: Credential = Credential { uid: 43, gid: 43 };
 
+#[test]
+fn cwd_reporting_is_root_relative_bounded_and_rejects_escaped_or_hidden_anchors() {
+    let (mut fs, root, cwd) = fixture();
+    let mut bytes = [0; 32];
+    let len = fs.cwd_beneath(root, cwd, &mut bytes).unwrap();
+    assert_eq!(&bytes[..len], b"/cwd");
+    assert_eq!(
+        fs.cwd_beneath(root, cwd, &mut bytes[..3]),
+        Err(FsError::InvalidPath)
+    );
+    let len = fs.cwd_beneath(root, root, &mut bytes).unwrap();
+    assert_eq!(&bytes[..len], b"/");
+    fs.rename("/jail", "/renamed").unwrap();
+    let len = fs.cwd_beneath(root, cwd, &mut bytes).unwrap();
+    assert_eq!(&bytes[..len], b"/cwd");
+    fs.rename("/renamed/cwd", "/outside").unwrap();
+    assert_eq!(
+        fs.cwd_beneath(root, cwd, &mut bytes),
+        Err(FsError::PermissionDenied)
+    );
+    fs.rename("/outside", "/renamed/cwd").unwrap();
+    fs.mount_tmpfs("/renamed/cwd", Tmpfs::new(&[])).unwrap();
+    assert_eq!(
+        fs.cwd_beneath(root, cwd, &mut bytes),
+        Err(FsError::BadHandle)
+    );
+    fs.close(root).unwrap();
+    fs.close(cwd).unwrap();
+    assert_eq!(fs.open_handle_count(), 0);
+}
+
+#[test]
+fn root_pinning_rejects_files_and_checks_search_before_dotdot() {
+    let (mut fs, root, cwd) = fixture();
+    let count = fs.open_handle_count();
+    assert_eq!(
+        fs.pin_root_beneath(root, cwd, "data", OWNER),
+        Err(FsError::NotDir)
+    );
+    fs.chmod("/jail/cwd", 0o700).unwrap();
+    for path in [".", "..", "../cwd"] {
+        assert_eq!(
+            fs.pin_root_beneath(root, cwd, path, OTHER),
+            Err(FsError::PermissionDenied)
+        );
+    }
+    assert_eq!(fs.open_handle_count(), count);
+    let (new_root, new_cwd) = fs.pin_root_beneath(root, cwd, ".", OWNER).unwrap();
+    assert_ne!(new_root, new_cwd);
+    let destination = fs.stat_beneath(root, cwd, ".", OWNER).unwrap();
+    assert_eq!(
+        fs.stat_beneath(new_root, new_cwd, "../../..", OWNER)
+            .unwrap(),
+        destination
+    );
+    for handle in [root, cwd, new_root, new_cwd] {
+        fs.close(handle).unwrap();
+    }
+    assert_eq!(fs.open_handle_count(), 0);
+}
+
 fn fixture() -> (Vfs, FileHandle, FileHandle) {
     let mut fs = Vfs::new();
     fs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();
@@ -226,4 +287,56 @@ fn directory_transition_checks_final_search_and_rolls_back_partial_opens() {
     fs.close(new_root).unwrap();
     fs.close(new_cwd).unwrap();
     assert_eq!(fs.open_handle_count(), 2);
+}
+
+#[test]
+fn regular_open_checks_final_access_and_directory_search_without_leaking_handles() {
+    let (mut fs, root, cwd) = fixture();
+    let count = fs.open_handle_count();
+    assert_eq!(
+        fs.open_file_beneath(root, cwd, "data", OWNER, true, false),
+        Err(FsError::PermissionDenied)
+    );
+    assert_eq!(
+        fs.open_file_beneath(root, cwd, "data", OWNER, false, false),
+        Err(FsError::InvalidPath)
+    );
+    assert_eq!(
+        fs.open_file_beneath(root, cwd, ".", OWNER, true, false),
+        Err(FsError::IsDir)
+    );
+    fs.chmod("/jail/cwd/data", 0o400).unwrap();
+    assert_eq!(
+        fs.open_file_beneath(root, cwd, "data", OWNER, true, true),
+        Err(FsError::PermissionDenied)
+    );
+    let handle = fs
+        .open_file_beneath(root, cwd, "data", OWNER, true, false)
+        .unwrap();
+    fs.close(handle).unwrap();
+    fs.chmod("/jail/cwd", 0o000).unwrap();
+    assert_eq!(
+        fs.open_file_beneath(root, cwd, "../cwd/data", OWNER, true, false),
+        Err(FsError::PermissionDenied)
+    );
+    assert_eq!(fs.open_handle_count(), count);
+}
+
+#[test]
+fn regular_open_is_confined_after_anchor_rename_and_keeps_unlinked_inode() {
+    let (mut fs, root, cwd) = fixture();
+    fs.chmod("/jail/cwd/data", 0o600).unwrap();
+    fs.rename("/jail", "/moved").unwrap();
+    let handle = fs
+        .open_file_beneath(root, cwd, "/../../cwd/data", OWNER, true, true)
+        .unwrap();
+    fs.unlink("/moved/cwd/data").unwrap();
+    let mut bytes = [0; 5];
+    assert_eq!(fs.read(handle, 0, &mut bytes), Ok(5));
+    assert_eq!(&bytes, b"hello");
+    fs.close(handle).unwrap();
+    assert_eq!(
+        fs.open_file_beneath(root, cwd, "data", OWNER, true, false),
+        Err(FsError::NotFound)
+    );
 }

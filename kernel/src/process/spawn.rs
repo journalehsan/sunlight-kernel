@@ -238,11 +238,15 @@ pub fn exec_into_process(
         // own the broker. Withdraw before activation can replace the syscall
         // stack's VM; failed image preparation above preserves old authority.
         let mut broker = crate::capability::CAP_BROKER.lock();
-        crate::ipc::retire_vfs_process(sunlight_ipc::vfs_rpc::lifecycle::Caller {
+        let old_caller = sunlight_ipc::vfs_rpc::lifecycle::Caller {
             pid: process.pid as u64,
             incarnation: process.foreground.incarnation,
             address_space_generation: old_address_space.identity().generation,
-        });
+        };
+        // Hold the file-owner barrier until sys_exec has published transfers
+        // for every surviving non-CLOEXEC service descriptor.
+        crate::ipc::expect_vfs_file_transfer(old_caller);
+        crate::ipc::retire_vfs_process(old_caller);
         #[cfg(any(feature = "cap_issuance_test", feature = "production_grant_test"))]
         let old_grants = broker.recipient_grant_count(process.pid);
         broker.retire_recipient_grants(process.pid);
@@ -744,8 +748,18 @@ pub fn spawn_from_path_with_restrictions(
     service_lookup_restrictions: Option<u64>,
 ) -> Result<usize, SpawnError> {
     spawn_with_session_attachment(
-        path, _argv, pmm, sched, _caps, hhdm_offset, uid, gid, env,
-        service_lookup_restrictions, None, None,
+        path,
+        _argv,
+        pmm,
+        sched,
+        _caps,
+        hhdm_offset,
+        uid,
+        gid,
+        env,
+        service_lookup_restrictions,
+        None,
+        None,
     )
 }
 
@@ -758,8 +772,12 @@ fn rollback_launch_fault(
     hhdm: VirtAddr,
     free_before: usize,
 ) -> bool {
-    if !attachment.is_some_and(|a| a.fails_at(stage)) { return false; }
-    unsafe { process.address_space.reclaim_user_space(pmm, hhdm, true); }
+    if !attachment.is_some_and(|a| a.fails_at(stage)) {
+        return false;
+    }
+    unsafe {
+        process.address_space.reclaim_user_space(pmm, hhdm, true);
+    }
     crate::serial_println!("[SL41] event=rollback stage={} pid={} incarnation={} free_before={} free_after={} published=0 runnable=0",
         stage, process.pid, process.foreground.incarnation, free_before, pmm.free_page_count());
     true
@@ -813,10 +831,18 @@ pub(crate) fn spawn_with_session_attachment(
     #[cfg(all(debug_assertions, feature = "session_launch_test"))]
     let free_before = pmm.free_page_count();
     let mut process = unsafe {
-        Process::try_new(pid, parent_pid.unwrap_or(1), proc_name, pmm, hhdm_offset).map_err(|_| SpawnError::NoMemory)?
+        Process::try_new(pid, parent_pid.unwrap_or(1), proc_name, pmm, hhdm_offset)
+            .map_err(|_| SpawnError::NoMemory)?
     };
     #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(&mut process, attachment.as_ref(), 1, pmm, hhdm_offset, free_before) {
+    if rollback_launch_fault(
+        &mut process,
+        attachment.as_ref(),
+        1,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
         return Err(SpawnError::SessionRejected);
     }
     process.uid = uid;
@@ -836,12 +862,24 @@ pub(crate) fn spawn_with_session_attachment(
 
     let envp_strings = process.env.to_envp();
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
-    if let Err(error) = exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false) {
-        unsafe { process.address_space.reclaim_user_space(pmm, hhdm_offset, true); }
+    if let Err(error) = exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)
+    {
+        unsafe {
+            process
+                .address_space
+                .reclaim_user_space(pmm, hhdm_offset, true);
+        }
         return Err(error);
     }
     #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(&mut process, attachment.as_ref(), 2, pmm, hhdm_offset, free_before) {
+    if rollback_launch_fault(
+        &mut process,
+        attachment.as_ref(),
+        2,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
         return Err(SpawnError::SessionRejected);
     }
     process.nice = initial_embedded_nice(path, uid);
@@ -871,7 +909,14 @@ pub(crate) fn spawn_with_session_attachment(
     // The account broker may resolve caller roles and owns `account-broker:*`.
     process.trusted_account_broker = uid == 0 && is_trusted_account_broker_path(path);
     #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(&mut process, attachment.as_ref(), 3, pmm, hhdm_offset, free_before) {
+    if rollback_launch_fault(
+        &mut process,
+        attachment.as_ref(),
+        3,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
         return Err(SpawnError::SessionRejected);
     }
     process.set_initial_args(
@@ -889,7 +934,14 @@ pub(crate) fn spawn_with_session_attachment(
     );
 
     #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(&mut process, attachment.as_ref(), 4, pmm, hhdm_offset, free_before) {
+    if rollback_launch_fault(
+        &mut process,
+        attachment.as_ref(),
+        4,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
         return Err(SpawnError::SessionRejected);
     }
     if let Some(attachment) = attachment {
@@ -899,10 +951,12 @@ pub(crate) fn spawn_with_session_attachment(
             Ok(reference) => {
                 process.account_membership = Some(reference);
                 process.restrict_account_member_roles();
-            },
+            }
             Err(_) => {
                 unsafe {
-                    process.address_space.reclaim_user_space(pmm, hhdm_offset, true);
+                    process
+                        .address_space
+                        .reclaim_user_space(pmm, hhdm_offset, true);
                 }
                 return Err(SpawnError::SessionRejected);
             }
@@ -910,12 +964,30 @@ pub(crate) fn spawn_with_session_attachment(
     }
     #[cfg(all(debug_assertions, feature = "session_launch_test"))]
     if let Some(reference) = process.account_membership {
-        crate::serial_println!("[SL41] event=prepublication pid={} incarnation={} vm={} session={} epoch={} uid={}",
-            process.pid, process.foreground.incarnation, process.address_space.identity().generation,
-            reference.id, reference.epoch, process.uid);
+        crate::serial_println!(
+            "[SL41] event=prepublication pid={} incarnation={} vm={} session={} epoch={} uid={}",
+            process.pid,
+            process.foreground.incarnation,
+            process.address_space.identity().generation,
+            reference.id,
+            reference.epoch,
+            process.uid
+        );
+    }
+    // Use the authenticated launching task, never the bookkeeping ppid default.
+    let parent_idx = sched
+        .current_process_index()
+        .map(|idx| sched.shared_process_index(idx));
+    let source = parent_idx.and_then(|idx| crate::ipc::capture_vfs_inheritance(idx, sched, _caps));
+    if let Some(idx) = parent_idx {
+        process.vfs_stat_routed = sched.processes[idx].vfs_stat_routed;
+        if process.vfs_stat_routed {
+            process.cwd = sched.processes[idx].cwd.clone();
+        }
     }
     let actual_pid = process.pid;
     let idx = sched.add_process_after_reaping(process);
+    crate::ipc::provision_vfs_inheritance(idx, sched, source);
     sched.enqueue_ready(idx);
 
     crate::serial_println!("[SPAWN] {} spawned pid={}", path, actual_pid);
@@ -1030,7 +1102,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/arp"
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
         #[cfg(feature = "vfs_stat_failure_test")]
-        "/bin/vfs-stat-caller" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/vfs-stat-caller")),
+        "/bin/vfs-stat-caller" => Ok(include_bytes!(
+            "../../../target/x86_64-unknown-none/release/vfs-stat-caller"
+        )),
         // Base servers spawned by init (pid=1), not hardcoded in kernel boot.
         // These need no privileged memory setup (unlike vfs/tty).
         "/sbin/timer_server" | "/usr/sbin/timer_server" => Ok(crate::TIMER_SERVER_ELF_BYTES),
@@ -1088,11 +1162,20 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         #[cfg(all(debug_assertions, feature = "session_launch_test"))]
         "/test/launch-bad-elf" => Ok(b"not-an-elf"),
         #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-        "/bin/session-launch-probe" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
+        "/bin/session-launch-probe" => Ok(include_bytes!(
+            "../../../target/x86_64-unknown-none/release/session-race-probe"
+        )),
         #[cfg(feature = "native_session_race_test")]
-        "/tmp/session-race-probe" | "/bin/session-racer" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
+        "/tmp/session-race-probe" | "/bin/session-racer" => Ok(include_bytes!(
+            "../../../target/x86_64-unknown-none/release/session-race-probe"
+        )),
         #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
-        "/test/contract-system" | "/test/contract-audio" | "/test/contract-protected" | "/test/contract-required" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
+        "/test/contract-system"
+        | "/test/contract-audio"
+        | "/test/contract-protected"
+        | "/test/contract-required" => Ok(include_bytes!(
+            "../../../target/x86_64-unknown-none/release/session-race-probe"
+        )),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         "/usr/bin/memoryctl" | "/bin/memoryctl" => Ok(crate::MEMORYCTL_ELF_BYTES),
         "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),

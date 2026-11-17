@@ -139,6 +139,20 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         // so early clients (especially tty_server → "tty") are not stuck until
         // the entire list is created.
         let spawn_cap = CapabilityToken(spawn_token);
+        // Spawn inheritance snapshots an already-bound namespace. Starting a
+        // child before this handshake would copy sticky service routing without
+        // any namespace authority, permanently denying its later app lookups.
+        // Keep answering REGISTER/LOOKUP while VFS finishes its boot handshake.
+        loop {
+            use sunlight_ipc::vfs_rpc::{response::Kind, stat_transport as api};
+            drain_nameserver(ep, &mut registry, DRAIN_MSGS_PER_SPAWN, DRAIN_TIMEOUT_MS);
+            if matches!(api::root_metadata(), Ok(metadata)
+                if metadata.kind == Kind::Directory && metadata.links > 0)
+            {
+                debug_log("[init] VFS namespace ready before service spawn");
+                break;
+            }
+        }
         // Native spawn stamps storagectl with its existing root-only StorageAdmin grant.
         // Complete the bounded pass before launching ordinary boot services.
         match sunlight_libc::spawn(b"/bin/storagectl", &[b"storagectl", b"fstab"], None)
@@ -428,6 +442,7 @@ fn verify_stat_failures(cap: CapabilityToken) {
     verify_stat_output_vm(original);
     stat_vm_race::verify(original);
     verify_stat_caller_lifecycle(cap, original);
+    verify_file_caller(cap);
     arm(2);
     assert_eq!(api::stat("/etc/motd"), Err(api::IO_ERROR));
     // No fallback to the still-present kernel filesystem after epoch loss.
@@ -801,6 +816,7 @@ fn verify_stat_caller_lifecycle(
     }
     for mode in [
         b"initial-cwd".as_slice(),
+        b"narrow-root".as_slice(),
         b"failed-exec".as_slice(),
         b"exit".as_slice(),
         b"exec".as_slice(),
@@ -830,4 +846,29 @@ fn verify_stat_caller_lifecycle(
         assert_eq!(api::stat("/etc/motd"), Ok(original));
     }
     debug_log("[VFS-RPC] native stat caller exit/exec stale reply/fresh recovery OK");
+}
+
+/// Dedicated native caller for the copied regular-file channel. The kernel
+/// selects this exact fixture for `vfs_file_routed`; the child exercises open,
+/// read, write, seek, fstat, dup, close and the exec descriptor transfer.
+#[cfg(feature = "stat-failure-test")]
+fn verify_file_caller(cap: CapabilityToken) {
+    let mut digits = [0u8; 20];
+    let mut number = cap.0;
+    let mut start = digits.len();
+    loop {
+        start -= 1;
+        digits[start] = b'0' + (number % 10) as u8;
+        number /= 10;
+        if number == 0 {
+            break;
+        }
+    }
+    let pid = sunlight_libc::spawn(
+        b"/bin/vfs-stat-caller",
+        &[b"vfs-stat-caller", b"file", &digits[start..]],
+        None,
+    )
+    .expect("native file caller");
+    assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
 }

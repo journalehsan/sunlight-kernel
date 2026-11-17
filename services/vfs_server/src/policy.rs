@@ -24,7 +24,8 @@ pub enum Error {
     Retention(retention::Error<FsError>),
 }
 
-struct Binding {
+#[derive(Clone)]
+pub(crate) struct Binding {
     scope: Scope,
     pair: Arc<DirectoryPair>,
 }
@@ -102,6 +103,29 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         caller: sunlight_fs::Credential,
         revalidate: impl FnOnce() -> bool,
     ) -> Result<(), Error> {
+        self.transition(old, next, path, caller, false, revalidate)
+    }
+
+    pub(crate) fn change_root(
+        &mut self,
+        old: Scope,
+        next: Scope,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        self.transition(old, next, path, caller, true, revalidate)
+    }
+
+    fn transition(
+        &mut self,
+        old: Scope,
+        next: Scope,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        replace_root: bool,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
         if self.retired {
             return Err(Error::Retired);
         }
@@ -119,12 +143,13 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         }
         // Failed attempts cannot reuse generations, including failed lookup.
         self.last_generation = next.namespace_generation;
-        let pair = self.bindings[slot]
-            .as_ref()
-            .unwrap()
-            .pair
-            .change_directory(path, caller)
-            .map_err(Error::Filesystem)?;
+        let previous = &self.bindings[slot].as_ref().unwrap().pair;
+        let pair = if replace_root {
+            previous.change_root(path, caller)
+        } else {
+            previous.change_directory(path, caller)
+        }
+        .map_err(Error::Filesystem)?;
         let pair = Arc::try_new(pair).map_err(|_| Error::Filesystem(FsError::NoMemory))?;
         if !revalidate() {
             self.withdraw(old)?;
@@ -132,6 +157,111 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         }
         self.bindings[slot] = Some(Binding { scope: next, pair });
         Ok(())
+    }
+
+    /// Derive a separately withdrawable caller binding from exact retained
+    /// objects. No pathname lookup, credential inheritance or numeric object
+    /// claim is involved. The lifecycle owner authenticates parent and child.
+    pub(crate) fn derive_caller(
+        &mut self,
+        parent: Scope,
+        child: Scope,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        if self.retired {
+            return Err(Error::Retired);
+        }
+        let pair = self
+            .bindings
+            .iter()
+            .flatten()
+            .find(|b| b.scope == parent)
+            .map(|b| Arc::clone(&b.pair))
+            .ok_or(Error::Scope)?;
+        self.derive_pair(parent, child, pair, revalidate)
+    }
+
+    /// The copied kernel handoff pins this exact lease while the source caller
+    /// can retire. Ordinary retention requests never invoke this authority.
+    pub(crate) fn derive_retained_caller(
+        &mut self,
+        source: Receipt,
+        child: Scope,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        let pair = Arc::clone(
+            self.leases
+                .get(self.registration, source)
+                .map_err(|_| Error::Scope)?,
+        );
+        self.derive_pair(source.scope(), child, pair, revalidate)
+    }
+
+    fn derive_pair(
+        &mut self,
+        parent: Scope,
+        child: Scope,
+        pair: Arc<DirectoryPair>,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        if self.retired {
+            return Err(Error::Retired);
+        }
+        wire::PendingRetain::new(self.registration, child, 1).map_err(Error::Protocol)?;
+        if parent.caller == child.caller || parent.namespace_id != child.namespace_id {
+            return Err(Error::Scope);
+        }
+        if self
+            .bindings
+            .iter()
+            .flatten()
+            .any(|b| b.scope.caller == child.caller)
+        {
+            return Err(Error::Scope);
+        }
+        if child.namespace_generation <= self.last_generation {
+            return Err(Error::Generation);
+        }
+        let slot = self
+            .bindings
+            .iter()
+            .position(Option::is_none)
+            .ok_or(Error::Capacity)?;
+        self.last_generation = child.namespace_generation;
+        if !revalidate() {
+            return Err(Error::Identity);
+        }
+        self.bindings[slot] = Some(Binding { scope: child, pair });
+        Ok(())
+    }
+
+    pub(crate) fn save_directory(&self, scope: Scope) -> Result<Binding, Error> {
+        self.bindings
+            .iter()
+            .flatten()
+            .find(|b| b.scope == scope)
+            .cloned()
+            .ok_or(Error::Scope)
+    }
+    pub(crate) fn restore_directory(&mut self, scope: Scope, saved: Binding) {
+        if let Some(slot) = self
+            .bindings
+            .iter_mut()
+            .find(|b| b.as_ref().is_some_and(|b| b.scope == scope))
+        {
+            *slot = Some(saved);
+        }
+    }
+
+    pub(crate) fn cwd(&self, scope: Scope) -> Result<alloc::string::String, Error> {
+        self.bindings
+            .iter()
+            .flatten()
+            .find(|b| b.scope == scope)
+            .ok_or(Error::Scope)?
+            .pair
+            .cwd()
+            .map_err(Error::Filesystem)
     }
 
     /// Complete scope match prevents stale exit/exec teardown from withdrawing
@@ -298,6 +428,36 @@ impl<const P: usize, const L: usize> Policy<P, L> {
             links: stat.nlinks,
             size: stat.size as u64,
         })
+    }
+
+    /// Trusted adapter only: receipt is independently authenticated, and the
+    /// caller's credentials are captured under lifecycle serialization.
+    pub(crate) fn open_file(
+        &self,
+        authenticated: Registration,
+        receipt: Receipt,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        read: bool,
+        write: bool,
+    ) -> Result<crate::open::File, Error> {
+        if self.retired || authenticated != self.registration {
+            return Err(Error::Identity);
+        }
+        let pair = self
+            .leases
+            .get(authenticated, receipt)
+            .map_err(|_| Error::Scope)?;
+        if !self
+            .bindings
+            .iter()
+            .flatten()
+            .any(|b| b.scope == receipt.scope())
+        {
+            return Err(Error::Scope);
+        }
+        pair.open_file(path, caller, read, write)
+            .map_err(Error::Filesystem)
     }
 
     /// Diagnostics of retained objects, with no pathname lookup or new authority.

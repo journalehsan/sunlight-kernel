@@ -20,10 +20,22 @@ pub const AUTHORIZE_ROOT: u64 = 4;
 /// The buffer starts with FRAME_BYTES of retain input and has CWD_BYTES output
 /// capacity. Success replaces it with u64 length, UTF-8 bytes and zero padding.
 pub const INITIAL_CWD: u64 = 5;
+/// Exact retained source for a kernel-staged spawn/exec handoff. The source
+/// lease stays owned until the child preparation settles, even after retirement.
+pub const DERIVE_SOURCE: u64 = 8;
 pub const CWD_BYTES: usize = 8 + 4096;
 
 pub fn has_input(operation: u64) -> bool {
-    matches!(operation, REPLY | AUTHORIZE_ROOT | INITIAL_CWD)
+    matches!(
+        operation,
+        REPLY
+            | DERIVE_SOURCE
+            | AUTHORIZE_ROOT
+            | INITIAL_CWD
+            | crate::vfs_rpc::file_transport::REPLY
+            | super::super::chdir_transport::CONTEXT
+            | super::super::chdir_transport::FINISH
+    )
 }
 pub const STATUS_BYTES: usize = REGISTRATION_BYTES + 8;
 pub const REGISTRATION_BYTES: usize = 40;
@@ -44,9 +56,20 @@ pub fn is_control_wakeup(message: &crate::IpcMsg) -> bool {
 pub fn copy_length(operation: u64, epoch: u64, length: u64, reserved: [u64; 3]) -> Option<usize> {
     let expected = match operation {
         SNAPSHOT if epoch == 0 => REGISTRATION_BYTES,
-        NEXT | REPLY | AUTHORIZE_ROOT if epoch != 0 => FRAME_BYTES,
+        NEXT | REPLY | AUTHORIZE_ROOT | DERIVE_SOURCE if epoch != 0 => FRAME_BYTES,
         STATUS if epoch != 0 => STATUS_BYTES,
         INITIAL_CWD if epoch != 0 => CWD_BYTES,
+        super::super::chdir_transport::CONTEXT if epoch != 0 => {
+            super::super::chdir_transport::CONTEXT_BYTES
+        }
+        super::super::chdir_transport::FINISH if epoch != 0 => {
+            super::super::chdir_transport::FINISH_BYTES
+        }
+        crate::vfs_rpc::file_transport::NEXT | crate::vfs_rpc::file_transport::REPLY
+            if epoch != 0 =>
+        {
+            crate::vfs_rpc::file_transport::FRAME_BYTES
+        }
         _ => return None,
     };
     (length == expected as u64 && reserved == [0; 3]).then_some(expected)
@@ -71,6 +94,30 @@ pub fn decode_cwd(bytes: &[u8; CWD_BYTES]) -> Result<&str, ProtocolError> {
     let path = core::str::from_utf8(&bytes[8..8 + len]).map_err(|_| ProtocolError::Encoding)?;
     encode_cwd(path)?;
     Ok(path)
+}
+
+pub fn derive_source(epoch: u64, retain: &[u8; FRAME_BYTES]) -> Option<super::Receipt> {
+    let mut bytes = *retain;
+    let (status, _) = unsafe {
+        crate::raw_syscall(
+            crate::SunlightSyscall::VfsRetention,
+            DERIVE_SOURCE,
+            bytes.as_mut_ptr() as u64,
+            FRAME_BYTES as u64,
+            epoch,
+            0,
+            0,
+            0,
+        )
+    };
+    match super::wire::Frame::decode(&bytes).ok()? {
+        super::wire::Frame::Retained(receipt)
+            if status == 0 && receipt.registration().epoch == epoch =>
+        {
+            Some(receipt)
+        }
+        _ => None,
+    }
 }
 
 pub fn initial_cwd(epoch: u64, retain: &[u8; FRAME_BYTES]) -> Option<[u8; CWD_BYTES]> {
@@ -297,7 +344,7 @@ mod tests {
     #[test]
     fn exact_copy_envelopes_reject_aliases_and_reserved_arguments() {
         assert_eq!(copy_length(SNAPSHOT, 0, 40, [0; 3]), Some(40));
-        for operation in [NEXT, REPLY, AUTHORIZE_ROOT] {
+        for operation in [NEXT, REPLY, AUTHORIZE_ROOT, DERIVE_SOURCE] {
             assert_eq!(copy_length(operation, 1, 112, [0; 3]), Some(112));
             assert_eq!(copy_length(operation, 0, 112, [0; 3]), None);
             for length in [0, 40, 111, 113, u64::MAX] {

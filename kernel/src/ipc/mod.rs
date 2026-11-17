@@ -1,22 +1,42 @@
-mod deferred_token;
 #[cfg(all(debug_assertions, feature = "authenticated_reply_test"))]
 pub(crate) mod authenticated_reply_test;
-mod reply_identity;
 #[cfg(all(debug_assertions, feature = "ipc_deferred_test"))]
 pub(crate) mod deferred_test;
+mod deferred_token;
+pub mod message;
+mod reply_identity;
 #[cfg(all(debug_assertions, feature = "ipc_reply_race_test"))]
 pub(crate) mod reply_race_test;
-pub mod message;
 mod vfs_registration;
 mod vfs_resources;
 pub(crate) use vfs_registration::cleanup_abandoned as cleanup_vfs_abandoned;
-pub(crate) use vfs_registration::reconcile_namespaces as reconcile_vfs_namespaces;
 pub(crate) use vfs_registration::control as vfs_retention_control;
 pub(crate) use vfs_registration::initial_cwd as vfs_initial_cwd;
+pub(crate) use vfs_registration::reconcile_namespaces as reconcile_vfs_namespaces;
 pub(crate) use vfs_registration::withdraw_root_profile as withdraw_vfs_root_profile;
-pub(crate) use vfs_registration::{stat_path_call, take_stat as vfs_take_stat,
-    complete_stat as vfs_complete_stat, stat_copy_failed, StatCall, StatError};
+pub(crate) use vfs_registration::{
+    capture_inheritance as capture_vfs_inheritance,
+    provision_inheritance as provision_vfs_inheritance,
+};
+pub(crate) use vfs_registration::{
+    chdir_call as vfs_chdir_call, chdir_context as vfs_chdir_context,
+    chdir_finish as vfs_chdir_finish, chdir_resume as vfs_chdir_resume,
+};
+pub(crate) use vfs_registration::{
+    complete_stat as vfs_complete_stat, stat_copy_failed, stat_path_call,
+    take_stat as vfs_take_stat, StatCall, StatError,
+};
+pub(crate) use vfs_registration::{
+    file_control as vfs_file_control, vfs_file_call, vfs_wake_file_callers, FileCall,
+    FileCompletion, FileControl, FileOperation,
+};
 
+pub(crate) use vfs_registration::{
+    expect_file_transfer as expect_vfs_file_transfer,
+    finish_file_transfer as finish_vfs_file_transfer,
+    transfer_file_owner as transfer_vfs_file_owner,
+    close_file_owner as close_vfs_file_owner,
+};
 pub(crate) use vfs_registration::{
     process_identity as vfs_process_identity, retire_endpoint as retire_vfs_endpoint,
     retire_process as retire_vfs_process,
@@ -917,7 +937,14 @@ pub(crate) fn deliver_reply_to_target(
     let h3_target = sched.processes[client_idx].name_str() == "session-race-probe";
     #[cfg(feature = "native_session_race_test")]
     if h3_target {
-        crate::capability::session_h3_trace::record(40, target.call.pid as u64, target.call.incarnation, target.endpoint_id as u64, target.call.generation, 0);
+        crate::capability::session_h3_trace::record(
+            40,
+            target.call.pid as u64,
+            target.call.incarnation,
+            target.endpoint_id as u64,
+            target.call.generation,
+            0,
+        );
     }
     let valid = !sched.processes[client_idx].is_exiting()
         && sched.processes[client_idx].foreground.incarnation == target.call.incarnation
@@ -934,7 +961,14 @@ pub(crate) fn deliver_reply_to_target(
     if !valid {
         #[cfg(feature = "native_session_race_test")]
         if h3_target {
-            crate::capability::session_h3_trace::record(42, target.call.pid as u64, target.call.incarnation, target.endpoint_id as u64, target.call.generation, 0);
+            crate::capability::session_h3_trace::record(
+                42,
+                target.call.pid as u64,
+                target.call.incarnation,
+                target.endpoint_id as u64,
+                target.call.generation,
+                0,
+            );
         }
         caps.settle_grant_delivery(
             target.call.pid,
@@ -974,7 +1008,14 @@ pub(crate) fn deliver_reply_to_target(
     sched.processes[client_idx].ipc_reply = Some((target.call.generation, reply));
     #[cfg(feature = "native_session_race_test")]
     if h3_target {
-        crate::capability::session_h3_trace::record(41, target.call.pid as u64, target.call.incarnation, target.endpoint_id as u64, target.call.generation, 0);
+        crate::capability::session_h3_trace::record(
+            41,
+            target.call.pid as u64,
+            target.call.incarnation,
+            target.endpoint_id as u64,
+            target.call.generation,
+            0,
+        );
     }
     trace_pty_event(
         sched,
@@ -1389,8 +1430,15 @@ fn mediate_nameserver_register(
         return Err(IpcError::InvalidCapability);
     }
     if msg.words[0] == name_hash("sunlightd") {
-        let process = sched.processes.iter().find(|p| p.pid == caller_pid).ok_or(IpcError::InvalidCapability)?;
-        if !sched.supervision.current(Scheduler::supervision_identity(process)) {
+        let process = sched
+            .processes
+            .iter()
+            .find(|p| p.pid == caller_pid)
+            .ok_or(IpcError::InvalidCapability)?;
+        if !sched
+            .supervision
+            .current(Scheduler::supervision_identity(process))
+        {
             return Err(IpcError::InvalidCapability);
         }
     }
@@ -1771,8 +1819,17 @@ fn withdraw_hybrid_reply_on_bus(
     bus.remove_pending_call(target.endpoint_id, target.call);
     bus.reply_waiter_remove(target.endpoint_id, target.call);
     if reply_target_is_live(target, sched) {
-        let idx = sched.processes.iter().position(|p| p.pid == target.call.pid).unwrap();
-        finish_call(sched, idx, IpcCallOutcome::PeerClosed(target.call.generation), caps);
+        let idx = sched
+            .processes
+            .iter()
+            .position(|p| p.pid == target.call.pid)
+            .unwrap();
+        finish_call(
+            sched,
+            idx,
+            IpcCallOutcome::PeerClosed(target.call.generation),
+            caps,
+        );
     }
     remove_deferred_target(sched, target);
     for process in &mut sched.processes {
@@ -1786,7 +1843,9 @@ pub(crate) fn withdraw_hybrid_reply(
     sched: &mut Scheduler,
     caps: &mut CapabilityBroker,
 ) {
-    with_shard(target.endpoint_id, |bus| withdraw_hybrid_reply_on_bus(target, sched, caps, bus));
+    with_shard(target.endpoint_id, |bus| {
+        withdraw_hybrid_reply_on_bus(target, sched, caps, bus)
+    });
 }
 
 pub(crate) fn reply_target_is_live(target: IpcReplyTarget, sched: &Scheduler) -> bool {
@@ -2159,7 +2218,14 @@ pub fn finish_peer_closed_calls(
         );
         #[cfg(feature = "native_session_race_test")]
         if sched.processes[idx].name_str() == "session-race-probe" {
-            crate::capability::session_h3_trace::record(30, call.pid as u64, call.incarnation, endpoint_id as u64, call.generation, 0);
+            crate::capability::session_h3_trace::record(
+                30,
+                call.pid as u64,
+                call.incarnation,
+                endpoint_id as u64,
+                call.generation,
+                0,
+            );
             crate::serial_println!("[SESSION-E3] seq={} checkpoint=peer-closed endpoint={} recipient={} recipient_inc={} request_generation={} pending=0 cpu={}", crate::capability::session_race::sequence(), endpoint_id, call.pid, call.incarnation, call.generation, crate::sched::current_cpu_id());
         }
         PEER_CLOSED_WAKE_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -2176,7 +2242,11 @@ mod tests {
     use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget, PendingIpcCall};
 
     fn call(pid: usize, generation: u64) -> IpcCallId {
-        IpcCallId { pid, incarnation: 0, generation }
+        IpcCallId {
+            pid,
+            incarnation: 0,
+            generation,
+        }
     }
 
     #[test]
@@ -2214,7 +2284,9 @@ mod tests {
             endpoint_id: 13,
             call: call(4, 9),
         };
-        assert!(reply_target_matches_pending_request(4, 0,
+        assert!(reply_target_matches_pending_request(
+            4,
+            0,
             Some(pending),
             Some(target)
         ));
@@ -2223,15 +2295,24 @@ mod tests {
             endpoint_id: 13,
             call: call(4, 8),
         };
-        assert!(!reply_target_matches_pending_request(4, 0,
+        assert!(!reply_target_matches_pending_request(
+            4,
+            0,
             Some(pending),
             Some(stale)
         ));
-        assert!(!reply_target_matches_pending_request(5, 0,
+        assert!(!reply_target_matches_pending_request(
+            5,
+            0,
             Some(pending),
             Some(target)
         ));
-        assert!(!reply_target_matches_pending_request(4, 0, None, Some(target)));
+        assert!(!reply_target_matches_pending_request(
+            4,
+            0,
+            None,
+            Some(target)
+        ));
     }
 
     #[test]

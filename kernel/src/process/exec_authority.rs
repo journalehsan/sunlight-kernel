@@ -29,6 +29,7 @@ impl Process {
         self.trusted_auth_broker = false;
         self.trusted_vfs_service = false;
         self.vfs_root_metadata = false;
+        self.vfs_boot_root = false;
         // Preserve vfs_stat_routed: losing admission cannot restore kernel VFS.
         self.trusted_service_manager = false;
         self.trusted_tty_session_service = false;

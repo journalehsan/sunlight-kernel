@@ -515,8 +515,8 @@ fn provisioning_rejects_foreign_registration_before_publishing_pins() {
     acquire(&mut runtime, r, authority.scope, 1);
 }
 
-fn stat_reply<const L: usize>(
-    runtime: &Runtime<1, L, 1>,
+fn stat_reply<const P: usize, const L: usize>(
+    runtime: &Runtime<P, L, 1>,
     receipt: Receipt,
     path: &str,
     uid: u32,
@@ -613,3 +613,10 @@ fn authenticated_stat_traverses_retained_cwd_and_encodes_search_and_path_errors(
 }
 
 mod cwd_transition;
+
+mod root_transition;
+
+#[path = "tests/file_channel.rs"]
+mod file_channel;
+#[path = "tests/open_files.rs"]
+mod open_files;

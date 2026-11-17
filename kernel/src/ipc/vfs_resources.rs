@@ -292,11 +292,19 @@ impl NamespaceBinding {
         }))
     }
 
+    pub(super) fn registration(&self) -> Registration {
+        self.root.registration
+    }
+
+    pub(super) fn grants(&self) -> u64 {
+        self.grants
+    }
+
     pub(super) fn retire(&self) {
         self.live.store(false, Ordering::Release);
     }
 
-    fn validate(&self, identity: AdmissionIdentity) -> Result<Namespace, Error> {
+    pub(super) fn validate(&self, identity: AdmissionIdentity) -> Result<Namespace, Error> {
         if self.caller != identity.caller
             || self.root.registration != identity.registration
             || !self.live.load(Ordering::Acquire)

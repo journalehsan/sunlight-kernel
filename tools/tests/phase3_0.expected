@@ -34,3 +34,7 @@ timezone: zone=
 [VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK
 
 [VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK
+
+[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture
+
+[init] VFS namespace ready before service spawn

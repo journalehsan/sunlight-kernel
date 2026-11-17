@@ -4,31 +4,8 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-struct BumpAllocator;
-#[cfg(feature = "production-grant-test")]
-static BUMP_USED: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 65536] = [0; 65536];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        #[cfg(feature = "production-grant-test")]
-        BUMP_USED.store(end, core::sync::atomic::Ordering::Relaxed);
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
+// The libc allocator reclaims dropped policy pins, leases and temporary paths.
+// Cwd transitions reuse the same bounded heap for the service lifetime.
 
 use sunlight_fat::{FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 use sunlight_fs::{
@@ -302,6 +279,7 @@ pub extern "C" fn _start() -> ! {
     loop {
         drain_retention(&mut state);
         drain_stats(&mut state);
+        drain_files(&mut state);
         if sunlight_ipc::vfs_rpc::retention::transport::is_control_wakeup(&msg) {
             msg = ipc_recv(ep);
             continue;
@@ -322,22 +300,32 @@ fn drain_retention(state: &mut State) {
 /// Copied stat work is kernel-origin only; legacy IPC cannot enter this path.
 fn drain_stats(state: &mut State) {
     use sunlight_ipc::vfs_rpc::stat_transport as api;
-    let Some(registration) = state.retention.active() else { return; };
+    let Some(registration) = state.retention.active() else {
+        return;
+    };
     #[cfg(feature = "stat-failure-test")]
     if state.stat_failure.fail_pull(registration.epoch) {
         return;
     }
     for _ in 0..64 {
-        let Ok(Some(packet)) = api::next(registration.epoch) else { break; };
-        let Ok(input) = api::input(&packet) else { break; };
+        let Ok(Some(packet)) = api::next(registration.epoch) else {
+            break;
+        };
+        let Ok(input) = api::input(&packet) else {
+            break;
+        };
         let reply = match state.retention.stat(registration, input) {
             Ok(reply) => reply,
             Err(_) => {
                 // Kernel input always contains the canonical dispatch header.
                 // A service-side policy failure completes that exact ID.
-                let Some(id) = input.get(8..16) else { break; };
+                let Some(id) = input.get(8..16) else {
+                    break;
+                };
                 let id = u64::from_le_bytes(id.try_into().unwrap());
-                let Ok(reply) = api::encode_reply(id, 5, &[]) else { break; };
+                let Ok(reply) = api::encode_reply(id, 5, &[]) else {
+                    break;
+                };
                 reply
             }
         };
@@ -345,7 +333,38 @@ fn drain_stats(state: &mut State) {
         if state.stat_failure.withhold(registration.epoch, &reply) {
             continue;
         }
-        if !api::complete(registration.epoch, &reply) { break; }
+        if !api::complete(registration.epoch, &reply) {
+            break;
+        }
+    }
+}
+
+/// Copied regular-file work is kernel-origin only; legacy IPC cannot enter this
+/// path. Each frame is independently authenticated by the kernel transport
+/// before it is pulled, and the service still checks the caller against every
+/// descriptor it touches. Bounded per turn so one busy caller cannot starve the
+/// ordinary IPC loop.
+fn drain_files(state: &mut State) {
+    use sunlight_vfs_server::runtime::control::{Control, CopiedControl};
+    let Some(registration) = state.retention.active() else {
+        return;
+    };
+    let mut control = CopiedControl;
+    for _ in 0..64 {
+        let Ok(Some(frame)) = control.file_next(registration.epoch) else {
+            break;
+        };
+        let Some(reply) = state
+            .retention
+            .file_request(&mut control, registration, &frame)
+        else {
+            // A structurally invalid frame is left for the kernel timeout; it
+            // is never retransmitted or acknowledged as success.
+            break;
+        };
+        if !control.file_reply(registration.epoch, &reply) {
+            break;
+        }
     }
 }
 
@@ -459,7 +478,7 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             .word(2, boot as u64)
             .word(
                 3,
-                BUMP_USED.load(core::sync::atomic::Ordering::Relaxed) as u64,
+                sunlight_libc::alloc::heap_stats().requested_user_bytes as u64,
             );
     }
     #[cfg(feature = "production-grant-test")]
@@ -1221,7 +1240,7 @@ fn test_live_namespace_pins(state: &mut State) {
         .lock()
         .mkdir("/tmp/vfs-pins", 0, 0, 0o755)
         .unwrap();
-    let mut policy = sunlight_vfs_server::runtime::Runtime::<1, 1, 1>::new();
+    let mut policy = sunlight_vfs_server::runtime::Runtime::<1, 4, 1>::new();
     policy.bind(registration).unwrap();
     policy
         .install(registration, scope, &state.namespace, "/", "/tmp/vfs-pins")
@@ -1242,7 +1261,66 @@ fn test_live_namespace_pins(state: &mut State) {
     let changed = policy.metadata(registration, receipt).unwrap();
     assert_eq!(retained[1].0, changed[1].0);
     assert_eq!((changed[1].1.uid, changed[1].1.gid), (71, 72));
+    // Trusted local file-owner fixture. This does not exercise copied file
+    // dispatch, application descriptor tables or exit/exec transport.
+    use sunlight_vfs_server::open::{Access, Seek};
+    let h = state
+        .vfs
+        .lock()
+        .create_file_exclusive("/tmp/vfs-pins/data", 71, 72, 0o600)
+        .unwrap();
+    state.vfs.lock().write(h, 0, b"abcdef").unwrap();
+    state.vfs.lock().close(h).unwrap();
+    let handles = state.vfs.lock().open_handle_count();
+    let file = policy
+        .open_file(
+            registration,
+            receipt,
+            "data",
+            Credential { uid: 71, gid: 72 },
+            Access::ReadWrite,
+            || true,
+        )
+        .unwrap();
+    let duplicate = policy
+        .duplicate_file(registration, scope.caller, file)
+        .unwrap();
+    let mut bytes = [0; 2];
+    assert_eq!(
+        policy
+            .read_file(registration, scope.caller, file, &mut bytes)
+            .unwrap(),
+        2
+    );
+    assert_eq!(&bytes, b"ab");
+    assert_eq!(
+        policy
+            .read_file(registration, scope.caller, duplicate, &mut bytes)
+            .unwrap(),
+        2
+    );
+    assert_eq!(&bytes, b"cd");
+    state.vfs.lock().unlink("/tmp/vfs-pins/data").unwrap();
+    policy
+        .seek_file(registration, scope.caller, duplicate, Seek::Start(0))
+        .unwrap();
+    policy
+        .read_file(registration, scope.caller, file, &mut bytes)
+        .unwrap();
+    assert_eq!(&bytes, b"ab");
+    assert_eq!(state.vfs.lock().open_handle_count(), handles + 1);
     policy.retire_caller(scope.caller);
+    assert_eq!(
+        policy
+            .stat_file(registration, scope.caller, file)
+            .unwrap()
+            .size,
+        6
+    );
+    policy.retire_file_owner(scope.caller);
+    assert_eq!(state.vfs.lock().open_handle_count(), handles);
+    debug_log("[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture");
+
     policy
         .request(registration, &Frame::Release(receipt).encode().unwrap())
         .unwrap();

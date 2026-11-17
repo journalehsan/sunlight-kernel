@@ -44,6 +44,37 @@ impl Receipt {
     pub const fn generation(self) -> u64 {
         self.generation
     }
+
+    /// Reconstruct the correlation value a copied transport authenticated
+    /// upstream. Callers must still prove it names a live lease; a decoded
+    /// request alone never grants the referenced objects.
+    pub fn from_parts(
+        registration: Registration,
+        scope: Scope,
+        request_id: u64,
+        generation: u64,
+    ) -> Option<Self> {
+        if request_id == 0
+            || generation == 0
+            || scope.namespace_id == 0
+            || scope.namespace_generation == 0
+            || [
+                registration.epoch,
+                scope.caller.pid,
+                scope.caller.incarnation,
+                scope.caller.address_space_generation,
+            ]
+            .contains(&0)
+        {
+            return None;
+        }
+        Some(Self {
+            registration,
+            scope,
+            request_id,
+            generation,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
