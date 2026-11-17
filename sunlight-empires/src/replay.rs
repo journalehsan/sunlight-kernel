@@ -14,6 +14,41 @@ fn command(out: &mut Vec<u8>, e: &Envelope) {
     put(out, e.player as u64);
     put(out, e.sequence as u64);
     match &e.command {
+        Command::Attack { units, target } => {
+            put(out, 6);
+            put(out, units.len() as u64);
+            for id in units {
+                put(out, *id as u64);
+            }
+            put(out, *target as u64);
+        }
+        Command::AttackMove { units, target } => {
+            put(out, 7);
+            put(out, units.len() as u64);
+            for id in units {
+                put(out, *id as u64);
+            }
+            tile(out, *target);
+        }
+        Command::Stop { units } | Command::Hold { units } => {
+            put(
+                out,
+                if matches!(e.command, Command::Stop { .. }) {
+                    8
+                } else {
+                    9
+                },
+            );
+            put(out, units.len() as u64);
+            for id in units {
+                put(out, *id as u64);
+            }
+        }
+        Command::Train { building, kind } => {
+            put(out, 10);
+            put(out, *building as u64);
+            put(out, *kind as u64);
+        }
         Command::MoveUnits { units, target } => {
             put(out, 0);
             put(out, units.len() as u64);
@@ -21,6 +56,19 @@ fn command(out: &mut Vec<u8>, e: &Envelope) {
                 put(out, *id as u64)
             }
             tile(out, *target);
+        }
+        Command::BuildGroup {
+            units,
+            kind,
+            tile: t,
+        } => {
+            put(out, 5);
+            put(out, units.len() as u64);
+            for id in units {
+                put(out, *id as u64);
+            }
+            put(out, *kind as u64);
+            tile(out, *t);
         }
         Command::BuildStructure {
             worker,
@@ -54,6 +102,18 @@ pub fn state_bytes(w: &World) -> Vec<u8> {
         RULES_VERSION as u64,
         content::CONTENT_VERSION as u64,
         w.tick,
+        w.match_enabled as u64,
+        w.outcome as u64,
+        w.ai_sequence as u64,
+        w.ai_next_attack,
+        w.ai_pacing.peaceful_ticks,
+        w.ai_pacing.attack_interval,
+        w.ai_pacing.decision_interval,
+        w.enemy_resources.food as u64,
+        w.enemy_resources.wood as u64,
+        w.enemy_resources.stone as u64,
+        w.enemy_resources.gold as u64,
+        w.enemy_resources.knowledge as u64,
         w.civilization as u64,
         w.next_id as u64,
         w.completed as u64,
@@ -66,6 +126,9 @@ pub fn state_bytes(w: &World) -> Vec<u8> {
         w.resources.knowledge as u64,
     ] {
         put(&mut out, v)
+    }
+    for v in w.visibility.iter().chain(w.explored.iter()) {
+        out.extend_from_slice(v);
     }
     for (t, r) in w.map.terrain.iter().zip(&w.map.remaining) {
         out.push(*t as u8);
@@ -80,12 +143,23 @@ pub fn state_bytes(w: &World) -> Vec<u8> {
             u.x as u64,
             u.y as u64,
             u.work as u64,
+            u.health as u64,
+            u.cooldown as u64,
             u.cargo as u64,
             u.cargo_stone as u64,
         ] {
             put(&mut out, v)
         }
         match u.task {
+            Task::Attack(id) => {
+                put(&mut out, 4);
+                put(&mut out, id as u64);
+            }
+            Task::AttackMove(t) => {
+                put(&mut out, 5);
+                tile(&mut out, t);
+            }
+            Task::Hold => put(&mut out, 6),
             Task::Idle => put(&mut out, 0),
             Task::Move => put(&mut out, 1),
             Task::Gather(t) => {
@@ -110,8 +184,14 @@ pub fn state_bytes(w: &World) -> Vec<u8> {
             b.kind as u64,
             b.progress as u64,
             b.complete as u64,
+            b.health as u64,
         ] {
             put(&mut out, v)
+        }
+        put(&mut out, b.training.is_some() as u64);
+        if let Some((kind, ticks)) = b.training {
+            put(&mut out, kind as u64);
+            put(&mut out, ticks as u64);
         }
         tile(&mut out, b.tile);
         put(&mut out, b.rally.is_some() as u64);
@@ -135,6 +215,10 @@ pub fn save(w: &World) -> Vec<u8> {
         w.civilization as u64,
         w.tick,
         w.log.len() as u64,
+        w.match_enabled as u64,
+        w.ai_pacing.peaceful_ticks,
+        w.ai_pacing.attack_interval,
+        w.ai_pacing.decision_interval,
     ] {
         put(&mut out, v)
     }
@@ -193,12 +277,58 @@ pub fn load(bytes: &[u8]) -> Result<World, LoadError> {
     if tick > 72000 || count > MAX_COMMANDS as u64 {
         return Err(LoadError::Limit);
     }
-    let mut w = World::new(civ);
+    let match_enabled = r.get()?;
+    if match_enabled > 1 {
+        return Err(LoadError::Invalid);
+    }
+    let mut w = if match_enabled == 1 {
+        World::new_match(civ)
+    } else {
+        World::new(civ)
+    };
+    w.ai_pacing = content::AiPacing {
+        peaceful_ticks: r.get()?,
+        attack_interval: r.get()?,
+        decision_interval: r.get()?,
+    };
     for _ in 0..count {
         let tick = r.get()?;
         let player = r.get()?.try_into().map_err(|_| LoadError::Invalid)?;
         let sequence = r.u32()?;
-        let cmd = match r.get()? {
+        let tag = r.get()?;
+        let cmd = match tag {
+            6..=9 => {
+                let n = r.get()?;
+                if n > 64 {
+                    return Err(LoadError::Limit);
+                }
+                let mut units = Vec::new();
+                for _ in 0..n {
+                    units.push(r.u32()?);
+                }
+                match tag {
+                    6 => Command::Attack {
+                        units,
+                        target: r.u32()?,
+                    },
+                    7 => Command::AttackMove {
+                        units,
+                        target: r.tile()?,
+                    },
+                    8 => Command::Stop { units },
+                    _ => Command::Hold { units },
+                }
+            }
+            10 => {
+                let building = r.u32()?;
+                let kind = match r.get()? {
+                    0 => UnitKind::Worker,
+                    1 => UnitKind::Guard,
+                    2 => UnitKind::Archer,
+                    _ => return Err(LoadError::Invalid),
+                };
+                Command::Train { building, kind }
+            }
             0 => {
                 let n = r.get()?;
                 if n > 64 {
@@ -228,6 +358,28 @@ pub fn load(bytes: &[u8]) -> Result<World, LoadError> {
                     tile: r.tile()?,
                 }
             }
+            5 => {
+                let count = r.get()?;
+                if count > 64 {
+                    return Err(LoadError::Invalid);
+                }
+                let mut units = Vec::new();
+                for _ in 0..count {
+                    units.push(r.u32()?);
+                }
+                let kind = match r.get()? {
+                    0 => BuildingKind::TownCenter,
+                    1 => BuildingKind::House,
+                    2 => BuildingKind::Storage,
+                    3 => BuildingKind::University,
+                    _ => return Err(LoadError::Invalid),
+                };
+                Command::BuildGroup {
+                    units,
+                    kind,
+                    tile: r.tile()?,
+                }
+            }
             2 => Command::AssignWorker {
                 worker: r.u32()?,
                 node: r.tile()?,
@@ -251,6 +403,9 @@ pub fn load(bytes: &[u8]) -> Result<World, LoadError> {
         return Err(LoadError::Invalid);
     }
     while w.tick < tick {
+        if w.outcome != combat::Outcome::Active {
+            return Err(LoadError::Invalid);
+        }
         w.step()
     }
     Ok(w)

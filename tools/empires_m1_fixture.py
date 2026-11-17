@@ -9,6 +9,7 @@ fixture launch evidence, never proof that the desktop launcher works.
 After use, rebuild sunlight-init and the production kernel/ISO to remove the
 fixture from generated artifacts. Generated files belong under target/ only.
 """
+import argparse
 import hashlib
 import json
 import os
@@ -23,6 +24,11 @@ FLAGS = "-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C targ
 
 
 def main():
+    global OUT
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=OUT)
+    args = parser.parse_args()
+    OUT = args.output.resolve()
     OUT.mkdir(parents=True, exist_ok=True)
     original = INIT.read_bytes()
     assert b"EMPIRES_STARTED" not in original, "restore the previous fixture backup before retrying"
@@ -53,7 +59,7 @@ def main():
             INIT.write_bytes(original)
         assert INIT.read_bytes() == original
         subprocess.run(["cargo", "build", "-p", "sunlight-kernel"], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
-        subprocess.run(["bash", "tools/make_hybrid_iso.sh", "target/x86_64-unknown-none/debug/sunlight-kernel", "target/empires-m1/native-fixture.iso", str(ROOT / "target/limine"), str(ROOT)], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
+        subprocess.run(["bash", "tools/make_hybrid_iso.sh", "target/x86_64-unknown-none/debug/sunlight-kernel", str(OUT / "native-fixture.iso"), str(ROOT / "target/limine"), str(ROOT)], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
     manifest = {"init_source_sha256": hashlib.sha256(original).hexdigest(), "init_source_restored": INIT.read_bytes() == original, "launch": "temporary init fixture, direct native spawn at tick time >=60000 ms", "normal_launcher_validated": False}
     for name, file in [("game", ROOT / "target/x86_64-unknown-none/release/sunlight-empires"), ("kernel", ROOT / "target/x86_64-unknown-none/debug/sunlight-kernel"), ("iso", OUT / "native-fixture.iso")]:
         manifest[name + "_sha256"] = hashlib.sha256(file.read_bytes()).hexdigest()

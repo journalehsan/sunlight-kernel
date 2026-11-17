@@ -3621,9 +3621,18 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _: *const *const u8)
         decoration: WindowDecoration::Normal,
     }) else {
         debug_log("[SILICON-ECHOES] display unavailable\n");
+        drop(app);
         ProcessExit::exit(1);
     };
+    // Allow the soundtrack worker to release audiod's exclusive stream lease
+    // before ExitOnLastWindowClosed would otherwise send immediate SIGTERM.
+    if !window.set_close_grace(6_000) {
+        debug_log("[SILICON-ECHOES] close grace unavailable\n");
+        drop(app);
+        ProcessExit::exit(1);
+    }
     window.run(&mut app);
     drop(app);
+    debug_log("[SILICON-ECHOES] audio shutdown complete\n");
     ProcessExit::exit(0);
 }

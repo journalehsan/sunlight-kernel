@@ -10,6 +10,7 @@ pub struct Input {
     pub building: Option<EntityId>,
     pub placing: Option<BuildingKind>,
     pub rally: bool,
+    pub attack_move: bool,
     pub shift: bool,
     pub drag: Option<(i32, i32)>,
     pub pointer: (i32, i32),
@@ -27,6 +28,7 @@ impl Input {
             building: None,
             placing: None,
             rally: false,
+            attack_move: false,
             shift: false,
             drag: None,
             pointer: (0, 0),
@@ -52,8 +54,8 @@ impl Input {
             return None;
         }
         if let Some(kind) = self.placing {
-            return Some(Command::BuildStructure {
-                worker: self.worker(w)?,
+            return Some(Command::BuildGroup {
+                units: self.selected.clone(),
                 kind,
                 tile: t,
             });
@@ -62,6 +64,30 @@ impl Input {
             return Some(Command::SetRallyPoint {
                 building: self.building?,
                 tile: t,
+            });
+        }
+        if let Some(target) = w
+            .units
+            .iter()
+            .filter(|u| u.owner != 0 && u.tile() == t && w.visible(0, t))
+            .map(|u| u.id)
+            .chain(
+                w.buildings
+                    .iter()
+                    .filter(|b| b.owner != 0 && b.tile == t && w.visible(0, t))
+                    .map(|b| b.id),
+            )
+            .next()
+        {
+            return Some(Command::Attack {
+                units: self.selected.clone(),
+                target,
+            });
+        }
+        if self.attack_move {
+            return Some(Command::AttackMove {
+                units: self.selected.clone(),
+                target: t,
             });
         }
         if w.map.remaining[t.index()?] > 0 {
@@ -91,7 +117,7 @@ impl Input {
             (sy - y).unsigned_abs().max(1),
         );
         let tile = self.tile(x, y);
-        for u in &w.units {
+        for u in w.units.iter().filter(|u| u.owner == 0) {
             let (px, py) = self.camera.tile_to_screen(0, 0, TOP);
             let ux = px + u.x * self.camera.tile_px / sunlight_empires::SUB;
             let uy = py + u.y * self.camera.tile_px / sunlight_empires::SUB;
@@ -102,7 +128,11 @@ impl Input {
             }
         }
         if !dragged && self.selected.is_empty() {
-            self.building = w.buildings.iter().find(|b| b.tile == tile).map(|b| b.id);
+            self.building = w
+                .buildings
+                .iter()
+                .find(|b| b.owner == 0 && b.tile == tile)
+                .map(|b| b.id);
         }
         self.selected.sort_unstable();
     }

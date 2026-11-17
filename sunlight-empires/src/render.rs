@@ -55,15 +55,20 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
             let t = Tile::new(x, y);
             let n = t.index().unwrap();
             let (px, py) = camera.tile_to_screen(x, y, top);
-            let col = match w.map.terrain[n] {
+            let mut col = match w.map.terrain[n] {
                 Terrain::Grass => Color::rgb(52, 91, 59),
                 Terrain::Ground => Color::rgb(93, 94, 62),
                 Terrain::Forest => Color::rgb(27, 62, 38),
                 Terrain::Water => Color::rgb(40, 89, 133),
                 Terrain::Stone => Color::rgb(112, 118, 125),
             };
+            if !w.explored(0, t) {
+                col = Color::rgb(10, 14, 19);
+            } else if !w.visible(0, t) {
+                col = col.darken(35);
+            }
             c.fill_rect(Rect::new(px, py, z as u32 - 1, z as u32 - 1), col);
-            if matches!(w.map.terrain[n], Terrain::Forest | Terrain::Stone) {
+            if w.explored(0, t) && matches!(w.map.terrain[n], Terrain::Forest | Terrain::Stone) {
                 c.fill_rect(
                     Rect::new(px + z / 3, py + z / 4, (z / 3) as u32, (z / 2) as u32),
                     if w.map.remaining[n] > 0 {
@@ -82,7 +87,11 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
         Rect::new(bx, by, (MAP_SIZE * z) as u32, (MAP_SIZE * z) as u32),
         theme.accent,
     );
-    for b in &w.buildings {
+    for b in w
+        .buildings
+        .iter()
+        .filter(|b| b.owner == 0 || w.visible(0, b.tile))
+    {
         let (px, py) = camera.tile_to_screen(b.tile.x, b.tile.y, top);
         if px + z < 0 || px >= c.width as i32 || py + z <= top || py >= bottom {
             continue;
@@ -90,7 +99,9 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
         let r = Rect::new(px + 2, py + 2, (z - 4) as u32, (z - 4) as u32);
         c.fill_rect(
             r,
-            if b.complete {
+            if b.owner != 0 {
+                Color::rgb(185, 65, 65)
+            } else if b.complete {
                 Color::rgb(153, 124, 85)
             } else {
                 Color::rgb(105, 87, 64)
@@ -103,6 +114,15 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
             BuildingKind::University => "U",
         };
         text(c, label, px + z / 3, py + z / 4, theme.text);
+        c.fill_rect(
+            Rect::new(
+                px + 2,
+                py + 2,
+                ((z - 4) as u32 * b.health / sunlight_empires::content::BUILDING_HEALTH).max(1),
+                2,
+            ),
+            theme.ok,
+        );
         if !b.complete {
             c.fill_rect(
                 Rect::new(
@@ -128,7 +148,11 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
     }
     let (r, g, b) = w.civilization.color();
     let civ = Color::rgb(r, g, b);
-    for u in &w.units {
+    for u in w
+        .units
+        .iter()
+        .filter(|u| u.owner == 0 || w.visible(0, u.tile()))
+    {
         let px = (u.x - camera.x * SUB) * z / SUB;
         let py = (u.y - camera.y * SUB) * z / SUB + top;
         if px < 0 || px >= c.width as i32 || py < top || py >= bottom {
@@ -142,12 +166,27 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
         let r = Rect::new(px - size / 2, py - size / 2, size as u32, size as u32);
         c.fill_rect(
             r,
-            if u.kind == UnitKind::Worker {
+            if u.owner == 0 {
                 civ
             } else {
-                Color::rgb(201, 99, 87)
+                Color::rgb(210, 70, 70)
             },
         );
+        c.fill_rect(
+            Rect::new(
+                px - size / 2,
+                py - size / 2 - 5,
+                (size as u32 * u.health / u.kind.combat().health).max(1),
+                3,
+            ),
+            theme.ok,
+        );
+        if u.kind == UnitKind::Archer {
+            outline(c, r, theme.text);
+        }
+        if u.kind == UnitKind::Guard {
+            c.vline(px + size / 2, py - size / 2, size as u32, theme.text);
+        }
         if u.cargo > 0 {
             c.fill_rect(
                 Rect::new(px + size / 2, py - 2, 4, 4),
@@ -160,7 +199,12 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
         }
         if input.selected.contains(&u.id) {
             outline(c, Rect::new(r.x - 3, r.y - 3, r.w + 6, r.h + 6), theme.text);
-            if let Some(t) = u.destination() {
+            let destination = match u.task {
+                sunlight_empires::Task::AttackMove(t) => Some(t),
+                sunlight_empires::Task::Attack(id) => w.target(0, id),
+                _ => u.destination(),
+            };
+            if let Some(t) = destination {
                 let (x, y) = camera.tile_to_screen(t.x, t.y, top);
                 outline(
                     c,
@@ -169,6 +213,37 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
                 );
             }
         }
+    }
+    for e in &w.effects {
+        if !w.visible(0, e.to) {
+            continue;
+        }
+        let (x, y) = camera.tile_to_screen(e.to.x, e.to.y, top);
+        if y < top || y >= bottom {
+            continue;
+        }
+        if e.arrow {
+            let (fx, fy) = camera.tile_to_screen(e.from.x, e.from.y, top);
+            let age = (6 - e.until.saturating_sub(w.tick).min(6)) as i32;
+            c.fill_rect(
+                Rect::new(
+                    fx + (x - fx) * age / 6 + z / 2,
+                    fy + (y - fy) * age / 6 + z / 2,
+                    5,
+                    2,
+                ),
+                theme.text,
+            );
+        } else {
+            outline(
+                c,
+                Rect::new(x + 3, y + 3, (z - 6) as u32, (z - 6) as u32),
+                theme.danger,
+            );
+        }
+        let mut label = Text::new();
+        let _ = write!(label, "-{}", e.damage);
+        text(c, label.str(), x, y, theme.danger);
     }
     if let Some((sx, sy)) = input.drag {
         let (x, y) = input.pointer;
@@ -200,12 +275,7 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
     c.fill_rect(Rect::new(0, 0, c.width, top as u32), theme.panel);
     let mut line = Text::new();
     let r = w.resources;
-    let cap = 5 + w
-        .buildings
-        .iter()
-        .filter(|b| b.complete && b.kind == BuildingKind::House)
-        .count()
-        * 5;
+    let cap = w.capacity(0);
     let _ = write!(
         line,
         "Food {}   Wood {}   Stone {}   Gold {}   Knowledge {}   Pop {}/{}",
@@ -214,13 +284,13 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
         r.stone,
         r.gold,
         r.knowledge,
-        w.units.len(),
+        w.population(0),
         cap
     );
     text(c, w.civilization.name(), 12, 5, civ);
     text(
         c,
-        "Sunlight Empires | P/G: new Persia/Greece",
+        "M2 | Space pause | 1:0.5x 2:1x 3:2x | Esc menu",
         110,
         5,
         theme.text_dim,
@@ -246,17 +316,29 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
                 b.progress,
                 b.kind.duration()
             );
+            let _ = write!(line, " | HP {}", b.health);
+            if let Some((kind, ticks)) = b.training {
+                let _ = write!(line, " | Training {:?}: {} ticks", kind, ticks);
+            }
+            if !b.complete {
+                let count = w
+                    .units
+                    .iter()
+                    .filter(|u| u.task == sunlight_empires::Task::Build(b.id))
+                    .count();
+                let _ = write!(line, " | {} builders", count);
+            }
         }
     } else if let Some(id) = input.selected.first() {
         if let Some(u) = w.units.iter().find(|u| u.id == *id) {
             let _ = write!(
                 line,
-                "{} selected | {:?} #{} | {:?} | carrying {}",
+                "{} selected | {:?} #{} | {:?} | HP {}",
                 input.selected.len(),
                 u.kind,
                 u.id,
                 u.task,
-                u.cargo
+                u.health
             );
         }
     } else {
@@ -284,9 +366,27 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
     text(c, notice, 12, bottom + 68, theme.accent);
     text(
         c,
-        "Arrows: pan | Wheel: zoom | Shift: add selection | Esc: cancel / exit",
+        "I/B train (TC) | A attack-move | O stop | D hold | Right-click: order",
         12,
         bottom + 91,
         theme.text_dim,
+    );
+}
+
+pub fn status(c: &mut Canvas, t: &Theme, s: &str) {
+    c.fill_rect(Rect::new(0, 0, c.width, 23), t.panel);
+    text(c, s, 12, 5, t.text_dim);
+}
+pub fn overlay(c: &mut Canvas, t: &Theme, title: &str, hint: &str) {
+    let y = c.height as i32 / 2 - 45;
+    c.fill_rect(Rect::new(20, y, c.width.saturating_sub(40), 100), t.panel);
+    text(c, title, 36, y + 16, t.accent);
+    text(c, hint, 36, y + 46, t.text);
+    text(
+        c,
+        "M: mute | -/+: master | [/]: effects | ,/.: music (reserved)",
+        36,
+        y + 74,
+        t.text_dim,
     );
 }

@@ -434,3 +434,30 @@ fn cancel_partially_built_structure_releases_worker_and_reservation() {
     assert_eq!(w.resources.wood, 240);
     assert_eq!(w.buildings.len(), 1);
 }
+
+#[test]
+fn group_build_normalizes_and_charges_once() {
+    let mut w = World::new(Civilization::Persia);
+    let wood = w.resources.wood;
+    send(
+        &mut w,
+        0,
+        Command::BuildGroup {
+            units: vec![4, 2, 3, 2, u32::MAX],
+            kind: BuildingKind::House,
+            tile: Tile::new(11, 8),
+        },
+    );
+    w.step();
+    assert_eq!(w.buildings.len(), 2);
+    assert_eq!(w.resources.wood, wood - 40);
+    let id = w.buildings[1].id;
+    assert_eq!(
+        w.units.iter().filter(|u| u.task == Task::Build(id)).count(),
+        3
+    );
+    run(&mut w, 600);
+    assert!(w.buildings[1].complete);
+    assert!(!w.units.iter().any(|u| u.task == Task::Build(id)));
+    assert_eq!(w.resources.wood, wood - 40);
+}

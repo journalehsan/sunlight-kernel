@@ -5,8 +5,13 @@ mod audio;
 mod input;
 mod render;
 use input::{Input, TOP};
+use sunlight_empires::{
+    combat::Outcome,
+    sound::{Cue, Settings},
+    timing::{Clock, Speed},
+    UnitKind,
+};
 use sunlight_empires::{BuildingKind, Civilization, Command, Envelope, World};
-use sunlight_game::FixedStep;
 use sunlight_ipc::{debug_log, monotonic_millis, ProcessExit};
 use sunlight_ui::{
     request_close, App, Canvas, Event, Theme, Window, WindowConfig, WindowDecoration, WindowEvent,
@@ -14,7 +19,10 @@ use sunlight_ui::{
 struct Empires {
     world: World,
     input: Input,
-    clock: FixedStep,
+    clock: Clock,
+    menu: bool,
+    audio: Option<audio::Audio>,
+    settings: Settings,
     sequence: u32,
     width: u32,
     height: u32,
@@ -30,13 +38,16 @@ struct Empires {
 impl Empires {
     fn new() -> Self {
         Self {
-            world: World::new(Civilization::Persia),
+            world: World::new_match(Civilization::Persia),
             input: Input::new(),
-            clock: FixedStep::new(monotonic_millis(), 50),
+            clock: Clock::new(monotonic_millis()),
+            menu: true,
+            audio: audio::Audio::start(),
+            settings: Settings::default(),
             sequence: 0,
             width: 960,
             height: 680,
-            notice: "Sunlight Empires | Offline M1 | Select a worker to begin",
+            notice: "Sunlight Empires M2 | P/G: start a beginner match",
             focused: true,
             close_after: None,
             last_rejected: 0,
@@ -46,7 +57,26 @@ impl Empires {
             last_stone: 100,
         }
     }
+    fn cue(&self, cue: Cue) {
+        if let Some(audio) = &self.audio {
+            audio.cue(cue);
+        }
+    }
+    fn set_speed(&mut self, speed: Speed) {
+        self.clock.set_speed(monotonic_millis(), speed);
+    }
+    fn train(&mut self, kind: UnitKind) {
+        if let Some(building) = self.input.building {
+            self.submit(Command::Train { building, kind });
+        } else {
+            self.notice = "Select your Town Center to train";
+            self.cue(Cue::Invalid);
+        }
+    }
     fn submit(&mut self, c: Command) {
+        if self.menu || self.world.outcome != Outcome::Active {
+            return;
+        }
         let e = Envelope {
             tick: self.world.tick,
             player: 0,
@@ -61,7 +91,7 @@ impl Empires {
         ));
         if self.world.submit(e).is_err() {
             self.notice = "Order queue full or invalid";
-            audio::cue(audio::Cue::Invalid);
+            self.cue(Cue::Invalid);
         } else {
             self.notice = "Order queued";
         }
@@ -95,7 +125,11 @@ impl Empires {
         }
     }
     fn new_game(&mut self, civ: Civilization) {
-        self.world = World::new(civ);
+        self.world = World::new_match(civ);
+        self.menu = false;
+        if let Some(audio) = &self.audio {
+            audio.reset();
+        }
         self.input = Input::new();
         self.sequence = 0;
         self.last_rejected = 0;
@@ -112,6 +146,34 @@ impl App for Empires {
         self.width = c.width;
         self.height = c.height;
         render::draw(c, t, &self.world, &mut self.input, self.notice);
+        let status = alloc::format!(
+            "{:?} | Volume {} SFX {} Music {} {}",
+            self.clock.speed,
+            self.settings.master,
+            self.settings.effects,
+            self.settings.music,
+            if self.settings.mute { "MUTED" } else { "" }
+        );
+        render::status(c, t, &status);
+        if self.menu {
+            render::overlay(
+                c,
+                t,
+                "Sunlight Empires M2",
+                "P: Persia / G: Greece | Beginner AI | Esc: exit",
+            );
+        } else if self.world.outcome != Outcome::Active {
+            render::overlay(
+                c,
+                t,
+                if self.world.outcome == Outcome::Victory {
+                    "Victory"
+                } else {
+                    "Defeat"
+                },
+                "P/G: restart | Esc: main menu",
+            );
+        }
     }
     fn poll_timeout_ms(&self) -> u64 {
         16
@@ -123,7 +185,12 @@ impl App for Empires {
         // Advance from every event, so continuous pointer motion cannot starve
         // simulation. Clock exists only in this native adapter.
         let now = monotonic_millis();
-        let steps = self.clock.advance(now);
+        let steps = if self.menu || self.world.outcome != Outcome::Active {
+            self.clock.reset(now);
+            0
+        } else {
+            self.clock.advance(now)
+        };
         let mut changed = false;
         {
             for _ in 0..steps {
@@ -133,7 +200,17 @@ impl App for Empires {
                     .iter()
                     .any(|u| u.task != sunlight_empires::Task::Idle || !u.path.is_empty());
                 self.world.step();
-                changed |= active;
+                for event in &self.world.events {
+                    if let Some(audio) = &self.audio {
+                        audio.cue(event.cue);
+                    }
+                    debug_log(&alloc::format!(
+                        "[EMPIRES] event tick={} cue={:?}\n",
+                        event.tick,
+                        event.cue
+                    ));
+                }
+                changed |= active || self.world.match_enabled;
             }
         }
         if self.close_after.is_some_and(|tick| self.world.tick >= tick) {
@@ -143,20 +220,20 @@ impl App for Empires {
             changed = true;
             self.last_rejected = self.world.rejected;
             self.notice = "Invalid order: check funds, occupancy, worker and reachability";
-            audio::cue(audio::Cue::Invalid);
+            self.cue(Cue::Invalid);
             debug_log("[EMPIRES] order rejected\n");
         }
         if self.world.accepted != self.last_accepted {
             changed = true;
             self.last_accepted = self.world.accepted;
             self.notice = "Order accepted";
-            audio::cue(audio::Cue::Started);
+
             debug_log("[EMPIRES] order accepted\n");
         }
         if self.world.completed != self.last_complete {
             self.last_complete = self.world.completed;
             self.notice = "Construction completed";
-            audio::cue(audio::Cue::Completed);
+
             debug_log("[EMPIRES] construction completed\n");
         }
         if self.world.resources.wood != self.last_wood
@@ -208,7 +285,7 @@ impl App for Empires {
                     self.input.selected,
                     self.input.building
                 ));
-                audio::cue(audio::Cue::Selection);
+                self.cue(Cue::Selection);
                 true
             }
             Event::MouseDown { x, y, button: 1 }
@@ -218,6 +295,7 @@ impl App for Empires {
                     self.submit(c);
                 }
                 self.input.rally = false;
+                self.input.attack_move = false;
                 true
             }
             Event::MouseWheel { delta, .. } if self.focused => {
@@ -227,6 +305,33 @@ impl App for Empires {
             }
             Event::Key(ch) if self.focused => {
                 match ch {
+                    ' ' => self.set_speed(if self.clock.speed == Speed::Paused {
+                        Speed::Normal
+                    } else {
+                        Speed::Paused
+                    }),
+                    '1' => self.set_speed(Speed::Half),
+                    '2' => self.set_speed(Speed::Normal),
+                    '3' => self.set_speed(Speed::Double),
+                    'a' | 'A' => {
+                        self.input.attack_move = true;
+                        self.notice = "Right-click an attack-move destination";
+                    }
+                    'o' | 'O' => self.submit(Command::Stop {
+                        units: self.input.selected.clone(),
+                    }),
+                    'd' | 'D' => self.submit(Command::Hold {
+                        units: self.input.selected.clone(),
+                    }),
+                    'i' | 'I' => self.train(UnitKind::Guard),
+                    'b' | 'B' => self.train(UnitKind::Archer),
+                    'm' | 'M' => self.settings.mute = !self.settings.mute,
+                    '-' => self.settings.master = self.settings.master.saturating_sub(10),
+                    '+' | '=' => self.settings.master = (self.settings.master + 10).min(100),
+                    '[' => self.settings.effects = self.settings.effects.saturating_sub(10),
+                    ']' => self.settings.effects = (self.settings.effects + 10).min(100),
+                    ',' => self.settings.music = self.settings.music.saturating_sub(10),
+                    '.' => self.settings.music = (self.settings.music + 10).min(100),
                     'h' | 'H' => self.action(0),
                     's' | 'S' => self.action(1),
                     'u' | 'U' => self.action(2),
@@ -235,6 +340,10 @@ impl App for Empires {
                     'p' | 'P' => self.new_game(Civilization::Persia),
                     'g' | 'G' => self.new_game(Civilization::Greece),
                     _ => return changed,
+                }
+                if let Some(audio) = &mut self.audio {
+                    audio.settings = self.settings;
+                    audio.sync_settings();
                 }
                 true
             }
@@ -251,7 +360,15 @@ impl App for Empires {
                     match keycode {
                         1 => {
                             if self.input.placing.take().is_none() {
-                                request_close();
+                                if self.menu {
+                                    request_close();
+                                } else {
+                                    self.menu = true;
+                                    self.input.clear_transient();
+                                    if let Some(audio) = &self.audio {
+                                        audio.reset();
+                                    }
+                                }
                             }
                         }
                         _ => {}
@@ -260,7 +377,7 @@ impl App for Empires {
                 true
             }
             Event::Tick => {
-                if self.focused && steps > 0 {
+                if self.focused {
                     let cam = &mut self.input.camera;
                     let keys = &self.input.keys;
                     if keys[0x4b] {
@@ -401,6 +518,7 @@ fn display_stress() -> bool {
         {
             let mut app = Empires::new();
             app.close_after = Some(3);
+            app.menu = false;
             let Some(mut window) = Window::connect(WindowConfig {
                 width: 640,
                 height: 480,

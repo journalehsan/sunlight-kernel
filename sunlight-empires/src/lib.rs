@@ -1,13 +1,16 @@
 //! Deterministic offline RTS rules. No windows, clock, graphics, input or I/O.
 #![no_std]
 extern crate alloc;
+pub mod combat;
 pub mod content;
 pub mod path;
 pub mod replay;
+pub mod sound;
+pub mod timing;
 use alloc::{vec, vec::Vec};
 pub use content::{BuildingKind, Civilization, UnitKind};
 
-pub const RULES_VERSION: u32 = 1;
+pub const RULES_VERSION: u32 = 3;
 pub const TICKS_PER_SECOND: u32 = 20;
 pub const MAP_SIZE: i32 = 64;
 pub const CELLS: usize = (MAP_SIZE * MAP_SIZE) as usize;
@@ -99,6 +102,9 @@ pub enum Task {
     Move,
     Gather(Tile),
     Build(EntityId),
+    Attack(EntityId),
+    AttackMove(Tile),
+    Hold,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unit {
@@ -112,6 +118,8 @@ pub struct Unit {
     pub work: u32,
     pub cargo: u32,
     pub cargo_stone: bool,
+    pub health: u32,
+    pub cooldown: u32,
 }
 impl Unit {
     pub fn tile(&self) -> Tile {
@@ -133,12 +141,37 @@ pub struct Building {
     pub progress: u32,
     pub complete: bool,
     pub rally: Option<Tile>,
+    pub health: u32,
+    pub training: Option<(UnitKind, u32)>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
+    Attack {
+        units: Vec<EntityId>,
+        target: EntityId,
+    },
+    AttackMove {
+        units: Vec<EntityId>,
+        target: Tile,
+    },
+    Stop {
+        units: Vec<EntityId>,
+    },
+    Hold {
+        units: Vec<EntityId>,
+    },
+    Train {
+        building: EntityId,
+        kind: UnitKind,
+    },
     MoveUnits {
         units: Vec<EntityId>,
         target: Tile,
+    },
+    BuildGroup {
+        units: Vec<EntityId>,
+        kind: BuildingKind,
+        tile: Tile,
     },
     BuildStructure {
         worker: EntityId,
@@ -192,6 +225,16 @@ pub struct World {
     pub(crate) pending: Vec<Envelope>,
     pub(crate) log: Vec<Envelope>,
     scratch: path::Search,
+    pub enemy_resources: Resources,
+    pub match_enabled: bool,
+    pub outcome: combat::Outcome,
+    pub visibility: [Vec<u8>; 2],
+    pub explored: [Vec<u8>; 2],
+    pub ai_pacing: content::AiPacing,
+    pub(crate) ai_sequence: u32,
+    pub(crate) ai_next_attack: u64,
+    pub events: Vec<sound::SoundEvent>,
+    pub effects: Vec<combat::Effect>,
 }
 impl World {
     pub fn new(civilization: Civilization) -> Self {
@@ -215,6 +258,22 @@ impl World {
             pending: Vec::new(),
             log: Vec::new(),
             scratch: path::Search::new(),
+            enemy_resources: Resources {
+                food: 200,
+                wood: 180,
+                stone: 100,
+                gold: 100,
+                knowledge: 0,
+            },
+            match_enabled: false,
+            outcome: combat::Outcome::Active,
+            visibility: [vec![0; CELLS], vec![0; CELLS]],
+            explored: [vec![0; CELLS], vec![0; CELLS]],
+            ai_pacing: content::AiPacing::default(),
+            ai_sequence: 0,
+            ai_next_attack: 0,
+            events: Vec::with_capacity(64),
+            effects: Vec::with_capacity(128),
         };
         let id = w.id();
         w.buildings.push(Building {
@@ -225,6 +284,8 @@ impl World {
             progress: 120,
             complete: true,
             rally: None,
+            health: content::BUILDING_HEALTH,
+            training: None,
         });
         for (kind, t) in [
             (UnitKind::Worker, Tile::new(10, 8)),
@@ -244,8 +305,11 @@ impl World {
                 work: 0,
                 cargo: 0,
                 cargo_stone: false,
+                health: kind.combat().health,
+                cooldown: 0,
             });
         }
+        w.update_visibility();
         w
     }
     fn id(&mut self) -> EntityId {
@@ -257,7 +321,7 @@ impl World {
         if e.tick < self.tick {
             return Err(SubmitError::Past);
         }
-        if e.player != 0 {
+        if e.player > 1 || (e.player == 1 && !self.match_enabled) {
             return Err(SubmitError::Player);
         }
         if self.log.len() >= MAX_COMMANDS {
@@ -270,7 +334,13 @@ impl World {
         {
             return Err(SubmitError::Duplicate);
         }
-        if let Command::MoveUnits { units, .. } = &mut e.command {
+        if let Command::MoveUnits { units, .. }
+        | Command::BuildGroup { units, .. }
+        | Command::Attack { units, .. }
+        | Command::AttackMove { units, .. }
+        | Command::Stop { units }
+        | Command::Hold { units } = &mut e.command
+        {
             if units.len() > 64 {
                 return Err(SubmitError::TooManyUnits);
             }
@@ -340,7 +410,15 @@ impl World {
             return true;
         }
         for t in target.neighbors() {
-            if self.passable(t) && !self.occupied(t, i) && self.route_avoiding(i, t, Some(target)) {
+            if self.passable(t)
+                && !self.occupied(t, i)
+                && !self
+                    .units
+                    .iter()
+                    .enumerate()
+                    .any(|(j, u)| j != i && u.destination() == Some(t))
+                && self.route_avoiding(i, t, Some(target))
+            {
                 return true;
             }
         }
@@ -353,6 +431,13 @@ impl World {
     }
     fn apply(&mut self, e: Envelope) -> bool {
         match e.command {
+            Command::Attack { units, target } => self.order_attack(e.player, units, target),
+            Command::AttackMove { units, target } => {
+                self.order_stance(e.player, units, Task::AttackMove(target))
+            }
+            Command::Stop { units } => self.order_stance(e.player, units, Task::Idle),
+            Command::Hold { units } => self.order_stance(e.player, units, Task::Hold),
+            Command::Train { building, kind } => self.order_train(e.player, building, kind),
             Command::MoveUnits { units, target } => {
                 if target.index().is_none() {
                     return false;
@@ -406,6 +491,43 @@ impl World {
                 self.units[i].work = 0;
                 true
             }
+            Command::BuildGroup { units, kind, tile } => {
+                if self.buildings.len() >= 128
+                    || !self.passable(tile)
+                    || self.occupied(tile, usize::MAX)
+                    || self.balance(e.player).wood < kind.cost()
+                {
+                    return false;
+                }
+                let eligible: Vec<_> = units
+                    .into_iter()
+                    .filter(|id| self.worker(*id, e.player).is_some())
+                    .collect();
+                let worker = eligible.iter().copied().find(|id| {
+                    let i = self.worker(*id, e.player).unwrap();
+                    self.approach(i, tile)
+                });
+                let Some(worker) = worker else {
+                    return false;
+                };
+                if !self.apply(Envelope {
+                    command: Command::BuildStructure { worker, kind, tile },
+                    tick: e.tick,
+                    player: e.player,
+                    sequence: e.sequence,
+                }) {
+                    return false;
+                }
+                let id = self.buildings.last().unwrap().id;
+                for other in eligible.into_iter().filter(|id| *id != worker) {
+                    let worker = other;
+                    let i = self.worker(worker, e.player).unwrap();
+                    self.units[i].task = Task::Build(id);
+                    self.clear_route(i);
+                    self.approach(i, tile);
+                }
+                true
+            }
             Command::BuildStructure { worker, kind, tile } => {
                 let Some(i) = self.worker(worker, e.player) else {
                     return false;
@@ -413,7 +535,7 @@ impl World {
                 if self.buildings.len() >= 128
                     || !self.passable(tile)
                     || self.occupied(tile, usize::MAX)
-                    || self.resources.wood < kind.cost()
+                    || self.balance(e.player).wood < kind.cost()
                 {
                     return false;
                 }
@@ -422,7 +544,7 @@ impl World {
                     return false;
                 }
                 let id = self.id();
-                self.resources.wood -= kind.cost();
+                self.balance_mut(e.player).wood -= kind.cost();
                 self.buildings.push(Building {
                     id,
                     owner: e.player,
@@ -431,6 +553,8 @@ impl World {
                     progress: 0,
                     complete: false,
                     rally: None,
+                    health: content::BUILDING_HEALTH,
+                    training: None,
                 });
                 self.units[i].task = Task::Build(id);
                 self.units[i].work = 0;
@@ -445,7 +569,7 @@ impl World {
                     return false;
                 };
                 let b = self.buildings.remove(i);
-                self.resources.wood += b.kind.cost();
+                self.balance_mut(e.player).wood += b.kind.cost();
                 for u in &mut self.units {
                     if u.task == Task::Build(building) {
                         u.task = Task::Idle;
@@ -476,6 +600,14 @@ impl World {
         }
     }
     pub fn step(&mut self) {
+        if self.outcome != combat::Outcome::Active {
+            return;
+        }
+        self.events.clear();
+        self.effects.retain(|e| e.until > self.tick);
+        if self.match_enabled {
+            self.ai_decide();
+        }
         while self
             .pending
             .first()
@@ -483,16 +615,31 @@ impl World {
             .unwrap_or(false)
         {
             let e = self.pending.remove(0);
+            let cue = match &e.command {
+                Command::BuildStructure { .. } | Command::BuildGroup { .. } => sound::Cue::Started,
+                _ => sound::Cue::Movement,
+            };
+            let player = e.player;
             if self.apply(e) {
-                self.accepted += 1;
-            } else {
+                if player == 0 {
+                    self.emit(cue);
+                    self.accepted += 1;
+                }
+            } else if player == 0 {
                 self.rejected += 1;
+                self.emit(sound::Cue::Invalid);
             }
         }
         for i in 0..self.units.len() {
             if let Some(t) = self.units[i].path.last().copied() {
                 // Reserve both current and next cells; no swaps or overlap.
-                if self.occupied(t, i) || !self.passable(t) {
+                if self.units.iter().enumerate().any(|(j, u)| {
+                    j != i
+                        && (u.tile() == t
+                            || (u.path.last() == Some(&t)
+                                && (!u.centered() || u.id < self.units[i].id)))
+                }) || !self.passable(t)
+                {
                     if self.units[i].centered() && self.tick % 20 == 0 {
                         let destination = self.units[i].destination().unwrap();
                         self.route(i, destination);
@@ -511,29 +658,70 @@ impl World {
                 continue;
             }
             match self.units[i].task {
-                Task::Idle => {}
+                Task::Idle | Task::Hold | Task::Attack(_) | Task::AttackMove(_) => {}
                 Task::Move => self.units[i].task = Task::Idle,
                 Task::Build(id) => {
-                    let Some(b) = self
-                        .buildings
-                        .iter_mut()
-                        .find(|b| b.id == id && !b.complete)
-                    else {
+                    let Some(b) = self.buildings.iter().find(|b| b.id == id && !b.complete) else {
                         self.units[i].task = Task::Idle;
                         continue;
                     };
-                    if self.units[i].tile().distance(b.tile) == 1 {
-                        b.progress += 1;
-                        if b.progress >= b.kind.duration() {
-                            b.complete = true;
-                            self.completed += 1;
-                            self.units[i].task = Task::Idle;
-                        }
+                    let tile = b.tile;
+                    if self.units[i].tile().distance(tile) != 1 && self.tick % 20 == 0 {
+                        self.approach(i, tile);
                     }
                 }
+
                 Task::Gather(node) => self.gather(i, node),
             }
         }
+        let completed_before = self.completed;
+        for b in &mut self.buildings {
+            if b.complete {
+                continue;
+            }
+            let active = self
+                .units
+                .iter()
+                .filter(|u| {
+                    u.task == Task::Build(b.id)
+                        && u.path.is_empty()
+                        && u.centered()
+                        && u.tile().distance(b.tile) == 1
+                })
+                .count();
+            // Integer work units: baseline remains one work per tick.
+            let speed = match active {
+                0 => 0,
+                1 => 10,
+                2 => 17,
+                3 => 23,
+                _ => 28,
+            };
+            // Deterministic fractional scheduling avoids adding serialized state.
+            let work = ((self.tick + 1) * speed / 10 - self.tick * speed / 10) as u32;
+            b.progress = (b.progress + work).min(b.kind.duration());
+            if b.progress >= b.kind.duration() {
+                b.complete = true;
+                if b.owner == 0 {
+                    self.completed += 1;
+                }
+            }
+        }
+        for u in &mut self.units {
+            if let Task::Build(id) = u.task {
+                if !self.buildings.iter().any(|b| b.id == id && !b.complete) {
+                    u.task = Task::Idle;
+                }
+            }
+        }
+        if self.completed > completed_before {
+            self.emit(sound::Cue::Completed);
+        }
+        self.training_step();
+        self.update_visibility();
+        self.combat_step();
+        self.update_visibility();
+        self.check_outcome();
         self.tick += 1;
     }
     fn gather(&mut self, i: usize, node: Tile) {
@@ -545,14 +733,18 @@ impl World {
                     && b.kind.delivery()
                     && here.distance(b.tile) == 1
             }) {
-                let u = &mut self.units[i];
-                if u.cargo_stone {
-                    self.resources.stone += u.cargo;
+                let (owner, cargo, stone) = (
+                    self.units[i].owner,
+                    self.units[i].cargo,
+                    self.units[i].cargo_stone,
+                );
+                if stone {
+                    self.balance_mut(owner).stone += cargo;
                 } else {
-                    self.resources.wood += u.cargo;
+                    self.balance_mut(owner).wood += cargo;
                 }
-                u.cargo = 0;
-                u.work = 0;
+                self.units[i].cargo = 0;
+                self.units[i].work = 0;
                 self.approach(i, node);
             } else if self.tick % 20 == 0 {
                 let mut deliveries: Vec<(i32, EntityId, Tile)> = self
@@ -587,6 +779,9 @@ impl World {
             self.map.remaining[n] -= amount;
             self.units[i].cargo = amount;
             self.units[i].cargo_stone = self.map.terrain[n] == Terrain::Stone;
+            if self.map.remaining[n] == 0 {
+                self.map.terrain[n] = Terrain::Ground;
+            }
             self.units[i].work = 0;
         }
     }
@@ -605,3 +800,6 @@ impl World {
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod m2_tests;

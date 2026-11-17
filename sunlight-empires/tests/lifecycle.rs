@@ -25,9 +25,9 @@ static ALLOC: Count = Count;
 #[test]
 fn no_growth_across_scene_lifetimes() {
     let baseline = (LIVE.load(Ordering::SeqCst), BYTES.load(Ordering::SeqCst));
-    for _ in 0..128 {
+    for iteration in 0..128 {
         {
-            let mut world = World::new(Civilization::Persia);
+            let mut world = if iteration%2==0 {World::new_match(Civilization::Persia)} else {World::new(Civilization::Persia)};
             world
                 .submit(Envelope {
                     tick: 0,

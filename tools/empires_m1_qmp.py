@@ -8,6 +8,7 @@ motion, subject to the ordinary guest pointer policy. Inspect screenshots to
 confirm positions before clicking. Uses the repository's existing QMP client.
 """
 import argparse
+import os
 import json
 import time
 from pathlib import Path
@@ -95,7 +96,7 @@ def main():
         q.call("screendump", {"filename": args.args[0], "format": "png"})
     record={"action": args.command, "args": args.args if args.args != ["root"] else ["[fixture credential]"], "executed": True}
     print(json.dumps(record))
-    evidence=Path(__file__).resolve().parents[1]/"target/empires-m1/qmp-actions.jsonl"
+    evidence=Path(os.environ.get("EMPIRES_EVIDENCE_DIR", str(Path(__file__).resolve().parents[1]/"target/empires-m1")))/"qmp-actions.jsonl"
     evidence.parent.mkdir(parents=True,exist_ok=True)
     with evidence.open("a") as log:log.write(json.dumps(record)+"\n")
     q.stream.close()

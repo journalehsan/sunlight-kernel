@@ -295,3 +295,47 @@ population enforcement, improved traffic recovery, replay/checkpoint file UI
 and a small offline combat scenario. Keep multiplayer transport for a separate
 milestone with lockstep and desynchronization tests. Add sound cues when the
 existing audio service can isolate/mix application streams.
+
+## M1.1 implementation report (partial)
+
+Confirmed cause: `input::order` selected the first worker and emitted the
+single-worker `BuildStructure`; `World::apply` assigned only that ID. This was
+an authoritative dispatch defect, not a rendering defect.
+
+Added BuildGroup to the existing envelope/queue/replay pipeline. IDs are sorted
+and deduplicated with the same 64-member limit as movement. Invalid members are
+ignored; no eligible workers rejects the command. One project and one upfront
+wood debit use the existing placement transaction. Adjacent destinations are
+reserved deterministically; overflow builders retry every 20 simulation ticks.
+Shared work uses integer rates 10/17/23/28 tenths per tick, capped at four-worker
+speed. Completion is processed once per project. Existing full-refund project
+cancellation remains; changing worker orders leaves the project intact. Rules
+version is now 2 because construction timing changed.
+
+Host validation: 16 Empires tests pass, including a new actual-world three-worker
+assignment, deduplication, stale-ID, single-charge, completion and release test.
+The requested complete 30-case matrix is not implemented. Silicon Echo host
+regression was started; no final result was captured at report time. Shared
+engine code is unchanged. Native production check logs are in
+`/tmp/m11-native.log`; host logs in `/tmp/m11-final.log` and `/tmp/m11-tests.log`.
+
+Native gameplay is UNVERIFIED. An existing QEMU diagnostic session is running
+on `/tmp/sunlight-launch.sock`, but it has not been rebuilt or exercised with
+these changes. No Persia/Greece gameplay or screenshots are claimed.
+
+Known limitations: UI contributor feedback is pending; overflow/deadlock and
+unreachable-site scenarios need focused tests. Group placement currently requires
+the first eligible worker to have a route. Repeated build commands do not join
+an existing project. Production builds and native validation for both games remain
+required. Recommended next work: finish M1.1 validation and lifecycle/navigation
+edge cases before beginning another gameplay milestone. Verdict: PARTIAL.
+
+
+### M2 validation follow-up (2026-11-17)
+
+See [the M2 report](sunlight-empires-m2.md) for new prerequisite repairs and
+current evidence. Ordinary desktop search launch and independent process
+relaunch were observed (new PIDs 54 and 56); the historical launcher blocker is
+therefore closed for that tested image. This does **not** promote the entire
+M1.1 milestone to PASS: its complete original test matrix and native variants
+remain incomplete. The original partial report above is retained.

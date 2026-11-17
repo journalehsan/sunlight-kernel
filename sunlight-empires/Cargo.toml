@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-empires"
-version = "0.2.8632-alpha.2"
+version = "0.2.8657-alpha.2"
+
+
 
 
 
@@ -9,7 +11,7 @@ description = "Deterministic native 2D RTS foundation for SunlightOS"
 
 [features]
 default = []
-native = ["dep:sunlight-libc", "dep:sunlight-ipc", "dep:sunlight-ui", "dep:sun-font"]
+native = ["dep:sunlight-libc", "dep:sunlight-ipc", "dep:sunlight-ui", "dep:sun-font", "dep:sunlight-audiod"]
 
 [[bin]]
 name = "sunlight-empires"
@@ -24,3 +26,5 @@ sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynami
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"], optional = true }
 sun-font = { path = "../sun-font", optional = true }
+
+sunlight-audiod = { path = "../services/sunlight-audiod", optional = true }
