@@ -4,6 +4,7 @@ extern crate alloc;
 mod audio;
 mod input;
 mod pacing;
+mod panel;
 mod preferences;
 mod render;
 use input::{Input, TOP};
@@ -58,7 +59,7 @@ impl Empires {
             sequence: 0,
             width: 960,
             height: 680,
-            notice: "Sunlight Empires M3 | P/G: start a beginner match",
+            notice: "Sunlight Empires M4 | P/G: start a beginner match",
             focused: true,
             close_after: None,
             last_rejected: 0,
@@ -78,9 +79,14 @@ impl Empires {
     }
     fn train(&mut self, kind: UnitKind) {
         if let Some(building) = self.input.building {
+            if let Some(reason) = self.world.training_blocked(0, building, kind) {
+                self.notice = reason;
+                self.cue(Cue::Invalid);
+                return;
+            }
             self.submit(Command::Train { building, kind });
         } else {
-            self.notice = "Select your Town Center to train";
+            self.notice = "Select a matching production building to train";
             self.cue(Cue::Invalid);
         }
     }
@@ -108,31 +114,54 @@ impl Empires {
         }
     }
     fn action(&mut self, i: usize) {
-        match i {
-            0..=2 => {
+        if let Some(action) = panel::actions(&self.world, &self.input).get(i).copied() {
+            self.perform(action);
+        }
+    }
+    fn perform(&mut self, action: panel::Action) {
+        use panel::Action::*;
+        self.input.drag = None;
+        self.input.placing = None;
+        self.input.rally = false;
+        self.input.attack_move = false;
+        self.input.move_only = false;
+        match action {
+            Build(kind) => {
                 if self.input.worker(&self.world).is_some() {
-                    self.input.placing = Some(
-                        [
-                            BuildingKind::House,
-                            BuildingKind::Storage,
-                            BuildingKind::University,
-                        ][i],
-                    );
-                    self.notice = "Left-click open ground to build; Esc cancels placement";
-                } else {
-                    self.notice = "Select a worker first";
+                    self.input.placing = Some(kind);
+                    self.notice = "Click valid ground to build; Escape cancels";
                 }
             }
-            3 => {
-                if let Some(id) = self.input.building {
-                    self.submit(Command::CancelConstruction { building: id });
+            Train(kind) => self.train(kind),
+            Cancel => {
+                if let Some(building) = self.input.building {
+                    self.submit(Command::CancelConstruction { building });
                 }
             }
-            4 => {
+            Rally => {
                 self.input.rally = true;
-                self.notice = "Select a completed building, then right-click a rally tile";
+                self.notice = "Right-click ground to set rally";
             }
-            _ => {}
+            Move => {
+                self.input.move_only = true;
+                self.notice = "Right-click destination";
+            }
+            Gather => {
+                self.notice = "Right-click trees or stone to gather with selected workers";
+            }
+            Attack => {
+                self.notice = "Right-click a visible enemy to attack";
+            }
+            AttackMove => {
+                self.input.attack_move = true;
+                self.notice = "Right-click attack-move destination";
+            }
+            Stop => self.submit(Command::Stop {
+                units: self.input.selected.clone(),
+            }),
+            Hold => self.submit(Command::Hold {
+                units: self.input.selected.clone(),
+            }),
         }
     }
     fn new_game(&mut self, civ: Civilization) {
@@ -169,22 +198,26 @@ impl App for Empires {
         let frame_started = monotonic_millis();
         self.width = c.width;
         self.height = c.height;
+        self.input
+            .selected
+            .retain(|id| self.world.units.iter().any(|u| u.id == *id && u.owner == 0));
+        if self.input.building.is_some_and(|id| {
+            !self
+                .world
+                .buildings
+                .iter()
+                .any(|b| b.id == id && b.owner == 0)
+        }) {
+            self.input.building = None;
+        }
         render::draw(c, t, &self.world, &mut self.input, self.notice);
-        let status = alloc::format!(
-            "{:?} | Volume {} SFX {} Music {} {}",
-            self.clock.speed,
-            self.settings.master,
-            self.settings.effects,
-            self.settings.music,
-            if self.settings.mute { "MUTED" } else { "" }
-        );
-        render::status(c, t, &status);
+        render::status(c, t, &self.world, self.clock.speed, self.settings);
         if self.menu {
             render::overlay(
                 c,
                 t,
-                "Sunlight Empires M3",
-                "P: Persia / G: Greece | C: credits | Esc: exit",
+                "Sunlight Empires M4",
+                "P: Persia / G: Greece | F: RTS Combat Sandbox | C: credits",
             );
         } else if self.world.outcome != Outcome::Active {
             render::overlay(
@@ -273,7 +306,6 @@ impl App for Empires {
             changed = true;
             self.last_rejected = self.world.rejected;
             self.notice = "Invalid order: check funds, occupancy, worker and reachability";
-            self.cue(Cue::Invalid);
             debug_log("[EMPIRES] order rejected\n");
         }
         if self.world.accepted != self.last_accepted {
@@ -313,11 +345,40 @@ impl App for Empires {
                 changed || self.input.drag.is_some() || self.input.placing.is_some()
             }
             Event::MouseDown { x, y, button: 0 } if self.focused => {
-                if y >= self.height as i32 - 83 && y < self.height as i32 - 56 {
-                    self.action(((x - 8) / ((self.width as i32 - 16) / 5).max(1)).max(0) as usize);
+                if self.menu || self.credits || self.world.outcome != Outcome::Active {
+                    return changed;
+                }
+                let bottom = self.height as i32 - panel::HEIGHT;
+                if y >= bottom {
+                    self.input.drag = None;
+                    let point = sunlight_ui::Point::new(x, y);
+                    for i in 0..panel::actions(&self.world, &self.input).len() {
+                        if panel::button(
+                            self.width,
+                            bottom,
+                            i,
+                            panel::actions(&self.world, &self.input).len(),
+                        )
+                        .contains(point)
+                        {
+                            self.action(i);
+                            return true;
+                        }
+                    }
+                    if let Some(building) = self.input.building {
+                        for slot in 0..5 {
+                            if panel::queue_button(self.width, bottom, slot).contains(point) {
+                                self.submit(Command::CancelTraining {
+                                    building,
+                                    slot: slot as u32,
+                                });
+                                return true;
+                            }
+                        }
+                    }
                     return true;
                 }
-                if y < TOP || y >= self.height as i32 - 116 {
+                if y < TOP || y >= self.height as i32 - panel::HEIGHT {
                     return changed;
                 }
                 if self.input.placing.is_some() {
@@ -332,6 +393,13 @@ impl App for Empires {
                 true
             }
             Event::Click { x, y } | Event::MouseUp { x, y, button: 0 } if self.focused => {
+                if self.menu || self.credits || y < TOP || y >= self.height as i32 - panel::HEIGHT {
+                    self.input.drag = None;
+                    return changed;
+                }
+                if self.input.drag.is_none() {
+                    return changed;
+                }
                 self.input.select(&self.world, x, y);
                 debug_log(&alloc::format!(
                     "[EMPIRES] selection {:?} building {:?}\n",
@@ -342,13 +410,21 @@ impl App for Empires {
                 true
             }
             Event::MouseDown { x, y, button: 1 }
-                if self.focused && y >= TOP && y < self.height as i32 - 116 =>
+                if self.focused && y >= TOP && y < self.height as i32 - panel::HEIGHT =>
             {
+                if self.menu || self.credits {
+                    return changed;
+                }
+                if self.input.placing.take().is_some() {
+                    self.notice = "Placement canceled";
+                    return true;
+                }
                 if let Some(c) = self.input.order(&self.world, self.input.tile(x, y)) {
                     self.submit(c);
                 }
                 self.input.rally = false;
                 self.input.attack_move = false;
+                self.input.move_only = false;
                 true
             }
             Event::MouseWheel { delta, .. } if self.focused => {
@@ -387,11 +463,18 @@ impl App for Empires {
                     ']' => self.settings.effects = (self.settings.effects + 10).min(100),
                     ',' => self.settings.music = self.settings.music.saturating_sub(10),
                     '.' => self.settings.music = (self.settings.music + 10).min(100),
-                    'h' | 'H' => self.action(0),
-                    's' | 'S' => self.action(1),
-                    'u' | 'U' => self.action(2),
-                    'x' | 'X' => self.action(3),
-                    'r' | 'R' => self.action(4),
+                    'w' | 'W' => self.train(UnitKind::Worker),
+                    'f' | 'F' if self.menu => {
+                        self.new_game(Civilization::Persia);
+                        self.world = World::combat_sandbox(Civilization::Persia);
+                        self.notice =
+                            "RTS Combat Sandbox | Train, rally, and attack the eastern base";
+                    }
+                    'h' | 'H' => self.perform(panel::Action::Build(BuildingKind::House)),
+                    's' | 'S' => self.perform(panel::Action::Build(BuildingKind::Storage)),
+                    'u' | 'U' => self.perform(panel::Action::Build(BuildingKind::University)),
+                    'x' | 'X' => self.perform(panel::Action::Cancel),
+                    'r' | 'R' => self.perform(panel::Action::Rally),
                     'p' | 'P' => self.new_game(Civilization::Persia),
                     'g' | 'G' => self.new_game(Civilization::Greece),
                     _ => return changed,
@@ -418,7 +501,14 @@ impl App for Empires {
                                 self.credits = false;
                                 return true;
                             }
-                            if self.input.placing.take().is_none() {
+                            let targeting = self.input.placing.take().is_some()
+                                || self.input.rally
+                                || self.input.attack_move
+                                || self.input.move_only;
+                            self.input.rally = false;
+                            self.input.attack_move = false;
+                            self.input.move_only = false;
+                            if !targeting {
                                 if self.menu {
                                     request_close();
                                 } else {
@@ -451,7 +541,12 @@ impl App for Empires {
                     if keys[0x50] {
                         cam.y += 1;
                     }
-                    cam.clamp(64, 64, self.width as i32, self.height as i32 - 116 - TOP);
+                    cam.clamp(
+                        64,
+                        64,
+                        self.width as i32,
+                        self.height as i32 - panel::HEIGHT - TOP,
+                    );
                 }
                 changed
             }

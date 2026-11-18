@@ -11,6 +11,7 @@ pub struct Input {
     pub placing: Option<BuildingKind>,
     pub rally: bool,
     pub attack_move: bool,
+    pub move_only: bool,
     pub shift: bool,
     pub drag: Option<(i32, i32)>,
     pub pointer: (i32, i32),
@@ -29,6 +30,7 @@ impl Input {
             placing: None,
             rally: false,
             attack_move: false,
+            move_only: false,
             shift: false,
             drag: None,
             pointer: (0, 0),
@@ -60,10 +62,22 @@ impl Input {
                 tile: t,
             });
         }
-        if self.rally {
+        if self.rally
+            || self.building.is_some_and(|id| {
+                w.buildings.iter().any(|b| {
+                    b.id == id && b.owner == 0 && b.complete && b.kind.produces().is_some()
+                })
+            })
+        {
             return Some(Command::SetRallyPoint {
                 building: self.building?,
                 tile: t,
+            });
+        }
+        if self.move_only {
+            return Some(Command::MoveUnits {
+                units: self.selected.clone(),
+                target: t,
             });
         }
         if let Some(target) = w
@@ -91,8 +105,8 @@ impl Input {
             });
         }
         if w.map.remaining[t.index()?] > 0 {
-            return Some(Command::AssignWorker {
-                worker: self.worker(w)?,
+            return Some(Command::GatherGroup {
+                units: self.selected.clone(),
                 node: t,
             });
         }
@@ -117,6 +131,14 @@ impl Input {
             (sy - y).unsigned_abs().max(1),
         );
         let tile = self.tile(x, y);
+        if !dragged {
+            if let Some(b) = w.buildings.iter().find(|b| b.owner == 0 && b.tile == tile) {
+                self.selected.clear();
+                self.building = Some(b.id);
+                return;
+            }
+            self.building = None;
+        }
         for u in w.units.iter().filter(|u| u.owner == 0) {
             let (px, py) = self.camera.tile_to_screen(0, 0, TOP);
             let ux = px + u.x * self.camera.tile_px / sunlight_empires::SUB;

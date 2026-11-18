@@ -143,6 +143,7 @@ fn multiple_melee_approach_and_kill_building() {
         rally: None,
         health: 400,
         training: None,
+        queue: Vec::new(),
     });
     w.update_visibility();
     let units = w.units.iter().map(|u| u.id).collect();
@@ -226,11 +227,11 @@ fn training_cost_duration_and_capacity_reservation() {
         0,
         Command::Train {
             building: 1,
-            kind: UnitKind::Guard,
+            kind: UnitKind::Worker,
         },
     );
     w.step();
-    assert_eq!(w.resources.wood, wood - 35);
+    assert_eq!(w.resources.wood, wood - 30);
     assert_eq!(w.population(0), 5);
     cmd(
         &mut w,
@@ -242,7 +243,7 @@ fn training_cost_duration_and_capacity_reservation() {
     );
     w.step();
     assert_eq!(w.rejected, 1);
-    run(&mut w, 78);
+    run(&mut w, 58);
     assert_eq!(w.units.len(), 5);
     assert!(w.buildings[0].training.is_none());
     cmd(
@@ -443,7 +444,7 @@ fn pause_keeps_commands_until_resume() {
         0,
         Command::Train {
             building: 1,
-            kind: UnitKind::Guard,
+            kind: UnitKind::Worker,
         },
     );
     let before = w.state_bytes();
@@ -572,6 +573,44 @@ fn economic_player_can_win_through_commands() {
             break;
         }
         if w.tick % 100 == 0 {
+            let range = w
+                .buildings
+                .iter()
+                .find(|b| b.owner == 0 && b.kind == BuildingKind::ArcheryRange)
+                .map(|b| (b.id, b.complete));
+            if range.is_none() && w.resources.wood >= BuildingKind::ArcheryRange.cost() {
+                if let Some(worker) = w
+                    .units
+                    .iter()
+                    .find(|u| u.owner == 0 && u.kind == UnitKind::Worker)
+                    .map(|u| u.id)
+                {
+                    cmd(
+                        &mut w,
+                        0,
+                        Command::BuildGroup {
+                            units: vec![worker],
+                            kind: BuildingKind::ArcheryRange,
+                            tile: Tile::new(10, 5),
+                        },
+                    );
+                }
+            }
+            if let Some((building, true)) = range {
+                if w.buildings
+                    .iter()
+                    .any(|b| b.id == building && b.rally.is_none())
+                {
+                    cmd(
+                        &mut w,
+                        0,
+                        Command::SetRallyPoint {
+                            building,
+                            tile: Tile::new(9, 5),
+                        },
+                    );
+                }
+            }
             let houses = w
                 .buildings
                 .iter()
@@ -584,6 +623,9 @@ fn economic_player_can_win_through_commands() {
                 .map(|u| u.id)
                 .collect();
             for (j, id) in workers.into_iter().enumerate() {
+                if range.is_none() && j == 0 {
+                    continue;
+                }
                 if houses < 3 && j == 0 && w.resources.wood >= 40 {
                     cmd(
                         &mut w,
@@ -613,13 +655,18 @@ fn economic_player_can_win_through_commands() {
                 .collect();
             if w.population(0) < w.capacity(0)
                 && w.resources.wood >= 45
-                && w.buildings[0].training.is_none()
+                && range.is_some_and(|(id, complete)| {
+                    complete
+                        && w.buildings
+                            .iter()
+                            .any(|b| b.id == id && b.training.is_none())
+                })
             {
                 cmd(
                     &mut w,
                     0,
                     Command::Train {
-                        building: 1,
+                        building: range.unwrap().0,
                         kind: UnitKind::Archer,
                     },
                 );

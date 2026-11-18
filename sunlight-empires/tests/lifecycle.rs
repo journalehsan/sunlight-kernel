@@ -27,7 +27,11 @@ fn no_growth_across_scene_lifetimes() {
     let baseline = (LIVE.load(Ordering::SeqCst), BYTES.load(Ordering::SeqCst));
     for iteration in 0..128 {
         {
-            let mut world = if iteration%2==0 {World::new_match(Civilization::Persia)} else {World::new(Civilization::Persia)};
+            let mut world = match iteration % 3 {
+                0 => World::combat_sandbox(Civilization::Persia),
+                1 => World::new_match(Civilization::Persia),
+                _ => World::new(Civilization::Persia),
+            };
             world
                 .submit(Envelope {
                     tick: 0,
@@ -36,6 +40,30 @@ fn no_growth_across_scene_lifetimes() {
                     command: Command::AssignWorker {
                         worker: 2,
                         node: Tile::new(14, 8),
+                    },
+                })
+                .unwrap();
+            for sequence in 1..=3 {
+                world
+                    .submit(Envelope {
+                        tick: 0,
+                        player: 0,
+                        sequence,
+                        command: Command::Train {
+                            building: 1,
+                            kind: sunlight_empires::UnitKind::Worker,
+                        },
+                    })
+                    .unwrap();
+            }
+            world
+                .submit(Envelope {
+                    tick: 10,
+                    player: 0,
+                    sequence: 4,
+                    command: Command::CancelTraining {
+                        building: 1,
+                        slot: 1,
                     },
                 })
                 .unwrap();

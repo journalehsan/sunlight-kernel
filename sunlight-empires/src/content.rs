@@ -1,5 +1,5 @@
 //! Identity is independent of progression; both civilizations use the same rules.
-pub const CONTENT_VERSION: u32 = 2;
+pub const CONTENT_VERSION: u32 = 3;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Civilization {
     Persia,
@@ -40,6 +40,8 @@ pub enum BuildingKind {
     House,
     Storage,
     University,
+    Barracks,
+    ArcheryRange,
 }
 impl BuildingKind {
     pub fn cost(self) -> u32 {
@@ -48,6 +50,8 @@ impl BuildingKind {
             Self::House => 40,
             Self::Storage => 60,
             Self::University => 100,
+            Self::Barracks => 80,
+            Self::ArcheryRange => 100,
         }
     }
     pub fn duration(self) -> u32 {
@@ -55,6 +59,14 @@ impl BuildingKind {
             Self::House => 60,
             Self::Storage => 80,
             _ => 120,
+        }
+    }
+    pub fn produces(self) -> Option<UnitKind> {
+        match self {
+            Self::TownCenter => Some(UnitKind::Worker),
+            Self::Barracks => Some(UnitKind::Guard),
+            Self::ArcheryRange => Some(UnitKind::Archer),
+            _ => None,
         }
     }
     pub fn delivery(self) -> bool {

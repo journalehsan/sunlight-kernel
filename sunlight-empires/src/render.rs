@@ -41,7 +41,7 @@ pub fn outline(c: &mut Canvas, r: Rect, col: Color) {
 }
 pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice: &str) {
     let top = TOP;
-    let bottom = (c.height as i32 - 116).max(top);
+    let bottom = (c.height as i32 - crate::panel::HEIGHT).max(top);
     input
         .camera
         .clamp(MAP_SIZE, MAP_SIZE, c.width as i32, bottom - top);
@@ -112,7 +112,26 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
             BuildingKind::House => "H",
             BuildingKind::Storage => "S",
             BuildingKind::University => "U",
+            BuildingKind::Barracks => "B",
+            BuildingKind::ArcheryRange => "A",
         };
+        if b.kind == BuildingKind::Barracks {
+            for dx in [2, z / 2, z - 6] {
+                c.fill_rect(Rect::new(px + dx, py + 2, 4, 5), theme.border);
+            }
+        } else if b.kind == BuildingKind::ArcheryRange {
+            outline(
+                c,
+                Rect::new(
+                    px + 5,
+                    py + 5,
+                    (z - 10).max(1) as u32,
+                    (z - 10).max(1) as u32,
+                ),
+                theme.border,
+            );
+            c.vline(px + z / 2, py + 1, (z - 2).max(1) as u32, theme.border);
+        }
         text(c, label, px + z / 3, py + z / 4, theme.text);
         c.fill_rect(
             Rect::new(
@@ -264,7 +283,10 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
         outline(
             c,
             Rect::new(x, y, z as u32, z as u32),
-            if w.passable(t) {
+            if w.passable(t)
+                && !w.units.iter().any(|u| u.tile() == t)
+                && input.placing.is_some_and(|k| w.resources.wood >= k.cost())
+            {
                 theme.ok
             } else {
                 theme.danger
@@ -290,7 +312,7 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
     text(c, w.civilization.name(), 12, 5, civ);
     text(
         c,
-        "M2 | Space pause | 1:0.5x 2:1x 3:2x | Esc menu",
+        "Space pause | 1:0.5x 2:1x 3:2x | Esc menu",
         110,
         5,
         theme.text_dim,
@@ -301,81 +323,181 @@ pub fn draw(c: &mut Canvas, theme: &Theme, w: &World, input: &mut Input, notice:
         theme.panel,
     );
     let mut line = Text::new();
-    if let Some(id) = input.building {
-        if let Some(b) = w.buildings.iter().find(|b| b.id == id) {
-            let _ = write!(
-                line,
-                "{:?} #{} | {} | progress {}/{}",
-                b.kind,
-                b.id,
-                if b.complete {
-                    "Complete"
-                } else {
-                    "Construction"
-                },
-                b.progress,
-                b.kind.duration()
+    if let Some(b) = input
+        .building
+        .and_then(|id| w.buildings.iter().find(|b| b.id == id))
+    {
+        let _ = write!(line, "{:?} #{} HP {}", b.kind, b.id, b.health);
+        text(c, line.str(), 10, bottom + 9, theme.text);
+        let mut detail = Text::new();
+        let _ = write!(detail, "Pop {}/{}", w.population(0), w.capacity(0));
+        text(c, detail.str(), 10, bottom + 36, theme.text_dim);
+        let mut detail = Text::new();
+        if let Some(t) = b.rally {
+            let _ = write!(detail, "Rally {},{}", t.x, t.y);
+        } else {
+            let _ = detail.write_str("Rally: unset");
+        }
+        text(c, detail.str(), 10, bottom + 60, theme.text_dim);
+        if !b.complete {
+            let mut detail = Text::new();
+            let _ = write!(detail, "Building {}%", b.progress * 100 / b.kind.duration());
+            text(c, detail.str(), 10, bottom + 84, theme.accent);
+        }
+        if let Some((kind, ticks)) = b.training {
+            text(
+                c,
+                "Queue (click to refund)",
+                c.width as i32 * 77 / 100,
+                bottom + 9,
+                theme.text_dim,
             );
-            let _ = write!(line, " | HP {}", b.health);
-            if let Some((kind, ticks)) = b.training {
-                let _ = write!(line, " | Training {:?}: {} ticks", kind, ticks);
+            for (i, k) in core::iter::once(&kind).chain(b.queue.iter()).enumerate() {
+                let r = crate::panel::queue_button(c.width, bottom, i);
+                c.fill_rect(r, theme.panel_alt);
+                let mut label = Text::new();
+                if i == 0 {
+                    let _ = write!(
+                        label,
+                        "{:?} {}% X",
+                        k,
+                        (kind.train_ticks() - ticks.min(kind.train_ticks())) * 100
+                            / kind.train_ticks()
+                    );
+                } else {
+                    let _ = write!(label, "{:?} X", k);
+                }
+                text(c, label.str(), r.x + 3, r.y + 3, theme.text);
             }
-            if !b.complete {
-                let count = w
-                    .units
-                    .iter()
-                    .filter(|u| u.task == sunlight_empires::Task::Build(b.id))
-                    .count();
-                let _ = write!(line, " | {} builders", count);
+            if ticks <= 1 {
+                text(c, "Waiting: exit / housing", 10, bottom + 108, theme.danger);
             }
         }
-    } else if let Some(id) = input.selected.first() {
-        if let Some(u) = w.units.iter().find(|u| u.id == *id) {
-            let _ = write!(
-                line,
-                "{} selected | {:?} #{} | {:?} | HP {}",
-                input.selected.len(),
-                u.kind,
-                u.id,
-                u.task,
-                u.health
+    } else if let Some(u) = input
+        .selected
+        .iter()
+        .find_map(|id| w.units.iter().find(|u| u.id == *id))
+    {
+        let _ = write!(
+            line,
+            "{} selected | {:?} HP {}",
+            input.selected.len(),
+            u.kind,
+            u.health
+        );
+        text(c, line.str(), 10, bottom + 9, theme.text);
+        let task = match u.task {
+            sunlight_empires::Task::Gather(_) if u.cargo > 0 => {
+                if u.path.is_empty() {
+                    "Carrying"
+                } else {
+                    "Returning"
+                }
+            }
+            sunlight_empires::Task::Gather(_) => {
+                if u.path.is_empty() {
+                    "Gathering"
+                } else {
+                    "Moving to resource"
+                }
+            }
+            sunlight_empires::Task::Build(_) => "Constructing",
+            sunlight_empires::Task::Move => "Moving",
+            sunlight_empires::Task::Idle => "Idle",
+            sunlight_empires::Task::Hold => "Holding",
+            _ => "Attacking",
+        };
+        text(c, task, 10, bottom + 36, theme.text_dim);
+        let mut detail = Text::new();
+        let _ = write!(
+            detail,
+            "Cargo {} {}",
+            u.cargo,
+            if u.cargo_stone { "stone" } else { "wood" }
+        );
+        text(c, detail.str(), 10, bottom + 60, theme.text_dim);
+        for (i, kind) in [UnitKind::Worker, UnitKind::Guard, UnitKind::Archer]
+            .into_iter()
+            .enumerate()
+        {
+            let mut detail = Text::new();
+            let n = w
+                .units
+                .iter()
+                .filter(|u| u.kind == kind && input.selected.contains(&u.id))
+                .count();
+            let _ = write!(detail, "{:?}: {}", kind, n);
+            text(
+                c,
+                detail.str(),
+                c.width as i32 * 77 / 100,
+                bottom + 36 + i as i32 * 24,
+                theme.text_dim,
             );
         }
     } else {
-        let _ =
-            line.write_str("Select a worker. Right-click trees / stone to gather; ground to move.");
+        text(c, w.civilization.name(), 10, bottom + 9, theme.text);
+        text(c, "Settlement era", 10, bottom + 36, theme.text_dim);
+        text(
+            c,
+            "Select workers to build.",
+            10,
+            bottom + 60,
+            theme.text_dim,
+        );
+        text(c, "Right-click to order.", 10, bottom + 84, theme.text_dim);
+        text(
+            c,
+            "Arrows pan; wheel zoom.",
+            10,
+            bottom + 108,
+            theme.text_dim,
+        );
     }
-    text(c, line.str(), 12, bottom + 9, theme.text);
-    for (i, label) in [
-        "[H] House 40W",
-        "[S] Store 60W",
-        "[U] Univ 100W",
-        "[X] Cancel",
-        "[R] Rally",
-    ]
-    .iter()
-    .enumerate()
-    {
-        let bw = (c.width as i32 - 16) / 5;
-        let x = 8 + i as i32 * bw;
-        let r = Rect::new(x, bottom + 33, (bw - 6).max(1) as u32, 27);
+    for (i, action) in crate::panel::actions(w, input).iter().enumerate() {
+        let r = crate::panel::button(c.width, bottom, i, crate::panel::actions(w, input).len());
         c.fill_rect(r, theme.panel_alt);
         outline(c, r, theme.border);
-        text(c, label, x + 5, bottom + 40, theme.text);
+        text(
+            c,
+            action.label(),
+            r.x + 4,
+            r.y + 5,
+            if action.cost() > w.resources.wood {
+                theme.danger
+            } else {
+                theme.text
+            },
+        );
     }
-    text(c, notice, 12, bottom + 68, theme.accent);
-    text(
-        c,
-        "I/B train (TC) | A attack-move | O stop | D hold | Right-click: order",
-        12,
-        bottom + 91,
-        theme.text_dim,
-    );
+    text(c, notice, 10, bottom + 156, theme.accent);
 }
 
-pub fn status(c: &mut Canvas, t: &Theme, s: &str) {
+pub fn status(
+    c: &mut Canvas,
+    t: &Theme,
+    w: &World,
+    speed: sunlight_empires::timing::Speed,
+    settings: sunlight_empires::sound::Settings,
+) {
     c.fill_rect(Rect::new(0, 0, c.width, 23), t.panel);
-    text(c, s, 12, 5, t.text_dim);
+    let mut line = Text::new();
+    let _ = write!(
+        line,
+        "{} | Settlement | {} | Volume {} SFX {} Music {} {}",
+        w.civilization.name(),
+        match speed {
+            sunlight_empires::timing::Speed::Paused => "Paused",
+            sunlight_empires::timing::Speed::Half => "0.5x",
+            sunlight_empires::timing::Speed::Normal => "1x",
+            sunlight_empires::timing::Speed::Double => "2x",
+        },
+        settings.master,
+        settings.effects,
+        settings.music,
+        if settings.mute { "MUTED" } else { "" }
+    );
+    text(c, line.str(), 12, 5, t.text_dim);
 }
 pub fn overlay(c: &mut Canvas, t: &Theme, title: &str, hint: &str) {
     let y = c.height as i32 / 2 - 45;

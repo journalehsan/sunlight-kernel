@@ -10,11 +10,12 @@ pub mod timing;
 use alloc::{vec, vec::Vec};
 pub use content::{BuildingKind, Civilization, UnitKind};
 
-pub const RULES_VERSION: u32 = 3;
+pub const RULES_VERSION: u32 = 4;
 pub const TICKS_PER_SECOND: u32 = 20;
 pub const MAP_SIZE: i32 = 64;
 pub const CELLS: usize = (MAP_SIZE * MAP_SIZE) as usize;
 pub const SUB: i32 = 256;
+pub const TRAIN_QUEUE_LIMIT: usize = 5;
 pub const MAX_COMMANDS: usize = 4096;
 pub type EntityId = u32;
 pub type PlayerId = u8;
@@ -143,9 +144,19 @@ pub struct Building {
     pub rally: Option<Tile>,
     pub health: u32,
     pub training: Option<(UnitKind, u32)>,
+    /// Paid FIFO waiting items; active training counts toward the five-slot bound.
+    pub queue: Vec<UnitKind>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
+    GatherGroup {
+        units: Vec<EntityId>,
+        node: Tile,
+    },
+    CancelTraining {
+        building: EntityId,
+        slot: u32,
+    },
     Attack {
         units: Vec<EntityId>,
         target: EntityId,
@@ -227,6 +238,7 @@ pub struct World {
     scratch: path::Search,
     pub enemy_resources: Resources,
     pub match_enabled: bool,
+    pub sandbox: bool,
     pub outcome: combat::Outcome,
     pub visibility: [Vec<u8>; 2],
     pub explored: [Vec<u8>; 2],
@@ -266,6 +278,7 @@ impl World {
                 knowledge: 0,
             },
             match_enabled: false,
+            sandbox: false,
             outcome: combat::Outcome::Active,
             visibility: [vec![0; CELLS], vec![0; CELLS]],
             explored: [vec![0; CELLS], vec![0; CELLS]],
@@ -286,6 +299,7 @@ impl World {
             rally: None,
             health: content::BUILDING_HEALTH,
             training: None,
+            queue: Vec::new(),
         });
         for (kind, t) in [
             (UnitKind::Worker, Tile::new(10, 8)),
@@ -334,7 +348,8 @@ impl World {
         {
             return Err(SubmitError::Duplicate);
         }
-        if let Command::MoveUnits { units, .. }
+        if let Command::GatherGroup { units, .. }
+        | Command::MoveUnits { units, .. }
         | Command::BuildGroup { units, .. }
         | Command::Attack { units, .. }
         | Command::AttackMove { units, .. }
@@ -431,6 +446,67 @@ impl World {
     }
     fn apply(&mut self, e: Envelope) -> bool {
         match e.command {
+            Command::CancelTraining { building, slot } => {
+                let Some(b) = self
+                    .buildings
+                    .iter_mut()
+                    .find(|b| b.id == building && b.owner == e.player)
+                else {
+                    return false;
+                };
+                let kind = if slot == 0 {
+                    let Some((kind, _)) = b.training.take() else {
+                        return false;
+                    };
+                    if !b.queue.is_empty() {
+                        let next = b.queue.remove(0);
+                        b.training = Some((next, next.train_ticks()));
+                    }
+                    kind
+                } else {
+                    let i = slot as usize - 1;
+                    if i >= b.queue.len() {
+                        return false;
+                    }
+                    b.queue.remove(i)
+                };
+                self.balance_mut(e.player).wood += kind.cost();
+                true
+            }
+            Command::GatherGroup { units, node } => {
+                let mut any = false;
+                for worker in units {
+                    // Nearby nodes spread larger groups across finite approach cells.
+                    let mut nodes: Vec<_> = (0..CELLS)
+                        .filter(|n| {
+                            self.map.remaining[*n] > 0
+                                && self.map.terrain[*n]
+                                    == node
+                                        .index()
+                                        .map(|i| self.map.terrain[i])
+                                        .unwrap_or(Terrain::Water)
+                        })
+                        .map(|n| Tile::new(n as i32 % MAP_SIZE, n as i32 / MAP_SIZE))
+                        .filter(|t| t.distance(node) <= 4 && self.visible(e.player, *t))
+                        .collect();
+                    nodes.sort_by_key(|t| (t.distance(node), *t));
+                    for target in nodes {
+                        if self.apply(Envelope {
+                            command: Command::AssignWorker {
+                                worker,
+                                node: target,
+                            },
+                            tick: e.tick,
+                            player: e.player,
+                            sequence: e.sequence,
+                        }) {
+                            any = true;
+                            break;
+                        }
+                    }
+                }
+                any
+            }
             Command::Attack { units, target } => self.order_attack(e.player, units, target),
             Command::AttackMove { units, target } => {
                 self.order_stance(e.player, units, Task::AttackMove(target))
@@ -555,6 +631,7 @@ impl World {
                     rally: None,
                     health: content::BUILDING_HEALTH,
                     training: None,
+                    queue: Vec::new(),
                 });
                 self.units[i].task = Task::Build(id);
                 self.units[i].work = 0;
@@ -616,7 +693,9 @@ impl World {
         {
             let e = self.pending.remove(0);
             let cue = match &e.command {
-                Command::BuildStructure { .. } | Command::BuildGroup { .. } => sound::Cue::Started,
+                Command::BuildStructure { .. }
+                | Command::BuildGroup { .. }
+                | Command::Train { .. } => sound::Cue::Started,
                 _ => sound::Cue::Movement,
             };
             let player = e.player;
@@ -642,7 +721,11 @@ impl World {
                 {
                     if self.units[i].centered() && self.tick % 20 == 0 {
                         let destination = self.units[i].destination().unwrap();
-                        self.route(i, destination);
+                        if !self.route(i, destination)
+                            && matches!(self.units[i].task, Task::Gather(_))
+                        {
+                            self.units[i].path.clear();
+                        }
                     }
                     continue;
                 }
@@ -754,9 +837,23 @@ impl World {
                     .map(|b| (here.distance(b.tile), b.id, b.tile))
                     .collect();
                 deliveries.sort_unstable();
+                if deliveries.is_empty() {
+                    self.units[i].task = Task::Idle;
+                }
+                let mut routed = false;
                 for (_, _, t) in deliveries {
                     if self.approach(i, t) {
+                        routed = true;
                         break;
+                    }
+                }
+                if routed {
+                    self.units[i].work = 0;
+                } else {
+                    self.units[i].work += 1;
+                    if self.units[i].work >= 5 {
+                        self.units[i].task = Task::Idle;
+                        self.units[i].work = 0;
                     }
                 }
             }
@@ -769,7 +866,15 @@ impl World {
         }
         if self.units[i].tile().distance(node) != 1 {
             if self.tick % 20 == 0 {
-                self.approach(i, node);
+                if !self.approach(i, node) {
+                    self.units[i].work += 1;
+                    if self.units[i].work >= 5 {
+                        self.units[i].task = Task::Idle;
+                        self.units[i].work = 0;
+                    }
+                } else {
+                    self.units[i].work = 0;
+                }
             }
             return;
         }
@@ -805,3 +910,6 @@ mod tests;
 mod m2_tests;
 
 pub mod music;
+
+#[cfg(test)]
+mod m4_tests;

@@ -14,6 +14,19 @@ fn command(out: &mut Vec<u8>, e: &Envelope) {
     put(out, e.player as u64);
     put(out, e.sequence as u64);
     match &e.command {
+        Command::CancelTraining { building, slot } => {
+            put(out, 11);
+            put(out, *building as u64);
+            put(out, *slot as u64);
+        }
+        Command::GatherGroup { units, node } => {
+            put(out, 12);
+            put(out, units.len() as u64);
+            for id in units {
+                put(out, *id as u64);
+            }
+            tile(out, *node);
+        }
         Command::Attack { units, target } => {
             put(out, 6);
             put(out, units.len() as u64);
@@ -103,6 +116,7 @@ pub fn state_bytes(w: &World) -> Vec<u8> {
         content::CONTENT_VERSION as u64,
         w.tick,
         w.match_enabled as u64,
+        w.sandbox as u64,
         w.outcome as u64,
         w.ai_sequence as u64,
         w.ai_next_attack,
@@ -193,6 +207,10 @@ pub fn state_bytes(w: &World) -> Vec<u8> {
             put(&mut out, kind as u64);
             put(&mut out, ticks as u64);
         }
+        put(&mut out, b.queue.len() as u64);
+        for kind in &b.queue {
+            put(&mut out, *kind as u64);
+        }
         tile(&mut out, b.tile);
         put(&mut out, b.rally.is_some() as u64);
         if let Some(t) = b.rally {
@@ -216,6 +234,7 @@ pub fn save(w: &World) -> Vec<u8> {
         w.tick,
         w.log.len() as u64,
         w.match_enabled as u64,
+        w.sandbox as u64,
         w.ai_pacing.peaceful_ticks,
         w.ai_pacing.attack_interval,
         w.ai_pacing.decision_interval,
@@ -281,7 +300,13 @@ pub fn load(bytes: &[u8]) -> Result<World, LoadError> {
     if match_enabled > 1 {
         return Err(LoadError::Invalid);
     }
-    let mut w = if match_enabled == 1 {
+    let sandbox = r.get()?;
+    if sandbox > 1 || (sandbox == 1 && match_enabled == 0) {
+        return Err(LoadError::Invalid);
+    }
+    let mut w = if sandbox == 1 {
+        World::combat_sandbox(civ)
+    } else if match_enabled == 1 {
         World::new_match(civ)
     } else {
         World::new(civ)
@@ -297,6 +322,24 @@ pub fn load(bytes: &[u8]) -> Result<World, LoadError> {
         let sequence = r.u32()?;
         let tag = r.get()?;
         let cmd = match tag {
+            11 => Command::CancelTraining {
+                building: r.u32()?,
+                slot: r.u32()?,
+            },
+            12 => {
+                let n = r.get()?;
+                if n > 64 {
+                    return Err(LoadError::Limit);
+                }
+                let mut units = Vec::new();
+                for _ in 0..n {
+                    units.push(r.u32()?);
+                }
+                Command::GatherGroup {
+                    units,
+                    node: r.tile()?,
+                }
+            }
             6..=9 => {
                 let n = r.get()?;
                 if n > 64 {
@@ -350,6 +393,8 @@ pub fn load(bytes: &[u8]) -> Result<World, LoadError> {
                     1 => BuildingKind::House,
                     2 => BuildingKind::Storage,
                     3 => BuildingKind::University,
+                    4 => BuildingKind::Barracks,
+                    5 => BuildingKind::ArcheryRange,
                     _ => return Err(LoadError::Invalid),
                 };
                 Command::BuildStructure {
@@ -372,6 +417,8 @@ pub fn load(bytes: &[u8]) -> Result<World, LoadError> {
                     1 => BuildingKind::House,
                     2 => BuildingKind::Storage,
                     3 => BuildingKind::University,
+                    4 => BuildingKind::Barracks,
+                    5 => BuildingKind::ArcheryRange,
                     _ => return Err(LoadError::Invalid),
                 };
                 Command::BuildGroup {

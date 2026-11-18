@@ -17,6 +17,44 @@ pub struct Effect {
     pub damage: u32,
 }
 impl World {
+    pub fn combat_sandbox(civ: Civilization) -> Self {
+        let mut w = Self::new_match(civ);
+        w.sandbox = true;
+        w.resources.wood = 800;
+        w.buildings.retain(|b| b.owner == 0);
+        w.units.retain(|u| u.owner == 0);
+        for (owner, kind, tile) in [
+            (0, BuildingKind::House, Tile::new(7, 7)),
+            (0, BuildingKind::Barracks, Tile::new(10, 6)),
+            (0, BuildingKind::ArcheryRange, Tile::new(12, 6)),
+            (1, BuildingKind::TownCenter, Tile::new(22, 10)),
+        ] {
+            let id = w.id();
+            w.buildings.push(Building {
+                id,
+                owner,
+                kind,
+                tile,
+                progress: kind.duration(),
+                complete: true,
+                rally: None,
+                health: content::BUILDING_HEALTH,
+                training: None,
+                queue: Vec::new(),
+            });
+        }
+        for (owner, kind, tile) in [
+            (0, UnitKind::Guard, Tile::new(12, 11)),
+            (0, UnitKind::Archer, Tile::new(12, 12)),
+            (0, UnitKind::Archer, Tile::new(11, 12)),
+            (1, UnitKind::Guard, Tile::new(20, 10)),
+            (1, UnitKind::Archer, Tile::new(21, 11)),
+        ] {
+            w.spawn_unit(owner, kind, tile);
+        }
+        w.update_visibility();
+        w
+    }
     pub fn new_match(civ: Civilization) -> Self {
         let mut w = Self::new(civ);
         w.match_enabled = true;
@@ -31,6 +69,7 @@ impl World {
             rally: None,
             health: content::BUILDING_HEALTH,
             training: None,
+            queue: Vec::new(),
         });
         for t in [Tile::new(38, 36), Tile::new(38, 38), Tile::new(36, 39)] {
             w.spawn_unit(1, UnitKind::Worker, t);
@@ -64,8 +103,9 @@ impl World {
             + self
                 .buildings
                 .iter()
-                .filter(|b| b.owner == owner && b.training.is_some())
-                .count()
+                .filter(|b| b.owner == owner)
+                .map(|b| b.queue.len() + usize::from(b.training.is_some()))
+                .sum::<usize>()
     }
     pub fn capacity(&self, owner: PlayerId) -> usize {
         self.buildings
@@ -205,29 +245,64 @@ impl World {
         }
         any
     }
-    pub(crate) fn order_train(&mut self, owner: PlayerId, id: EntityId, kind: UnitKind) -> bool {
+    pub fn training_blocked(
+        &self,
+        owner: PlayerId,
+        id: EntityId,
+        kind: UnitKind,
+    ) -> Option<&'static str> {
+        let Some(b) = self
+            .buildings
+            .iter()
+            .find(|b| b.id == id && b.owner == owner)
+        else {
+            return Some("Select your production building");
+        };
+        if !b.complete {
+            return Some("Construction incomplete");
+        }
+        if b.kind.produces() != Some(kind) {
+            return Some("This building cannot train that unit");
+        }
+        if b.queue.len() + usize::from(b.training.is_some()) >= TRAIN_QUEUE_LIMIT {
+            return Some("Training queue full (5)");
+        }
+        if self.balance(owner).wood < kind.cost() {
+            return Some("Insufficient wood");
+        }
+        if self.population(owner) >= self.capacity(owner) {
+            return Some("Population full: build a house");
+        }
         if self.units.len()
             + self
                 .buildings
                 .iter()
-                .filter(|b| b.training.is_some())
-                .count()
+                .map(|b| b.queue.len() + usize::from(b.training.is_some()))
+                .sum::<usize>()
             >= 256
-            || self.population(owner) >= self.capacity(owner)
-            || self.balance(owner).wood < kind.cost()
         {
+            return Some("World unit limit reached");
+        }
+        None
+    }
+    pub(crate) fn order_train(&mut self, owner: PlayerId, id: EntityId, kind: UnitKind) -> bool {
+        if self.training_blocked(owner, id, kind).is_some() {
             return false;
         }
         let Some(b) = self.buildings.iter_mut().find(|b| {
             b.id == id
                 && b.owner == owner
                 && b.complete
-                && b.kind == BuildingKind::TownCenter
-                && b.training.is_none()
+                && b.kind.produces() == Some(kind)
+                && b.queue.len() + usize::from(b.training.is_some()) < TRAIN_QUEUE_LIMIT
         }) else {
             return false;
         };
-        b.training = Some((kind, kind.train_ticks()));
+        if b.training.is_none() {
+            b.training = Some((kind, kind.train_ticks()));
+        } else {
+            b.queue.push(kind);
+        }
         self.balance_mut(owner).wood -= kind.cost();
         true
     }
@@ -241,6 +316,10 @@ impl World {
                 continue;
             }
             // Completed units wait inside if exits are blocked. Population remains reserved.
+            let owner = self.buildings[i].owner;
+            if self.units.iter().filter(|u| u.owner == owner).count() >= self.capacity(owner) {
+                continue;
+            }
             let t = self.buildings[i].tile;
             if let Some(exit) = t
                 .neighbors()
@@ -250,6 +329,10 @@ impl World {
                 let owner = self.buildings[i].owner;
                 self.spawn_unit(owner, kind, exit);
                 self.buildings[i].training = None;
+                if !self.buildings[i].queue.is_empty() {
+                    let next = self.buildings[i].queue.remove(0);
+                    self.buildings[i].training = Some((next, next.train_ticks()));
+                }
                 if let Some(rally) = self.buildings[i].rally {
                     let i = self.units.len() - 1;
                     if kind == UnitKind::Worker {
@@ -488,7 +571,22 @@ impl World {
         let worker = self
             .units
             .iter()
-            .find(|u| u.owner == 1 && u.kind == UnitKind::Worker && matches!(u.task, Task::Idle))
+            .find(|u| {
+                u.owner == 1
+                    && u.kind == UnitKind::Worker
+                    && (matches!(u.task, Task::Idle)
+                        || (u.cargo == 0
+                            && matches!(u.task, Task::Gather(_))
+                            && [BuildingKind::Barracks, BuildingKind::ArcheryRange]
+                                .iter()
+                                .any(|k| {
+                                    self.balance(1).wood >= k.cost()
+                                        && !self
+                                            .buildings
+                                            .iter()
+                                            .any(|b| b.owner == 1 && b.kind == *k)
+                                })))
+            })
             .map(|u| u.id);
         if let Some(worker) = worker {
             if !self
@@ -500,6 +598,24 @@ impl World {
                     units: vec![worker],
                     kind: BuildingKind::House,
                     tile: Tile::new(base.tile.x - 2, base.tile.y),
+                });
+            } else if let Some(kind) = [BuildingKind::Barracks, BuildingKind::ArcheryRange]
+                .into_iter()
+                .find(|kind| {
+                    self.balance(1).wood >= kind.cost()
+                        && !self
+                            .buildings
+                            .iter()
+                            .any(|b| b.owner == 1 && b.kind == *kind)
+                })
+            {
+                self.ai_command(Command::BuildGroup {
+                    units: vec![worker],
+                    kind,
+                    tile: Tile::new(
+                        base.tile.x - 3,
+                        base.tile.y + if kind == BuildingKind::Barracks { 2 } else { 4 },
+                    ),
                 });
             } else if !self
                 .buildings
@@ -522,7 +638,10 @@ impl World {
                     .filter(|t| self.visible(1, *t))
                     .min_by_key(|t| (base.tile.distance(*t), *t));
                 if let Some(node) = node {
-                    self.ai_command(Command::AssignWorker { worker, node });
+                    self.ai_command(Command::GatherGroup {
+                        units: vec![worker],
+                        node,
+                    });
                 }
             }
         }
@@ -552,10 +671,29 @@ impl World {
             } else {
                 UnitKind::Guard
             };
-            self.ai_command(Command::Train {
-                building: base.id,
-                kind,
-            });
+            if let Some(b) = self
+                .buildings
+                .iter()
+                .find(|b| {
+                    b.owner == 1
+                        && b.complete
+                        && b.kind.produces() == Some(kind)
+                        && b.training.is_none()
+                })
+                .map(|b| b.id)
+            {
+                if self
+                    .buildings
+                    .iter()
+                    .any(|building| building.id == b && building.rally.is_none())
+                {
+                    self.ai_command(Command::SetRallyPoint {
+                        building: b,
+                        tile: Tile::new(base.tile.x, base.tile.y - 4),
+                    });
+                }
+                self.ai_command(Command::Train { building: b, kind });
+            }
         }
         let soldiers: Vec<_> = self
             .units
