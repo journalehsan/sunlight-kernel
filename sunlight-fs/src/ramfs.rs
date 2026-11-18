@@ -2,7 +2,8 @@
 pub use crate::tmpfs::Tmpfs as RamFs;
 use crate::vfs::mode;
 pub const RAMFS_MAX_HANDLES: usize = 32;
-pub const RAMFS_MAX_ENTRIES: usize = 512;
+// Empires adds bundle resources to the existing boot namespace.
+pub const RAMFS_MAX_ENTRIES: usize = 576;
 
 pub struct RamEntry {
     pub path: &'static str,
@@ -365,6 +366,26 @@ pub static INITRAMFS: &[RamEntry] = &[
 
     RamEntry::file("/bin/voice-recorder", 0, 0, mode::FILE_755, b"#!/sunlight/voice-recorder\n"),
     RamEntry::file("/usr/bin/voice-recorder", 0, 0, mode::FILE_755, b"#!/sunlight/voice-recorder\n"),
+    // Native Empires resource staging; executable resolution remains the existing registry.
+    RamEntry::dir("/Applications/SunlightEmpires.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/SunlightEmpires.sunapp/Licenses", 0, 0, mode::DIR_755),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/CC-BY-SA-3.0.txt", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/CC-BY-SA-3.0.txt")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/CREDITS.txt", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/CREDITS.txt")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/attribution.json", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/attribution.json")),
+    RamEntry::dir("/Applications/SunlightEmpires.sunapp/Licenses/fonts", 0, 0, mode::DIR_755),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/fonts/FiraCode-OFL.txt", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/fonts/FiraCode-OFL.txt")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/fonts/Inter-OFL.txt", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/fonts/Inter-OFL.txt")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/fonts/MaterialIcons-Apache-2.0.txt", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/fonts/MaterialIcons-Apache-2.0.txt")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/fonts/Noto-OFL.txt", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/fonts/Noto-OFL.txt")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/fonts/OpenMoji-CC-BY-SA-4.0.txt", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/fonts/OpenMoji-CC-BY-SA-4.0.txt")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Licenses/fonts/OpenMoji-SOURCE.json", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Licenses/fonts/OpenMoji-SOURCE.json")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Manifest.toml", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Manifest.toml")),
+    RamEntry::dir("/Applications/SunlightEmpires.sunapp/Resources", 0, 0, mode::DIR_755),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Resources/icon.svg", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Resources/icon.svg")),
+    RamEntry::dir("/Applications/SunlightEmpires.sunapp/Resources/music", 0, 0, mode::DIR_755),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Resources/music/combat.wav", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Resources/music/combat.wav")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Resources/music/menu.wav", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Resources/music/menu.wav")),
+    RamEntry::file("/Applications/SunlightEmpires.sunapp/Resources/music/peace.wav", 0, 0, mode::FILE_644, include_bytes!("../../SunlightEmpires.sunapp/Resources/music/peace.wav")),
     RamEntry::dir("/Applications/VoiceRecorder.sunapp", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications/VoiceRecorder.sunapp/Resources", 0, 0, mode::DIR_755),
     RamEntry::file("/Applications/VoiceRecorder.sunapp/Manifest.toml", 0, 0, mode::FILE_644, include_bytes!("../../VoiceRecorder.sunapp/Manifest.toml")),
@@ -2622,3 +2643,6 @@ StandardOutput=journal\nStandardError=journal\n\n\
         include_bytes!("../../assets/documents/Why SunlightOS Exists.txt"),
     ),
 ];
+
+// Static namespace entries must remain addressable by Tmpfs::entry_idx.
+const _: () = assert!(INITRAMFS.len() <= RAMFS_MAX_ENTRIES);

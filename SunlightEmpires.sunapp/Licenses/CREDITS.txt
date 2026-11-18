@@ -1,0 +1,55 @@
+Sunlight Empires M3
+Version 0.2.8657-alpha.2; native SunlightOS SGP Window and audio.v1.
+Game implementation, procedural geometry and sound effects: SunlightOS contributors.
+No top-level game-source license grant was found in this checkout. The music
+license below does not license the game source, embedded fonts or platform code.
+Existing platform resources/fonts remain governed by their upstream notices;
+see Licenses/fonts (Inter/Fira Code/Noto OFL, Material Icons Apache 2.0,
+OpenMoji CC BY-SA 4.0 notices). Font rendering conversions remain separate
+from the 0 A.D. music license.
+Noto Serif: Copyright 2022 The Noto Project Authors. OFL text verified against
+the embedded font metadata and https://github.com/notofonts/latin-greek-cyrillic/blob/main/OFL.txt.
+
+Third-party music: 0 A.D. soundtrack, Wildfire Games.
+Official source: https://play0ad.com/files/0ad-music.zip
+License declaration: https://play0ad.com/media/music/
+Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+https://creativecommons.org/licenses/by-sa/3.0/
+Full legal code accompanies this document in CC-BY-SA-3.0.txt.
+
+Menu: Honor Bound (0 A.D. Main Theme) — Omri Lahav, composer.
+Additional credits: Avior Rokah, trumpet; Marta Mc'cave, flute.
+https://play0ad.bandcamp.com/track/honor-bound-0-a-d-main-theme
+Peace: The Road Ahead — Omri Lahav, composer and percussion.
+Additional credits: Marta Mc'cave, flute; Shir-Ran Yinon, viola.
+https://play0ad.bandcamp.com/track/the-road-ahead
+Combat: First Sighting — Jeff Willet, composer.
+https://play0ad.bandcamp.com/track/first-sighting
+
+Current Bandcamp release notice (preserved as supplementary attribution):
+Ⓟ 2018 2018 Materia Collective LLC under exclusive license from Sholmi Nogay,
+Omri Lahav, Jeff Willet, Mike Skalandunas. UPC 00811576030656; MCOL-0114.
+https://www.materiacollective.com/music/0-ad-original-game-soundtrack
+Those current release pages link to CC BY-SA 4.0. This bundle uses only MP3
+files from the official archive linked under CC BY-SA 3.0. The archive contains
+31 MP3 files, no separate license/readme, and no composer tags on these selected
+files. Composer/performance credits were independently cross-checked against
+the official linked Bandcamp pages; Omri Lahav's official Music Blog #2 also
+identifies Honor Bound. No additional restrictive notice was found in the
+selected archive files. The later release notice is retained without asserting
+that its remastered recording is byte-identical to the archive recording.
+
+Modifications by SunlightOS contributors: first 30 seconds, decode/resample to
+48 kHz stereo signed 16-bit little-endian PCM WAV, 20 ms fade-in and 1 second
+fade-out; restart at EOF. No loudness normalization. Adapted excerpts are made
+available under CC BY-SA 3.0. Original MP3s are retained unmodified under
+Resources/music/original; attribution.json records SHA256s and conversion details.
+Music is not original Sunlight Empires music. No endorsement is implied.
+No other 0 A.D. artwork, voice recordings or sound effects are included.
+
+PUBLIC RELEASE REVIEW STILL REQUIRED: CC BY-SA 3.0 defines synchronization of
+music with moving images as an Adaptation. Review obligations for combined
+interactive audiovisual distribution and recordings, and resolve the separate
+game/platform/font license inventory before public release. Do not impose DRM
+or additional restrictions on the licensed music. This staging build makes no
+claim that the soundtrack license automatically licenses the game source.

@@ -461,3 +461,127 @@ fn group_build_normalizes_and_charges_once() {
     assert!(!w.units.iter().any(|u| u.task == Task::Build(id)));
     assert_eq!(w.resources.wood, wood - 40);
 }
+
+#[test]
+fn m3_cooperative_cancel_in_both_civilizations() {
+    for civ in [Civilization::Persia, Civilization::Greece] {
+        let mut w = World::new(civ);
+        send(
+            &mut w,
+            0,
+            Command::BuildGroup {
+                units: vec![2, 3, 4],
+                kind: BuildingKind::University,
+                tile: Tile::new(11, 9),
+            },
+        );
+        run(&mut w, 12);
+        assert_eq!(w.resources.wood, 140);
+        let id = w.buildings[1].id;
+        let positions: Vec<_> = w.units.iter().map(|u| (u.x, u.y)).collect();
+        send(&mut w, 1, Command::CancelConstruction { building: id });
+        w.step();
+        assert_eq!(w.resources.wood, 240);
+        assert!(!w.units.iter().any(|u| u.task == Task::Build(id)));
+        for (u, (x, y)) in w.units.iter().zip(positions) {
+            assert!((u.x - x).abs() + (u.y - y).abs() <= u.kind.speed());
+        }
+        run(&mut w, 200);
+        assert_eq!(w.buildings.len(), 1);
+        assert!(w.passable(Tile::new(11, 9)));
+        send(&mut w, 2, Command::CancelConstruction { building: id });
+        w.step();
+        assert_eq!(w.resources.wood, 240);
+        assert_eq!(w.rejected, 1);
+    }
+}
+#[test]
+fn m3_distinct_approaches_and_exact_cooperative_work() {
+    let mut w = World::new(Civilization::Persia);
+    send(
+        &mut w,
+        0,
+        Command::BuildGroup {
+            units: vec![2, 3, 4],
+            kind: BuildingKind::University,
+            tile: Tile::new(11, 9),
+        },
+    );
+    w.step();
+    let id = w.buildings[1].id;
+    let destinations: Vec<_> = w
+        .units
+        .iter()
+        .filter(|u| u.task == Task::Build(id))
+        .map(|u| u.destination().unwrap_or(u.tile()))
+        .collect();
+    assert_eq!(destinations.len(), 3);
+    for (i, t) in destinations.iter().enumerate() {
+        assert_eq!(t.distance(Tile::new(11, 9)), 1);
+        assert!(!destinations[..i].contains(t));
+    }
+    let mut contributors = 0;
+    for _ in 0..200 {
+        let before = w.buildings[1].progress;
+        w.step();
+        let delta = w.buildings[1].progress - before;
+        assert!(delta <= 3);
+        contributors = contributors.max(delta);
+        assert_eq!(w.resources.wood, 140);
+        if w.buildings[1].complete {
+            break;
+        }
+    }
+    assert!(contributors > 1);
+    assert!(w.buildings[1].complete);
+    assert_eq!(w.buildings[1].progress, BuildingKind::University.duration());
+}
+#[test]
+fn m3_unreachable_group_preserves_accounting_and_ids() {
+    let mut w = World::new(Civilization::Persia);
+    let site = Tile::new(24, 24);
+    for t in site.neighbors() {
+        w.map.terrain[t.index().unwrap()] = Terrain::Water;
+    }
+    let before = w.next_id;
+    send(
+        &mut w,
+        0,
+        Command::BuildGroup {
+            units: vec![2, 3, 4, u32::MAX],
+            kind: BuildingKind::House,
+            tile: site,
+        },
+    );
+    w.step();
+    assert_eq!(w.rejected, 1);
+    assert_eq!(w.resources.wood, 240);
+    assert_eq!(w.next_id, before);
+    assert_eq!(w.buildings.len(), 1);
+    assert!(!w.units.iter().any(|u| matches!(u.task, Task::Build(_))));
+}
+#[test]
+fn m3_group_movement_obstacle_and_stale_members() {
+    let mut w = World::new(Civilization::Greece);
+    for y in 5..14 {
+        if y != 12 {
+            w.map.terrain[Tile::new(12, y).index().unwrap()] = Terrain::Water;
+        }
+    }
+    send(
+        &mut w,
+        0,
+        Command::MoveUnits {
+            units: vec![4, 3, 2, 2, u32::MAX],
+            target: Tile::new(17, 10),
+        },
+    );
+    run(&mut w, 700);
+    let mut destinations = Vec::new();
+    for u in &w.units[..3] {
+        assert!(u.tile().distance(Tile::new(17, 10)) <= 5);
+        assert!(u.path.is_empty());
+        assert!(!destinations.contains(&u.tile()));
+        destinations.push(u.tile());
+    }
+}

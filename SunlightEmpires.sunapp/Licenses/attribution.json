@@ -1,0 +1,58 @@
+{
+  "format_version": 1,
+  "source": "https://play0ad.com/files/0ad-music.zip",
+  "license_source": "https://play0ad.com/media/music/",
+  "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+  "archive_sha256": "b04049a17fe33ff5ff87bf243dd81d4b2790e9d68e76f44cf459a1ce63407cea",
+  "verified_date": "2026-11-17",
+  "tracks": [
+    {
+      "role": "menu",
+      "title": "Honor Bound",
+      "composer": "Omri Lahav",
+      "additional_credits": [
+        "Avior Rokah: trumpet",
+        "Marta Mc’cave: flute"
+      ],
+      "credit_source": "https://play0ad.bandcamp.com/track/honor-bound-0-a-d-main-theme",
+      "original": "Resources/music/original/Honor_Bound.mp3",
+      "original_sha256": "711497ca329b53b9ea4a6c6ce7b8ce08d141972c40386e96c7a7eb6dda5b27be",
+      "resource": "Resources/music/menu.wav",
+      "resource_sha256": "ec30c4e3c75260490aa2682c3397dce3754c37387c966faad4dab540cfc8f9c9",
+      "license": "CC-BY-SA-3.0",
+      "modifications": "First 30 seconds; decoded/resampled to 48 kHz stereo s16le PCM; 20 ms fade-in, 1 second end fade; loop at EOF; no normalization."
+    },
+    {
+      "role": "peace",
+      "title": "The Road Ahead",
+      "composer": "Omri Lahav",
+      "additional_credits": [
+        "Omri Lahav: percussion",
+        "Marta Mc’cave: flute",
+        "Shir-Ran Yinon: viola"
+      ],
+      "credit_source": "https://play0ad.bandcamp.com/track/the-road-ahead",
+      "original": "Resources/music/original/The_Road_Ahead.mp3",
+      "original_sha256": "32779c1470decfb230acf7dd4ff40771b56a1c69b1b9910bd22d7feaea0a1741",
+      "resource": "Resources/music/peace.wav",
+      "resource_sha256": "504524ec0f9d55d72b71cfb02c48892e4187337e02a4f4c4b92b4ccc2a34a1b6",
+      "license": "CC-BY-SA-3.0",
+      "modifications": "First 30 seconds; decoded/resampled to 48 kHz stereo s16le PCM; 20 ms fade-in, 1 second end fade; loop at EOF; no normalization."
+    },
+    {
+      "role": "combat",
+      "title": "First Sighting",
+      "composer": "Jeff Willet",
+      "additional_credits": [],
+      "credit_source": "https://play0ad.bandcamp.com/track/first-sighting",
+      "original": "Resources/music/original/First_Sighting.mp3",
+      "original_sha256": "510c943fad79aa28263e3bf93f6ba7a994b505f50f14d500c51a26eb5325b887",
+      "resource": "Resources/music/combat.wav",
+      "resource_sha256": "954fa2f2e85f9a305e919acebe954aa14881707b434aaba0a49478ff71c900f1",
+      "license": "CC-BY-SA-3.0",
+      "modifications": "First 30 seconds; decoded/resampled to 48 kHz stereo s16le PCM; 20 ms fade-in, 1 second end fade; loop at EOF; no normalization."
+    }
+  ],
+  "additional_release_notice": "Current 2018 Bandcamp release carries: Ⓟ 2018 2018 Materia Collective LLC under exclusive license from Sholmi Nogay, Omri Lahav, Jeff Willet, Mike Skalandunas. UPC 00811576030656; MCOL-0114. Bandcamp license links currently resolve to CC BY-SA 4.0; files here originate exclusively in the official archive offered under 3.0, not that later download.",
+  "converter": "ffmpeg version n9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"
+}

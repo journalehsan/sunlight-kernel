@@ -3,6 +3,8 @@
 extern crate alloc;
 mod audio;
 mod input;
+mod pacing;
+mod preferences;
 mod render;
 use input::{Input, TOP};
 use sunlight_empires::{
@@ -21,6 +23,10 @@ struct Empires {
     input: Input,
     clock: Clock,
     menu: bool,
+    credits: bool,
+    music_paused: bool,
+    music_policy: sunlight_empires::music::Policy,
+    pacing: pacing::Pacing,
     audio: Option<audio::Audio>,
     settings: Settings,
     sequence: u32,
@@ -37,17 +43,22 @@ struct Empires {
 }
 impl Empires {
     fn new() -> Self {
+        let settings = preferences::load();
         Self {
             world: World::new_match(Civilization::Persia),
             input: Input::new(),
             clock: Clock::new(monotonic_millis()),
             menu: true,
-            audio: audio::Audio::start(),
-            settings: Settings::default(),
+            credits: false,
+            music_paused: false,
+            music_policy: Default::default(),
+            pacing: pacing::Pacing::new(),
+            audio: audio::Audio::start(settings),
+            settings,
             sequence: 0,
             width: 960,
             height: 680,
-            notice: "Sunlight Empires M2 | P/G: start a beginner match",
+            notice: "Sunlight Empires M3 | P/G: start a beginner match",
             focused: true,
             close_after: None,
             last_rejected: 0,
@@ -127,6 +138,9 @@ impl Empires {
     fn new_game(&mut self, civ: Civilization) {
         self.world = World::new_match(civ);
         self.menu = false;
+        self.credits = false;
+        self.music_policy = Default::default();
+        self.pacing = pacing::Pacing::new();
         if let Some(audio) = &self.audio {
             audio.reset();
         }
@@ -141,8 +155,18 @@ impl Empires {
         self.notice = "New settlement | Select a worker";
     }
 }
+impl Drop for Empires {
+    fn drop(&mut self) {
+        debug_log(if preferences::save(self.settings) {
+            "[EMPIRES] preferences saved v1\n"
+        } else {
+            "[EMPIRES] preferences unavailable; session only\n"
+        });
+    }
+}
 impl App for Empires {
     fn view(&mut self, c: &mut Canvas, t: &Theme) {
+        let frame_started = monotonic_millis();
         self.width = c.width;
         self.height = c.height;
         render::draw(c, t, &self.world, &mut self.input, self.notice);
@@ -159,8 +183,8 @@ impl App for Empires {
             render::overlay(
                 c,
                 t,
-                "Sunlight Empires M2",
-                "P: Persia / G: Greece | Beginner AI | Esc: exit",
+                "Sunlight Empires M3",
+                "P: Persia / G: Greece | C: credits | Esc: exit",
             );
         } else if self.world.outcome != Outcome::Active {
             render::overlay(
@@ -174,6 +198,16 @@ impl App for Empires {
                 "P/G: restart | Esc: main menu",
             );
         }
+        if self.credits {
+            render::credits(c, t);
+        }
+        self.pacing.frame(
+            frame_started,
+            self.world.tick,
+            !self.menu
+                && self.clock.speed != Speed::Paused
+                && self.world.outcome == Outcome::Active,
+        );
     }
     fn poll_timeout_ms(&self) -> u64 {
         16
@@ -185,6 +219,23 @@ impl App for Empires {
         // Advance from every event, so continuous pointer motion cannot starve
         // simulation. Clock exists only in this native adapter.
         let now = monotonic_millis();
+        let combat = self
+            .world
+            .events
+            .iter()
+            .any(|e| matches!(e.cue, Cue::Melee | Cue::Arrow));
+        let track = self.music_policy.update(
+            now,
+            self.menu,
+            combat,
+            self.world.outcome != Outcome::Active,
+        );
+        if let Some(audio) = &self.audio {
+            audio.music(
+                track,
+                self.music_paused || (!self.menu && self.clock.speed == Speed::Paused),
+            );
+        }
         let steps = if self.menu || self.world.outcome != Outcome::Active {
             self.clock.reset(now);
             0
@@ -199,7 +250,9 @@ impl App for Empires {
                     .units
                     .iter()
                     .any(|u| u.task != sunlight_empires::Task::Idle || !u.path.is_empty());
+                let started = monotonic_millis();
                 self.world.step();
+                self.pacing.step(monotonic_millis().saturating_sub(started));
                 for event in &self.world.events {
                     if let Some(audio) = &self.audio {
                         audio.cue(event.cue);
@@ -325,6 +378,8 @@ impl App for Empires {
                     }),
                     'i' | 'I' => self.train(UnitKind::Guard),
                     'b' | 'B' => self.train(UnitKind::Archer),
+                    'c' | 'C' => self.credits = !self.credits,
+                    'n' | 'N' => self.music_paused = !self.music_paused,
                     'm' | 'M' => self.settings.mute = !self.settings.mute,
                     '-' => self.settings.master = self.settings.master.saturating_sub(10),
                     '+' | '=' => self.settings.master = (self.settings.master + 10).min(100),
@@ -359,6 +414,10 @@ impl App for Empires {
                 if pressed && !previous {
                     match keycode {
                         1 => {
+                            if self.credits {
+                                self.credits = false;
+                                return true;
+                            }
                             if self.input.placing.take().is_none() {
                                 if self.menu {
                                     request_close();

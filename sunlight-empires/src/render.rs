@@ -384,9 +384,52 @@ pub fn overlay(c: &mut Canvas, t: &Theme, title: &str, hint: &str) {
     text(c, hint, 36, y + 46, t.text);
     text(
         c,
-        "M: mute | -/+: master | [/]: effects | ,/.: music (reserved)",
+        "M: mute | -/+: master | [/]: effects | ,/.: music | N: audio pause | C: credits",
         36,
         y + 74,
         t.text_dim,
     );
+}
+
+pub fn credits(c: &mut Canvas, t: &Theme) {
+    c.fill_rect(
+        Rect::new(
+            12,
+            58,
+            c.width.saturating_sub(24),
+            c.height.saturating_sub(70),
+        ),
+        t.panel,
+    );
+    let lines = [
+        "Sunlight Empires M3 - native SunlightOS game",
+        concat!(
+            "Version ",
+            env!("CARGO_PKG_VERSION"),
+            " | SunlightOS audio.v1 / SGP Window"
+        ),
+        "Game: SunlightOS contributors. Original geometry and procedural SFX.",
+        "Music: 0 A.D. soundtrack / Wildfire Games (not original game music).",
+        "Menu: Honor Bound - Omri Lahav (composer)",
+        "Peace: The Road Ahead - Omri Lahav (composer, percussion)",
+        "Combat: First Sighting - Jeff Willet (composer)",
+        "Additional performance credits and notices: bundle Licenses/.",
+        "Official archive: https://play0ad.com/files/0ad-music.zip",
+        "Source: https://play0ad.com/media/music/",
+        "Music license: Creative Commons Attribution-ShareAlike 3.0",
+        "https://creativecommons.org/licenses/by-sa/3.0/",
+        "Modified: PCM conversion, 30s excerpts, 1s end fades; no normalization.",
+        "Music adaptations retain CC BY-SA 3.0. Game license is separate.",
+        "URLs are displayed for transcription; no browser integration.",
+        "C / Esc: close credits | N: audio pause/resume",
+    ];
+    for (i, line) in lines.iter().enumerate() {
+        text(
+            c,
+            line,
+            26,
+            76 + i as i32 * 27,
+            if i == 0 { t.accent } else { t.text },
+        );
+    }
 }

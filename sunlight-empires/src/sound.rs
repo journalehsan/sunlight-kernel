@@ -135,3 +135,53 @@ impl Mixer {
         }
     }
 }
+
+impl Settings {
+    /// Version 1 preferences record. A different version is never guessed.
+    pub fn encode(self) -> [u8; 6] {
+        [
+            b'E',
+            1,
+            self.master.min(100),
+            self.effects.min(100),
+            self.music.min(100),
+            self.mute as u8,
+        ]
+    }
+    pub fn decode(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != 6
+            || bytes[0] != b'E'
+            || bytes[1] != 1
+            || bytes[2..5].iter().any(|n| *n > 100)
+            || bytes[5] > 1
+        {
+            return None;
+        }
+        Some(Self {
+            master: bytes[2],
+            effects: bytes[3],
+            music: bytes[4],
+            mute: bytes[5] != 0,
+        })
+    }
+}
+#[cfg(test)]
+mod preferences_tests {
+    use super::Settings;
+    #[test]
+    fn settings_record_is_versioned_and_validated() {
+        let s = Settings {
+            master: 20,
+            effects: 80,
+            music: 50,
+            mute: true,
+        };
+        assert_eq!(Settings::decode(&s.encode()), Some(s));
+        for (offset, value) in [(0, b'X'), (1, 2), (2, 101), (3, 101), (4, 101), (5, 2)] {
+            let mut bytes = s.encode();
+            bytes[offset] = value;
+            assert_eq!(Settings::decode(&bytes), None);
+        }
+        assert_eq!(Settings::decode(&s.encode()[..5]), None);
+    }
+}

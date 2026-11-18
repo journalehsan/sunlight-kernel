@@ -1,0 +1,21 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.empires"
+name = "Sunlight Empires"
+version = "0.2.8657-alpha.2"
+kind = "windowed"
+icon = "Resources/icon.svg"
+
+[runtime]
+type = "native"
+
+[entry]
+executable = "/bin/sunlight-empires"
+
+[session]
+startup_eligible = false
+default_enabled = true
+single_instance = true
+launch_path = "/bin/sunlight-empires"

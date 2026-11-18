@@ -1,0 +1,12 @@
+{
+  "project": "OpenMoji",
+  "version": "17.0.0",
+  "release_date": "2026-04-23",
+  "upstream": "https://github.com/hfg-gmuend/openmoji/releases/tag/17.0.0",
+  "archive_sha256": "04994a5398a968a2d6db2ad9ac57cc7f6be8f3daba2baa05ad69113ba5239027",
+  "font_path": "font/OpenMoji-black-glyf/OpenMoji-black-glyf.ttf",
+  "font_sha256": "bfa18b01a9038fe06f0fe72c72bb6ad38e9de4d6ec99951e170f8e5cb776159a",
+  "metadata_sha256": "ab181dd523021dfbe2b98a13d96ab384b7b3014d17815261bc267fb39d9a211b",
+  "license": "CC BY-SA 4.0",
+  "conversion": "Official monochrome glyf outlines rasterized to MiniType MTF2 alpha masks"
+}

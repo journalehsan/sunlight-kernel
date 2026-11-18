@@ -803,3 +803,5 @@ mod tests;
 
 #[cfg(test)]
 mod m2_tests;
+
+pub mod music;
