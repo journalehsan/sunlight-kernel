@@ -99,6 +99,7 @@ pub fn is_trusted_kv_service_path(path: &str) -> bool {
 /// load/exec time from the exact embedded executable path.
 pub fn trusted_service_identity_for_path(path: &str) -> u64 {
     match path {
+        "/sbin/sunlight-kbd" | "/usr/sbin/sunlight-kbd" => sunlight_ipc::service_identity::KEYBOARD,
         "/sbin/sunlight-kv" | "/usr/sbin/sunlight-kv" => sunlight_ipc::service_identity::KV,
         "/sbin/sunlight-tls" | "/usr/sbin/sunlight-tls" => sunlight_ipc::service_identity::TLS,
         "/sbin/uac_service" | "/usr/sbin/uac_service" => {
@@ -1259,7 +1260,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/widget-gallery" | "/usr/bin/widget-gallery" => {
             Ok(crate::SUNLIGHT_WIDGET_GALLERY_ELF_BYTES)
         }
-        "/bin/sunlight-empires" | "/usr/bin/sunlight-empires" => Ok(crate::SUNLIGHT_EMPIRES_ELF_BYTES),
+        "/bin/sunlight-empires" | "/usr/bin/sunlight-empires" => {
+            Ok(crate::SUNLIGHT_EMPIRES_ELF_BYTES)
+        }
         // silicon-echoes: native graphical narrative-game vertical slice.
         "/bin/silicon-echoes" | "/usr/bin/silicon-echoes" => Ok(crate::SILICON_ECHOES_ELF_BYTES),
         // sunlight-files: native graphical file manager.

@@ -262,6 +262,8 @@ pub enum SunlightSyscall {
 /// `sunlight-kv` daemon derives matching keys from ACL identity strings, so the
 /// two sides agree without ever trusting a user-supplied service name.
 pub mod service_identity {
+    /// Kernel-provenance identity of the embedded hardware keyboard driver.
+    pub const KEYBOARD: u64 = super::name_to_u64("keyboard");
     /// Key for the TLS/network service (`sunlight-tls`).
     pub const TLS: u64 = super::name_to_u64("sunlight-tls");
     /// Key for the authentication broker (`sunlight-uac`).
@@ -2336,6 +2338,8 @@ pub const LOCK_CALLER_AUTHENTICATED_TTY: u64 = 2;
 pub const LOCK_SESSION_USERNAME_MAX: usize = 32;
 pub const SESSION_CALLER_TTY_SERVICE: u64 = 1;
 pub const SESSION_CALLER_SESSION_SERVICE: u64 = 2;
+/// Kernel-attested embedded PS/2 input driver.
+pub const SESSION_CALLER_KEYBOARD_SERVICE: u64 = 3;
 pub const SESSION_PROTOCOL_VERSION: u16 = 1;
 pub const SESSION_ENDPOINT: &str = "sunlight.session.v1";
 pub const SESSION_COMPONENT_APP_ID_MAX: usize = 32;
@@ -6578,7 +6582,8 @@ pub fn gpu_attach_backing(
     }
 }
 
-/// Wire resource 1 to scanout 0. On failure returns the kernel's reason + detail.
+/// Select the caller's kernel-assigned surface on scanout 0 (desktop 1, TTY 3).
+/// On failure returns the kernel's reason + detail.
 pub fn gpu_set_scanout() -> Result<(), gpu_proxy::GpuProxyError> {
     let (ok, msg) = unsafe { raw_syscall(SunlightSyscall::GpuSetScanout, 0, 0, 0, 0, 0, 0, 0) };
     if ok != 0 {

@@ -1374,7 +1374,7 @@ pub unsafe fn render_login_grid_interactive(
     }
 
     // ── Bottom hint bar ──────────────────────────────────────────────────────
-    let footer = "Tab to navigate   Enter to select   Space/Up/Down toggle session";
+    let footer = "Tab navigate   Enter select   Space/Up/Down session   Ctrl+F1 TTY   Ctrl+F2 Desktop";
     let footer_w = fontatlas::measure_text(footer, fontatlas::FontSize::Regular);
     fontatlas::draw_text(
         &mut fb,
@@ -1642,7 +1642,7 @@ pub unsafe fn render_login_screen(
         3,
         0,
         LoginFocus::UserSlot(0),
-        "TTY",
+        "Desktop",
         0,
         "Welcome. Please log in.",
     );

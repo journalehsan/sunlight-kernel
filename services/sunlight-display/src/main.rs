@@ -1536,6 +1536,22 @@ fn desktop_overlay_idx(state: &CompositorState) -> Option<usize> {
     })
 }
 
+/// A consumed Search chord must finish even after its palette owns input.
+fn route_desktop_overlay_key(state: &mut CompositorState, packed: u64) -> bool {
+    let (keycode, pressed, _, _, _, _, _) = sunlight_ipc::unpack_key_event(packed);
+    if state
+        .keyboard
+        .consume_active_desktop_search_k(keycode, pressed)
+    {
+        return true;
+    }
+    if let Some(index) = desktop_overlay_idx(state) {
+        state.windows[index].pending_keys.push(packed);
+        return true;
+    }
+    false
+}
+
 fn desktop_overlay_from_commit(win: &Window, caller: u64, xy: u64, wh: u64) -> Option<Rect> {
     if win.owner_pid != caller || win.config.window_type != WindowType::Desktop {
         return None;
@@ -4571,6 +4587,27 @@ fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) 
     }
 }
 
+/// Release physical keys at handoff without changing window ownership or focus.
+fn release_session_keys(state: &mut CompositorState) {
+    for window in &mut state.windows {
+        window.pending_keys.clear();
+    }
+    // Release held keys to the focused client before resetting
+    // compositor state; Ctrl-up may occur while TTY is active.
+    if let Some(index) = focused_window_idx(state) {
+        for key in 0..256 {
+            if state.keyboard.pressed[key] {
+                state.windows[index]
+                    .pending_keys
+                    .push(sunlight_ipc::pack_key_event(
+                        key as u8, false, false, false, false, false, None,
+                    ));
+            }
+        }
+    }
+    state.keyboard = KeyboardState::new();
+}
+
 fn redraw_scene(state: &mut CompositorState) {
     if !state.session_active {
         return;
@@ -5377,15 +5414,13 @@ fn apply_stored_vmware_mode(state: &mut CompositorState) {
 }
 
 /// Wire the prepared VirtIO resource to scanout 0 and switch to the hardware
-/// cursor. Called on the first SESSION_ACTIVATE (after login) so the VGA/TTY
-/// login screen stays visible until then. Idempotent via `virtio_scanout_enabled`.
+/// cursor. Called on every SESSION_ACTIVATE: TTY may have selected its own
+/// independent resource since the previous activation.
 fn activate_virtio_scanout(state: &mut CompositorState) {
-    if state.virtio_scanout_enabled
-        || !matches!(
-            state.display_backend,
-            backend::DisplayBackend::VirtioGpu { .. }
-        )
-    {
+    if !matches!(
+        state.display_backend,
+        backend::DisplayBackend::VirtioGpu { .. }
+    ) {
         return;
     }
     match sunlight_ipc::gpu_set_scanout() {
@@ -5797,6 +5832,39 @@ mod tests {
         assert_eq!(win.surface_generation, 1);
     }
 
+    #[test]
+    fn session_handoff_discards_stale_keys_and_releases_ctrl_without_losing_focus() {
+        let app = test_window(
+            10,
+            40,
+            40,
+            300,
+            200,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let mut state = test_state(vec![app]);
+        assert_eq!(focused_window_id(&state), Some(10));
+        state.keyboard.update_key(KEY_CTRL, true);
+        state.windows[0]
+            .pending_keys
+            .push(sunlight_ipc::pack_key_event(
+                KEY_K, true, false, false, false, false, None,
+            ));
+        release_session_keys(&mut state);
+        assert_eq!(focused_window_id(&state), Some(10));
+        assert!(!state.keyboard.ctrl_down());
+        let event = state.windows[0].pending_keys.pop().expect("Ctrl release");
+        assert_eq!(
+            sunlight_ipc::unpack_key_event(event),
+            (KEY_CTRL, false, false, false, false, false, None)
+        );
+        assert!(state.windows[0].pending_keys.pop().is_none());
+        release_session_keys(&mut state);
+        assert!(state.windows[0].pending_keys.pop().is_none());
+    }
+
     fn test_state(windows: Vec<Window>) -> CompositorState {
         CompositorState {
             windows,
@@ -5879,6 +5947,33 @@ mod tests {
         assert_eq!(event_poll_window_idx(&state, 1), Some(0));
         assert_eq!(event_poll_window_idx(&state, 26), None);
         assert_eq!(event_poll_window_idx(&state, 999), None);
+    }
+
+    #[test]
+    fn search_release_clears_latch_while_palette_owns_focus() {
+        let mut shell = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        shell.desktop_overlays[0] = Some(Rect::new(10, 10, 400, 200));
+        let mut state = test_state(vec![shell]);
+        state.keyboard.desktop_search_k_active = true;
+        let release = sunlight_ipc::pack_key_event(KEY_K, false, false, false, false, true, None);
+        assert!(route_desktop_overlay_key(&mut state, release));
+        assert!(!state.keyboard.desktop_search_k_active);
+        assert!(state.windows[0].pending_keys.pop().is_none());
+        state.windows[0].desktop_overlays[0] = None;
+        let next_press = sunlight_ipc::pack_key_event(KEY_K, true, false, false, false, true, None);
+        assert!(!route_desktop_overlay_key(&mut state, next_press));
+        assert!(desktop_search_shortcut_eligible(
+            KEY_K, true, false, false, false, false, true, false
+        ));
     }
 
     #[test]
@@ -8673,6 +8768,13 @@ pub extern "C" fn _start() -> ! {
             // Alt + Tab: rotate focus across app windows in the active z-group.
             // -------------------------------------------------------------------
             sunlight_ipc::KbdMsg::KEY_EVENT => {
+                if !sunlight_ipc::validate_session_caller(
+                    msg.badge,
+                    sunlight_ipc::SESSION_CALLER_TTY_SERVICE,
+                ) {
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 0));
+                    continue;
+                }
                 let packed = msg.words[0];
                 if sunlight_ipc::is_text_commit(packed) {
                     if state.session_active && sunlight_ipc::unpack_text_commit(packed).is_some() {
@@ -8706,13 +8808,7 @@ pub extern "C" fn _start() -> ! {
                         state.windows[index].pending_keys.push(packed);
                     }
                     consumed = true;
-                } else if let Some(index) = desktop_overlay_idx(&state) {
-                    state.windows[index].pending_keys.push(packed);
-                    consumed = true;
-                } else if state
-                    .keyboard
-                    .consume_active_desktop_search_k(keycode, pressed)
-                {
+                } else if route_desktop_overlay_key(&mut state, packed) {
                     consumed = true;
                 } else if desktop_search_shortcut_eligible(
                     keycode,
@@ -9371,6 +9467,17 @@ pub extern "C" fn _start() -> ! {
             // SESSION_ACTIVATE — tty_server hands framebuffer to Desktop session.
             // -------------------------------------------------------------------
             SgpMsg::SESSION_ACTIVATE => {
+                if !sunlight_ipc::validate_session_caller(
+                    msg.badge,
+                    sunlight_ipc::SESSION_CALLER_TTY_SERVICE,
+                ) {
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 0));
+                    continue;
+                }
+                // Re-select even after a lost prior handoff reply.
+                if state.session_active {
+                    activate_virtio_scanout(&mut state);
+                }
                 let mut activated_now = false;
                 if !state.session_active {
                     if !ensure_limine_framebuffer_mapped(&mut state) {
@@ -9413,7 +9520,15 @@ pub extern "C" fn _start() -> ! {
             // SESSION_DEACTIVATE — tty_server takes framebuffer for TTY/Login.
             // -------------------------------------------------------------------
             SgpMsg::SESSION_DEACTIVATE => {
+                if !sunlight_ipc::validate_session_caller(
+                    msg.badge,
+                    sunlight_ipc::SESSION_CALLER_TTY_SERVICE,
+                ) {
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 0));
+                    continue;
+                }
                 if state.session_active {
+                    release_session_keys(&mut state);
                     debug_log("[DISPLAY] [SESSION] deactivated — TTY owns framebuffer\n");
                     state.session_active = false;
                 }

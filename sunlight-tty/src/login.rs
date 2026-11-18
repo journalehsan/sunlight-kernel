@@ -68,8 +68,8 @@ pub enum FocusArea {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionType {
-    Tty,
     Desktop,
+    Tty,
 }
 
 impl SessionType {
@@ -82,7 +82,7 @@ impl SessionType {
 
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Tty => "TTY",
+            Self::Tty => "Terminal (TTY)",
             Self::Desktop => "Desktop",
         }
     }
@@ -156,7 +156,7 @@ impl LoginScreen {
             active_count: 3,
             focus: FocusArea::UserSlot(0),
             selected_user_idx: 0,
-            session: SessionType::Tty,
+            session: SessionType::Desktop,
             password: InputField::new(),
             message: "Welcome. Please log in.",
             attempts: 0,
@@ -360,6 +360,7 @@ impl LoginScreen {
             let ulen = self.users[u_idx].len.min(63);
             let mut uname = [0u8; 64];
             uname[..ulen].copy_from_slice(&self.users[u_idx].buf[..ulen]);
+            self.password.clear();
             self.message = "Login successful.";
             self.attempts = 0;
             LoginResult::Success {
@@ -409,6 +410,38 @@ mod tests {
     };
     use sunlight_ipc::CapabilityToken;
     use sunlight_uac::auth::AuthSuccess;
+
+    #[test]
+    fn desktop_default_and_explicit_tty_preserve_authenticated_identity() {
+        let mut login = LoginScreen::new();
+        assert_eq!(login.session, SessionType::Desktop);
+        login.handle_key_ascii(b'\n');
+        assert_eq!(login.focus, FocusArea::Password);
+        login.handle_key_ascii(b'x');
+        login.handle_key_ascii(b'\t');
+        login.handle_key_event(0x50, true, None);
+        assert_eq!(login.session, SessionType::Tty);
+        let result = login.attempt_login_with(|user, password| {
+            assert_eq!(user, b"root");
+            assert_eq!(password, b"x");
+            Some(AuthSuccess {
+                uid: 42,
+                gid: 43,
+                session_grant: CapabilityToken(99),
+            })
+        });
+        assert!(matches!(
+            result,
+            LoginResult::Success {
+                uid: 42,
+                gid: 43,
+                session_grant: CapabilityToken(99),
+                session: SessionType::Tty,
+                ..
+            }
+        ));
+        assert_eq!(login.password.len, 0);
+    }
 
     #[test]
     fn guest_display_name_is_presentation_only() {
@@ -525,9 +558,9 @@ mod tests {
     #[test]
     fn pointer_dropdown_toggles_session_and_takes_focus() {
         let mut login = LoginScreen::new();
-        assert_eq!(login.session, SessionType::Tty);
-        login.handle_pointer_click(FocusArea::Dropdown);
         assert_eq!(login.session, SessionType::Desktop);
+        login.handle_pointer_click(FocusArea::Dropdown);
+        assert_eq!(login.session, SessionType::Tty);
         assert_eq!(login.focus, FocusArea::Dropdown);
     }
 

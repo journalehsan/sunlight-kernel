@@ -2001,7 +2001,11 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
     let caller = sched.current_process();
     // sessiond validates tty callers; mezzo validates sessiond on
     // SESSION_ESTABLISH_TRUSTED (trusted_lock_service).
-    if !caller.trusted_session_service && !caller.trusted_lock_service {
+    if !caller.trusted_session_service
+        && !caller.trusted_lock_service
+        && !caller.trusted_tty_session_service
+        && !caller.trusted_display_service
+    {
         return 0;
     }
     let Some(target) = sched
@@ -2014,6 +2018,10 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
     match kind {
         ::sunlight_ipc::SESSION_CALLER_TTY_SERVICE => u64::from(target.trusted_tty_session_service),
         ::sunlight_ipc::SESSION_CALLER_SESSION_SERVICE => u64::from(target.trusted_session_service),
+        ::sunlight_ipc::SESSION_CALLER_KEYBOARD_SERVICE => u64::from(
+            target.service_identity == ::sunlight_ipc::service_identity::KEYBOARD
+                && !target.is_exiting(),
+        ),
         _ => 0,
     }
 }
@@ -13465,6 +13473,11 @@ fn sys_swapctl(frame: &mut SyscallFrame) -> u64 {
 // Keyboard driver syscalls (Ring 3 migration)
 // ---------------------------------------------------------------------------
 
+fn current_process_is_keyboard_driver() -> bool {
+    let sched = crate::sched::SCHEDULER.lock();
+    sched.current_process().service_identity == ::sunlight_ipc::service_identity::KEYBOARD
+}
+
 /// Syscall: kbd_register (110)
 /// rdi = endpoint_id
 /// Register the calling process as the keyboard driver.
@@ -13474,6 +13487,10 @@ fn sys_kbd_register(frame: &mut SyscallFrame) -> u64 {
     // endpoint the driver receives on via ipc_recv. Storing the raw token here
     // (truncated to u32) queues events on a non-existent endpoint, so the
     // driver's ipc_recv never returns and the keyboard appears dead.
+    // Only the root-launched embedded input driver may own the hardware stream.
+    if !current_process_is_keyboard_driver() {
+        return u64::MAX;
+    }
     let token = CapabilityToken(frame.rdi);
     let caps = crate::capability::CAP_BROKER.lock();
     let endpoint_id = match caps.check(token, CapabilityRights::RECV_ONLY) {
@@ -13496,6 +13513,9 @@ fn sys_kbd_register(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: kbd_unregister (111)
 /// Unregister the keyboard driver.
 fn sys_kbd_unregister() -> u64 {
+    if !current_process_is_keyboard_driver() {
+        return u64::MAX;
+    }
     crate::arch::x86_64::keyboard::unregister_kbd_driver();
     0
 }
@@ -13504,6 +13524,9 @@ fn sys_kbd_unregister() -> u64 {
 /// Pop one raw scancode from the kernel's ring buffer.
 /// Returns the scancode in the low byte, or u64::MAX if none available.
 fn sys_kbd_pop_scancode() -> u64 {
+    if !current_process_is_keyboard_driver() {
+        return u64::MAX;
+    }
     crate::arch::x86_64::keyboard::pop_scancode()
         .map(|sc| sc as u64)
         .unwrap_or(u64::MAX)
@@ -14249,23 +14272,33 @@ fn sys_powerctl(command: u64) -> u64 {
 
 // ---------------------------------------------------------------------------
 // VirtIO GPU proxy syscalls (119-124)
-// All gated by process name "display_server".
+// Surface operations are gated by kernel image provenance. Cursor operations
+// remain display-only; callers cannot choose or replace another service's resource.
 // ---------------------------------------------------------------------------
 
 fn current_process_is_display_server() -> bool {
-    // The display server's *process* name is "sunlight-display" (its binary at
-    // /sbin/sunlight-display); "display_server" is only its nameserver
-    // registration string. Accept both so the GPU proxy syscalls aren't denied.
     let sched = crate::sched::SCHEDULER.lock();
-    let name = sched.current_process().name_str();
-    name == "sunlight-display" || name == "display_server"
+    sched.current_process().trusted_display_service
+}
+
+/// Independent persistent surfaces: desktop=1, cursor=2, native TTY=3.
+fn current_gpu_surface() -> Option<u32> {
+    let sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_process();
+    if process.trusted_tty_session_service {
+        Some(sunlight_virtio::gpu::TTY_RESOURCE_ID)
+    } else if process.trusted_display_service {
+        Some(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID)
+    } else {
+        None
+    }
 }
 
 /// Syscall 119: GpuGetInfo
 /// Returns 1 in rax if GPU present, 0 otherwise.
 /// frame.r8 = width | (height << 32)
 fn sys_gpu_get_info(frame: &mut SyscallFrame) -> u64 {
-    if !current_process_is_display_server() {
+    if current_gpu_surface().is_none() {
         return 0;
     }
     let dev = crate::GPU_DEVICE.lock();
@@ -14302,12 +14335,12 @@ fn gpu_err(frame: &mut SyscallFrame, reason: u64, detail: u32) -> u64 {
 /// rsi = number of 4KiB pages.
 /// Walks the process page table, coalesces physically-contiguous pages into a
 /// scatter-gather list, then sends RESOURCE_CREATE_2D + RESOURCE_ATTACH_BACKING
-/// for SCANOUT_RESOURCE_ID (1). Returns 1 on success; on failure returns 0 with
+/// for the caller's kernel-assigned resource. Returns 1 on success; on failure returns 0 with
 /// a reason code in r8 and logs the exact step that failed.
 fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
-    if !current_process_is_display_server() {
+    let Some(resource_id) = current_gpu_surface() else {
         return gpu_err(frame, GPU_ERR_NOT_DISPLAY_SERVER, 0);
-    }
+    };
     let user_va = frame.rdi;
     let num_pages = frame.rsi as usize;
     // 4096 pages = 16 MiB backing, comfortably above any sane scanout size.
@@ -14397,6 +14430,11 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
         None => return gpu_err(frame, GPU_ERR_NO_DEVICE, 0),
     };
 
+    // Reject undersized DMA backing before creating a resource.
+    if byte_len < gpu.width as usize * gpu.height as usize * 4 {
+        return gpu_err(frame, GPU_ERR_BAD_ARGS, num_pages as u32);
+    }
+
     // First create the scanout resource (idempotent if already created, but safe)
     let (w, h) = (gpu.width, gpu.height);
     crate::serial_println!(
@@ -14409,7 +14447,7 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
     );
     if let Err(code) = unsafe {
         gpu.resource_create_2d(
-            sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
+            resource_id,
             // The back_buffer holds packed little-endian 0x00RRGGBB pixels,
             // which is memory byte order B,G,R,X. Using X8R8G8B8 here swaps
             // R/G and drops blue entirely (green-tinted screen).
@@ -14428,9 +14466,7 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
         return gpu_err(frame, GPU_ERR_CREATE_FAILED, code);
     }
 
-    if let Err(code) =
-        unsafe { gpu.resource_attach_backing(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, &entries) }
-    {
+    if let Err(code) = unsafe { gpu.resource_attach_backing(resource_id, &entries) } {
         crate::serial_println!(
             "[GPU] RESOURCE_ATTACH_BACKING ({} entries) failed: {:#x} ({})",
             entries.len(),
@@ -14443,26 +14479,21 @@ fn sys_gpu_attach_backing(frame: &mut SyscallFrame) -> u64 {
 }
 
 /// Syscall 121: GpuSetScanout
-/// Sends SET_SCANOUT to wire resource 1 to scanout 0. Returns 1 on success;
+/// Sends SET_SCANOUT for the caller's resource on scanout 0. Returns 1 on success;
 /// on failure returns 0 with a reason code in r8.
 fn sys_gpu_set_scanout(frame: &mut SyscallFrame) -> u64 {
-    if !current_process_is_display_server() {
+    let Some(resource_id) = current_gpu_surface() else {
         return gpu_err(frame, GPU_ERR_NOT_DISPLAY_SERVER, 0);
-    }
+    };
     let mut dev = crate::GPU_DEVICE.lock();
     let gpu = match dev.as_mut() {
         Some(g) => g,
         None => return gpu_err(frame, GPU_ERR_NO_DEVICE, 0),
     };
     let (w, h) = (gpu.width, gpu.height);
-    if let Err(code) = unsafe {
-        gpu.set_scanout(
-            sunlight_virtio::gpu::SCANOUT_ID,
-            sunlight_virtio::gpu::SCANOUT_RESOURCE_ID,
-            w,
-            h,
-        )
-    } {
+    if let Err(code) =
+        unsafe { gpu.set_scanout(sunlight_virtio::gpu::SCANOUT_ID, resource_id, w, h) }
+    {
         crate::serial_println!(
             "[GPU] SET_SCANOUT {}x{} failed: {:#x} ({})",
             w,
@@ -14472,7 +14503,12 @@ fn sys_gpu_set_scanout(frame: &mut SyscallFrame) -> u64 {
         );
         return gpu_err(frame, GPU_ERR_SCANOUT_FAILED, code);
     }
-    crate::serial_println!("[GPU] SET_SCANOUT {}x{} OK (scanout 0, resource 1)", w, h);
+    crate::serial_println!(
+        "[GPU] SET_SCANOUT {}x{} OK (scanout 0, resource {})",
+        w,
+        h,
+        resource_id
+    );
     1
 }
 
@@ -14480,9 +14516,9 @@ fn sys_gpu_set_scanout(frame: &mut SyscallFrame) -> u64 {
 /// rdi = x | (y << 32), rsi = w | (h << 32)
 /// Issues TRANSFER_TO_HOST_2D then RESOURCE_FLUSH for the dirty rect.
 fn sys_gpu_flush(frame: &mut SyscallFrame) -> u64 {
-    if !current_process_is_display_server() {
+    let Some(resource_id) = current_gpu_surface() else {
         return 0;
-    }
+    };
     let x = (frame.rdi & 0xFFFF_FFFF) as u32;
     let y = (frame.rdi >> 32) as u32;
     let w = (frame.rsi & 0xFFFF_FFFF) as u32;
@@ -14494,10 +14530,8 @@ fn sys_gpu_flush(frame: &mut SyscallFrame) -> u64 {
         None => return 0,
     };
     let width = gpu.width;
-    let ok1 = unsafe {
-        gpu.transfer_to_host_2d(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, x, y, w, h, width)
-    };
-    let ok2 = unsafe { gpu.resource_flush(sunlight_virtio::gpu::SCANOUT_RESOURCE_ID, x, y, w, h) };
+    let ok1 = unsafe { gpu.transfer_to_host_2d(resource_id, x, y, w, h, width) };
+    let ok2 = unsafe { gpu.resource_flush(resource_id, x, y, w, h) };
     if ok1.is_ok() && ok2.is_ok() {
         1
     } else {

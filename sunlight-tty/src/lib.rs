@@ -8,6 +8,7 @@ pub mod login;
 pub mod mux;
 pub mod proc;
 pub mod session;
+pub mod session_keys;
 pub mod shell;
 pub mod vt100;
 

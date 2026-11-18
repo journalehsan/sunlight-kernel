@@ -115,6 +115,8 @@ pub const VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM: u32 = 1;
 pub const SCANOUT_RESOURCE_ID: u32 = 1;
 /// Resource ID for the hardware cursor.
 pub const CURSOR_RESOURCE_ID: u32 = 2;
+/// Independent native TTY/login surface; never replaces desktop backing.
+pub const TTY_RESOURCE_ID: u32 = 3;
 /// Scanout index.
 pub const SCANOUT_ID: u32 = 0;
 

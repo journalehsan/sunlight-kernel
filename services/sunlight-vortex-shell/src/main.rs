@@ -1701,6 +1701,7 @@ struct VortexShell {
     overview_zone: Rect,
     /// Bounds of the dock's grid icon — toggles the Start Menu.
     launcher_zone: Rect,
+    launcher_hover: bool,
     /// Bounds of the bottom-right Search control — toggles the Search Palette.
     search_zone: Rect,
     /// Bounds of the bottom-right Trash control (next to Search).
@@ -1935,6 +1936,7 @@ impl VortexShell {
             sidebar_zone: Rect::new(0, 0, 0, 0),
             overview_zone: Rect::new(0, 0, 0, 0),
             launcher_zone: Rect::new(0, 0, 0, 0),
+            launcher_hover: false,
             search_zone: Rect::new(0, 0, 0, 0),
             trash_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
@@ -6805,11 +6807,12 @@ fn draw_bot_center(
     hover: Option<usize>,
     running_hover: Option<usize>,
     dock: DockTheme,
-    sym: SymbolTheme,
+    _sym: SymbolTheme,
     pinned_apps: &[&DockAppState; DOCK_PINNED_COUNT],
     running_apps: &[RunningAppEntry],
     running_zones: &mut Vec<(Rect, u64)>,
     menu_open: bool,
+    launcher_hover: bool,
     _rtl: bool,
     now: u64,
 ) -> (Rect, [Rect; DOCK_PINNED_COUNT]) {
@@ -6847,14 +6850,30 @@ fn draw_bot_center(
             ICON_BTN,
         );
         launcher_rect = cell;
-        if menu_open {
+        if menu_open || launcher_hover {
             canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
             canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
         }
-        if let Some(tga) = sym.start.or(sym.menu) {
-            draw_icon_tinted_orange(canvas, &tga, cell.inset(4), theme.accent);
-        } else {
-            draw_icon_btn(canvas, cell, &GRID_ROWS, theme, false, false);
+        // Four application tiles stay crisp at the actual panel size and do
+        // not depend on a theme's generic hamburger/menu raster asset.
+        let size = (cell.w * 5 / 16).max(2);
+        let gap = (cell.w / 12).max(2);
+        let extent = size * 2 + gap;
+        let left = cell.x + (cell.w - extent) as i32 / 2;
+        let top = cell.y + (cell.h - extent) as i32 / 2;
+        for row in 0..2 {
+            for column in 0..2 {
+                canvas.fill_rounded_rect(
+                    Rect::new(
+                        left + column * (size + gap) as i32,
+                        top + row * (size + gap) as i32,
+                        size,
+                        size,
+                    ),
+                    (size / 5).max(1),
+                    theme.text,
+                );
+            }
         }
         x += ICON_BTN as i32 + ICON_GAP;
     }
@@ -8385,6 +8404,7 @@ impl App for VortexShell {
             running_apps,
             &mut self.running_zones,
             self.start_menu.is_open(),
+            self.launcher_hover,
             rtl,
             now,
         );
@@ -8405,7 +8425,9 @@ impl App for VortexShell {
         self.trash_zone = bot_right.trash;
         self.search_zone = bot_right.search;
 
-        if self.overview_hover {
+        if self.launcher_hover {
+            draw_shelf_tooltip(canvas, theme, self.launcher_zone, "Applications", cw);
+        } else if self.overview_hover {
             draw_shelf_tooltip(canvas, theme, self.overview_zone, "Show Workspaces", cw);
         } else if self.trash_hover {
             let tip = if self.trash_full {
@@ -9463,6 +9485,8 @@ impl App for VortexShell {
                 }
                 let prev_settings = self.settings_hover;
                 self.settings_hover = self.settings_zone.contains(point);
+                let prev_launcher = self.launcher_hover;
+                self.launcher_hover = self.launcher_zone.contains(point);
                 let prev_overview = self.overview_hover;
                 self.overview_hover = self.overview_zone.contains(point);
                 let prev_search = self.search_hover;
@@ -9476,6 +9500,7 @@ impl App for VortexShell {
                     self.network_settings_focused = self.network_settings_btn.contains(point);
                 }
                 if self.settings_hover != prev_settings
+                    || self.launcher_hover != prev_launcher
                     || self.overview_hover != prev_overview
                     || self.search_hover != prev_search
                     || self.trash_hover != prev_trash
@@ -9498,6 +9523,7 @@ impl App for VortexShell {
 
                 self.hover != prev
                     || self.running_hover != prev_running
+                    || self.launcher_hover != prev_launcher
                     || self.overview_hover != prev_overview
                     || self.search_hover != prev_search
                     || self.trash_hover != prev_trash

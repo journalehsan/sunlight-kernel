@@ -14,6 +14,7 @@ the SunlightOS **session manager** stack:
 
 | Doc | Contents |
 |---|---|
+| [desktop-login-tty-switching-ux.md](./desktop-login-tty-switching-ux.md) | Desktop-first login, shared-resolution VirtIO TTY, global switching, launcher and validation |
 | [WELCOME_WIZARD_PHASE1.md](./WELCOME_WIZARD_PHASE1.md) | Phase 1 design: scope, architecture, completion model, tests |
 | [WELCOME_WIZARD_IMPLEMENTATION_FIXES.md](./WELCOME_WIZARD_IMPLEMENTATION_FIXES.md) | What broke during bring-up and how it was fixed (keep forever) |
 | [../SUNLIGHT_SESSION_FOUNDATION.md](../SUNLIGHT_SESSION_FOUNDATION.md) | Session Foundation (shell as required component) |

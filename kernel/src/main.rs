@@ -4572,7 +4572,7 @@ fn setup_key_injection() {
     // (when no env var is set) is the phase 3.8 sequence used by the boot gate.
     let phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
 
-    let sequence: [u8; 12288] = match phase {
+    let mut sequence: [u8; 12288] = match phase {
         "shell-phase1.5" => build_shell_phase_sequence(b"sshl --native-tests"),
         "shell-phase2" => build_shell_phase_sequence(b"sshl --script-tests"),
         "shell-pty-liveness" => build_shell_phase_sequence(b"sshl --pty-liveness-tests"),
@@ -4614,6 +4614,34 @@ fn setup_key_injection() {
         .iter()
         .position(|&b| b == 0)
         .unwrap_or(sequence.len());
+
+    // Legacy command gates explicitly select TTY instead of depending on the
+    // production default. Navigate back to the initial user card so their
+    // existing authentication keystrokes (including custom users) are intact.
+    let desktop_gate = matches!(phase,
+        "desktop_login" | "session_foundation" | "session_configuration" |
+        "welcome_wizard" | "wiseowl_graphical_console_v1" |
+        "wiseowl_gui_conversation_v1" | "wiseowl_delegated_session_lifecycle_ipc_v1");
+    let len = if desktop_gate {
+        len
+    } else {
+        let mut prefix = [0u8; 12288];
+        let mut prefix_len = 0;
+        append_injected_delay(&mut prefix, &mut prefix_len, 512);
+        for _ in 0..4 {
+            append_injected_scancode(&mut prefix, &mut prefix_len, 0x0f);
+        }
+        append_injected_scancode(&mut prefix, &mut prefix_len, 0x39);
+        append_injected_scancode(&mut prefix, &mut prefix_len, 0x2a);
+        for _ in 0..4 {
+            append_injected_scancode(&mut prefix, &mut prefix_len, 0x0f);
+        }
+        append_injected_scancode(&mut prefix, &mut prefix_len, 0xaa);
+        assert!(len + prefix_len <= sequence.len(), "TTY gate injection capacity");
+        sequence.copy_within(0..len, prefix_len);
+        sequence[..prefix_len].copy_from_slice(&prefix[..prefix_len]);
+        len + prefix_len
+    };
 
     // SAFETY: single-threaded kernel boot, no concurrent access
     unsafe {
@@ -5048,8 +5076,7 @@ fn build_phase3_9_sequence() -> [u8; 12288] {
 }
 
 /// Desktop login injection: commit the preselected root user, type the
-/// password, Tab to the session dropdown, Space to toggle Tty→Desktop, Enter
-/// to log in. Used to verify the login → SESSION_ACTIVATE → desktop handover.
+/// password, Enter to log in with the default Desktop selection. Used to verify the login → SESSION_ACTIVATE → desktop handover.
 #[cfg(feature = "key_inject")]
 fn build_desktop_login_sequence() -> [u8; 12288] {
     let mut s = [0u8; 12288];
@@ -5061,10 +5088,6 @@ fn build_desktop_login_sequence() -> [u8; 12288] {
         append_injected_scancode(&mut s, &mut len, code);
     }
     append_injected_delay(&mut s, &mut len, 96);
-    append_injected_scancode(&mut s, &mut len, 0x0F);
-    append_injected_delay(&mut s, &mut len, 32);
-    append_injected_scancode(&mut s, &mut len, 0x39);
-    append_injected_delay(&mut s, &mut len, 32);
     append_injected_scancode(&mut s, &mut len, 0x1C);
     s
 }

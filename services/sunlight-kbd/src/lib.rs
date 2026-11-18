@@ -290,6 +290,25 @@ mod tests {
         commit.and_then(sunlight_ipc::unpack_text_commit)
     }
     #[test]
+    fn both_control_sides_decode_session_function_keys_and_release() {
+        for extended in [false, true] {
+            let mut k = Keyboard::default();
+            for function in [0x3b, 0x3c] {
+                k.process(0x1d, extended);
+                let (key, pressed, _, ctrl, _, _, ascii) =
+                    sunlight_ipc::unpack_key_event(k.process(function, false).0);
+                assert_eq!(key, function);
+                assert!(pressed && ctrl);
+                assert_eq!(ascii, None);
+                assert!(!sunlight_ipc::unpack_key_event(k.process(function | 0x80, false).0).1);
+                k.process(0x9d, extended);
+                assert!(!sunlight_ipc::unpack_key_event(k.process(function, false).0).3);
+                k.process(function | 0x80, false);
+            }
+        }
+    }
+
+    #[test]
     fn native_unicode_composition_and_invalid_scalars() {
         let mut k = Keyboard::default();
         assert_eq!(unicode(&mut k, &[0x12, 0x0a]), Some('é')); // e9

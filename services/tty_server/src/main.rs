@@ -273,7 +273,75 @@ fn debug_log_u64(mut value: u64) {
     }
 }
 
+// A daemon-lifetime mapping, allocated once; switching never allocates or
+// attaches another resource. The Limine mapping remains the failure fallback.
+static mut TTY_VIRTIO: bool = false;
+
+fn setup_tty_virtio() -> Option<(u64, u32, u32, u32)> {
+    let (w, h) = sunlight_ipc::gpu_get_info()?;
+    let pitch = w.checked_mul(4)?;
+    let bytes = pitch.checked_mul(h)? as usize;
+    if bytes == 0 || bytes > 16 * 1024 * 1024 {
+        return None;
+    }
+    let mapped = sunlight_libc::mman::mmap(
+        core::ptr::null_mut(),
+        bytes,
+        sunlight_libc::mman::PROT_READ | sunlight_libc::mman::PROT_WRITE,
+        sunlight_libc::mman::MAP_PRIVATE | sunlight_libc::mman::MAP_ANONYMOUS,
+        -1,
+        0,
+    )
+    .ok()?;
+    // Fault in every page before the GPU proxy walks the backing page table.
+    unsafe {
+        core::ptr::write_bytes(mapped as *mut u8, 0, bytes);
+    }
+    if sunlight_ipc::gpu_attach_backing(mapped as *const u32, (bytes + 4095) / 4096).is_err()
+        || sunlight_ipc::gpu_set_scanout().is_err()
+    {
+        // Keep backing alive even if SET_SCANOUT failed after a successful
+        // attach: the device may still reference it. This happens only at boot.
+        debug_log("[TTY-GPU] setup failed; retaining Limine fallback\n");
+        return None;
+    }
+    unsafe {
+        TTY_VIRTIO = true;
+    }
+    debug_log(&alloc::format!(
+        "[TTY-GPU] ready {}x{} pitch={} resource=3 backing_bytes={}\n",
+        w,
+        h,
+        pitch,
+        (bytes + 4095) / 4096 * 4096
+    ));
+    Some((mapped as u64, w, h, pitch))
+}
+
+fn select_tty_surface() {
+    if unsafe { TTY_VIRTIO } && sunlight_ipc::gpu_set_scanout().is_err() {
+        debug_log("[TTY-GPU] scanout selection failed\n");
+    }
+}
+
+fn present_tty(w: u32, h: u32) {
+    if unsafe { TTY_VIRTIO } {
+        let _ = sunlight_ipc::gpu_flush(0, 0, w, h);
+    }
+}
+
 fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) -> bool {
+    let deactivate = msg.label == SgpMsg::SESSION_DEACTIVATE;
+    let result = send_display_request_inner(display_cap, msg);
+    // Finish scanout handoff after the compositor releases output (or its
+    // bounded request fails). Recovery must also work when no display exists.
+    if deactivate {
+        select_tty_surface();
+    }
+    result
+}
+
+fn send_display_request_inner(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) -> bool {
     let requires_activation_ack = msg.label == SgpMsg::SESSION_ACTIVATE;
     let timeout_ms = if requires_activation_ack {
         DISPLAY_ACTIVATION_TIMEOUT_MS
@@ -283,7 +351,8 @@ fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) 
         DISPLAY_IPC_TIMEOUT_MS
     };
     if display_cap.is_none() {
-        *display_cap = nameserver_lookup("display_server");
+        *display_cap =
+            sunlight_ipc::nameserver_lookup_timeout("display_server", DISPLAY_IPC_TIMEOUT_MS);
     }
     let Some(cap) = *display_cap else {
         return false;
@@ -867,6 +936,7 @@ fn activate_desktop_session(
         login.message = "Desktop session launched.";
     } else {
         *active_vt = VirtualTerminal::Tty;
+        select_tty_surface();
         login.message = "Desktop unavailable; TTY retained.";
         debug_log("[SESSION] desktop activation failed; TTY retains framebuffer");
         if has_fb {
@@ -1323,6 +1393,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     debug_log("[TTY]  TTY server started");
     debug_log("[LOGIN-TUI] service started");
 
+    let (fb_addr, fb_width, fb_height, fb_pitch) = setup_tty_virtio()
+        .map(|(addr, w, h, p)| (addr, u64::from(w), u64::from(h), u64::from(p)))
+        .unwrap_or((fb_addr, fb_width, fb_height, fb_pitch));
     let fb32_w = fb_width as u32;
     let fb32_h = fb_height as u32;
     let fb32_p = fb_pitch as u32;
@@ -1338,24 +1411,16 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     let mut mouse = PointerSurface::new();
     // Decode SIMG v2 login wallpaper once; re-used for every login redraw.
     let login_bg = decode_login_bg();
+    let mut login = LoginScreen::new();
 
     if has_fb {
         log_login_framebuffer_layout(framebuffer_layout.unwrap());
         debug_log("[TTY] Framebuffer acquired");
         debug_log("[LOGIN-TUI] metrics acquired");
         debug_log("[LOGIN-TUI] background begin");
-        unsafe {
-            sunlight_tui::render_login_screen(
-                fb_addr as *mut u32,
-                fb32_w,
-                fb32_h,
-                fb32_p,
-                login_bg_view(&login_bg),
-            );
-        }
-        unsafe {
-            mouse.draw_overlay(fb_addr as *mut u32, fb32_w, fb32_h, fb32_p);
-        }
+        render_login_fb(
+            &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse, &login_bg,
+        );
         debug_log("[TTY] Login rendered");
         debug_log("[LOGIN-TUI] first frame complete");
     } else if fb_addr != 0 || fb_width != 0 || fb_height != 0 || fb_pitch != 0 {
@@ -1380,7 +1445,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         debug_log("[TTY]  FATAL: nameserver_register('tty') failed — keyboard will not work");
     }
 
-    let mut login = LoginScreen::new();
     // TTY/Login is the default session at boot; Desktop becomes active after Desktop login.
     let mut active_vt = VirtualTerminal::Tty;
     let mut desktop_pointer_release_gate = false;
@@ -1418,7 +1482,20 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
     let mut msg = ipc_recv(ep);
     let mut phase3_6_done = false;
+    let mut session_keys = sunlight_tty::session_keys::SessionKeys::default();
     loop {
+        if msg.label == KbdMsg::KEY_EVENT {
+            let (key, pressed, _, ctrl, _, _, _) = unpack_key_event(msg.words[0]);
+            if !sunlight_ipc::validate_session_caller(
+                msg.badge,
+                sunlight_ipc::SESSION_CALLER_KEYBOARD_SERVICE,
+            ) || (!sunlight_ipc::is_text_commit(msg.words[0])
+                && session_keys.suppress(key, pressed, ctrl))
+            {
+                // Still reply normally, but never route spoofed or consumed input.
+                msg.label = 0;
+            }
+        }
         match state {
             TtyState::Login => {
                 let mut logged_in = false;
@@ -1435,8 +1512,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if pressed && _ctrl {
                             match keycode {
                                 KEY_F1 => {
-                                    if active_vt != VirtualTerminal::Tty {
-                                        debug_log("[SESSION] switched to F1 TTY/Login");
+                                    let switching_to_tty = active_vt != VirtualTerminal::Tty;
+                                    if switching_to_tty {
                                         let _ = send_display_request(
                                             &mut display_cap,
                                             IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
@@ -1445,11 +1522,28 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     active_vt = VirtualTerminal::Tty;
                                     desktop_pointer_release_gate = false;
                                     mouse.activate(fb32_w, fb32_h);
+                                    if tab_count > 0 {
+                                        logged_in = true; // do not redraw the login over the shell
+                                        state = TtyState::Shell;
+                                        if has_fb {
+                                            render_active_shell_fb(
+                                                fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count,
+                                                active_tab, true, &mut mouse,
+                                            );
+                                        }
+                                        if switching_to_tty {
+                                            debug_log("[SESSION] switched to F1 TTY/Login");
+                                        }
+                                        break 'kbd;
+                                    }
                                     if has_fb {
                                         render_login_fb(
                                             &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
                                             &login_bg,
                                         );
+                                    }
+                                    if switching_to_tty {
+                                        debug_log("[SESSION] switched to F1 TTY/Login");
                                     }
                                     break 'kbd;
                                 }
@@ -1473,6 +1567,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             desktop_pointer_release_gate = true;
                                             mouse.deactivate();
                                         } else {
+                                            select_tty_surface();
                                             debug_log("[SESSION] F2 activation failed; TTY retains framebuffer");
                                             if has_fb {
                                                 render_login_fb(
@@ -1545,11 +1640,12 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     logged_initial_spawn = true;
                                                 }
                                             } else {
-                                                login.message = "TTY session failed. Please log in again.";
+                                                login.message =
+                                                    "TTY session failed. Please log in again.";
                                                 if has_fb {
                                                     render_login_fb(
-                                                        &login, fb_addr, fb32_w, fb32_h,
-                                                        fb32_p, &mut mouse, &login_bg,
+                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                        &mut mouse, &login_bg,
                                                     );
                                                 }
                                                 break 'kbd;
@@ -1767,8 +1863,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if pressed && ctrl {
                             match keycode {
                                 KEY_F1 => {
-                                    if active_vt != VirtualTerminal::Tty {
-                                        debug_log("[SESSION] switched to F1 TTY/Login");
+                                    let switching_to_tty = active_vt != VirtualTerminal::Tty;
+                                    if switching_to_tty {
                                         let _ = send_display_request(
                                             &mut display_cap,
                                             IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
@@ -1784,9 +1880,28 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             active_tab, true, &mut mouse,
                                         );
                                     }
+                                    if switching_to_tty {
+                                        debug_log("[SESSION] switched to F1 TTY/Login");
+                                    }
                                     break 'kbd;
                                 }
                                 KEY_F2 => {
+                                    if desktop_session.is_none() {
+                                        // A TTY proof was already consumed by its shell.
+                                        // Reuse the secure form for the first desktop
+                                        // login instead of launching an unmanaged shell.
+                                        state = TtyState::Login;
+                                        login.session = SessionType::Desktop;
+                                        login.focus = FocusArea::Password;
+                                        login.message = "Log in for Desktop. TTY tabs retained.";
+                                        if has_fb {
+                                            render_login_fb(
+                                                &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                &mut mouse, &login_bg,
+                                            );
+                                        }
+                                        break 'kbd;
+                                    }
                                     if active_vt != VirtualTerminal::Desktop {
                                         if has_fb {
                                             erase_tui_pointer(
@@ -1802,6 +1917,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             desktop_pointer_release_gate = true;
                                             mouse.deactivate();
                                         } else {
+                                            select_tty_surface();
                                             debug_log("[SESSION] F2 activation failed; TTY retains framebuffer");
                                             if has_fb {
                                                 render_active_shell_fb(
@@ -1984,7 +2100,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     needs_render = true;
                 }
 
-                if let Some(ascii) = key_ascii_from_msg(&msg) {
+                if let Some(ascii) = key_ascii_from_msg(&msg, active_vt) {
                     if TRACE_TTY_IPC {
                         debug_log(&alloc::format!(
                             "[TTY-IPC] keyboard event converted to KBD_LABEL byte={}",
@@ -2391,6 +2507,7 @@ fn redraw_mouse_overlay(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, mouse: &m
         mouse.erase_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
         mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
     }
+    present_tty(fb_w, fb_h);
 }
 
 fn build_tab_labels(
@@ -2479,6 +2596,7 @@ fn render_login_fb(
         );
         mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
     }
+    present_tty(fb_w, fb_h);
 }
 
 fn render_active_shell_fb(
@@ -2609,6 +2727,7 @@ fn render_active_shell_fb(
     unsafe {
         mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
     }
+    present_tty(fb_w, fb_h);
 }
 
 fn reset_login(login: &mut LoginScreen) {
@@ -2885,20 +3004,14 @@ fn resolve_active_shell(
     }
 }
 
-fn key_ascii_from_msg(msg: &IpcMsg) -> Option<u8> {
-    if msg.label == KbdMsg::KEY_EVENT {
-        let (_keycode, pressed, _shift, ctrl, _alt, _super, ascii) = unpack_key_event(msg.words[0]);
-        // Suppress ctrl combos: Ctrl+T, Ctrl+1 etc. are handled by tty_server
-        // itself and must NOT be forwarded as bare ASCII to the shell (which
-        // would corrupt its line buffer, e.g. turning "id" into "1id").
-        if pressed && !ctrl {
-            ascii
-        } else {
-            None
-        }
-    } else {
-        None
+fn key_ascii_from_msg(msg: &IpcMsg, active_vt: VirtualTerminal) -> Option<u8> {
+    if msg.label != KbdMsg::KEY_EVENT {
+        return None;
     }
+    sunlight_tty::session_keys::native_ascii(
+        vt_is_active(active_vt, VirtualTerminal::Tty),
+        msg.words[0],
+    )
 }
 
 /// Outcome of forwarding a keystroke to the shell.

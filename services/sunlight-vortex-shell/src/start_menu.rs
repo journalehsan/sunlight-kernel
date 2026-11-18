@@ -1209,6 +1209,9 @@ impl StartMenuState {
                 };
                 (self.hover != prev, StartMenuAction::None)
             }
+            // The native UI decodes Enter as a control character, while
+            // navigation keys arrive as KeyPress. Match Search's convention.
+            Event::Key('\n' | '\r') => self.handle_keypress(0x1c, &layout),
             Event::Key(ch) => {
                 if !self.search.active {
                     return (false, StartMenuAction::None);
@@ -1802,6 +1805,24 @@ mod tests {
     };
 
     #[test]
+    fn native_enter_launches_filtered_application_and_closes_menu() {
+        for enter in ['\n', '\r'] {
+            let mut menu = super::StartMenuState::new();
+            menu.open_menu();
+            for ch in "empires".chars() {
+                menu.handle_event(super::Event::Key(ch), 1280, 800, &[], 0);
+            }
+            let (dirty, action) = menu.handle_event(super::Event::Key(enter), 1280, 800, &[], 1);
+            assert!(dirty);
+            assert!(matches!(
+                action,
+                super::StartMenuAction::Launch(AppId::Empires)
+            ));
+            assert!(!menu.is_open());
+        }
+    }
+
+    #[test]
     fn empires_search_launches_native_game() {
         let layout = compute_layout(800, 600, "empires", &[], StartMenuPage::Home, 0);
         let tile = layout.search_results.get(0).expect("Empires search result");
@@ -1811,10 +1832,19 @@ mod tests {
             menu.handle_event(super::Event::Key(ch), 800, 600, &[], 0);
         }
         let (_, action) = menu.handle_event(
-            super::Event::Click {x: tile.rect.x + 1, y: tile.rect.y + 1},
-            800, 600, &[], 1,
+            super::Event::Click {
+                x: tile.rect.x + 1,
+                y: tile.rect.y + 1,
+            },
+            800,
+            600,
+            &[],
+            1,
         );
-        assert!(matches!(action, super::StartMenuAction::Launch(AppId::Empires)));
+        assert!(matches!(
+            action,
+            super::StartMenuAction::Launch(AppId::Empires)
+        ));
     }
 
     #[test]
