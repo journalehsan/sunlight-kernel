@@ -1,0 +1,115 @@
+baseline-direct.log.gz
+state=Running retired=10000000 CS:IP=11cb:0036
+final PSP=1041
+INT 10: AH=01:7210 AH=02:7208 AH=03:14419 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=11:7209
+INT 21: AH=0b:1 AH=19:1 AH=25:18 AH=2a:1 AH=2c:3 AH=30:3 AH=33:2 AH=35:20 AH=38:1 AH=3d:9 AH=3e:1 AH=3f:21 AH=41:5 AH=42:41 AH=44:1 AH=47:1
+
+baseline-launcher.log.gz
+state=Running retired=10000000 CS:IP=29ef:0431
+final PSP=10bf
+INT 10: AH=01:6325 AH=02:6316 AH=03:12633 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=11:6313
+INT 21: AH=09:1 AH=0b:1 AH=0e:102 AH=19:117 AH=1a:45 AH=25:19 AH=29:6 AH=2a:2 AH=2c:3 AH=30:3 AH=33:2 AH=35:21 AH=36:2 AH=38:1 AH=3b:6 AH=3c:1 AH=3d:10 AH=3e:2 AH=3f:31 AH=40:1 AH=41:5 AH=42:57 AH=43:1 AH=44:1 AH=47:13 AH=4a:1 AH=4b:1 AH=4e:5 AH=4f:40 AH=52:1
+
+direct-down.log.gz
+KEY at=5000000 scheduled=5000000 word=5000 PSP=1041 state=Running queue=0
+state=Trapped(UnsupportedInterrupt { interrupt: 22, function: 16 }) retired=5000256 CS:IP=11cb:01d7
+final PSP=1041
+INT 10: AH=01:1376 AH=02:1374 AH=03:2751 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:1375
+INT 21: AH=0b:1 AH=19:1 AH=25:18 AH=2a:1 AH=2c:3 AH=30:3 AH=33:2 AH=35:20 AH=38:1 AH=3d:9 AH=3e:1 AH=3f:21 AH=41:5 AH=42:41 AH=44:1 AH=47:1
+
+direct-f10.log.gz
+KEY at=5000000 scheduled=5000000 word=4400 PSP=1041 state=Running queue=0
+state=Trapped(UnsupportedInterrupt { interrupt: 22, function: 16 }) retired=5000256 CS:IP=11cb:01d7
+final PSP=1041
+INT 10: AH=01:1376 AH=02:1374 AH=03:2751 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:1375
+INT 21: AH=0b:1 AH=19:1 AH=25:18 AH=2a:1 AH=2c:3 AH=30:3 AH=33:2 AH=35:20 AH=38:1 AH=3d:9 AH=3e:1 AH=3f:21 AH=41:5 AH=42:41 AH=44:1 AH=47:1
+
+final-direct-down.log.gz
+KEY at=5000000 scheduled=5000000 word=5000 PSP=1041 state=Running queue=0
+state=Running retired=7000000 CS:IP=1443:11e1
+final PSP=1041
+INT 10: AH=01:3703 AH=02:3701 AH=03:7407 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:3703
+INT 21: AH=0b:1 AH=19:1 AH=25:18 AH=2a:1 AH=2c:3 AH=30:3 AH=33:2 AH=35:20 AH=38:1 AH=3d:9 AH=3e:1 AH=3f:23 AH=41:5 AH=42:42 AH=44:1 AH=47:1
+
+final-direct-exit.log.gz
+KEY at=5000000 scheduled=5000000 word=2d00 PSP=1041 state=Running queue=0
+KEY at=5100000 scheduled=5100000 word=1579 PSP=1041 state=Running queue=0
+state=Exited { code: 0 } retired=5335016 CS:IP=3c56:01f0
+final PSP=1041
+INT 10: AH=01:1405 AH=02:1395 AH=03:2791 AH=0f:3 AH=10:3 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:2 AH=11:1396
+INT 21: AH=0b:1 AH=19:1 AH=25:37 AH=2a:1 AH=2c:3 AH=30:3 AH=33:3 AH=35:20 AH=38:1 AH=3c:1 AH=3d:9 AH=3e:4 AH=3f:34 AH=40:2 AH=41:5 AH=42:58 AH=44:1 AH=47:1 AH=4c:1
+
+final-direct-f10.log.gz
+KEY at=5000000 scheduled=5000000 word=4400 PSP=1041 state=Running queue=0
+state=Running retired=7000000 CS:IP=3c56:3ffb
+final PSP=1041
+INT 10: AH=01:3723 AH=02:3717 AH=03:7437 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:3719
+INT 21: AH=0b:1 AH=19:1 AH=25:18 AH=2a:1 AH=2c:3 AH=30:3 AH=33:2 AH=35:20 AH=38:1 AH=3d:9 AH=3e:1 AH=3f:21 AH=41:5 AH=42:41 AH=44:1 AH=47:1
+
+final-direct-no-input.log.gz
+state=Running retired=10000000 CS:IP=11cb:0036
+final PSP=1041
+INT 10: AH=01:7210 AH=02:7208 AH=03:14419 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=11:7209
+INT 21: AH=0b:1 AH=19:1 AH=25:18 AH=2a:1 AH=2c:3 AH=30:3 AH=33:2 AH=35:20 AH=38:1 AH=3d:9 AH=3e:1 AH=3f:21 AH=41:5 AH=42:41 AH=44:1 AH=47:1
+
+final-launcher-down.log.gz
+KEY at=5000000 scheduled=5000000 word=5000 PSP=10bf state=Running queue=0
+state=Running retired=7000000 CS:IP=394e:07dc
+final PSP=10bf
+INT 10: AH=01:2870 AH=02:2859 AH=03:5717 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:2857
+INT 21: AH=09:1 AH=0b:1 AH=0e:102 AH=19:117 AH=1a:45 AH=25:19 AH=29:6 AH=2a:2 AH=2c:3 AH=30:3 AH=33:2 AH=35:21 AH=36:2 AH=38:1 AH=3b:6 AH=3c:1 AH=3d:10 AH=3e:2 AH=3f:31 AH=40:1 AH=41:5 AH=42:57 AH=43:1 AH=44:1 AH=47:13 AH=4a:1 AH=4b:1 AH=4e:5 AH=4f:40 AH=52:1
+
+final-launcher-exit.log.gz
+KEY at=5000000 scheduled=5000000 word=4400 PSP=10bf state=Running queue=0
+KEY at=5100000 scheduled=5100000 word=011b PSP=10bf state=Running queue=0
+KEY at=5200000 scheduled=5200000 word=2d00 PSP=10bf state=Running queue=0
+KEY at=5300000 scheduled=5300000 word=1579 PSP=10bf state=Running queue=0
+KEY at=5400000 scheduled=5400000 word=1c0d PSP=10bf state=Running queue=0
+state=Exited { code: 0 } retired=5680816 CS:IP=1041:0276
+final PSP=1041
+INT 10: AH=01:838 AH=02:792 AH=03:1581 AH=0f:3 AH=10:3 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:4 AH=11:791
+INT 21: AH=09:1 AH=0b:1 AH=0e:102 AH=19:117 AH=1a:45 AH=25:39 AH=29:6 AH=2a:2 AH=2c:3 AH=30:3 AH=33:3 AH=35:21 AH=36:2 AH=38:1 AH=3b:6 AH=3c:2 AH=3d:10 AH=3e:5 AH=3f:43 AH=40:3 AH=41:5 AH=42:72 AH=43:1 AH=44:1 AH=47:13 AH=4a:1 AH=4b:1 AH=4c:2 AH=4d:1 AH=4e:5 AH=4f:40 AH=52:1
+
+final-launcher-f10.log.gz
+KEY at=5000000 scheduled=5000000 word=4400 PSP=10bf state=Running queue=0
+state=Running retired=7000000 CS:IP=394e:0826
+final PSP=10bf
+INT 10: AH=01:2967 AH=02:2951 AH=03:5901 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:2949
+INT 21: AH=09:1 AH=0b:1 AH=0e:102 AH=19:117 AH=1a:45 AH=25:19 AH=29:6 AH=2a:2 AH=2c:3 AH=30:3 AH=33:2 AH=35:21 AH=36:2 AH=38:1 AH=3b:6 AH=3c:1 AH=3d:10 AH=3e:2 AH=3f:31 AH=40:1 AH=41:5 AH=42:57 AH=43:1 AH=44:1 AH=47:13 AH=4a:1 AH=4b:1 AH=4e:5 AH=4f:40 AH=52:1
+
+final-launcher-no-input.log.gz
+state=Running retired=10000000 CS:IP=29ef:0431
+final PSP=10bf
+INT 10: AH=01:6325 AH=02:6316 AH=03:12633 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=11:6313
+INT 21: AH=09:1 AH=0b:1 AH=0e:102 AH=19:117 AH=1a:45 AH=25:19 AH=29:6 AH=2a:2 AH=2c:3 AH=30:3 AH=33:2 AH=35:21 AH=36:2 AH=38:1 AH=3b:6 AH=3c:1 AH=3d:10 AH=3e:2 AH=3f:31 AH=40:1 AH=41:5 AH=42:57 AH=43:1 AH=44:1 AH=47:13 AH=4a:1 AH=4b:1 AH=4e:5 AH=4f:40 AH=52:1
+
+launcher-down.log.gz
+KEY at=5000000 scheduled=5000000 word=5000 PSP=10bf state=Running queue=0
+state=Running retired=5000330 CS:IP=1041:01f0
+recovered child trap=UnsupportedInterrupt { interrupt: 22, function: 16 }
+final PSP=1041
+INT 10: AH=01:625 AH=02:616 AH=03:1231 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:613
+INT 21: AH=09:1 AH=0b:1 AH=0e:102 AH=19:117 AH=1a:45 AH=25:19 AH=29:6 AH=2a:2 AH=2c:3 AH=30:3 AH=33:2 AH=35:21 AH=36:2 AH=38:1 AH=3b:6 AH=3c:1 AH=3d:10 AH=3e:2 AH=3f:31 AH=40:1 AH=41:5 AH=42:57 AH=43:1 AH=44:1 AH=47:13 AH=4a:1 AH=4b:1 AH=4e:5 AH=4f:40 AH=52:1
+
+launcher-f10.log.gz
+KEY at=5000000 scheduled=5000000 word=4400 PSP=10bf state=Running queue=0
+state=Running retired=5000330 CS:IP=1041:01f0
+recovered child trap=UnsupportedInterrupt { interrupt: 22, function: 16 }
+final PSP=1041
+INT 10: AH=01:625 AH=02:616 AH=03:1231 AH=0f:3 AH=10:2 AH=11:3 AH=12:2 AH=1c:1
+INT 16: AH=10:1 AH=11:613
+INT 21: AH=09:1 AH=0b:1 AH=0e:102 AH=19:117 AH=1a:45 AH=25:19 AH=29:6 AH=2a:2 AH=2c:3 AH=30:3 AH=33:2 AH=35:21 AH=36:2 AH=38:1 AH=3b:6 AH=3c:1 AH=3d:10 AH=3e:2 AH=3f:31 AH=40:1 AH=41:5 AH=42:57 AH=43:1 AH=44:1 AH=47:13 AH=4a:1 AH=4b:1 AH=4e:5 AH=4f:40 AH=52:1
+

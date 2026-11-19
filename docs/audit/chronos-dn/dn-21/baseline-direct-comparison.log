@@ -1,0 +1,4 @@
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+trace_cmp=0
+0 (0)

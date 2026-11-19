@@ -13,7 +13,7 @@ use core::alloc::{GlobalAlloc, Layout};
 use chronos_core::{
     display_char, translate_key_press, BiosKey, GuestState, GuestStateKind, GuestVideoMode,
     GuestWaitReason, HostKeyEvent, MouseViewport, Rgb8, Runtime, SliceStopReason,
-    CHRONOS_INTERACTIVE_COM, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT, VGA_WIDTH,
+    TextAttributeMode, CHRONOS_INTERACTIVE_COM, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT, VGA_WIDTH,
 };
 #[cfg(not(test))]
 use chronos_core::{DosDrive, DosEntry, LoaderError, MzError, UnsupportedExecutable};
@@ -45,6 +45,7 @@ const BUDGET_CONTINUATION_INTERVAL_MS: u64 = 0;
 const INT28_TIMER_INTERVAL_MS: u64 = 16;
 const WAKE_EVIDENCE_CAPACITY: usize = 128;
 const TEXT_PRESENT_INSTRUCTION_QUANTUM: usize = 32 * 1024;
+const BLINK_PHASE_MS: u64 = 500;
 const DOS_SURFACE: Color = Color::rgb(12, 20, 37);
 const DOS_CURSOR: Color = Color::rgb(255, 181, 71);
 #[cfg(not(test))]
@@ -158,6 +159,8 @@ struct ChronosApp {
     last_text_present_ms: u64,
     text_present_pending: bool,
     text_instructions_since_present: usize,
+    blink_phase: bool,
+    last_text_attribute_generation: u64,
     last_graphics_present_ms: u64,
     graphics_present_pending: bool,
     graphics_viewport: MouseViewport,
@@ -175,6 +178,7 @@ impl ChronosApp {
     fn new() -> Self {
         let runtime = Runtime::from_com(CHRONOS_INTERACTIVE_COM)
             .expect("bundled Chronos COM program must fit the guest process");
+        let text_attribute_generation = runtime.text_attribute_generation();
         let mut app = Self {
             runtime,
             title: String::from("Chronos - Sunlight DOS Terminal"),
@@ -193,6 +197,8 @@ impl ChronosApp {
             last_text_present_ms: 0,
             text_present_pending: false,
             text_instructions_since_present: 0,
+            blink_phase: true,
+            last_text_attribute_generation: text_attribute_generation,
             last_graphics_present_ms: 0,
             graphics_present_pending: false,
             graphics_viewport: default_graphics_viewport(),
@@ -230,6 +236,7 @@ impl ChronosApp {
         let storage = config.storage();
         seed_drives(&mut runtime, &storage);
         debug_log("[CHRONOS] DOS drives seeded\n");
+        let text_attribute_generation = runtime.text_attribute_generation();
         let mut app = Self {
             runtime,
             title: config.title,
@@ -247,6 +254,8 @@ impl ChronosApp {
             last_text_present_ms: 0,
             text_present_pending: false,
             text_instructions_since_present: 0,
+            blink_phase: true,
+            last_text_attribute_generation: text_attribute_generation,
             last_graphics_present_ms: 0,
             graphics_present_pending: false,
             graphics_viewport: default_graphics_viewport(),
@@ -312,7 +321,7 @@ impl ChronosApp {
         let y0 = surface.y + ((surface.h as i32 - 25 * DOS_CELL_H) / 2).max(0);
         self.graphics_viewport =
             MouseViewport::new(x0, y0, (80 * DOS_CELL_W) as u32, (25 * DOS_CELL_H) as u32);
-        draw_surface_cells(canvas, &self.runtime, x0, y0);
+        draw_surface_cells(canvas, &self.runtime, x0, y0, self.blink_phase);
         if self.cursor_visible
             && self.runtime.text_cursor_visible()
             && matches!(
@@ -786,6 +795,16 @@ impl App for ChronosApp {
                 let cursor_changed = self.cursor_visible != cursor_visible;
                 self.cursor_visible = cursor_visible;
                 let now = monotonic_millis();
+                let blink_phase = (now / BLINK_PHASE_MS) % 2 == 0;
+                let blink_changed = self.blink_phase != blink_phase;
+                self.blink_phase = blink_phase;
+                let blink_repaint = blink_changed
+                    && self.runtime.video_mode() == GuestVideoMode::Text80x25Color
+                    && self.runtime.text_attribute_mode() == TextAttributeMode::Blink
+                    && self.runtime.has_blink_attributes();
+                let attribute_mode_changed =
+                    self.runtime.text_attribute_generation() != self.last_text_attribute_generation;
+                self.last_text_attribute_generation = self.runtime.text_attribute_generation();
                 if let Some(wake_source) = self.due_wake_source(now) {
                     let mode_before = self.runtime.video_mode();
                     let text_or_state_changed = self
@@ -829,7 +848,8 @@ impl App for ChronosApp {
                             .text_instructions_since_present
                             .saturating_add(INSTRUCTIONS_PER_TICK);
                     }
-                    let mode_changed = mode_before != self.runtime.video_mode();
+                    let mode_changed =
+                        mode_before != self.runtime.video_mode() || attribute_mode_changed;
                     let guest_running = matches!(
                         self.runtime.state(),
                         GuestState::Running | GuestState::YieldedUntilTimer
@@ -837,6 +857,7 @@ impl App for ChronosApp {
                     let presentation_changed = match self.runtime.video_mode() {
                         GuestVideoMode::Text80x25Color => {
                             self.graphics_present_pending = false;
+                            let mut presented = false;
                             if self.text_present_pending {
                                 let due = text_presentation_due(
                                     &mut self.last_text_present_ms,
@@ -849,10 +870,9 @@ impl App for ChronosApp {
                                     self.text_present_pending = false;
                                     self.text_instructions_since_present = 0;
                                 }
-                                due
-                            } else {
-                                false
+                                presented = due;
                             }
+                            presented || blink_repaint || attribute_mode_changed
                         }
                         GuestVideoMode::Vga320x200x256 => {
                             self.text_present_pending = false;
@@ -886,7 +906,10 @@ impl App for ChronosApp {
                         || presentation_changed
                         || status_changed
                 } else {
-                    self.record_cursor_damage(old_guest_cursor) || cursor_changed
+                    self.record_cursor_damage(old_guest_cursor)
+                        || cursor_changed
+                        || blink_repaint
+                        || attribute_mode_changed
                 }
             }
             Event::MouseMove { x, y } => {
@@ -1417,12 +1440,19 @@ fn hex_digit(value: u8) -> u8 {
     }
 }
 
-fn draw_surface_cells(canvas: &mut Canvas, runtime: &Runtime, x0: i32, y0: i32) {
+fn draw_surface_cells(canvas: &mut Canvas, runtime: &Runtime, x0: i32, y0: i32, blink_phase: bool) {
     for row in 0..25 {
         for column in 0..80 {
             let cell = runtime.cell(column, row);
-            let background = dos_color((cell.attribute >> 4) & 0x07);
-            let foreground = dos_color(cell.attribute & 0x0f);
+            let attribute = runtime.text_attribute(cell.attribute);
+            let background = dos_color(attribute.background);
+            // In blink mode the off phase hides the glyph by painting it in
+            // the background color; guest attributes are never modified.
+            let foreground = if attribute.blink && !blink_phase {
+                background
+            } else {
+                dos_color(attribute.foreground)
+            };
             canvas.fill_rect(
                 Rect::new(
                     x0 + column as i32 * DOS_CELL_W,
@@ -1868,13 +1898,14 @@ fn parent_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        dos_color, draw_scaled_graphics, graphics_viewport, running_presentation_due, ChronosApp,
-        RuntimeWakeSource, DOS_CELL_H, DOS_CELL_W, DOS_SURFACE, WIN_H, WIN_W,
+        dos_color, draw_scaled_graphics, draw_surface_cells, graphics_viewport,
+        running_presentation_due, ChronosApp, RuntimeWakeSource, DOS_CELL_H, DOS_CELL_W,
+        DOS_SURFACE, WIN_H, WIN_W,
     };
-    use alloc::{format, vec};
+    use alloc::{format, vec, vec::Vec};
     use chronos_core::{
         BiosKey, DosDrive, GuestState, GuestStateKind, GuestVideoMode, GuestWaitReason,
-        GuestWakeSource, Rgb8, Runtime, SliceStopReason,
+        GuestWakeSource, Rgb8, Runtime, SliceStopReason, TextAttributeMode,
     };
     use sun_font::{measure_text, FontRole};
     use sunlight_ui::{App, Canvas, Color, Event, Rect, Theme};
@@ -2514,6 +2545,79 @@ mod tests {
         assert_ne!(dos_color(0), dos_color(1));
         assert_ne!(dos_color(7), dos_color(15));
         assert!(dos_color(15).r() > dos_color(0).r());
+    }
+
+    fn text_render_runtime(attribute: u8) -> Runtime {
+        let mut runtime = Runtime::from_com(&[0xcd, 0x10]).unwrap();
+        runtime.memory.write_u8(0xb800, 0, b'A');
+        runtime.memory.write_u8(0xb800, 1, attribute);
+        runtime
+    }
+
+    fn render_text(runtime: &Runtime, blink_phase: bool) -> Vec<u32> {
+        let width = 80 * DOS_CELL_W as u32;
+        let height = 25 * DOS_CELL_H as u32;
+        let mut framebuffer = vec![0u32; width as usize * height as usize];
+        let mut canvas = Canvas::new(&mut framebuffer, width, width, height);
+        draw_surface_cells(&mut canvas, runtime, 0, 0, blink_phase);
+        framebuffer
+    }
+
+    #[test]
+    fn blink_phase_hides_the_glyph_without_changing_guest_attributes() {
+        let runtime = text_render_runtime(0x8f);
+        let foreground = dos_color(15).0;
+        let background = dos_color(0).0;
+
+        let on = render_text(&runtime, true);
+        assert!(on.iter().any(|pixel| *pixel == foreground));
+
+        let off = render_text(&runtime, false);
+        assert!(!off.iter().any(|pixel| *pixel == foreground));
+        assert!(off.iter().any(|pixel| *pixel == background));
+
+        assert_eq!(runtime.cell(0, 0).attribute, 0x8f);
+        assert_eq!(runtime.memory.read_u8(0xb800, 1), 0x8f);
+    }
+
+    #[test]
+    fn intensity_mode_paints_bit_seven_as_the_fourth_background_bit() {
+        let mut runtime = text_render_runtime(0x8f);
+        runtime.cpu.ax = 0x1003;
+        runtime.cpu.bx = 0x0000;
+        runtime.step();
+        assert_eq!(
+            runtime.text_attribute_mode(),
+            TextAttributeMode::BackgroundIntensity
+        );
+
+        let pixels = render_text(&runtime, false);
+        assert!(pixels.iter().any(|pixel| *pixel == dos_color(8).0));
+        assert!(pixels.iter().any(|pixel| *pixel == dos_color(15).0));
+        assert_eq!(runtime.memory.read_u8(0xb800, 1), 0x8f);
+    }
+
+    #[test]
+    fn attribute_mode_switch_requests_a_native_repaint_without_memory_change() {
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(&[
+            0xb8, 0x00, 0xb8, // MOV AX,B800h
+            0x8e, 0xc0, // MOV ES,AX
+            0x26, 0xc6, 0x06, 0x01, 0x00, 0x8f, // MOV byte ES:[0001],8Fh
+            0xb8, 0x03, 0x10, // MOV AX,1003h
+            0xbb, 0x00, 0x00, // MOV BX,0000h
+            0xcd, 0x10, // INT 10h
+            0xb4, 0x00, 0xcd, 0x16, // INT 16h/AH=00 (wait for key)
+        ])
+        .unwrap();
+        app.runtime.run_slice(64);
+        assert_eq!(app.runtime.state(), &GuestState::WaitingForInput);
+        assert_eq!(
+            app.runtime.text_attribute_mode(),
+            TextAttributeMode::BackgroundIntensity
+        );
+        assert_eq!(app.runtime.memory.read_u8(0xb800, 1), 0x8f);
+        assert!(app.update(Event::Tick));
     }
 
     #[test]

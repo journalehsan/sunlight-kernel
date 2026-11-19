@@ -208,7 +208,7 @@ static ICON_INODE_DIRECTORY_SVG: &[u8] =
 static ICON_DRIVE_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/drive-harddisk.svg");
 static ICON_NETWORK_SVG: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/preferences/22/yast-nfs-server.svg");
+    include_bytes!("../../../docs/icons/SunlightOS/places/symbolic/network-workgroup-symbolic.svg");
 static ICON_FILE_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.svg");
 static ICON_IMAGE_FILE_SVG: &[u8] =
@@ -295,7 +295,8 @@ static ICON_SYM_CALENDAR_TGA: &[u8] =
 static ICON_SYM_NOTIF_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icon_notifications.tga"));
 static ICON_SYM_LOGOUT_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_logout.tga"));
-static ICON_SYM_LAN_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_lan.tga"));
+// Reuse the bundled globe: the former "lan" asset was a rack-like glyph.
+static ICON_SYM_LAN_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_public.tga"));
 static ICON_SYM_MENU_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_menu.tga"));
 static ICON_SYM_SETTINGS_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icon_settings.tga"));
@@ -1151,24 +1152,16 @@ const SUN_ROWS: [u16; 16] = [
     0b0000000000000000,
 ];
 
-/// Overview icon — 2×2 grid of rounded squares.
+/// Overview: overlapping window frames and title bars, distinct from Apps.
 const OVERVIEW_ROWS: [u16; 16] = [
-    0b0000000000000000,
-    0b0111111001111110,
-    0b0100001001000010,
-    0b0100001001000010,
-    0b0100001001000010,
-    0b0100001001000010,
-    0b0111111001111110,
-    0b0000000000000000,
-    0b0000000000000000,
-    0b0111111001111110,
-    0b0100001001000010,
-    0b0100001001000010,
-    0b0100001001000010,
-    0b0100001001000010,
-    0b0111111001111110,
-    0b0000000000000000,
+    0x0000, 0x3ff0, 0x2010, 0x3ff0, 0x2010, 0x27fc, 0x2404, 0x27fc, 0x2404, 0x2404, 0x3c04, 0x0404,
+    0x0404, 0x07fc, 0x0000, 0x0000,
+];
+
+/// Network settings fallback: connected nodes, never a storage enclosure.
+const NETWORK_SETTINGS_ROWS: [u16; 16] = [
+    0x0000, 0x03c0, 0x0240, 0x0240, 0x03c0, 0x0080, 0x0080, 0x1ff8, 0x1008, 0x1008, 0x3c3c, 0x2424,
+    0x2424, 0x3c3c, 0x0000, 0x0000,
 ];
 
 /// Sidebar icon — vertical bar on left + content area.
@@ -5064,15 +5057,18 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
             ic,
         );
         canvas.draw_icon_tinted(&tga, icon_rect, net_color);
-        let dot = Rect::new(net_cell.right() - 6, net_cell.y + 4, 3, 3);
-        let dot_color = match shell.network.indicator {
-            NetworkIndicatorState::Connected => theme.ok,
-            NetworkIndicatorState::Configuring => theme.accent,
-            NetworkIndicatorState::Disconnected => theme.border.lighten(24),
-            NetworkIndicatorState::Error => theme.warn,
-        };
-        canvas.fill_rect(dot, dot_color);
+    } else {
+        draw_icon16(canvas, net_cell, &NETWORK_SETTINGS_ROWS, net_color);
     }
+    // Preserve status independently of the icon asset/fallback.
+    let dot = Rect::new(net_cell.right() - 6, net_cell.y + 4, 3, 3);
+    let dot_color = match shell.network.indicator {
+        NetworkIndicatorState::Connected => theme.ok,
+        NetworkIndicatorState::Configuring => theme.accent,
+        NetworkIndicatorState::Disconnected => theme.border.lighten(24),
+        NetworkIndicatorState::Error => theme.warn,
+    };
+    canvas.fill_rect(dot, dot_color);
     shell.net_zone = net_cell;
     shell.top_panel_item_zones[TOP_ITEM_NETWORK] = net_cell;
 }
@@ -5941,7 +5937,7 @@ fn load_desktop_icons(paths: &DesktopPaths) -> Vec<DesktopIcon> {
     // a desktop shortcut — matches macOS Dock / Windows taskbar placement.
     icons.push(make_desktop_icon(
         String::from("Network"),
-        "Network locations",
+        "Network settings",
         String::from("network:///"),
         DesktopIconKind::Network,
     ));
@@ -6006,7 +6002,7 @@ fn desktop_icon_visual(kind: DesktopIconKind, theme: &Theme) -> (&'static [u16; 
     match kind {
         DesktopIconKind::Computer => (&COMPUTER_ROWS, theme.accent),
         DesktopIconKind::Home => (&HOME_ROWS, theme.ok),
-        DesktopIconKind::Network => (&NET_ON_ROWS, theme.text),
+        DesktopIconKind::Network => (&NETWORK_SETTINGS_ROWS, theme.text),
         DesktopIconKind::Drive => (&DRIVE_ROWS, theme.warn),
         DesktopIconKind::Folder => (&FOLDER_ROWS, theme.accent_hover),
         DesktopIconKind::Image => (&FILE_ROWS, theme.accent),
@@ -8048,6 +8044,21 @@ fn draw_shelf_tooltip(canvas: &mut Canvas, theme: &Theme, cell: Rect, label: &st
 mod shelf_control_tests {
     use super::*;
 
+    #[test]
+    fn launcher_glyphs_preserve_distinct_identities_and_network_fallback() {
+        assert_ne!(OVERVIEW_ROWS, GRID_ROWS);
+        assert_ne!(OVERVIEW_ROWS, SETTINGS_ROWS);
+        assert_ne!(NETWORK_SETTINGS_ROWS, DRIVE_ROWS);
+        assert!(IconImage::parse(ICON_NETWORK_SVG).is_ok());
+        assert!(IconImage::parse(ICON_SYM_LAN_TGA).is_ok());
+        assert_eq!(ICON_SYM_LAN_TGA, ICON_SYM_PUBLIC_TGA);
+        let theme = Theme::default();
+        assert_eq!(
+            desktop_icon_visual(DesktopIconKind::Network, &theme).0,
+            &NETWORK_SETTINGS_ROWS
+        );
+    }
+
     fn formatted_12h(hour: u8, minute: u8) -> String {
         let mut out = [0u8; 8];
         let len = format_time_12h(hour, minute, &mut out);
@@ -8428,7 +8439,7 @@ impl App for VortexShell {
         if self.launcher_hover {
             draw_shelf_tooltip(canvas, theme, self.launcher_zone, "Applications", cw);
         } else if self.overview_hover {
-            draw_shelf_tooltip(canvas, theme, self.overview_zone, "Show Workspaces", cw);
+            draw_shelf_tooltip(canvas, theme, self.overview_zone, "Overview", cw);
         } else if self.trash_hover {
             let tip = if self.trash_full {
                 "Trash (has items)"

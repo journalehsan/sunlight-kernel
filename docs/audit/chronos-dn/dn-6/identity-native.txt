@@ -1,0 +1,49 @@
+Native QEMU DN execution: NOT_RUN
+QEMU executable: /usr/bin/qemu-system-x86_64
+Native adapter: sunlight-chronos/src/main.rs MAX_HOST_FILE = 64 * 1024; runtime CPU profile remains default (no set_cpu_profile call).
+Full-image, explicit I80286 host execution is therefore not reproducible via this adapter.
+No ISO rebuild/boot, global installation, capability changes, or guest binary modifications performed.
+DN.COM: bytes=1778 sha256=ae0863550ec07f21c5cf8d208373a5022b868133e6f644757b1623cd8f7e9905
+DN.PRG: bytes=109613 sha256=ac0024e269ecf0feb4a8db15f96181092604567a62cf00fb8453d9052c2862c3
+DN.OVR: bytes=745951 sha256=401a8e631b8627fcbf8c209f01b1d71e3e314347f1c32417a0345d45455e3569
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.chronos.dn151.diagnostic"
+name = "DOS Navigator 1.51 (Compatibility Diagnostic)"
+version = "1.51.0"
+kind = "terminal-window"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "chronos"
+
+[entry]
+executable = "C:\\DN.COM"
+working_directory = "C:\\"
+arguments = []
+
+[chronos]
+cpu = "80286"
+memory_kb = 640
+code_page = 437
+
+[storage]
+c_base = ["Program"]
+c_overlay = "persistent"
+d_scope = "none"
+t_drive = "temporary"
+
+[permissions]
+documents = "none"
+clipboard = false
+printing = false
+serial = false
+network = false
+
+[window]
+default_width = 1000
+default_height = 720
+resizable = true
+

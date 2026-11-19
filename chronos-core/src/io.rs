@@ -3,6 +3,7 @@ use crate::{default_vga_dac_entries, CpuState, Rgb8, VgaDacEntry};
 pub const VGA_DAC_READ_INDEX_PORT: u16 = 0x03c7;
 pub const VGA_DAC_WRITE_INDEX_PORT: u16 = 0x03c8;
 pub const VGA_DAC_DATA_PORT: u16 = 0x03c9;
+const SYSTEM_CONTROL_PORT_B: u16 = 0x0061;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IoOperation {
@@ -168,12 +169,28 @@ impl Default for VgaDac {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct SystemControlPortB {
+    control: u8,
+}
+
+impl SystemControlPortB {
+    fn read(&self) -> u8 {
+        self.control
+    }
+
+    fn write(&mut self, value: u8) {
+        self.control = value & 0x0f;
+    }
+}
+
 /// Per-runtime allowlist dispatcher. Word accesses use two little-endian byte
 /// cycles (`low -> port`, `high -> port + 1`) only after both cycles have been
 /// validated, so an unsupported adjacent port cannot cause a partial write.
 #[derive(Clone, Debug, Default)]
 pub struct GuestIoDispatcher {
     vga_dac: VgaDac,
+    system_control_b: SystemControlPortB,
     entries_committed_slice: u32,
     unsupported_attempts: u64,
 }
@@ -200,14 +217,50 @@ impl GuestIoDispatcher {
     }
 
     const fn can_read_u8(port: u16) -> bool {
-        port == VGA_DAC_DATA_PORT
+        matches!(port, SYSTEM_CONTROL_PORT_B | VGA_DAC_DATA_PORT)
     }
 
     const fn can_write_u8(port: u16) -> bool {
         matches!(
             port,
-            VGA_DAC_READ_INDEX_PORT | VGA_DAC_WRITE_INDEX_PORT | VGA_DAC_DATA_PORT
+            SYSTEM_CONTROL_PORT_B
+                | VGA_DAC_READ_INDEX_PORT
+                | VGA_DAC_WRITE_INDEX_PORT
+                | VGA_DAC_DATA_PORT
         )
+    }
+
+    pub(crate) fn execute(
+        &mut self,
+        vga_addressing_enabled: bool,
+        cpu: &mut CpuState,
+        opcode: u8,
+        immediate_port: Option<u8>,
+    ) -> Result<(), IoTrap> {
+        if !vga_addressing_enabled {
+            let port = immediate_port.map_or(cpu.dx, u16::from);
+            let high = port.wrapping_add(1);
+            let dac_port = |p| {
+                matches!(
+                    p,
+                    VGA_DAC_READ_INDEX_PORT | VGA_DAC_WRITE_INDEX_PORT | VGA_DAC_DATA_PORT
+                )
+            };
+            if dac_port(port) {
+                // The modeled DAC no longer responds. Preserve the bus's
+                // existing unsupported-operation policy for unmodeled access.
+                match opcode {
+                    0xe4 | 0xec if Self::can_read_u8(port) => {
+                        cpu.set_al(0xff);
+                        return Ok(());
+                    }
+                    0xe6 | 0xee if Self::can_write_u8(port) => return Ok(()),
+                    0xe7 | 0xef if dac_port(high) && Self::can_write_u8(high) => return Ok(()),
+                    _ => {}
+                }
+            }
+        }
+        execute_io_instruction(self, cpu, opcode, immediate_port)
     }
 
     fn reject<T>(
@@ -227,15 +280,20 @@ impl GuestIoDevice for GuestIoDispatcher {
         // Chronos does not fabricate VGA status values for 03C7h/03C8h.
         // Until their real readback semantics are needed, those reads trap;
         // only the sequential DAC data read at 03C9h is supported.
-        if port == VGA_DAC_DATA_PORT {
-            Ok(self.vga_dac.read_data())
-        } else {
-            self.reject(IoOperation::Read, port, IoWidth::Byte, None)
+        match port {
+            SYSTEM_CONTROL_PORT_B => Ok(self.system_control_b.read()),
+            VGA_DAC_DATA_PORT => Ok(self.vga_dac.read_data()),
+            _ => self.reject(IoOperation::Read, port, IoWidth::Byte, None),
         }
     }
 
     fn write_u8(&mut self, port: u16, value: u8) -> Result<(), IoTrap> {
         match port {
+            // AT coprocessor interrupt-latch clear during DOS runtime startup.
+            // Chronos has no coprocessor or IRQ13 latch, so clearing it is
+            // inert. No host port is accessed; other values/widths still trap.
+            0x00f0 if value == 0 => {}
+            SYSTEM_CONTROL_PORT_B => self.system_control_b.write(value),
             VGA_DAC_READ_INDEX_PORT => self.vga_dac.set_read_index(value),
             VGA_DAC_WRITE_INDEX_PORT => self.vga_dac.set_write_index(value),
             VGA_DAC_DATA_PORT => {
@@ -291,6 +349,87 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::*;
+
+    #[test]
+    fn system_control_b_reads_back_only_controls() {
+        let mut io = GuestIoDispatcher::default();
+        assert_eq!(io.read_u8(0x61), Ok(0));
+        for controls in 0..=0x0f {
+            io.write_u8(0x61, controls).unwrap();
+            assert_eq!(io.read_u8(0x61), Ok(controls));
+            io.write_u8(0x61, controls | 0xf0).unwrap();
+            assert_eq!(io.read_u8(0x61), Ok(controls));
+        }
+        io.write_u8(0x61, 0x85).unwrap();
+        io.begin_slice();
+        io.reset_mode13();
+        for _ in 0..10_000 {
+            assert_eq!(io.read_u8(0x61), Ok(0x05));
+        }
+        assert_eq!(io.unsupported_attempts(), 0);
+        assert_eq!(io.entries_committed_slice(), 0);
+        assert_eq!(GuestIoDispatcher::default().read_u8(0x61), Ok(0));
+    }
+
+    #[test]
+    fn system_control_b_does_not_admit_neighbor_or_word_accesses() {
+        let mut io = GuestIoDispatcher::default();
+        io.write_u8(0x61, 0x0f).unwrap();
+        for neighbor in [0x60, 0x62] {
+            assert_eq!(
+                io.read_u8(neighbor),
+                Err(IoTrap::unsupported(
+                    IoOperation::Read,
+                    neighbor,
+                    IoWidth::Byte,
+                    None
+                ))
+            );
+            assert_eq!(
+                io.write_u8(neighbor, 0),
+                Err(IoTrap::unsupported(
+                    IoOperation::Write,
+                    neighbor,
+                    IoWidth::Byte,
+                    Some(0)
+                ))
+            );
+        }
+        for port in [0x60, 0x61] {
+            assert_eq!(
+                io.read_u16(port),
+                Err(IoTrap::unsupported(
+                    IoOperation::Read,
+                    port,
+                    IoWidth::Word,
+                    None
+                ))
+            );
+            assert_eq!(
+                io.write_u16(port, 0),
+                Err(IoTrap::unsupported(
+                    IoOperation::Write,
+                    port,
+                    IoWidth::Word,
+                    Some(0)
+                ))
+            );
+        }
+        assert_eq!(io.read_u8(0x61), Ok(0x0f));
+    }
+
+    #[test]
+    fn absent_coprocessor_latch_clear_is_narrow_and_does_not_touch_video() {
+        let mut io = GuestIoDispatcher::default();
+        let checksum = io.vga_dac().palette_checksum();
+        io.write_u8(0xf0, 0).unwrap();
+        assert_eq!(io.vga_dac().palette_checksum(), checksum);
+        assert_eq!(io.entries_committed_slice(), 0);
+        assert!(io.write_u8(0xf0, 1).is_err());
+        assert!(io.write_u16(0xf0, 0).is_err());
+        assert!(io.read_u8(0xf0).is_err());
+        assert!(io.write_u8(0xf1, 0).is_err());
+    }
 
     #[derive(Default)]
     struct MockIo {

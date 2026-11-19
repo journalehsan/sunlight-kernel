@@ -1,0 +1,5 @@
+8414:XLAT before retired=3745436 bytes=[26, d7, 08, c0] instruction=[26, d7] mode=386-real addr_size=16 operand_size=16 CPU=CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0103, bx: 8738, cx: 0050, dx: 6a9a, si: 6a9a, di: 0000, bp: 4682, sp: 467e, cs: 1443, ds: 4117, es: 4117, ss: 4c13, ip: 0022, flags: f293 } offset=873b segment=ES:4117 linear=498ab value=04
+8415:XLAT after retired=3745437 IP=1443:0024 EAX=00010104 EFLAGS=f293 before_IP=0022 before_EAX=00010103 before_FLAGS=f293 state=Running
+8527:state=Trapped(UnsupportedOpcode { cs: 15446, ip: 16399, bytes: [102, 153, 102, 247], cpu: CpuState { gpr_upper: [30, 0, 0, 0, 0, 0, 0, 0], ax: 43920, bx: 0, cx: 92, dx: 30, si: 28646, di: 80, bp: 19286, sp: 19278, cs: 15446, ds: 16663, es: 28640, ss: 19475, ip: 16401, flags: 61958 } }) retired=3749458 CS:IP=3c56:4011
+8542:C:\>
+8543: F1 Help

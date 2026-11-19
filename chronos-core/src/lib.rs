@@ -11,6 +11,7 @@ mod arena;
 mod cpu;
 mod dos;
 mod fs;
+mod font;
 mod io;
 mod loader;
 mod memory;
@@ -28,7 +29,7 @@ pub use arena::{
 pub use cpu::CpuState;
 pub use fs::{
     is_reserved_device, wildcard_matches, DirectoryEntry, DosDrive, DosEntry, DosError, DosHandle,
-    DosHandleTable, DosPath, DriveAccess, DriveTable, OpenMode, ATTR_ARCHIVE, ATTR_DIRECTORY,
+    DosHandleTable, DosPath, DriveAccess, DriveSpace, DriveTable, OpenMode, ATTR_ARCHIVE, ATTR_DIRECTORY,
     ATTR_HIDDEN, ATTR_READ_ONLY, ATTR_SYSTEM,
 };
 pub use io::{
@@ -55,8 +56,8 @@ pub use runtime::{
 };
 pub use sample::{CHRONOS_INTERACTIVE_COM, HELLO_CHRONOS_COM};
 pub use text_mode::{
-    display_char, TextCell, TextModeSurface, DEFAULT_ATTRIBUTE, TEXT_COLUMNS, TEXT_ROWS,
-    VIDEO_BYTES, VIDEO_PHYSICAL, VIDEO_SEGMENT,
+    display_char, TextAttribute, TextAttributeMode, TextCell, TextModeSurface, DEFAULT_ATTRIBUTE,
+    TEXT_COLUMNS, TEXT_ROWS, VIDEO_BYTES, VIDEO_PHYSICAL, VIDEO_SEGMENT,
 };
 pub use video::{
     convert_indexed_rows, dac6_to_host8, default_vga_dac_entries, default_vga_palette,

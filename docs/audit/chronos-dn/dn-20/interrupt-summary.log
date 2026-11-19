@@ -1,0 +1,80 @@
+== dn-19 launcher ==
+21h/AH=4eh CF=1: 3 observed returns
+before INT 21 retired=3475837 CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 492c, cx: 0020, dx: 48d8, si: 4943, di: 48e3, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f046 }
+after INT 21 state=Running CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 492c, cx: 0020, dx: 48d8, si: 4943, di: 48e3, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f047 }
+before INT 21 retired=3476097 CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 492c, cx: 0020, dx: 48d8, si: 4944, di: 48e4, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f046 }
+after INT 21 state=Running CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 492c, cx: 0020, dx: 48d8, si: 4944, di: 48e4, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f047 }
+21h/AH=4eh CF=0: 2 observed returns
+before INT 21 retired=3822559 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f246 }
+before INT 21 retired=3929235 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f246 }
+21h/AH=4fh CF=0: 38 observed returns
+before INT 21 retired=3824323 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0000, cx: 0000, dx: 433e, si: 420f, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7232, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0000, cx: 0000, dx: 433e, si: 420f, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7232, ss: 4c91, ip: 0181, flags: f246 }
+before INT 21 retired=4003293 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0004, cx: 0000, dx: 433e, si: 000e, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0004, cx: 0000, dx: 433e, si: 000e, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 0181, flags: f246 }
+21h/AH=4fh CF=1: 2 observed returns
+before INT 21 retired=3900570 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7260, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7260, ss: 4c91, ip: 0181, flags: f247 }
+before INT 21 retired=4007206 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 0181, flags: f247 }
+21h/AH=36h CF=0: 2 observed returns
+before INT 21 retired=3913219 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 3600, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 7225, ss: 4c91, ip: 1337, flags: f206 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: ffff, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 7225, ss: 4c91, ip: 1339, flags: f206 }
+before INT 21 retired=4014185 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 3600, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 72ae, ss: 4c91, ip: 1337, flags: f206 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: ffff, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 72ae, ss: 4c91, ip: 1339, flags: f206 }
+16h/AH=11h CF=0: 6311 observed returns
+before INT 16 retired=4465338 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0081, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01ca, flags: f246 }
+after INT 16 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0081, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01cc, flags: f246 }
+before INT 16 retired=9999191 CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01ca, flags: f246 }
+after INT 16 state=Running CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01cc, flags: f246 }
+initial PSP=1041 end=2041
+state=Running retired=10000000 CS:IP=14c1:2e2c
+INT 2f vector=1041:0142
+final PSP=10bf
+== dn-20 launcher ==
+21h/AH=4eh CF=1: 3 observed returns
+before INT 21 retired=3475837 CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 492c, cx: 0020, dx: 48d8, si: 4943, di: 48e3, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f046 }
+after INT 21 state=Running CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 492c, cx: 0020, dx: 48d8, si: 4943, di: 48e3, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f047 }
+before INT 21 retired=3476097 CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 492c, cx: 0020, dx: 48d8, si: 4944, di: 48e4, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f046 }
+after INT 21 state=Running CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 492c, cx: 0020, dx: 48d8, si: 4944, di: 48e4, bp: 4928, sp: 48d6, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f047 }
+21h/AH=4eh CF=0: 2 observed returns
+before INT 21 retired=3822559 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f246 }
+before INT 21 retired=3928375 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0162, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4e00, bx: 3f10, cx: 00f7, dx: 41d0, si: 423b, di: 41d7, bp: 4220, sp: 41ce, cs: 39e6, ds: 4c91, es: 4c91, ss: 4c91, ip: 0164, flags: f246 }
+21h/AH=4fh CF=0: 38 observed returns
+before INT 21 retired=3824280 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0000, cx: 0000, dx: 433e, si: 420f, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7232, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0000, cx: 0000, dx: 433e, si: 420f, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7232, ss: 4c91, ip: 0181, flags: f246 }
+before INT 21 retired=4001616 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0004, cx: 0000, dx: 433e, si: 000e, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0004, cx: 0000, dx: 433e, si: 000e, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 0181, flags: f246 }
+21h/AH=4fh CF=1: 2 observed returns
+before INT 21 retired=3899710 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7260, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 7260, ss: 4c91, ip: 0181, flags: f247 }
+before INT 21 retired=4005486 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4f00, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 017f, flags: f246 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0012, bx: 0022, cx: 0000, dx: 433e, si: 004a, di: 433e, bp: 4226, sp: 4226, cs: 39e6, ds: 4195, es: 72e9, ss: 4c91, ip: 0181, flags: f247 }
+21h/AH=36h CF=0: 2 observed returns
+before INT 21 retired=3912359 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 3600, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 7225, ss: 4c91, ip: 1337, flags: f206 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: ffff, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 7225, ss: 4c91, ip: 1339, flags: f206 }
+before INT 21 retired=4012465 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 3600, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 72ae, ss: 4c91, ip: 1337, flags: f206 }
+after INT 21 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: ffff, bx: 4382, cx: 0000, dx: 4103, si: 43b9, di: 0008, bp: 3f54, sp: 3f54, cs: 5f40, ds: 4195, es: 72ae, ss: 4c91, ip: 1339, flags: f206 }
+16h/AH=11h CF=0: 6313 observed returns
+before INT 16 retired=4463618 CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0081, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01ca, flags: f246 }
+after INT 16 state=Running CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0081, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01cc, flags: f246 }
+before INT 16 retired=9999225 CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01ca, flags: f246 }
+after INT 16 state=Running CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 4de0, bp: 4d98, sp: 4d98, cs: 1249, ds: 4195, es: 4c91, ss: 4c91, ip: 01cc, flags: f246 }
+initial PSP=1041 end=2041
+state=Running retired=10000000 CS:IP=29ef:0431
+INT 2f vector=1041:0142
+final PSP=10bf
+== dn-20 direct ==
+16h/AH=11h CF=0: 7209 observed returns
+before INT 16 retired=3809844 CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 4f09, di: 4de0, bp: 4d98, sp: 4d98, cs: 11cb, ds: 4117, es: 4c13, ss: 4c13, ip: 01ca, flags: f246 }
+after INT 16 state=Running CpuState { gpr_upper: [0000, 0000, 004c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 4f09, di: 4de0, bp: 4d98, sp: 4d98, cs: 11cb, ds: 4117, es: 4c13, ss: 4c13, ip: 01cc, flags: f246 }
+before INT 16 retired=9999989 CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 4de0, bp: 4d98, sp: 4d98, cs: 11cb, ds: 4117, es: 4c13, ss: 4c13, ip: 01ca, flags: f246 }
+after INT 16 state=Running CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 1100, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 4de0, bp: 4d98, sp: 4d98, cs: 11cb, ds: 4117, es: 4c13, ss: 4c13, ip: 01cc, flags: f246 }
+initial PSP=1041 end=a000
+state=Running retired=10000000 CS:IP=11cb:0036
+INT 2f vector=0800:0400
+final PSP=1041

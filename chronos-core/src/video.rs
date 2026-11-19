@@ -1,10 +1,64 @@
 use crate::GuestMemory;
 
+// Conservative EGA configuration contract for the implemented video subset.
+// No planar/banked RAM, extra text pages, or font-loading services are implied.
+pub(crate) const EGA_MEMORY_CODE: u8 = 0; // 64 KiB aperture
+pub(crate) const EGA_SWITCH_SETTINGS: u8 = 9; // Enhanced color display
+pub(crate) const EGA_FEATURE_BITS: u8 = 0; // No feature connector
+
 pub const VGA_WIDTH: usize = 320;
 pub const VGA_HEIGHT: usize = 200;
 pub const VGA_FRAMEBUFFER_SEGMENT: u16 = 0xa000;
 pub const VGA_FRAMEBUFFER_PHYSICAL: usize = 0xa0000;
 pub const VGA_FRAMEBUFFER_BYTES: usize = VGA_WIDTH * VGA_HEIGHT;
+
+// INT 10h/AH=1Ch save/restore video state. The documented buffer is a fixed
+// 20h-byte header followed by the requested state areas. Chronos implements
+// only the BIOS data area (CX bit 1): it owns the guest BDA video range and
+// can restore the modeled mode, cursor and shape from it. The hardware area
+// (CX bit 0) would require sequencer, CRTC, attribute and graphics-controller
+// register files that this virtual VGA does not have, and the DAC area
+// (CX bit 2) would require the pixel mask, color select and read/write mode
+// registers. Neither area is advertised.
+pub const VIDEO_STATE_HEADER_BYTES: usize = 0x20;
+pub const VIDEO_STATE_HARDWARE_BYTES: usize = 0x46;
+pub const VIDEO_STATE_BIOS_DATA_BYTES: usize = 0x60;
+pub const VIDEO_STATE_DAC_BYTES: usize = 0x304;
+pub const VIDEO_STATE_MASK_HARDWARE: u16 = 0x0001;
+pub const VIDEO_STATE_MASK_BIOS_DATA: u16 = 0x0002;
+pub const VIDEO_STATE_MASK_DAC: u16 = 0x0004;
+pub const VIDEO_STATE_SUPPORTED_MASK: u16 = VIDEO_STATE_MASK_BIOS_DATA;
+
+/// Byte offset of the BIOS data area inside a save buffer. The header holds
+/// the area offset table at words 0..3 (hardware, BIOS data, DAC, reserved).
+pub const VIDEO_STATE_BIOS_DATA_OFFSET: usize = VIDEO_STATE_HEADER_BYTES;
+
+/// Total documented buffer size for a requested state mask, or `None` when
+/// the mask is empty or asks for an area this VGA profile does not model.
+pub const fn video_state_buffer_bytes(mask: u16) -> Option<usize> {
+    if mask == 0 || mask & !VIDEO_STATE_SUPPORTED_MASK != 0 {
+        return None;
+    }
+    let mut total = VIDEO_STATE_HEADER_BYTES;
+    if mask & VIDEO_STATE_MASK_HARDWARE != 0 {
+        total += VIDEO_STATE_HARDWARE_BYTES;
+    }
+    if mask & VIDEO_STATE_MASK_BIOS_DATA != 0 {
+        total += VIDEO_STATE_BIOS_DATA_BYTES;
+    }
+    if mask & VIDEO_STATE_MASK_DAC != 0 {
+        total += VIDEO_STATE_DAC_BYTES;
+    }
+    Some(total)
+}
+
+/// The documented block count is the total byte size rounded up to 64 bytes.
+pub const fn video_state_buffer_blocks(mask: u16) -> Option<u16> {
+    match video_state_buffer_bytes(mask) {
+        Some(bytes) => Some(((bytes + 63) / 64) as u16),
+        None => None,
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuestVideoMode {
@@ -13,6 +67,20 @@ pub enum GuestVideoMode {
 }
 
 impl GuestVideoMode {
+    pub const fn character_height(self) -> u16 {
+        match self {
+            Self::Text80x25Color => 16,
+            Self::Vga320x200x256 => 8,
+        }
+    }
+
+    pub const fn character_rows(self) -> u8 {
+        match self {
+            Self::Text80x25Color => (400u16 / 16) as u8,
+            Self::Vga320x200x256 => 200 / 8,
+        }
+    }
+
     pub const fn bios_mode(self) -> u8 {
         match self {
             Self::Text80x25Color => 0x03,
@@ -164,7 +232,8 @@ pub fn convert_indexed_rows(
         }
         let row_start = row * VGA_WIDTH;
         for column in 0..VGA_WIDTH {
-            let index = memory.read_u8(VGA_FRAMEBUFFER_SEGMENT, (row_start + column) as u16);
+            let index =
+                memory.read_display_byte(VGA_FRAMEBUFFER_SEGMENT, (row_start + column) as u16);
             destination[row_start + column] = palette[index as usize];
         }
     }
@@ -176,9 +245,32 @@ mod tests {
     use alloc::vec;
 
     use super::{
-        convert_indexed_rows, dac6_to_host8, GuestMemory, Rgb8, DEFAULT_VGA_PALETTE,
-        VGA_FRAMEBUFFER_BYTES, VGA_FRAMEBUFFER_SEGMENT, VGA_HEIGHT,
+        convert_indexed_rows, dac6_to_host8, video_state_buffer_blocks, video_state_buffer_bytes,
+        GuestMemory, Rgb8, DEFAULT_VGA_PALETTE, VGA_FRAMEBUFFER_BYTES, VGA_FRAMEBUFFER_SEGMENT,
+        VGA_HEIGHT, VIDEO_STATE_BIOS_DATA_BYTES, VIDEO_STATE_DAC_BYTES, VIDEO_STATE_HARDWARE_BYTES,
+        VIDEO_STATE_HEADER_BYTES,
     };
+
+    #[test]
+    fn video_state_sizes_follow_the_documented_layout() {
+        assert_eq!(video_state_buffer_bytes(0), None);
+        assert_eq!(
+            video_state_buffer_bytes(0x0002),
+            Some(VIDEO_STATE_HEADER_BYTES + VIDEO_STATE_BIOS_DATA_BYTES)
+        );
+        assert_eq!(video_state_buffer_blocks(0x0002), Some(2));
+        // The documented hardware and DAC areas are not modeled, so their
+        // sizes are known but never advertised as supported requests.
+        for mask in [0x0001, 0x0004, 0x0003, 0x0005, 0x0006, 0x0007] {
+            assert_eq!(video_state_buffer_bytes(mask), None);
+        }
+        for mask in [0x0008, 0x0010, 0x8000, 0xfffe] {
+            assert_eq!(video_state_buffer_bytes(mask), None);
+        }
+        assert_eq!(VIDEO_STATE_HARDWARE_BYTES, 0x46);
+        assert_eq!(VIDEO_STATE_BIOS_DATA_BYTES, 0x60);
+        assert_eq!(VIDEO_STATE_DAC_BYTES, 0x304);
+    }
 
     #[test]
     fn palette_has_stable_classic_vga_colors() {

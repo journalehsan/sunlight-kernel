@@ -305,6 +305,7 @@ fn push_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
     use sunlight_ipc::{pack_short_name, AdminState, IfaceSummary, IpConfigMode};
 
     fn summary(id: u64, name: &str, prefix: u8) -> IfaceSummary {

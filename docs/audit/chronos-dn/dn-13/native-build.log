@@ -1,0 +1,128 @@
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling compiler_builtins v0.1.160 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+   Compiling core v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/core)
+   Compiling libc v0.2.185
+   Compiling std v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std)
+   Compiling zerocopy v0.8.54
+   Compiling version_check v0.9.5
+   Compiling once_cell v1.21.4
+   Compiling zmij v1.0.21
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling serde_json v1.0.150
+   Compiling unicode-script v0.5.8
+   Compiling ttf-parser v0.15.2
+   Compiling ttf-parser v0.19.2
+   Compiling unicode-ccc v0.1.2
+   Compiling itoa v1.0.18
+   Compiling unicode-properties v0.1.4
+   Compiling unicode-bidi-mirroring v0.1.0
+   Compiling smallvec v1.15.2
+   Compiling bytemuck v1.25.0
+   Compiling memchr v2.8.2
+   Compiling bitflags v1.3.2
+   Compiling ahash v0.8.12
+   Compiling rustybuzz v0.10.0
+   Compiling hashbrown v0.13.2
+   Compiling fontdue v0.7.3
+   Compiling sun-font v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-font)
+warning: sun-font@0.2.8688-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+   Compiling rustc-std-workspace-core v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+   Compiling alloc v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/alloc)
+   Compiling rustc-demangle v0.1.27
+   Compiling panic_abort v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_abort)
+   Compiling rustc-literal-escaper v0.0.7
+   Compiling unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/unwind)
+   Compiling rustc-std-workspace-alloc v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+   Compiling panic_unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_unwind)
+   Compiling hashbrown v0.17.1
+   Compiling std_detect v0.1.5 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std_detect)
+   Compiling proc_macro v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/proc_macro)
+   Compiling zune-core v0.4.12
+   Compiling simd-adler32 v0.3.9
+   Compiling sunlight-ipc v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling lz4_flex v0.11.6
+   Compiling sunlight-cert v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-cert)
+   Compiling unicode-segmentation v1.13.3
+   Compiling chronos-core v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/chronos-core)
+   Compiling zune-inflate v0.2.54
+   Compiling zune-jpeg v0.4.21
+   Compiling zune-png v0.4.10
+   Compiling sun-img v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-img)
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+   Compiling sunlight-ui v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui)
+   Compiling sunlight-libc v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+warning: field `terminal` is never read
+   --> sunlight-libc/src/sun_exec.rs:773:5
+    |
+768 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+773 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `key` and `value` are never read
+  --> sunlight-libc/src/tls.rs:21:16
+   |
+20 | pub(crate) struct Specific {
+   |                   -------- fields in this struct
+21 |     pub(crate) key: usize,
+   |                ^^^
+22 |     pub(crate) value: *mut u8,
+   |                ^^^^^
+   |
+   = note: `Specific` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: fields `control` and `previous` are never read
+  --> sunlight-libc/src/tls.rs:32:16
+   |
+31 | pub(crate) struct OnceFrame {
+   |                   --------- fields in this struct
+32 |     pub(crate) control: *const AtomicU32,
+   |                ^^^^^^^
+33 |     pub(crate) previous: *mut OnceFrame,
+   |                ^^^^^^^^
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+warning: `sunlight-libc` (lib) generated 3 warnings
+   Compiling sunlight-chronos v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-chronos)
+    Finished `release` profile [optimized] target(s) in 34.85s

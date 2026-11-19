@@ -1,0 +1,57 @@
+sunlight-chronos/src/main.rs:51: const MAX_HOST_FILE: usize = 64 * 1024;
+sunlight-chronos/src/main.rs:1624:     documents_root: Option<String>,
+sunlight-chronos/src/main.rs:1635:     documents_root: Option<String>,
+sunlight-chronos/src/main.rs:1658:         let documents_root = argument(&values, b"--chronos-documents");
+sunlight-chronos/src/main.rs:1669:             b"--chronos-documents".as_slice(),
+sunlight-chronos/src/main.rs:1691:             documents_root: documents_root.and_then(|value| String::from_utf8(value.to_vec()).ok()),
+sunlight-chronos/src/main.rs:1716:             documents_root: self.documents_root.clone(),
+sunlight-chronos/src/main.rs:1746:     if let Some(documents) = &storage.documents_root {
+sunlight-chronos/src/main.rs:1747:         import_directory(runtime, DosDrive::D, documents, "", false, 0);
+sunlight-chronos/src/main.rs:1816:     if let Some(documents) = &storage.documents_root {
+sunlight-chronos/src/main.rs:1817:         persist_drive(runtime, DosDrive::D, documents);
+sunlight-chronos/src/main.rs:1849:     while data.len() < MAX_HOST_FILE {
+sunlight-chronos/src/main.rs:1854:         let remaining = MAX_HOST_FILE - data.len();
+chronos-core/src/loader.rs:190:     let paragraphs = requested_paragraphs;
+qemu-system-x86_64: /usr/bin/qemu-system-x86_64
+target/dos-navigator/package/DosNavigatorDiagnostic.sunapp/Manifest.toml
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.chronos.dn151.diagnostic"
+name = "DOS Navigator 1.51 (Compatibility Diagnostic)"
+version = "1.51.0"
+kind = "terminal-window"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "chronos"
+
+[entry]
+executable = "C:\\DN.COM"
+working_directory = "C:\\"
+arguments = []
+
+[chronos]
+cpu = "80286"
+memory_kb = 640
+code_page = 437
+
+[storage]
+c_base = ["Program"]
+c_overlay = "persistent"
+d_scope = "none"
+t_drive = "temporary"
+
+[permissions]
+documents = "none"
+clipboard = false
+printing = false
+serial = false
+network = false
+
+[window]
+default_width = 1000
+default_height = 720
+resizable = true
+

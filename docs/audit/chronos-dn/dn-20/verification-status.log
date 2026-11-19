@@ -1,0 +1,11 @@
+units=0
+probe-build=0
+direct=2
+launcher=2
+target/dos-navigator/dn151/DN.PRG: OK
+target/dos-navigator/dn151/DN.COM: OK
+target/dos-navigator/dn151/DN.OVR: OK
+no-std=0
+native=0
+doctest=101
+platform=0

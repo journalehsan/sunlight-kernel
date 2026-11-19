@@ -1,0 +1,7 @@
+Native QEMU execution: NOT_RUN
+QEMU executable: /usr/bin/qemu-system-x86_64
+Adapter MAX_HOST_FILE=65536; no explicit CPU-profile forwarding.
+No global installation, Documents grant, host persistence, guest patch, commit or push.
+DN.COM: bytes=1778 sha256=ae0863550ec07f21c5cf8d208373a5022b868133e6f644757b1623cd8f7e9905
+DN.PRG: bytes=109613 sha256=ac0024e269ecf0feb4a8db15f96181092604567a62cf00fb8453d9052c2862c3
+DN.OVR: bytes=745951 sha256=401a8e631b8627fcbf8c209f01b1d71e3e314347f1c32417a0345d45455e3569

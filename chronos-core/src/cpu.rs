@@ -1,6 +1,8 @@
-/// 16-bit real-mode CPU register state used by the initial interpreter.
+/// Real-mode registers. Low words remain public for DOS/BIOS compatibility.
+/// Upper words are independent storage, so every legacy write preserves them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CpuState {
+    pub gpr_upper: [u16; 8],
     pub ax: u16,
     pub bx: u16,
     pub cx: u16,
@@ -18,11 +20,22 @@ pub struct CpuState {
 }
 
 impl CpuState {
+    /// Architectural encoding order: EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI.
+    pub fn reg32(&self, index: u8) -> u32 {
+        ((self.gpr_upper[index as usize] as u32) << 16) | self.reg16(index) as u32
+    }
+
+    pub fn set_reg32(&mut self, index: u8, value: u32) {
+        self.gpr_upper[index as usize] = (value >> 16) as u16;
+        self.set_reg16(index, value as u16);
+    }
+
     pub const FLAG_CF: u16 = 0x0001;
     pub const FLAG_PF: u16 = 0x0004;
     pub const FLAG_AF: u16 = 0x0010;
     pub const FLAG_ZF: u16 = 0x0040;
     pub const FLAG_SF: u16 = 0x0080;
+    pub const FLAG_TF: u16 = 0x0100;
     pub const FLAG_IF: u16 = 0x0200;
     pub const FLAG_DF: u16 = 0x0400;
     pub const FLAG_OF: u16 = 0x0800;

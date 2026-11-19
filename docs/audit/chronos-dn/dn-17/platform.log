@@ -1,0 +1,836 @@
++ set -euo pipefail
++++ dirname tools/test.sh
+++ cd tools
+++ pwd
++ SCRIPT_DIR=/home/ehsantor/Projects/sunlightos-kernel/tools
+++ cd /home/ehsantor/Projects/sunlightos-kernel/tools/..
+++ pwd
++ PROJECT_ROOT=/home/ehsantor/Projects/sunlightos-kernel
++ TIMEOUT=60
++ KERNEL_ELF=target/x86_64-unknown-none/debug/sunlight-kernel
++ ISO_PATH=target/sunlightos.iso
++ LIMINE_BRANCH=v8.x
++ LIMINE_DIR=target/limine
++ KERNEL_RUSTFLAGS='-C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-model=static'
++ SERVICE_RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ TLS_RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone --cfg aes_force_soft --cfg polyval_force_soft --cfg poly1305_force_soft --cfg chacha20_force_soft --cfg curve25519_dalek_backend="serial"'
+++ mktemp
++ BUILD_LOG=/tmp/tmp.i7ldUlrh3V
++ PHASE=phase3.0
++ case "$PHASE" in
++ EXPECTED_FILE=tools/tests/phase3_0.expected
++ FINAL_MARKER='[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK'
++ PASS_LABEL='Phase 3.0'
++ NEED_DISK=false
++ [[ -n '' ]]
++ mapfile -t EXPECTED
+++ grep -Ev '^[[:space:]]*($|#)' tools/tests/phase3_0.expected
++ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/audit_vfs_cutover.py --no-growth
++ VFS_STAT_FEATURES=()
++ [[ phase3.0 == vfs\-stat\-failure ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-init --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-timer-server --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-swapd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-kbd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-mouse --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-usb-mouse --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-deviced --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-networkd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-resolved --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-powerd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-thermald --release
++ [[ phase3.0 == audio ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-audiod --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-vfs-server --release
++ [[ phase3.0 == session\-foundation ]]
++ [[ phase3.0 == session\-configuration ]]
++ [[ phase3.0 == welcome\-wizard ]]
++ [[ phase3.0 == wiseowl\-phase4a ]]
++ [[ phase3.0 == wiseowl\-phase4b ]]
++ [[ phase3.0 == wiseowl\-foundation\-v1 ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-tty-server --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package pty_server --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-net-server --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package timezone_service --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-timed --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-tz --features tzutils --bin tzutils --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package rand_service --release
++ [[ phase3.0 == session\-configuration ]]
++ [[ phase3.0 == welcome\-wizard ]]
++ [[ phase3.0 == wiseowl\-delegated\-session\-lifecycle\-ipc\-v1 ]]
++ [[ phase3.0 == wiseowl\-phase4a ]]
++ [[ phase3.0 == wiseowl\-phase4b ]]
++ [[ phase3.0 == wiseowl\-foundation\-v1 ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-sessiond --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-sessionctl --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-startup-fixture --release
++ [[ phase3.0 == welcome\-wizard ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-welcome --bin welcome --release
++ [[ phase3.0 == wiseowl\-graphical\-console\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-conversation\-v1 ]]
++ [[ phase3.0 == wiseowl\-delegated\-session\-lifecycle\-ipc\-v1 ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-c ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlightd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-niced --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-gcd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlightctl --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-uac --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-sm --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-kv --features sunlightos --no-default-features --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-kvctl --features sunlightos --no-default-features --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-account-broker --features native-service --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone --cfg aes_force_soft --cfg polyval_force_soft --cfg poly1305_force_soft --cfg chacha20_force_soft --cfg curve25519_dalek_backend="serial"'
++ cargo build --package sunlight-tls --features sunlightos --no-default-features --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package certificatectl --features sunlightos --no-default-features --release
++ SHELL_FEATURES=sunlight
++ [[ phase3.0 == shell-* ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunshell --features sunlight --no-default-features --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-utils --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-net-utils --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-top --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package memoryctl --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-fetch --features sunlightos --no-default-features --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-sunsay --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-zoxide --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-dict --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-hangman --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package cpu-utils --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-display --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package mezzo --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package mezzoctl --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package eyes --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-runner --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sun-exec --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sun-open --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-terminal --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-chronos --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-tasks --release
++ bash tools/build_svg_apps.sh -p sunlight-vortex-shell
++ [[ phase3.0 != mm2b ]]
++ [[ phase3.0 != mm2d ]]
++ [[ phase3.0 != swap1 ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-bench --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-calculator --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-widget-gallery --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-silicon-echoes --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-empires --features native --release
++ bash tools/build_svg_apps.sh -p sunlight-files
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-light-lens --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package melody-mina --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-voice-recorder --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-edit --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-writer --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-calendar --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-reminders --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-devices --release
++ bash tools/build_rappid_rabbit.sh
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-api-lab --release
++ bash tools/build_svg_apps.sh -p sunlight-dialogd
++ bash tools/build_svg_apps.sh -p sunlight-control-panel
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-thumbd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-clipd --release
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-clipman --release
++ [[ phase3.0 == wiseowl\-identity\-phase\-c ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release
++ [[ phase3.0 == wiseowl\-identity\-phase\-a ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-c ]]
++ [[ phase3.0 == phase3\.75 ]]
++ [[ phase3.0 == phase3\.875 ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos --no-default-features --release
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-c ]]
++ [[ phase3.0 == phase3\.75 ]]
++ [[ phase3.0 == phase3\.875 ]]
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release
++ [[ phase3.0 == wiseowl\-executor\-v1 ]]
++ [[ phase3.0 == wiseowl\-planner\-v1 ]]
++ [[ phase3.0 == wiseowl\-coordinator\-v1 ]]
++ [[ phase3.0 == wiseowl\-outcome\-observer\-v1 ]]
++ [[ phase3.0 == wiseowl\-action\-receipt\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-bridge\-foundation\-v1 ]]
++ [[ phase3.0 == wiseowl\-trusted\-session\-readiness\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-live\-action\-activation\-v1 ]]
++ [[ phase3.0 == wiseowl\-delegated\-session\-lifecycle\-ipc\-v1 ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-c ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ [[ phase3.0 == wiseowl\-phase4a ]]
++ [[ phase3.0 == wiseowl\-phase4b ]]
++ [[ phase3.0 == wiseowl\-foundation\-v1 ]]
++ bash tools/build_wiseowl_brain.sh
++ RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone'
++ cargo build --package sunlight-emoji-picker --release
++ [[ phase3.0 == wiseowl\-identity\-phase\-a ]]
++ [[ false == true ]]
++ [[ phase3.0 == helios\-proven\-tier1 ]]
++ [[ phase3.0 == helios\-static\-runtime ]]
++ [[ phase3.0 == helios\-thread\-probe ]]
++ [[ phase3.0 == helios\-io\-probe ]]
++ [[ phase3.0 == helios\-note\-regression ]]
++ [[ phase3.0 == helios\-static\-runtime ]]
++ [[ phase3.0 == yazi\-baseline ]]
++ [[ phase3.0 == yazi\-phase1 ]]
++ KERNEL_FEATURES=
++ [[ phase3.0 == vfs\-stat\-failure ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == helios\-open\-largefile\-probe ]]
++ [[ phase3.0 == helios\-proven\-tier1 ]]
++ [[ phase3.0 == helios\-thread\-probe ]]
++ [[ phase3.0 == helios\-io\-probe ]]
++ [[ phase3.0 == helios\-note\-regression ]]
++ [[ phase3.0 == helios\-static\-runtime ]]
++ [[ phase3.0 == yazi\-baseline ]]
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == phase2b1 ]]
++ [[ phase3.0 == phase3\.6 ]]
++ [[ phase3.0 == phase3\.7 ]]
++ [[ phase3.0 == phase3\.8 ]]
++ [[ phase3.0 == phase3\.9 ]]
++ [[ phase3.0 == tty\-login ]]
++ [[ phase3.0 == phase3\.75 ]]
++ [[ phase3.0 == phase3\.875 ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-a ]]
++ [[ phase3.0 == phase6\.5\.1 ]]
++ [[ phase3.0 == phase6\.5\.3 ]]
++ [[ phase3.0 == phase6\.5\.utils ]]
++ [[ phase3.0 == phase2b4 ]]
++ [[ phase3.0 == phase2b5 ]]
++ [[ phase3.0 == top ]]
++ [[ phase3.0 == tzctl ]]
++ [[ phase3.0 == session\-foundation ]]
++ [[ phase3.0 == session\-configuration ]]
++ [[ phase3.0 == welcome\-wizard ]]
++ [[ phase3.0 == wiseowl\-phase4a ]]
++ [[ phase3.0 == wiseowl\-phase4b ]]
++ [[ phase3.0 == wiseowl\-foundation\-v1 ]]
++ [[ phase3.0 == wiseowl\-executor\-v1 ]]
++ [[ phase3.0 == wiseowl\-planner\-v1 ]]
++ [[ phase3.0 == wiseowl\-coordinator\-v1 ]]
++ [[ phase3.0 == wiseowl\-outcome\-observer\-v1 ]]
++ [[ phase3.0 == wiseowl\-action\-receipt\-v1 ]]
++ [[ phase3.0 == wiseowl\-graphical\-console\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-conversation\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-bridge\-foundation\-v1 ]]
++ [[ phase3.0 == wiseowl\-trusted\-session\-readiness\-v1 ]]
++ [[ phase3.0 == wiseowl\-delegated\-session\-lifecycle\-ipc\-v1 ]]
++ [[ phase3.0 == phase_sec ]]
++ [[ phase3.0 == mm2b ]]
++ [[ phase3.0 == mm2d ]]
++ [[ phase3.0 == mm2e ]]
++ [[ phase3.0 == swap1 ]]
++ [[ phase3.0 == tmpfs ]]
++ [[ phase3.0 == memory\-accounting ]]
++ [[ '' == *cpu_accounting_diag* ]]
++ EXTRA_ENV=(SUNLIGHT_TRUST_LEGACY_STATE=0)
++ [[ false == true ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == phase2b1 ]]
++ [[ phase3.0 == phase3\.9 ]]
++ [[ phase3.0 == tty\-login ]]
++ [[ phase3.0 == phase3\.75 ]]
++ [[ phase3.0 == phase3\.875 ]]
++ [[ phase3.0 == phase6\.5\.1 ]]
++ [[ phase3.0 == phase6\.5\.3 ]]
++ [[ phase3.0 == phase6\.5\.utils ]]
++ [[ phase3.0 == phase2b4 ]]
++ [[ phase3.0 == phase2b5 ]]
++ [[ phase3.0 == top ]]
++ [[ phase3.0 == tzctl ]]
++ [[ phase3.0 == session\-foundation ]]
++ [[ phase3.0 == session\-configuration ]]
++ [[ phase3.0 == welcome\-wizard ]]
++ [[ phase3.0 == wiseowl\-graphical\-console\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-conversation\-v1 ]]
++ [[ phase3.0 == wiseowl\-delegated\-session\-lifecycle\-ipc\-v1 ]]
++ [[ phase3.0 == wiseowl\-phase4a ]]
++ [[ phase3.0 == wiseowl\-phase4b ]]
++ [[ phase3.0 == wiseowl\-foundation\-v1 ]]
++ [[ phase3.0 == phase4\.5 ]]
++ [[ phase3.0 == helios\-proven\-tier1 ]]
++ [[ phase3.0 == helios\-thread\-probe ]]
++ [[ phase3.0 == helios\-io\-probe ]]
++ [[ phase3.0 == helios\-open\-largefile\-probe ]]
++ [[ phase3.0 == helios\-note\-regression ]]
++ [[ phase3.0 == helios\-static\-runtime ]]
++ [[ phase3.0 == yazi\-baseline ]]
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == phase5* ]]
++ [[ phase3.0 == phase5x* ]]
++ [[ phase3.0 == dns_hosts ]]
++ touch kernel/src/main.rs
++ touch /home/ehsantor/Projects/sunlightos-kernel/services/sunlightd/src/main.rs
++ env SUNLIGHT_TRUST_LEGACY_STATE=0 cargo build --package sunlight-kernel
++ LIMINE_BRANCH=v8.x
++ /home/ehsantor/Projects/sunlightos-kernel/tools/make_hybrid_iso.sh target/x86_64-unknown-none/debug/sunlight-kernel target/sunlightos.iso /home/ehsantor/Projects/sunlightos-kernel/target/limine /home/ehsantor/Projects/sunlightos-kernel
++ KVM_FLAGS=
++ [[ -r /dev/kvm ]]
++ [[ -w /dev/kvm ]]
++ KVM_FLAGS=-enable-kvm
+++ mktemp
++ QEMU_OUTPUT=/tmp/tmp.qdHQDbRGKB
++ QEMU_OUTPUT_FIRST=/tmp/tmp.qdHQDbRGKB
++ QEMU_OUTPUT_SECOND=
++ QEMU_OUTPUT_THIRD=
++ QEMU_OUTPUT_DETACHED=
++ QEMU_OUTPUT_RESTORED=
++ ROOT_FIRST=
++ ROOT_SECOND=
++ ROOT_THIRD=
++ ROOT_RESTORED=
++ trap 'rm -f "$QEMU_OUTPUT_FIRST" "$QEMU_OUTPUT" "$BUILD_LOG" "${QEMU_OUTPUT_SECOND:-}" "${QEMU_OUTPUT_THIRD:-}" "${QEMU_OUTPUT_DETACHED:-}" "${QEMU_OUTPUT_RESTORED:-}" "${ROOT_FIRST:-}" "${ROOT_SECOND:-}" "${ROOT_THIRD:-}" "${ROOT_RESTORED:-}"' EXIT
++ DISK_FLAGS=
++ [[ false == true ]]
++ NET_FLAGS=
++ [[ phase3.0 == phase5* ]]
++ [[ phase3.0 == phase5x* ]]
++ AUDIO_FLAGS=
++ [[ phase3.0 == audio ]]
++ set +e
++ QEMU_SMP=2
++ QEMU_MEMORY_MB=1024
++ [[ phase3.0 == tty\-login ]]
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == mm2b ]]
++ [[ phase3.0 == mm2d ]]
++ [[ phase3.0 == mm2e ]]
++ [[ phase3.0 == swap1 ]]
++ QEMU_PID=2022941
++ qemu-system-x86_64 -cdrom target/sunlightos.iso -serial file:/tmp/tmp.qdHQDbRGKB -display none -m 1024M -smp 2 -enable-kvm -device virtio-rng-pci,disable-modern=on -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 -no-reboot -no-shutdown
++ INITIAL_MARKER='[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK'
++ [[ phase3.0 == wiseowl\-identity\-phase\-a ]]
++ (( i=0 ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ [[ phase3.0 == mm2b ]]
++ grep -Fq '[timer] 100 ticks elapsed' /tmp/tmp.qdHQDbRGKB
++ sleep 1
++ (( i++ ))
++ (( i<TIMEOUT ))
++ kill -0 2022941
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ phase3.0 == shell-* ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ [[ phase3.0 == mm2b ]]
++ grep -Fq '[timer] 100 ticks elapsed' /tmp/tmp.qdHQDbRGKB
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ -n '' ]]
++ sleep 1
++ break
++ kill -0 2022941
++ kill -TERM 2022941
++ sleep 1
++ kill -KILL 2022941
++ true
++ wait 2022941
++ QEMU_EXIT=0
++ set -e
++ [[ phase3.0 == wiseowl\-identity\-phase\-a ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-b ]]
++ [[ phase3.0 == wiseowl\-identity\-phase\-c ]]
++ [[ -n '' ]]
++ [[ phase3.0 == phase3\.75 ]]
++ [[ phase3.0 == phase3\.875 ]]
++ [[ phase3.0 == wiseowl\-graphical\-console\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-conversation\-v1 ]]
++ [[ phase3.0 == wiseowl\-gui\-bridge\-foundation\-v1 ]]
++ [[ phase3.0 == wiseowl\-trusted\-session\-readiness\-v1 ]]
++ [[ phase3.0 == phase3\.0 ]]
++ cp /tmp/tmp.qdHQDbRGKB target/timekeeping-phase3-serial.log
++ [[ phase3.0 == vfs\-stat\-failure ]]
++ ALL_FOUND=true
+++ grep -E '^\[PMM\] [0-9]+/[0-9]+ MiB free$' /tmp/tmp.qdHQDbRGKB
+++ head -n1
++ PMM_LINE='[PMM] 155/435 MiB free'
++ [[ -n [PMM] 155/435 MiB free ]]
++ :
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[TIME] PIT calibration mode=2' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq 'rtc: decoded_utc=' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq 'timezone: zone=' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Registered as '\''vfs'\''' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] userspace dispatch injection rejected' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] negotiation handler OK dispatch=disabled' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] registration policy lifecycle OK transport=fixture' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] authenticated kernel registration snapshot OK transport=copy' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Test open /etc/motd' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Test read /etc/motd' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Read: "Welcome to SunlightOS\n"' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Fstat OK' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  ENOENT test OK' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Bad handle test OK' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Native stat/mkdir RAMFS OK' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS]  Stat OK' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[SunlightOS] Foundation Complete' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[USB-MOUSE] boot mouse ready' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] authenticated registration status OK transport=copy' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] live mounted namespace pins shared with legacy handlers OK transport=fixture' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] boot root policy installed caller=1 epoch=1 transport=copy' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] native root stat caller resume/result copy OK transport=copy' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] root stat parked caller=1' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] root stat reply validated=true errno=0 bytes=56' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] root stat result caller=1 status=0x0' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture' /tmp/tmp.qdHQDbRGKB
++ for expected in "${EXPECTED[@]}"
++ grep -Fq '[init] VFS namespace ready before service spawn' /tmp/tmp.qdHQDbRGKB
++ [[ phase3.0 == yazi\-phase1 ]]
++ [[ true == true ]]
++ echo ══════════════════════════════════════
+══════════════════════════════════════
++ echo '  SunlightOS — Phase 3.0 Boot Gate'
+  SunlightOS — Phase 3.0 Boot Gate
++ echo ══════════════════════════════════════
+══════════════════════════════════════
++ [[ -n [PMM] 155/435 MiB free ]]
++ echo '[PMM] 155/435 MiB free'
+[PMM] 155/435 MiB free
++ for expected in "${EXPECTED[@]}"
++ echo '[TIME] PIT calibration mode=2'
+[TIME] PIT calibration mode=2
++ for expected in "${EXPECTED[@]}"
++ echo 'rtc: decoded_utc='
+rtc: decoded_utc=
++ for expected in "${EXPECTED[@]}"
++ echo 'timezone: zone='
+timezone: zone=
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Registered as '\''vfs'\'''
+[VFS]  Registered as 'vfs'
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] userspace dispatch injection rejected'
+[VFS-RPC] userspace dispatch injection rejected
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] negotiation handler OK dispatch=disabled'
+[VFS-RPC] negotiation handler OK dispatch=disabled
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture'
+[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture'
+[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] registration policy lifecycle OK transport=fixture'
+[VFS-RPC] registration policy lifecycle OK transport=fixture
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] authenticated kernel registration snapshot OK transport=copy'
+[VFS-RPC] authenticated kernel registration snapshot OK transport=copy
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Test open /etc/motd'
+[VFS]  Test open /etc/motd
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Test read /etc/motd'
+[VFS]  Test read /etc/motd
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Read: "Welcome to SunlightOS\n"'
+[VFS]  Read: "Welcome to SunlightOS\n"
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Fstat OK'
+[VFS]  Fstat OK
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  ENOENT test OK'
+[VFS]  ENOENT test OK
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Bad handle test OK'
+[VFS]  Bad handle test OK
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Native stat/mkdir RAMFS OK'
+[VFS]  Native stat/mkdir RAMFS OK
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS]  Stat OK'
+[VFS]  Stat OK
++ for expected in "${EXPECTED[@]}"
++ echo '[SunlightOS] Foundation Complete'
+[SunlightOS] Foundation Complete
++ for expected in "${EXPECTED[@]}"
++ echo '[USB-MOUSE] boot mouse ready'
+[USB-MOUSE] boot mouse ready
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] authenticated registration status OK transport=copy'
+[VFS-RPC] authenticated registration status OK transport=copy
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] live mounted namespace pins shared with legacy handlers OK transport=fixture'
+[VFS-RPC] live mounted namespace pins shared with legacy handlers OK transport=fixture
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] boot root policy installed caller=1 epoch=1 transport=copy'
+[VFS-RPC] boot root policy installed caller=1 epoch=1 transport=copy
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] native root stat caller resume/result copy OK transport=copy'
+[VFS-RPC] native root stat caller resume/result copy OK transport=copy
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] root stat parked caller=1'
+[VFS-RPC] root stat parked caller=1
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] root stat reply validated=true errno=0 bytes=56'
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] root stat result caller=1 status=0x0'
+[VFS-RPC] root stat result caller=1 status=0x0
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy'
+[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK'
+[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK'
+[VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK
++ for expected in "${EXPECTED[@]}"
++ echo '[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture'
+[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture
++ for expected in "${EXPECTED[@]}"
++ echo '[init] VFS namespace ready before service spawn'
+[init] VFS namespace ready before service spawn
++ echo ══════════════════════════════════════
+══════════════════════════════════════
++ echo '✓ Phase 3.0 gate PASSED'
+✓ Phase 3.0 gate PASSED
++ exit 0
++ rm -f /tmp/tmp.qdHQDbRGKB /tmp/tmp.qdHQDbRGKB /tmp/tmp.i7ldUlrh3V '' '' '' '' '' '' '' ''

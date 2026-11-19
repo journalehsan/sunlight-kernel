@@ -1,0 +1,28 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/dn14-validation/x86_64-unknown-linux-gnu/debug/deps/chronos_core-c05cd1aa3b9d963e)
+
+running 1 test
+test runtime::tests::free_pascal_sunshell_runs_the_bundled_midterm_batch_through_dos_files ... FAILED
+
+failures:
+
+---- runtime::tests::free_pascal_sunshell_runs_the_bundled_midterm_batch_through_dos_files stdout ----
+
+thread 'runtime::tests::free_pascal_sunshell_runs_the_bundled_midterm_batch_through_dos_files' (1733301) panicked at chronos-core/src/runtime.rs:4414:9:
+assertion `left == right` failed
+  left: Running
+ right: Exited { code: 0 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    runtime::tests::free_pascal_sunshell_runs_the_bundled_midterm_batch_through_dos_files
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 181 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p chronos-core --lib`

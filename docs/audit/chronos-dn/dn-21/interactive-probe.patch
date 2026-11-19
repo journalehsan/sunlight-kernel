@@ -1,0 +1,93 @@
+--- chronos-core/examples/dos_probe.rs
++++ chronos-core/examples/dn21_probe.rs
+@@ -53,6 +53,7 @@
+     );
+     println!("initial CPU={:04x?}", runtime.cpu);
+     dump_arena(&runtime);
++    snapshot(&runtime);
+     let mut previous_heap = None;
+     let mut previous_vector = None;
+     let mut previous_system_vector = None;
+@@ -69,7 +70,27 @@
+     } else {
+         0
+     };
+-    for _ in 0..if trace { 10_000_000 } else { 1000 } {
++    let mut keys = env::var("DN21_KEYS").unwrap_or_default().split(',')
++        .filter(|s| !s.is_empty()).map(|s| {
++            let (at, word) = s.split_once(':').unwrap();
++            (at.parse::<u64>().unwrap(), u16::from_str_radix(word, 16).unwrap())
++        }).collect::<Vec<_>>().into_iter().peekable();
++    let budget = env::var("DN21_BUDGET").ok().map(|s| s.parse::<u64>().unwrap()).unwrap_or(7_000_000);
++    let mut psp = runtime.current_psp();
++    let mut checkpoint = 3_500_000;
++    for _ in 0..budget {
++        let retired = runtime.instructions_retired();
++        if retired >= checkpoint {
++            snapshot(&runtime);
++            checkpoint += 500_000;
++        }
++        if keys.peek().is_some_and(|&(at, _)| retired >= at || matches!(runtime.state(), GuestState::WaitingForInput)) {
++            let (at, word) = keys.next().unwrap();
++            let [ascii, scan_code] = word.to_le_bytes();
++            println!("KEY at={retired} scheduled={at} word={word:04x} PSP={:04x} state={:?} queue={}", runtime.current_psp(), runtime.state(), runtime.queued_key_count());
++            runtime.inject_key(chronos_core::BiosKey { ascii, scan_code });
++            snapshot(&runtime);
++        }
+         if trace {
+             if trace_system {
+                 let vector = (
+@@ -269,6 +290,13 @@
+                 );
+             }
+             runtime.step();
++            if opcode == 0xcd && interrupt == 0x16 {
++                println!("KEY RETURN retired={} queue={} cursor={},{}", runtime.instructions_retired(), runtime.queued_key_count(), runtime.cursor_column(), runtime.cursor_row());
++            }
++            if psp != runtime.current_psp() {
++                psp = runtime.current_psp();
++                snapshot(&runtime);
++            }
+             if disk_space {
+                 println!(
+                     "DOS disk space after retired={} CPU={:04x?}",
+@@ -349,6 +377,7 @@
+         }
+         match runtime.state() {
+             GuestState::Running | GuestState::Ready => {}
++            GuestState::WaitingForInput if keys.peek().is_some() => {}
+             GuestState::YieldedUntilTimer => {
+                 runtime.wake_from_timer();
+             }
+@@ -390,6 +419,7 @@
+             println!("{}", line.trim_end());
+         }
+     }
++    snapshot(&runtime);
+     println!("final PSP={:04x}", runtime.current_psp());
+     if let Some(path) = env::var_os("CHRONOS_TEXT_CAPTURE") {
+         capture_text(&runtime, Path::new(&path))?;
+@@ -507,3 +537,23 @@
+         mcb = next;
+     }
+ }
++
++
++fn snapshot(r: &Runtime) {
++    let p = r.current_psp();
++    let env = r.memory.read_u16(p, 0x2c);
++    let len = r.memory.read_u8(p, 0x80).min(126);
++    let tail = (0..=u16::from(len)).map(|i| r.memory.read_u8(p, 0x81+i)).collect::<Vec<_>>();
++    let env_bytes = (0..160).map(|i| r.memory.read_u8(env, i)).collect::<Vec<_>>();
++    let end = env_bytes.windows(2).position(|w| w == [0,0]).map(|i| i+2).unwrap_or(160);
++    let mut checksum = 0xcbf29ce484222325u64;
++    for row in 0..25 {
++        for col in 0..80 {
++            let c = r.cell(col,row);
++            for b in [c.character, c.attribute] {
++                checksum = (checksum ^ u64::from(b)).wrapping_mul(0x100000001b3);
++            }
++        }
++    }
++    println!("SNAP retired={} PSP={p:04x} parent={:04x} env={env:04x} env_vars={:?} tail_len={len} tail={tail:02x?} cursor={},{} shape={:04x} cells={checksum:016x} queue={} state={:?} CPU={:04x?}", r.instructions_retired(), r.memory.read_u16(p,0x16), String::from_utf8_lossy(&env_bytes[..end]), r.cursor_column(), r.cursor_row(), r.cursor_shape(), r.queued_key_count(), r.state(), r.cpu);
++}

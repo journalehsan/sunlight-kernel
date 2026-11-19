@@ -1,0 +1,4 @@
+no-std=0
+native=0
+doctest=101
+platform=0

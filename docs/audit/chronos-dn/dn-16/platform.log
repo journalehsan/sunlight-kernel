@@ -1,0 +1,11 @@
+Command: ./tools/test.sh
+Result: exit 101 before QEMU launch; stdout/stderr were empty because the
+script redirects builds to a temporary log and exits under `set -e` before
+installing its cleanup trap.
+
+Recovered the surviving temporary build log as `platform-build.log`. Service
+builds completed, but the kernel build failed because the workspace did not
+contain the embedded binaries `target/x86_64-unknown-linux-musl/release/helios-note`
+and `target/x86_64-unknown-none/release/wiseowl`. No QEMU process was started.
+This is a separate platform build prerequisite failure and provides no evidence
+against the Chronos CPU instruction implementation.

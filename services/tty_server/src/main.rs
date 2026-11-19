@@ -9,10 +9,10 @@ use sunlight_ipc::{
     ipc_reply_and_try_recv, kill,
     launch_trace::{LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
-    sysinfo, tty_publish_winsize, tty_stdin_push, tty_stdout_pull, unpack_key_event,
-    CapabilityToken, IpcMsg, KbdMsg, MouseMsg, PointerReport, SessionAction, SessionComponentState,
-    SessionKind, SessionMsg, SessionState, SgpMsg, ShellMsg, TerminalWinsize, TzMsg,
-    SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
+    tty_publish_winsize, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken,
+    IpcMsg, KbdMsg, MouseMsg, PointerReport, SessionAction, SessionComponentState, SessionKind,
+    SessionMsg, SessionState, SgpMsg, ShellMsg, TerminalWinsize, TzMsg, SESSION_ENDPOINT,
+    SESSION_PROTOCOL_VERSION,
 };
 use sunlight_libc::sun_exec;
 use sunlight_telemetry::Telemetry;
@@ -114,7 +114,7 @@ const SESSION_QUERY_TIMEOUT_MS: u64 = 1_000;
 /// desktop shell (currently ~17 MiB Vortex). 100 ms is enough on fast QEMU/KVM
 /// but fails under VMware and other slower guests; give the handoff real room.
 const SESSION_CREATE_TIMEOUT_MS: u64 = 15_000;
-const TZ_IPC_TIMEOUT_MS: u64 = 100;
+const TZ_IPC_TIMEOUT_MS: u64 = 10;
 const DISPLAY_TIMEOUT_LOG_INTERVAL: u64 = 32;
 const SESSION_FOUNDATION_IDLE_WINDOW_MS: u64 = 1_500;
 const SESSION_FOUNDATION_IDLE_CPU_BP_MAX: u16 = 1_500;
@@ -1788,7 +1788,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 }
             }
             TtyState::Shell => {
-                let mut needs_render = false;
+                let header_changed = vt_is_active(active_vt, VirtualTerminal::Tty)
+                    && unsafe { refresh_header(&mut session_telemetry) };
+                let mut needs_render = header_changed;
                 let mut pointer_only_render = false;
                 let mut force_shell_render = false;
                 let prev_output_len = active_shell_tab(&tabs, active_tab)
@@ -2274,11 +2276,18 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 let active_fg =
                     active_shell_tab(&tabs, active_tab).map_or(false, |t| t.fg_pid.is_some());
                 if has_fb && needs_render && vt_is_active(active_vt, VirtualTerminal::Tty) {
-                    if active_fg && !force_shell_render {
+                    if active_fg && !force_shell_render && !header_changed {
                         redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                     } else {
                         render_active_shell_fb(
-                            fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
+                            fb_addr,
+                            fb32_w,
+                            fb32_h,
+                            fb32_p,
+                            &tabs,
+                            tab_count,
+                            active_tab,
+                            !active_fg || force_shell_render,
                             &mut mouse,
                         );
                     }
@@ -2453,19 +2462,21 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             &mut mouse,
                         );
                     }
-                } else {
-                    static mut LAST_POLL_MIN: u64 = u64::MAX;
-                    let now_min = get_time_utc() / 60;
-                    // SAFETY: tty_server is single-threaded; no concurrent access.
-                    unsafe {
-                        if now_min != LAST_POLL_MIN {
-                            LAST_POLL_MIN = now_min;
-                            render_active_shell_fb(
-                                fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab,
-                                true, &mut mouse,
-                            );
-                        }
-                    }
+                }
+                // Also refresh while a foreground application is idle. Preserve
+                // its prompt ownership and output grid on the periodic redraw.
+                if unsafe { refresh_header(&mut session_telemetry) } {
+                    render_active_shell_fb(
+                        fb_addr,
+                        fb32_w,
+                        fb32_h,
+                        fb32_p,
+                        &tabs,
+                        tab_count,
+                        active_tab,
+                        active_shell_tab(&tabs, active_tab).is_some_and(|tab| tab.fg_pid.is_none()),
+                        &mut mouse,
+                    );
                 }
             }
             // Input IPC wakes immediately. A short deadline keeps foreground
@@ -2689,10 +2700,8 @@ fn render_active_shell_fb(
     };
     let term_cells = grid.to_term_cells_with_offset(&ANSI_COLORS, viewport_offset);
 
-    // Title-bar stats: "CPU 15% RAM 42%  12:22 AM | 2026/6/12 | eth0".
-    // Cached and refreshed at most once per minute (the same cadence the clock
-    // re-renders) so the per-keystroke render path never does a sysinfo syscall.
-    let (clock_buf, clock_len) = unsafe { titlebar(get_time_utc()) };
+    // Copy the status prepared by maintenance; rendering performs no status IPC.
+    let (clock_buf, clock_len) = unsafe { HEADER };
 
     // Build the dynamic tab labels: each tab shows its running app's name
     // (uppercased by the renderer) or "SHELL" when idle, plus a "*" on
@@ -3282,67 +3291,117 @@ fn fmt_u32(buf: &mut [u8], val: u32) -> usize {
     n
 }
 
-/// Build the title-bar string shown in the header next to the "TTY" label:
-/// `CPU 15% RAM 42%  <clock> | eth0`.
-///
-/// Tries "tz" TZ_GET_LOCAL_TIME for local time + abbr. Falls back to UTC
-/// from kernel + "UTC" label if tz service not yet available.
-///
-/// SAFETY: touches function-local `static mut` cache; tty_server is
-/// single-threaded so there is no concurrent access.
-unsafe fn titlebar(ts: u64) -> ([u8; 64], usize) {
-    static mut CACHE_BUF: [u8; 64] = [0; 64];
-    static mut CACHE_LEN: usize = 0;
-    static mut CACHE_MIN: u64 = u64::MAX;
+// Single-threaded UI cache. Sampling happens in loop maintenance, never in
+// rendering; keystrokes only copy the compact, fixed-size presentation buffer.
+static mut HEADER: ([u8; 64], usize) = ([0; 64], 0);
+static mut HEADER_SECOND: u64 = u64::MAX;
+static mut HEADER_NETWORK: Option<sunlight_networkd::NetworkPanelSummary> = None;
 
-    let now_min = ts / 60;
-    if now_min == CACHE_MIN && CACHE_LEN != 0 {
-        return (CACHE_BUF, CACHE_LEN);
+unsafe fn refresh_header(telemetry: &mut Option<Telemetry>) -> bool {
+    let now = monotonic_millis();
+    let second = now / 1000;
+    if HEADER_SECOND == second {
+        return false;
     }
-
+    HEADER_SECOND = second;
     let mut buf = [0u8; 64];
-    let mut n = 0usize;
-
-    // CPU usage (placeholder until scheduler accounting lands — matches the old
-    // banner's behaviour).
-    let cpu_percent: u64 = 15;
-    n += copy_into(&mut buf[n..], b"CPU ");
-    n += fmt_u64(&mut buf[n..], cpu_percent);
-    n += copy_into(&mut buf[n..], b"% RAM ");
-
-    let info = sysinfo();
-    let total = info.total_ram_kb.max(1);
-    let ram_percent = (info.used_ram_kb * 100) / total;
-    n += fmt_u64(&mut buf[n..], ram_percent);
-    n += copy_into(&mut buf[n..], b"%  ");
-
-    // Local time via tz service if available (sub-phase 9 refactor)
-    let (clock_len, used_tz) = try_local_clock(&mut buf[n..], ts);
-    n += clock_len;
-    if !used_tz {
-        // fallback already wrote UTC style inside try_ or here
+    let mut n = copy_into(&mut buf, b"CPU ");
+    if let Some(telem) = telemetry.as_mut() {
+        telem.poll();
+        let snap = telem.snapshot();
+        let fresh =
+            snap.sample_time_ns != 0 && now.saturating_sub(snap.sample_time_ns / 1_000_000) <= 3000;
+        if fresh && snap.cpu_capacity_ns != 0 {
+            n += fmt_u64(&mut buf[n..], (snap.cpu_used_bp / 100) as u64);
+            n += copy_into(&mut buf[n..], b"%");
+        } else {
+            n += copy_into(&mut buf[n..], b"--");
+        }
+        n += copy_into(&mut buf[n..], b" | RAM ");
+        if fresh && snap.total_ram_kb != 0 {
+            n += fmt_u64(
+                &mut buf[n..],
+                snap.used_ram_kb
+                    .saturating_mul(100)
+                    .checked_div(snap.total_ram_kb)
+                    .unwrap_or(0)
+                    .min(100),
+            );
+            n += copy_into(&mut buf[n..], b"%");
+        } else {
+            n += copy_into(&mut buf[n..], b"--");
+        }
+    } else {
+        n += copy_into(&mut buf[n..], b"-- | RAM --");
     }
-    n += copy_into(&mut buf[n..], b" | eth0");
+    n += copy_into(&mut buf[n..], b" | ");
+    n += try_local_clock(&mut buf[n..], get_time_utc()).0;
+    // Reuse the desktop's typed networkd client; never infer connectivity from
+    // traffic counters. Failed requests discard the old state immediately.
+    if second % 2 == 0 {
+        HEADER_NETWORK = sunlight_networkd::NetworkClient::new().panel_summary().ok();
+    }
+    n += copy_into(&mut buf[n..], b" | NET ");
+    if let Some(net) =
+        HEADER_NETWORK.filter(|net| now.saturating_sub(net.captured_monotonic_time) <= 3000)
+    {
+        use sunlight_networkd::DerivedConnectionState;
+        n += copy_into(
+            &mut buf[n..],
+            match net.state {
+                DerivedConnectionState::Connected => b"up",
+                DerivedConnectionState::Configuring => b"config",
+                DerivedConnectionState::CableDisconnected => b"down",
+                DerivedConnectionState::Unavailable => b"none",
+                DerivedConnectionState::Error => b"--",
+            },
+        );
+    } else {
+        n += copy_into(&mut buf[n..], b"--");
+    }
+    HEADER = (buf, n);
+    true
+}
 
-    CACHE_BUF = buf;
-    CACHE_LEN = n;
-    CACHE_MIN = now_min;
-    (buf, n)
+fn utc_header_clock(dst: &mut [u8], ts: u64) -> usize {
+    let (_, _, _, hour, minute, second) = sunlight_tui::fmt::unix_to_datetime(ts);
+    let (hour, minute, second) = (hour as u8, minute as u8, second as u8);
+    let text = [
+        b'0' + hour / 10,
+        b'0' + hour % 10,
+        b':',
+        b'0' + minute / 10,
+        b'0' + minute % 10,
+        b':',
+        b'0' + second / 10,
+        b'0' + second % 10,
+        b' ',
+        b'U',
+        b'T',
+        b'C',
+    ];
+    copy_into(dst, &text)
 }
 
 /// Attempt to get local time+abbr from "tz" service. Returns (bytes_written, used_tz).
 /// On failure falls back to writing a UTC clock string (using existing fmt).
 unsafe fn try_local_clock(dst: &mut [u8], _ts: u64) -> (usize, bool) {
-    if let Some(tz_cap) = nameserver_lookup("tz") {
+    if let Some(tz_cap) = sunlight_ipc::nameserver_lookup_timeout("tz", 10) {
         let req = IpcMsg::with_label(TzMsg::GET_LOCAL_TIME);
         let Ok(reply) = ipc_call_timeout(tz_cap, req, TZ_IPC_TIMEOUT_MS) else {
-            return (0, false);
+            let len = utc_header_clock(dst, _ts);
+            return (len, false);
         };
         if reply.label == TzMsg::REPLY && reply.word_count >= 1 {
             // unpack word(0)
             let w0 = reply.words[0];
             let hour = ((w0 >> 24) & 0xff) as u8;
             let minute = ((w0 >> 16) & 0xff) as u8;
+            let second = ((w0 >> 8) & 0xff) as u8;
+            if hour > 23 || minute > 59 || second > 59 {
+                let len = utc_header_clock(dst, _ts);
+                return (len, false);
+            }
             // abbr from word(3) low 8 bytes
             let abw = if reply.word_count > 3 {
                 reply.words[3]
@@ -3357,7 +3416,7 @@ unsafe fn try_local_clock(dst: &mut [u8], _ts: u64) -> (usize, bool) {
                 }
                 abbr[i] = b;
             }
-            // write HH:MM ABBR
+            // write HH:MM:SS ABBR
             let mut p = 0usize;
             dst[p] = b'0' + hour / 10;
             p += 1;
@@ -3368,6 +3427,12 @@ unsafe fn try_local_clock(dst: &mut [u8], _ts: u64) -> (usize, bool) {
             dst[p] = b'0' + minute / 10;
             p += 1;
             dst[p] = b'0' + minute % 10;
+            p += 1;
+            dst[p] = b':';
+            p += 1;
+            dst[p] = b'0' + second / 10;
+            p += 1;
+            dst[p] = b'0' + second % 10;
             p += 1;
             dst[p] = b' ';
             p += 1;
@@ -3382,7 +3447,7 @@ unsafe fn try_local_clock(dst: &mut [u8], _ts: u64) -> (usize, bool) {
         }
     }
     // fallback UTC using tui fmt (no abbr change)
-    let len = sunlight_tui::fmt::fmt_clock(dst, sunlight_ipc::get_time_utc());
+    let len = utc_header_clock(dst, sunlight_ipc::get_time_utc());
     (len, false)
 }
 

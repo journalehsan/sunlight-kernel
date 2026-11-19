@@ -85,7 +85,8 @@ pub fn load_program(
     parent_psp: Option<u16>,
     environment_segment: u16,
 ) -> Result<LoadedProgram, LoaderError> {
-    match classify_executable(image)? {
+    let saved_arena = arena.clone();
+    let result = match classify_executable(image)? {
         ExecutableFormat::Com => load_com_in_arena(
             memory,
             arena,
@@ -102,7 +103,12 @@ pub fn load_program(
             parent_psp,
             environment_segment,
         ),
+    };
+    if result.is_err() {
+        *arena = saved_arena;
     }
+    arena.sync_mcbs(memory);
+    result
 }
 
 pub fn build_psp(
@@ -143,8 +149,15 @@ fn load_com_in_arena(
     parent_psp: Option<u16>,
     environment_segment: u16,
 ) -> Result<LoadedProgram, LoaderError> {
+    let maximum = PROCESS_BYTES - COM_OFFSET as usize;
+    if image.len() > maximum {
+        return Err(LoaderError::ProgramTooLarge {
+            size: image.len(),
+            maximum,
+        });
+    }
     let bytes = COM_OFFSET as usize + image.len();
-    let paragraphs = paragraphs_for(bytes)?;
+    let paragraphs = paragraphs_for(bytes)?.max(0x1000);
     let psp_segment = allocate_process(arena, paragraphs)?;
     let end_segment = psp_segment
         .checked_add(paragraphs)
@@ -180,22 +193,36 @@ fn load_mz_in_arena(
 ) -> Result<LoadedProgram, LoaderError> {
     let header = parse_mz(image)?;
     let image_paragraphs = paragraphs_for(header.image_size)?;
-    let requested_paragraphs = PSP_PARAGRAPHS
-        .checked_add(image_paragraphs)
-        .and_then(|value| value.checked_add(header.e_minalloc))
-        .ok_or(LoaderError::ProgramTooLarge {
-            size: header.image_size,
-            maximum: MEMORY_SIZE,
-        })?;
-    let paragraphs = requested_paragraphs;
+    let required =
+        u32::from(PSP_PARAGRAPHS) + u32::from(image_paragraphs) + u32::from(header.e_minalloc);
+    let largest = arena.largest_available();
+    if u32::from(largest) < required {
+        return Err(LoaderError::InsufficientMemory {
+            // The error's legacy 16-bit diagnostic field saturates; allocation
+            // arithmetic and segment calculations never truncate.
+            requested: u16::try_from(required).unwrap_or(u16::MAX),
+            largest,
+        });
+    }
+    let high_load = header.e_minalloc == 0 && header.e_maxalloc == 0;
+    let maximum = if high_load {
+        u32::MAX
+    } else {
+        u32::from(PSP_PARAGRAPHS)
+            + u32::from(image_paragraphs)
+            + u32::from(header.e_maxalloc.max(header.e_minalloc))
+    };
+    let paragraphs = u16::try_from(maximum.min(u32::from(largest)))
+        .map_err(|_| LoaderError::InvalidInitialStack)?;
+    // Validate the relocation table before reserving or writing guest memory.
+    let relocation_entries = relocations(image, header)?;
     let psp_segment = allocate_process(arena, paragraphs)?;
-    let load_segment =
-        psp_segment
-            .checked_add(PSP_PARAGRAPHS)
-            .ok_or(LoaderError::ProgramTooLarge {
-                size: header.image_size,
-                maximum: MEMORY_SIZE,
-            })?;
+    let load_segment = if high_load {
+        psp_segment.checked_add(paragraphs - image_paragraphs)
+    } else {
+        psp_segment.checked_add(PSP_PARAGRAPHS)
+    }
+    .ok_or(LoaderError::InvalidInitialStack)?;
     let end_segment = psp_segment
         .checked_add(paragraphs)
         .ok_or(LoaderError::ProgramTooLarge {
@@ -215,7 +242,7 @@ fn load_mz_in_arena(
         0,
         &image[header.header_size..header.logical_size],
     )?;
-    for (index, relocation) in relocations(image, header)?.into_iter().enumerate() {
+    for (index, relocation) in relocation_entries.into_iter().enumerate() {
         let target_segment = load_segment.checked_add(relocation.segment).ok_or(
             MzError::RelocationOutsideImage {
                 index: index as u16,
@@ -241,8 +268,7 @@ fn load_mz_in_arena(
     }
     let cs_linear = header.e_cs as usize * 16 + header.e_ip as usize;
     let ss_linear = header.e_ss as usize * 16 + header.e_sp as usize;
-    let allocation_bytes =
-        (image_paragraphs as usize + header.e_minalloc as usize).saturating_mul(16);
+    let allocation_bytes = (end_segment as usize - load_segment as usize) * 16;
     // A DOS stack pointer may designate the first byte immediately after the
     // allocated stack area. FPC's large-model startup uses that conventional
     // top-of-stack form, so equality is valid here.
@@ -362,7 +388,10 @@ mod tests {
         let mut arena = DosMemoryArena::new();
         let program = load_program(&mut memory, &mut arena, &mz_image(), b"", None, 0).unwrap();
         assert_eq!(program.format, ExecutableFormat::Mz);
-        assert_eq!(program.load_segment, program.psp_segment + 0x10);
+        assert_eq!(
+            program.load_segment,
+            program.psp_segment + program.paragraphs - 2
+        );
         assert_eq!(
             memory.read_u16(program.load_segment, 0),
             0x1234 + program.load_segment
@@ -376,12 +405,14 @@ mod tests {
     }
 
     #[test]
-    fn mz_loader_keeps_unrequested_conventional_memory_available_for_children() {
+    fn mz_loader_keeps_bounded_requests_available_for_children() {
         let mut memory = GuestMemory::new();
         let mut arena = DosMemoryArena::new();
-        let program = load_program(&mut memory, &mut arena, &mz_image(), b"", None, 0).unwrap();
+        let mut image = mz_image();
+        image[12..14].copy_from_slice(&1u16.to_le_bytes());
+        let program = load_program(&mut memory, &mut arena, &image, b"", None, 0).unwrap();
 
-        assert_eq!(program.paragraphs, 0x12);
+        assert_eq!(program.paragraphs, 0x13);
         assert!(arena.largest_available() > 0x8000);
     }
 
@@ -396,5 +427,100 @@ mod tests {
         assert_eq!(memory.read_u16(0x2000, 0x2c), 0x2200);
         assert_eq!(memory.read_u8(0x2000, 0x18), 0);
         assert_eq!(memory.read_u8(0x2000, 0x80), 1);
+    }
+    #[test]
+    fn mz_allocation_limits_and_high_loading_are_bounded() {
+        for (min, max, expected) in [
+            (0u16, 1u16, 0x13),
+            (3, 0, 0x15),
+            (3, 3, 0x15),
+            (1, 0xffff, 0x9000),
+            (1, 0x9000, 0x9000),
+            (0, 0, 0x9000),
+        ] {
+            let mut image = mz_image();
+            image[10..12].copy_from_slice(&min.to_le_bytes());
+            image[12..14].copy_from_slice(&max.to_le_bytes());
+            let mut memory = GuestMemory::new();
+            let mut arena = DosMemoryArena::new();
+            let program = load_program(&mut memory, &mut arena, &image, b"", None, 0).unwrap();
+            assert_eq!(program.paragraphs, expected, "min={min} max={max}");
+            let end = program.psp_segment + expected;
+            assert_eq!(memory.read_u16(program.psp_segment, 2), end);
+            assert_eq!(
+                memory.read_u16(program.psp_segment - 1, 1),
+                program.psp_segment
+            );
+            assert_eq!(memory.read_u16(program.psp_segment - 1, 3), expected);
+            assert!((program.cpu.ss as usize * 16 + program.cpu.sp as usize) <= end as usize * 16);
+            assert!(arena.owns_range(program.psp_segment, program.load_segment, 0, 32));
+            arena.free_owner(program.psp_segment);
+            assert_eq!(arena.largest_available(), 0x9000);
+        }
+    }
+
+    #[test]
+    fn failed_mz_loads_restore_arena_and_metadata() {
+        let mut memory = GuestMemory::new();
+        let mut arena = DosMemoryArena::new();
+        let prior = arena.blocks().to_vec();
+        let mut image = mz_image();
+        image[10..12].copy_from_slice(&0x9000u16.to_le_bytes());
+        assert!(matches!(
+            load_program(&mut memory, &mut arena, &image, b"", None, 0),
+            Err(LoaderError::InsufficientMemory { .. })
+        ));
+        assert_eq!(arena.blocks(), prior.as_slice());
+        image[10..12].copy_from_slice(&0u16.to_le_bytes());
+        image[14..16].copy_from_slice(&0xffffu16.to_le_bytes());
+        assert_eq!(
+            load_program(&mut memory, &mut arena, &image, b"", None, 0),
+            Err(LoaderError::InvalidInitialStack)
+        );
+        assert_eq!(arena.blocks(), prior.as_slice());
+        assert_eq!(memory.read_u16(0xfff, 1), 0);
+        assert_eq!(memory.read_u16(0xfff, 3), 0x9000);
+    }
+
+    #[test]
+    fn repeated_com_loads_keep_stack_and_environment_separate() {
+        let mut memory = GuestMemory::new();
+        let mut arena = DosMemoryArena::new();
+        let env = arena.allocate(0x40, 0x1234).unwrap();
+        memory.write_u16(env, 0x3fe, 0xbeef);
+        for _ in 0..32 {
+            let program =
+                load_program(&mut memory, &mut arena, &[0xcd, 0x20], b"", None, env).unwrap();
+            assert_eq!(program.paragraphs, 0x1000);
+            assert!(arena.owns_range(program.psp_segment, program.cpu.ss, program.cpu.sp, 2));
+            assert_eq!(memory.read_u16(env, 0x3fe), 0xbeef);
+            arena.free_owner(program.psp_segment);
+        }
+        arena.free(env, 0x1234).unwrap();
+        assert_eq!(arena.blocks().len(), 1);
+        assert_eq!(arena.largest_available(), 0x9000);
+    }
+    #[test]
+    fn initial_stack_uses_granted_memory_and_oversized_requests_fail_cleanly() {
+        let mut memory = GuestMemory::new();
+        let mut arena = DosMemoryArena::new();
+        let mut image = mz_image();
+        image[12..14].copy_from_slice(&1u16.to_le_bytes());
+        image[14..16].copy_from_slice(&2u16.to_le_bytes());
+        image[16..18].copy_from_slice(&16u16.to_le_bytes());
+        let program = load_program(&mut memory, &mut arena, &image, b"", None, 0).unwrap();
+        assert_eq!(program.cpu.ss, program.load_segment + 2);
+        arena.free_owner(program.psp_segment);
+        image[10..12].copy_from_slice(&0xffffu16.to_le_bytes());
+        assert!(matches!(
+            load_program(&mut memory, &mut arena, &image, b"", None, 0),
+            Err(LoaderError::InsufficientMemory { .. })
+        ));
+        let too_big = alloc::vec![0; 0xff01];
+        assert!(matches!(
+            load_program(&mut memory, &mut arena, &too_big, b"", None, 0),
+            Err(LoaderError::ProgramTooLarge { .. })
+        ));
+        assert_eq!(arena.largest_available(), 0x9000);
     }
 }

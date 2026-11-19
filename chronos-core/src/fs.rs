@@ -248,10 +248,31 @@ impl DosEntry {
     }
 }
 
+/// Allocation figures supplied by the filesystem backing a DOS drive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DriveSpace {
+    pub sectors_per_cluster: u64,
+    pub free_clusters: u64,
+    pub bytes_per_sector: u64,
+    pub total_clusters: u64,
+}
+
+impl DriveSpace {
+    pub(crate) fn dos_registers(self) -> Option<(u16, u16, u16, u16)> {
+        let ax = u16::try_from(self.sectors_per_cluster).ok()?;
+        let bx = u16::try_from(self.free_clusters).ok()?;
+        let cx = u16::try_from(self.bytes_per_sector).ok()?;
+        let dx = u16::try_from(self.total_clusters).ok()?;
+        // Do not rescale, saturate, or multiply the backend's allocation figures.
+        (ax != 0 && ax != u16::MAX && cx != 0 && bx <= dx).then_some((ax, bx, cx, dx))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MountedDrive {
     pub access: DriveAccess,
     pub current_directory: String,
+    space: Option<DriveSpace>,
     /// Read-only Program + Dependencies content.  `C:` uses this map; direct
     /// launches may use it with an empty persistent overlay.
     base: BTreeMap<String, DosEntry>,
@@ -264,6 +285,7 @@ impl MountedDrive {
         Self {
             access,
             current_directory: String::new(),
+            space: None,
             base: BTreeMap::new(),
             overlay: BTreeMap::new(),
             tombstones: BTreeSet::new(),
@@ -310,6 +332,7 @@ impl MountedDrive {
         let Some(entry) = self.base.get(path) else {
             return Err(DosError::FileNotFound);
         };
+        self.space = None;
         self.overlay.insert(path.to_string(), entry.clone());
         Ok(())
     }
@@ -343,6 +366,23 @@ impl DriveTable {
         if let Some(mounted) = self.drives.get_mut(&drive) {
             mounted.access = access;
         }
+    }
+
+    /// Publish a current snapshot for the guest volume, or clear it with
+    /// `None`. Backends must refresh it after external allocation changes.
+    /// Changes to the internal file maps invalidate the snapshot automatically.
+    pub fn set_drive_space(
+        &mut self,
+        drive: DosDrive,
+        space: Option<DriveSpace>,
+    ) -> Result<(), DosError> {
+        let mounted = self.drives.get_mut(&drive).ok_or(DosError::InvalidDrive)?;
+        mounted.space = space;
+        Ok(())
+    }
+
+    pub fn drive_space(&self, drive: DosDrive) -> Option<DriveSpace> {
+        self.drives.get(&drive)?.space
     }
 
     pub fn mounted_count(&self) -> u8 {
@@ -423,6 +463,7 @@ impl DriveTable {
                 return Err(DosError::PathNotFound);
             }
         }
+        mounted.space = None;
         mounted.base.insert(path, entry);
         Ok(())
     }
@@ -435,6 +476,7 @@ impl DriveTable {
     ) -> Result<(), DosError> {
         let path = self.parse_external_path(drive, path)?;
         let mounted = self.drives.get_mut(&drive).ok_or(DosError::InvalidDrive)?;
+        mounted.space = None;
         mounted.overlay.insert(path, entry);
         Ok(())
     }
@@ -480,6 +522,7 @@ impl DriveTable {
         if path.relative.is_empty() {
             return Err(DosError::AccessDenied);
         }
+        mounted.space = None;
         mounted.tombstones.remove(&path.relative);
         mounted.overlay.insert(
             path.relative.clone(),
@@ -520,6 +563,7 @@ impl DriveTable {
             .overlay
             .get_mut(&path.relative)
             .ok_or(DosError::FileNotFound)?;
+        mounted.space = None;
         if truncate_at_position {
             entry.data.truncate(position);
         }
@@ -553,6 +597,7 @@ impl DriveTable {
         if entry.is_directory {
             return Err(DosError::AccessDenied);
         }
+        mounted.space = None;
         mounted.overlay.remove(&path.relative);
         if mounted.base.contains_key(&path.relative) {
             mounted.tombstones.insert(path.relative.clone());
@@ -570,6 +615,7 @@ impl DriveTable {
         if path.relative.is_empty() || mounted.visible_entry(&path.relative).is_some() {
             return Err(DosError::AccessDenied);
         }
+        mounted.space = None;
         mounted.tombstones.remove(&path.relative);
         mounted
             .overlay
@@ -601,6 +647,7 @@ impl DriveTable {
         {
             return Err(DosError::AccessDenied);
         }
+        mounted.space = None;
         mounted.overlay.remove(&path.relative);
         if mounted.base.contains_key(&path.relative) {
             mounted.tombstones.insert(path.relative.clone());
@@ -628,6 +675,7 @@ impl DriveTable {
             return Err(DosError::AccessDenied);
         }
         let copy = entry.clone();
+        mounted.space = None;
         mounted.overlay.insert(new.relative.clone(), copy);
         mounted.overlay.remove(&old.relative);
         if mounted.base.contains_key(&old.relative) {
@@ -683,7 +731,7 @@ impl DriveTable {
             directory.relative.clone() + "/"
         };
         let mut results = BTreeMap::<String, DirectoryEntry>::new();
-        for (path, entry) in mounted.base.iter().chain(mounted.overlay.iter()) {
+        for path in mounted.base.keys().chain(mounted.overlay.keys()) {
             if mounted.is_tombstoned(path) || !path.starts_with(&prefix) {
                 continue;
             }
@@ -691,7 +739,11 @@ impl DriveTable {
             if suffix.is_empty() || suffix.contains('/') {
                 continue;
             }
-            if !attributes_visible(entry.attributes, attribute_mask)
+            let Some(entry) = mounted.visible_entry(path) else {
+                continue;
+            };
+            if !is_short_search_name(suffix)
+                || !attributes_visible(entry.attributes, attribute_mask)
                 || !wildcard_matches(pattern, suffix.as_bytes())
             {
                 continue;
@@ -871,6 +923,19 @@ fn normalize_wildcard(pattern: &[u8]) -> Vec<u8> {
         .iter()
         .map(|byte| byte.to_ascii_uppercase())
         .collect()
+}
+
+// The map has no short-name aliases. Only return names that fit the classic
+// DOS directory record without truncation or alias invention.
+fn is_short_search_name(name: &str) -> bool {
+    let (stem, extension) = name.split_once('.').unwrap_or((name, ""));
+    !stem.is_empty()
+        && stem.len() <= 8
+        && extension.len() <= 3
+        && !extension.contains('.')
+        && !name.ends_with('.')
+        && !name.bytes().any(|byte| matches!(byte, b'*' | b'?' | b'[' | b']'))
+        && !is_reserved_device(name.as_bytes())
 }
 
 fn attributes_visible(attributes: u8, mask: u16) -> bool {

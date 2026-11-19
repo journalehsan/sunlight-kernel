@@ -1,0 +1,21 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.13s
+     Running `target/x86_64-unknown-linux-gnu/debug/examples/dos_probe target/dos-navigator/dn151/DN.PRG`
+HOST PROBE ONLY: target/dos-navigator/dn151/DN.PRG (109613 bytes)
+state=Trapped(UnsupportedInterrupt { interrupt: 33, function: 56 }) retired=3401904 CS:IP=35a6:323b
+INT 34 vector=3c55:2644
+INT 35 vector=3c55:2644
+INT 36 vector=3c55:2644
+INT 37 vector=3c55:2644
+INT 38 vector=3c55:2644
+INT 39 vector=3c55:2644
+INT 3a vector=3c55:2644
+INT 3b vector=3c55:2644
+INT 3c vector=3c55:2644
+INT 3d vector=3c55:2644
+INT 3e vector=3c55:2314
+INT 3f vector=3c55:0104

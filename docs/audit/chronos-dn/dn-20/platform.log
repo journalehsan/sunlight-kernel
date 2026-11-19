@@ -1,0 +1,38 @@
+══════════════════════════════════════
+  SunlightOS — Phase 3.0 Boot Gate
+══════════════════════════════════════
+[PMM] 155/434 MiB free
+[TIME] PIT calibration mode=2
+rtc: decoded_utc=
+timezone: zone=
+[VFS]  Registered as 'vfs'
+[VFS-RPC] userspace dispatch injection rejected
+[VFS-RPC] negotiation handler OK dispatch=disabled
+[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture
+[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture
+[VFS-RPC] registration policy lifecycle OK transport=fixture
+[VFS-RPC] authenticated kernel registration snapshot OK transport=copy
+[VFS]  Test open /etc/motd
+[VFS]  Test read /etc/motd
+[VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  Fstat OK
+[VFS]  ENOENT test OK
+[VFS]  Bad handle test OK
+[VFS]  Native stat/mkdir RAMFS OK
+[VFS]  Stat OK
+[SunlightOS] Foundation Complete
+[USB-MOUSE] boot mouse ready
+[VFS-RPC] authenticated registration status OK transport=copy
+[VFS-RPC] live mounted namespace pins shared with legacy handlers OK transport=fixture
+[VFS-RPC] boot root policy installed caller=1 epoch=1 transport=copy
+[VFS-RPC] native root stat caller resume/result copy OK transport=copy
+[VFS-RPC] root stat parked caller=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy
+[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK
+[VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK
+[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture
+[init] VFS namespace ready before service spawn
+══════════════════════════════════════
+✓ Phase 3.0 gate PASSED

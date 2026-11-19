@@ -19,3 +19,17 @@ mkdir -p "$(dirname "$OUT")"
 "$PPC8086" -Tmsdos -Pi8086 -Mtp -WmLarge -Wh -Xs -O1 \
   -Fu"$RTL" -FD/usr/bin -XP -o"$OUT" "$ROOT/guest/sunshell/sunshell.pas"
 rm -f "$(dirname "$OUT")/sunshell.a"
+
+
+# The shell uses static storage and must leave conventional RAM for EXEC.
+# Encode that policy in the MZ header (equivalent to EXEMOD /MAX:MINALLOC).
+python3 - "$OUT" <<'PYHEADER'
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+image = bytearray(path.read_bytes())
+if image[:2] != b"MZ":
+    raise SystemExit("expected MZ shell executable")
+image[12:14] = image[10:12]
+path.write_bytes(image)
+PYHEADER

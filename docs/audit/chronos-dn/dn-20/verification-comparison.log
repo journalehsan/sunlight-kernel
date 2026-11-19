@@ -1,0 +1,4 @@
+direct: decompressed traces are byte-identical
+direct: differing image pixels: 0 (0)
+launcher: decompressed traces are byte-identical
+launcher: differing image pixels: 0 (0)

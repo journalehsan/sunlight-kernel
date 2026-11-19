@@ -30,7 +30,7 @@ pub enum ArenaError {
 }
 
 /// A bounded paragraph allocator that models the DOS process arena without
-/// exposing raw MCBs to a guest yet.
+/// trusting guest-writable MCBs. Each split reserves one MCB paragraph.
 #[derive(Clone, Debug)]
 pub struct DosMemoryArena {
     blocks: Vec<MemoryBlock>,
@@ -120,8 +120,8 @@ impl DosMemoryArena {
             self.blocks.insert(
                 index + 1,
                 MemoryBlock {
-                    segment: segment + paragraphs,
-                    paragraphs: block.paragraphs - paragraphs,
+                    segment: segment + paragraphs + 1,
+                    paragraphs: block.paragraphs - paragraphs - 1,
                     owner_psp: None,
                     state: BlockState::Free,
                 },
@@ -189,12 +189,12 @@ impl DosMemoryArena {
             return Ok(());
         }
         if paragraphs < block.paragraphs {
-            let released = block.paragraphs - paragraphs;
+            let released = block.paragraphs - paragraphs - 1;
             self.blocks[index].paragraphs = paragraphs;
             self.blocks.insert(
                 index + 1,
                 MemoryBlock {
-                    segment: segment + paragraphs,
+                    segment: segment + paragraphs + 1,
                     paragraphs: released,
                     owner_psp: None,
                     state: BlockState::Free,
@@ -206,16 +206,21 @@ impl DosMemoryArena {
         let additional = paragraphs - block.paragraphs;
         let Some(next) = self.blocks.get(index + 1).copied() else {
             return Err(ArenaError::InsufficientMemory {
-                largest: self.largest_available(),
+                largest: block.paragraphs,
             });
         };
-        if next.state != BlockState::Free || next.paragraphs < additional {
+        if next.state != BlockState::Free || next.paragraphs + 1 < additional {
             return Err(ArenaError::InsufficientMemory {
-                largest: self.largest_available(),
+                largest: block.paragraphs
+                    + if next.state == BlockState::Free {
+                        next.paragraphs + 1
+                    } else {
+                        0
+                    },
             });
         }
         self.blocks[index].paragraphs = paragraphs;
-        if next.paragraphs == additional {
+        if next.paragraphs + 1 == additional {
             self.blocks.remove(index + 1);
         } else {
             self.blocks[index + 1].segment += additional;
@@ -255,6 +260,24 @@ impl DosMemoryArena {
         })
     }
 
+    /// Publish the shadow arena as a DOS MCB chain; guest writes never grant ownership.
+    pub fn sync_mcbs(&self, memory: &mut crate::GuestMemory) {
+        for (index, block) in self.blocks.iter().enumerate() {
+            let mcb = block.segment - 1;
+            memory.write_u8(
+                mcb,
+                0,
+                if index + 1 == self.blocks.len() {
+                    b'Z'
+                } else {
+                    b'M'
+                },
+            );
+            memory.write_u16(mcb, 1, block.owner_psp.unwrap_or(0));
+            memory.write_u16(mcb, 3, block.paragraphs);
+        }
+    }
+
     fn coalesce(&mut self) {
         let mut index = 0;
         while index + 1 < self.blocks.len() {
@@ -262,9 +285,9 @@ impl DosMemoryArena {
             let right = self.blocks[index + 1];
             if left.state == BlockState::Free
                 && right.state == BlockState::Free
-                && left.segment + left.paragraphs == right.segment
+                && left.segment + left.paragraphs + 1 == right.segment
             {
-                self.blocks[index].paragraphs += right.paragraphs;
+                self.blocks[index].paragraphs += right.paragraphs + 1;
                 self.blocks.remove(index + 1);
             } else {
                 index += 1;
@@ -282,7 +305,7 @@ mod tests {
         let mut arena = DosMemoryArena::new();
         let first = arena.allocate(0x20, 0x1000).unwrap();
         let second = arena.allocate(0x20, 0x1000).unwrap();
-        assert_eq!(second, first + 0x20);
+        assert_eq!(second, first + 0x21);
         arena.resize(first, 0x10, 0x1000).unwrap();
         arena.resize(first, 0x20, 0x1000).unwrap();
         arena.free(first, 0x1000).unwrap();
@@ -298,5 +321,48 @@ mod tests {
         assert_eq!(arena.free(block, 0x2222), Err(ArenaError::InvalidOwner));
         arena.free(block, 0x1111).unwrap();
         assert_eq!(arena.free(block, 0x1111), Err(ArenaError::DoubleFree));
+    }
+    #[test]
+    fn fragmentation_resize_failure_and_mcb_chain_preserve_ownership() {
+        let mut arena = DosMemoryArena::new();
+        let first = arena.allocate(0x20, 0x1111).unwrap();
+        let second = arena.allocate(0x20, 0x2222).unwrap();
+        let third = arena.allocate(0x20, 0x3333).unwrap();
+        arena.free(second, 0x2222).unwrap();
+        let saved = arena.blocks().to_vec();
+        assert_eq!(
+            arena.resize(first, 0x42, 0x1111),
+            Err(ArenaError::InsufficientMemory { largest: 0x41 })
+        );
+        assert_eq!(arena.blocks(), saved.as_slice());
+        assert_eq!(
+            arena.resize(third, 1, 0x1111),
+            Err(ArenaError::InvalidOwner)
+        );
+        assert!(arena.allocate(0xffff, 0x1111).is_err());
+        assert_eq!(arena.blocks(), saved.as_slice());
+        arena.resize(first, 0x41, 0x1111).unwrap();
+        assert_eq!(arena.blocks()[1].segment, third);
+        arena.resize(first, 0x10, 0x1111).unwrap();
+        let mut memory = crate::GuestMemory::new();
+        arena.sync_mcbs(&mut memory);
+        for (i, block) in arena.blocks().iter().enumerate() {
+            assert_eq!(memory.read_u16(block.segment - 1, 3), block.paragraphs);
+            assert_eq!(
+                memory.read_u16(block.segment - 1, 1),
+                block.owner_psp.unwrap_or(0)
+            );
+            assert_eq!(
+                memory.read_u8(block.segment - 1, 0),
+                if i + 1 == arena.blocks().len() {
+                    b'Z'
+                } else {
+                    b'M'
+                }
+            );
+        }
+        arena.free_owner(0x1111);
+        arena.free_owner(0x3333);
+        assert_eq!(arena.largest_available(), 0x9000);
     }
 }

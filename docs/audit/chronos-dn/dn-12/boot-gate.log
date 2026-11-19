@@ -1,0 +1,15 @@
+Command: bash tools/test.sh (default phase3.0)
+Exit status: 101; QEMU was not launched
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: sunlight-net@0.2.8688-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+warning: `sunlight-ipc` (lib) generated 5 warnings
+   Compiling sunlight-fs v0.2.8688-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+error: could not write output to /home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/sunlight_kernel-939158af602425a1.95botxp7x4r02d4r2p2zgk14c.1bd3q8g.rcgu.o: No space left on device
+
+error: could not compile `sunlight-kernel` (bin "sunlight-kernel") due to 1 previous error

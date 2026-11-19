@@ -1,0 +1,1301 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+warning: unexpected `cfg` condition value: `sunlightos`
+ --> sunlight-libc/src/lib.rs:3:33
+  |
+3 |     all(feature = "native-std", target_os = "sunlightos"),
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:19:43
+   |
+19 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:32:43
+   |
+32 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:35:33
+   |
+35 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:43:33
+   |
+43 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:50:43
+   |
+50 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:55:45
+   |
+55 | #[cfg(any(test, all(feature = "native-std", target_os = "sunlightos")))]
+   |                                             ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:64:43
+   |
+64 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:68:43
+   |
+68 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:71:43
+   |
+71 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:74:43
+   |
+74 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:79:35
+   |
+79 | #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:82:35
+   |
+82 | #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:91:43
+   |
+91 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:100:43
+    |
+100 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:991:43
+    |
+991 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:994:33
+    |
+994 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:996:33
+    |
+996 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:999:33
+    |
+999 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-libc/src/lib.rs:1002:33
+     |
+1002 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-libc/src/lib.rs:1005:33
+     |
+1005 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-libc/src/lib.rs:1008:33
+     |
+1008 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/temp.rs:60:44
+   |
+60 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:680:44
+    |
+680 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:689:44
+    |
+689 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:698:44
+    |
+698 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:715:44
+    |
+715 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:787:29
+    |
+787 |     any(target_os = "none", target_os = "sunlightos")
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/env.rs:65:33
+   |
+65 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/errno.rs:55:44
+   |
+55 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+ --> sunlight-libc/src/fd.rs:7:36
+  |
+7 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/fd.rs:33:36
+   |
+33 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/fd.rs:59:36
+   |
+59 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:35:27
+   |
+35 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:40:27
+   |
+40 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:48:27
+   |
+48 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:52:27
+   |
+52 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:56:27
+   |
+56 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:71:27
+   |
+71 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:82:27
+   |
+82 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:86:27
+   |
+86 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:93:27
+   |
+93 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/termios.rs:100:27
+    |
+100 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:141:44
+    |
+141 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:158:44
+    |
+158 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:174:44
+    |
+174 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:191:44
+    |
+191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:207:44
+    |
+207 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:119:29
+    |
+119 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:268:29
+    |
+268 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:284:29
+    |
+284 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:872:27
+    |
+872 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:877:27
+    |
+877 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:882:27
+    |
+882 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:887:27
+    |
+887 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:155:44
+    |
+155 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:167:44
+    |
+167 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:179:44
+    |
+179 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:191:44
+    |
+191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:206:44
+    |
+206 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:221:44
+    |
+221 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:484:27
+    |
+484 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:532:27
+    |
+532 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:557:44
+    |
+557 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:571:44
+    |
+571 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:586:44
+    |
+586 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:604:44
+    |
+604 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:616:44
+    |
+616 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/time.rs:134:44
+    |
+134 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/time.rs:203:44
+    |
+203 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/time.rs:555:27
+    |
+555 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/tls.rs:58:7
+   |
+58 | #[cfg(target_os = "sunlightos")]
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/tls.rs:75:7
+   |
+75 | #[cfg(target_os = "sunlightos")]
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/tls.rs:90:11
+   |
+90 | #[cfg(not(target_os = "sunlightos"))]
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: field `terminal` is never read
+   --> sunlight-libc/src/sun_exec.rs:773:5
+    |
+768 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+773 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `key` and `value` are never read
+  --> sunlight-libc/src/tls.rs:21:16
+   |
+20 | pub(crate) struct Specific {
+   |                   -------- fields in this struct
+21 |     pub(crate) key: usize,
+   |                ^^^
+22 |     pub(crate) value: *mut u8,
+   |                ^^^^^
+   |
+   = note: `Specific` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: fields `control` and `previous` are never read
+  --> sunlight-libc/src/tls.rs:32:16
+   |
+31 | pub(crate) struct OnceFrame {
+   |                   --------- fields in this struct
+32 |     pub(crate) control: *const AtomicU32,
+   |                ^^^^^^^
+33 |     pub(crate) previous: *mut OnceFrame,
+   |                ^^^^^^^^
+
+warning: `sunlight-libc` (lib) generated 77 warnings
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2512:28
+     |
+2512 | #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                            ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2029:48
+     |
+2029 |                     #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `sunlight-ui` (lib) generated 2 warnings
+warning: `sunlight-ui` (lib test) generated 2 warnings (2 duplicates)
+warning: sun-font@0.2.8688-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/chronos_core-c05cd1aa3b9d963e)
+
+running 197 tests
+test cpu::tests::eight_bit_register_halves_preserve_the_other_half ... ok
+test arena::tests::ownership_and_double_free_are_rejected ... ok
+test arena::tests::allocation_free_resize_and_coalescing_are_bounded ... ok
+test arena::tests::fragmentation_resize_failure_and_mcb_chain_preserve_ownership ... ok
+test dos::tests::console_handle_enter_supplies_cr_lf_without_a_second_keypress ... ok
+test dos::tests::console_handle_reads_block_until_a_guest_key_arrives ... ok
+test dos::tests::country_selection_errors_and_set_do_not_write_buffer ... ok
+test dos::tests::absent_multiplex_executes_guest_iret_for_arbitrary_functions ... ok
+test dos::tests::directory_search_rejects_bad_paths_and_dta_without_partial_write ... ok
+test dos::tests::disk_space_uses_dos_selectors_without_changing_drive_or_flags ... ok
+test dos::tests::disk_space_rejects_unrepresentable_or_inconsistent_metadata ... ok
+test dos::tests::country_info_layout_boundaries_and_preserved_registers ... ok
+test dos::tests::drive_selection_and_find_first_write_a_dta_result ... ok
+test dos::tests::ctrl_break_flag_is_guest_local_and_unknown_functions_are_rejected ... ok
+test dos::tests::enhanced_keyboard_status_reports_and_preserves_the_next_event ... ok
+test dos::tests::date_and_time_are_guest_visible_but_not_settable ... ok
+test dos::tests::directory_search_filters_effective_entries_and_exhausts ... ok
+test dos::tests::duplicated_stdout_can_be_redirected_and_restored ... ok
+test dos::tests::directory_search_isolated_across_exec_and_discarded_on_exit ... ok
+test dos::tests::ioctl_reports_console_handles_as_character_devices ... ok
+test dos::tests::list_of_lists_exposes_a_bounded_terminating_sft_capacity_chain ... ok
+test dos::tests::extended_error_query_is_safe_and_reports_no_pending_error ... ok
+test dos::tests::file_services_use_handles_carry_and_guest_buffers ... ok
+test dos::tests::video_state_restore_of_graphics_bda_switches_the_model ... ok
+test dos::tests::unsupported_lfn_multiplex_returns_a_dos_error_without_trapping ... ok
+test dos::tests::parse_filename_builds_uppercase_fcb_and_reports_wildcards ... ok
+test dos::tests::video_state_save_writes_documented_header_and_bda ... ok
+test dos::tests::video_state_buffers_must_fit_guest_ram_and_fail_without_partial_writes ... ok
+test font::tests::guest_reads_bitmap_and_cannot_write_rom_through_aliases ... ok
+test font::tests::ivt_selectors_follow_guest_relocated_vectors ... ok
+test dos::tests::video_state_repeated_save_restore_is_deterministic ... ok
+test font::tests::rom_boundaries_do_not_reserve_adjacent_memory_or_dos_arena ... ok
+test fs::tests::aliases_are_case_insensitive_and_wildcards_are_deterministic ... ok
+test dos::tests::video_state_invalid_subfunction_and_save_restore_are_not_advertised ... ok
+test dos::tests::equipment_query_matches_bda_and_advertises_no_coprocessor ... ok
+test fs::tests::overlay_copy_up_tombstones_and_rename_preserve_base ... ok
+test fs::tests::path_preserves_drive_relative_and_absolute_meaning ... ok
+test font::tests::mode_changes_synchronize_bda_and_graphics_vector_repeatedly ... ok
+test fs::tests::rejects_root_escape_and_reserved_devices ... ok
+test dos::tests::video_state_size_query_reports_documented_blocks_and_preserves_state ... ok
+test io::tests::absent_coprocessor_latch_clear_is_narrow_and_does_not_touch_video ... ok
+test dos::tests::video_state_query_rejects_unmodeled_areas_and_reserved_bits ... ok
+test font::tests::unavailable_font_selectors_trap_without_fabricating_pointers ... ok
+test io::tests::all_8086_in_out_forms_route_once_and_preserve_flags_and_dx ... ok
+test io::tests::dac_write_and_read_sequences_commit_atomically_and_wrap ... ok
+test dos::tests::video_state_save_restore_round_trips_text_mode_state ... ok
+test io::tests::resetting_indices_discards_incomplete_writes_and_read_write_state_is_independent ... ok
+test io::tests::system_control_b_does_not_admit_neighbor_or_word_accesses ... ok
+test io::tests::unsupported_accesses_are_explicit_and_word_writes_are_prevalidated ... ok
+test io::tests::system_control_b_reads_back_only_controls ... ok
+test loader::tests::com_image_and_psp_are_initialized_at_the_conventional_offsets ... ok
+test loader::tests::failed_mz_loads_restore_arena_and_metadata ... ok
+test loader::tests::psp_carries_parent_environment_and_default_handles ... ok
+test memory::tests::graphics_damage_is_clamped_to_the_visible_a0000_range ... ok
+test loader::tests::mz_loader_places_psp_image_relocations_and_registers ... ok
+test loader::tests::mz_allocation_limits_and_high_loading_are_bounded ... ok
+test memory::tests::segment_address_uses_twenty_bit_wrapping ... ok
+test memory::tests::slices_are_bounded_and_wrap_safely ... ok
+test memory::tests::word_and_slice_damage_cover_crossed_rows_and_visible_end_safely ... ok
+test mouse::tests::buttons_focus_and_resize_preserve_coherent_latest_state ... ok
+test memory::tests::unchanged_pixels_do_not_advance_generation_or_recreate_damage ... ok
+test font::tests::guest_int_queries_all_supported_selectors_and_preserves_registers ... ok
+test memory::tests::mode_clear_marks_all_rows_without_allocating_per_pixel_damage ... ok
+test mouse::tests::focus_loss_releases_buttons_capture_without_moving ... ok
+test mouse::tests::malformed_or_odd_viewports_cannot_divide_by_zero_or_overflow ... ok
+test memory::tests::words_wrap_at_the_end_of_a_segment_and_memory ... ok
+test mouse::tests::outside_motion_is_ignored_until_capture_then_clamped_on_every_edge ... ok
+test mouse::tests::ranges_validate_clamp_and_allow_zero_width ... ok
+test loader::tests::loader_keeps_bounded_com_tails_and_rejects_mz_as_com ... ok
+test mouse::tests::separate_devices_are_isolated ... ok
+test mouse::tests::text_cell_centers_map_to_the_same_guest_cells ... ok
+test mouse::tests::reset_and_visibility_follow_documented_convention ... ok
+test loader::tests::mz_loader_keeps_bounded_requests_available_for_children ... ok
+test mouse::tests::viewport_edges_centers_scales_and_letterboxes_map_exactly ... ok
+test loader::tests::repeated_com_loads_keep_stack_and_environment_separate ... ok
+test mz::tests::parses_valid_header_and_last_page_sizes ... ok
+test mz::tests::rejects_malformed_and_extended_formats ... ok
+test mz::tests::validates_relocations_and_classifies_com ... ok
+test loader::tests::initial_stack_uses_granted_memory_and_oversized_requests_fail_cleanly ... ok
+test runtime::tests::accumulator_immediate_logic_instructions_are_available_on_the_8086_profile ... ok
+test runtime::tests::aam_base_zero_uses_divide_error_without_partial_state ... ok
+test runtime::tests::attribute_mode_switch_reports_a_slice_change_and_keeps_page_and_cursor ... ok
+test runtime::tests::arithmetic_flags_and_branches_are_not_approximated ... ok
+test runtime::tests::bios_cursor_and_single_page_contract ... ok
+test runtime::tests::bios_data_area_and_video_calls_share_the_b8000_model ... ok
+test runtime::tests::bios_scroll_down_copies_backwards_and_clips_to_window ... ok
+test runtime::tests::bios_mode_switching_updates_internal_bda_and_cursor_state ... ok
+test runtime::tests::bios_text_write_preserves_cursor_and_does_not_scroll ... ok
+test runtime::tests::bios_system_fallback_uses_the_guest_frame_and_preserves_registers ... ok
+test runtime::tests::blink_intensity_service_dispatches_through_guest_int_and_preserves_state ... ok
+test runtime::tests::bios_system_hook_can_handle_or_chain_to_saved_predecessor ... ok
+test runtime::tests::aam_honors_its_immediate_radix_and_byte_width ... ok
+test runtime::tests::dos_buffered_input_edits_and_completes_without_spinning ... ok
+test runtime::tests::dos_memory_interrupts_enforce_owner_and_report_growth_limit ... ok
+test runtime::tests::dword_mov_unaligned_memory_and_nested_interrupt_aliases ... ok
+test runtime::tests::dword_aliases_prefix_lifetime_and_dn_shift ... ok
+test runtime::tests::cwd_sign_extends_ax_without_changing_flags_or_other_state ... ok
+test runtime::tests::conditional_loops_decrement_cx_preserve_flags_and_wrap_zero ... ok
+test runtime::tests::documented_bh_is_accepted_and_other_bl_values_leave_state_unchanged ... ok
+test runtime::tests::cdq_sign_extends_eax_and_operand_override_is_consumed_once ... ok
+test runtime::tests::environment_exposes_guest_comspec_and_shell_paths ... ok
+test runtime::tests::bios_and_direct_guest_writes_use_the_shared_attribute_mode ... ok
+test runtime::tests::all_modrm_effective_address_forms_and_default_segments_work ... ok
+test runtime::tests::far_control_flow_and_iret_restore_full_machine_state ... ok
+test runtime::tests::graphics_child_exit_without_mode_restore_falls_back_to_text_parent ... ok
+test runtime::tests::double_shifts_use_full_source_and_mask_counts ... ok
+test runtime::tests::guest_installs_queries_invokes_and_restores_multiplex_vector ... ok
+test runtime::tests::hello_chronos_regression_exits_with_its_original_output ... ok
+test runtime::tests::free_pascal_sunshell_executes_help_after_one_enter_keypress ... ok
+test runtime::tests::immediate_count_shift_executes_dn_instruction ... ok
+test runtime::tests::inc_and_dec_byte_modrm_are_available_on_the_8086_profile ... ok
+test runtime::tests::free_pascal_sunshell_interactive_mode_renders_the_cmd_prompt_before_waiting ... ok
+test runtime::tests::free_pascal_sunshell_mz_starts_and_executes_a_command_without_host_interception ... ok
+test runtime::tests::idiv_memory_prefixes_and_segment_limit ... ok
+test runtime::tests::installed_multiplex_handler_runs_in_guest_and_iret_restores_the_frame ... ok
+test runtime::tests::int28_yields_the_slice_without_clobbering_registers ... ok
+test runtime::tests::bios_system_calls_reuse_the_stack_and_finish_within_the_slice_budget ... ok
+test runtime::tests::interrupt_pointer_and_stack_wrap_within_private_megabyte ... ok
+test runtime::tests::idiv_register_results_and_faults ... ok
+test runtime::tests::keyboard_translation_and_blocking_bios_input_work ... ok
+test runtime::tests::interactive_guest_scripted_input_uses_guest_keyboard_and_exits ... ok
+test runtime::tests::mode_switch_changes_interpretation_without_rewriting_b8000_bytes ... ok
+test runtime::tests::int33_core_functions_report_validate_clamp_and_remain_per_runtime ... ok
+test runtime::tests::mov_segment_lea_stack_and_near_call_work ... ok
+test runtime::tests::immediate_shift_memory_displacement_override_and_wrap ... ok
+test runtime::tests::incomplete_dac_entry_is_never_committed ... ok
+test runtime::tests::multiplex_predecessor_accepts_far_call_and_tail_jump ... ok
+test runtime::tests::maximum_mz_child_releases_environment_and_process_on_repeated_exit ... ok
+test runtime::tests::mz_child_exec_restores_parent_and_records_exit_code ... ok
+test runtime::tests::multiplication_memory_widths_and_segment_boundary ... ok
+test runtime::tests::nested_guest_interrupts_and_far_call_chains_restore_stack_and_flags ... ok
+test runtime::tests::palcycle_three_minute_equivalent_soak_has_no_growth_or_framebuffer_churn ... ignored, bounded three-minute-equivalent PALCYCLE soak
+test runtime::tests::multiply_divide_shifts_and_profile_gates_are_guest_visible ... ok
+test runtime::tests::released_and_shrunk_allocations_cannot_leave_live_vectors ... ok
+test runtime::tests::no_8087_escapes_are_ignored_so_real_mode_programs_can_probe_for_an_fpu ... ok
+test runtime::tests::palette_only_updates_reconvert_pixels_without_faking_framebuffer_damage ... ok
+test runtime::tests::repe_cmpsw_stops_at_the_first_mismatch ... ok
+test runtime::tests::repe_scasb_preserves_zero_flag_after_matching_a_bounded_sentinel_area ... ok
+test runtime::tests::rep_stosw_is_sliced_and_writes_guest_video_memory ... ok
+test runtime::tests::group_two_instruction_matrix ... ok
+test runtime::tests::repeated_children_release_own_vectors_but_preserve_parent_handler ... ok
+test runtime::tests::multiplication_memory_immediates_profiles_and_prefixes ... ok
+test runtime::tests::repne_scasb_stops_after_finding_a_matching_byte ... ok
+test runtime::tests::multiplication_full_product_boundary_tables ... ok
+test runtime::tests::mouse_graphics_child_trap_releases_capture_cursor_and_restores_one_shell_prompt ... ok
+test runtime::tests::repeated_mode13_selection_restores_default_dac_and_resets_sequences ... ok
+test runtime::tests::segment_override_wins_over_bp_default_segment ... ok
+test runtime::tests::runtime_decodes_every_8086_in_out_form_with_correct_ip_and_register_policy ... ok
+test runtime::tests::software_fpu_interrupt_uses_the_authoritative_guest_ivt ... ok
+test runtime::tests::staged_prefixes_and_segment_limits_fail_without_operand_writes ... ok
+test runtime::tests::free_pascal_sunshell_runs_the_bundled_midterm_batch_through_dos_files ... ok
+test runtime::tests::palcycle_escape_restores_default_dac_and_text_mode ... ok
+test runtime::tests::sunlight_mines_bundle_loads_as_an_mz_guest ... ok
+test runtime::tests::sunpaint_mouse_unavailable_path_restores_text_and_exits_nonzero ... ok
+test runtime::tests::teletype_cr_lf_and_backspace_keep_cursor_and_cells_in_sync ... ok
+test runtime::tests::teletype_places_characters_before_advancing_the_cursor ... ok
+test runtime::tests::teletype_scrolls_after_the_bottom_right_cell ... ok
+test runtime::tests::rep_stosb_and_stosw_fill_authoritative_mode13_memory_cooperatively ... ok
+test runtime::tests::teletype_wraps_only_after_writing_the_rightmost_cell ... ok
+test runtime::tests::shell_recovers_from_a_trapped_graphics_child_and_remains_interactive ... ok
+test runtime::tests::test_and_xchg_follow_guest_visible_register_and_flag_rules ... ok
+test runtime::tests::text_mode_mouse_delivery_uses_guest_selected_ranges ... ok
+test runtime::tests::unsupported_bios_video_modes_are_explicit_and_do_not_change_state ... ok
+test runtime::tests::unsupported_io_child_trap_restores_parent_and_carries_guest_identity ... ok
+test runtime::tests::trapped_graphics_child_restores_text_parent_generically ... ok
+test runtime::tests::vga_decoder_service_respects_guest_int10_hook ... ok
+test runtime::tests::vga_decoder_controls_guest_memory_and_dac_without_changing_display ... ok
+test runtime::tests::unsupported_video_requests_trap_without_changing_display ... ok
+test runtime::tests::shell_runs_real_sunpaint_stroke_then_escape_and_dir_with_one_restored_prompt ... ok
+test runtime::tests::palcycle_guest_has_deterministic_palette_checkpoints_and_static_framebuffer ... ok
+test runtime::tests::video_mode_set_restores_the_blink_default_and_blink_scan_follows_mode ... ok
+test runtime::tests::immediate_group_two_memory_matches_registers ... ok
+test runtime::tests::video_profile_bda_and_mode_queries_agree ... ok
+test runtime::tests::shift_counts_and_profile_rules ... ok
+test runtime::tests::video_byte_writes_and_bios_cursor_are_coherent ... ok
+test runtime::tests::shell_command_path_runs_vgalab_and_escape_returns_one_clean_prompt ... ok
+test text_mode::tests::cp437_line_drawing_mapping_is_unchanged ... ok
+test text_mode::tests::foreground_color_uses_the_low_nibble_in_both_modes ... ok
+test runtime::tests::sunpaint_focus_loss_and_high_frequency_motion_never_stick_input ... ok
+test text_mode::tests::intensity_mode_uses_bit_seven_as_the_fourth_background_bit ... ok
+test video::tests::palette_has_stable_classic_vga_colors ... ok
+test video::tests::video_state_sizes_follow_the_documented_layout ... ok
+test runtime::tests::xlat_uses_segment_override_preserves_state_and_consumes_prefixes ... ok
+test video::tests::six_bit_dac_conversion_rounds_stably_and_preserves_endpoints ... ok
+test video::tests::indexed_conversion_is_row_selective_and_bounds_checked ... ok
+test runtime::tests::xlat_address_and_operand_size_prefixes_follow_independent_rules ... ok
+test runtime::tests::sunpaint_real_guest_paints_erases_selects_clears_and_exits ... ok
+test text_mode::tests::blink_mode_limits_background_to_three_bits_and_marks_blinking ... ok
+test runtime::tests::vgalab_completes_static_drawing_under_small_execution_slices ... ok
+test runtime::tests::vgalab_guest_generates_the_static_image_and_waits_without_spinning ... ok
+test runtime::tests::shell_runs_palcycle_escape_then_ver_and_dir_with_one_restored_prompt ... ok
+test runtime::tests::xlat_uses_ds_by_default_and_last_segment_prefix_wins ... ok
+test runtime::tests::sunpaint_bounded_interaction_soak_has_no_stuck_state_or_arena_growth ... ok
+test runtime::tests::rotate_rings_and_arithmetic_shift_boundaries ... ok
+test runtime::tests::ega_configuration_guest_interrupt_preserves_state_and_memory ... ok
+test dos::tests::country_case_mapping_is_far_callable_and_preserves_state ... ok
+test runtime::tests::dword_shift_matrix_flags_counts_and_memory ... ok
+
+test result: ok. 196 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/main.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_chronos-b864fd57001fe158)
+
+running 33 tests
+test tests::bundled_interactive_guest_waits_and_exits_from_guest_keyboard_input ... ok
+test tests::dos_grid_uses_fixed_fira_code_cell_widths ... ok
+test tests::graphics_cache_converts_only_when_mode_framebuffer_or_palette_generation_changes ... ok
+test tests::dos_palette_keeps_a_navy_surface_and_distinct_dos_colors ... ok
+test tests::attribute_mode_switch_requests_a_native_repaint_without_memory_change ... ok
+test tests::idle_cursor_ticks_do_not_wake_a_blocked_guest ... ok
+test tests::nearest_neighbor_renderer_preserves_logical_pixel_blocks ... ok
+test tests::decoded_enter_reaches_the_guest_console ... ok
+test tests::decoded_enter_and_backspace_reach_the_guest_console ... ok
+test tests::native_startup_burst_stops_at_the_first_cooperative_idle_hint ... ok
+test tests::intensity_mode_paints_bit_seven_as_the_fourth_background_bit ... ok
+test tests::blink_phase_hides_the_glyph_without_changing_guest_attributes ... ok
+test tests::raw_printable_key_events_do_not_duplicate_text_input ... ok
+test tests::running_graphics_presentation_is_batched_and_static_waiting_is_not_polled ... ok
+test tests::no_input_budget_continuations_advance_cs_ip_and_retirement ... ok
+test tests::palette_only_batch_reconverts_once_without_touching_a0000_generation ... ok
+test tests::continuous_text_mode_pointer_events_cannot_starve_shell_or_keyboard ... ok
+test tests::status_text_uses_the_precise_waiting_state ... ok
+test tests::small_budget_mines_frame_continues_until_complete_without_input ... ok
+test tests::standalone_mines_completes_initial_frame_without_native_input ... ok
+test tests::standalone_mines_escape_exits_cleanly ... ok
+test tests::graphics_view_selects_a0000_and_never_draws_the_text_cursor ... ok
+test tests::text_mode_mouse_state_does_not_request_invisible_frames ... ok
+test tests::viewport_uses_largest_integer_scale_and_centers_without_guest_mutation ... ok
+test tests::native_tick_loop_reaches_and_renders_the_bundled_shell_prompt ... ok
+test tests::guest_cursor_overlay_changes_native_pixels_not_guest_evidence ... ok
+test tests::cursor_clips_at_edges_and_focus_loss_clears_guest_drag ... ok
+test tests::title_header_status_and_letterbox_events_do_not_reach_guest_mouse ... ok
+test tests::standalone_mines_held_button_reaches_int33_without_duplicate_edges ... ok
+test tests::standalone_mines_right_click_and_restart_update_the_board ... ok
+test tests::native_dir_output_is_coalesced_and_reaches_the_next_prompt ... ok
+test tests::native_shell_path_renders_vgalab_guest_pixels_then_returns_to_text ... ok
+test tests::native_surface_changes_from_guest_dac_outs_while_a0000_stays_static ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_ui-edbf19cd70858dc9)
+
+running 290 tests
+test app::tests::decoration_flag_bits_match_protocol_layout ... ok
+test app::tests::printable_clipboard_chords_keep_modifiers ... ok
+test app::tests::resize_reply_carries_authoritative_client_geometry ... ok
+test app::tests::resize_reply_rejects_tiny_invalid_and_oversized_surfaces ... ok
+test app::tests::resize_window_event_is_typed_and_exact ... ok
+test app::tests::runnable_local_ticks_are_bounded_by_an_event_poll ... ok
+test app::tests::unicode_commits_reject_malformed_words_and_do_not_duplicate_text ... ok
+test app::tests::window_create_timeout_scales_with_surface_allocation ... ok
+test clipboard::tests::file_items_reject_unknown_operations_relative_paths_and_invalid_utf8 ... ok
+test clipboard::tests::parses_cli_copy_and_desktop_cut_lists ... ok
+test clipboard::tests::parses_text_item ... ok
+test clipboard::tests::rejects_non_text_item ... ok
+test draw::rounded::tests::rounded_fill_clips_to_canvas ... ok
+test draw::rounded::tests::rounded_stroke_leaves_center_unfilled ... ok
+test font::label::tests::ellipsis_and_unseparated_names ... ok
+test font::label::tests::extended_graphemes_are_never_split ... ok
+test font::label::tests::ink_is_clipped_with_stride_and_partial_scrolling ... ok
+test font::label::tests::full_tooltip_wrap_retains_every_grapheme ... ok
+test font::label::tests::short_names_and_proportional_metrics ... ok
+test font::label::tests::two_lines_wrap_at_filename_boundaries ... ok
+test horizon::tests::control_ordering_matches_horizon_spec ... ok
+test horizon::tests::glyph_stays_inside_button_bounds ... ok
+test horizon::tests::hit_rects_cover_full_buttons_not_glyph_pixels ... ok
+test horizon::tests::horizon_palette_uses_chrome_roles ... ok
+test horizon::tests::hover_backplates_fit_inside_titlebar_strip ... ok
+test horizon::tests::maximize_vs_restore_glyph_selection ... ok
+test horizon::tests::physical_order_stable_under_rtl ... ok
+test image::blit::tests::alpha_0_leaves_destination_unchanged ... ok
+test image::blit::tests::alpha_255_produces_source_color ... ok
+test image::blit::tests::bilinear_does_not_import_transparent_rgb_fringe ... ok
+test image::blit::tests::channel_order_argb_preserved_in_blend ... ok
+test image::blit::tests::coverage_scales_alpha_only ... ok
+test image::blit::tests::excessive_radius_is_clamped ... ok
+test image::blit::tests::fifty_percent_source_over_matches_known_rounding ... ok
+test image::blit::tests::matches_color_blend_over ... ok
+test image::blit::tests::radius_zero_is_full_rect ... ok
+test image::blit::tests::rounded_coverage_inside_outside_and_boundary ... ok
+test image::blit::tests::scale_1_wide_and_1_high_are_safe ... ok
+test image::blit::tests::scale_1x1_preserves_color ... ok
+test font::label::tests::unicode_mixed_names_and_narrow_widths ... ok
+test image::mono_icon::tests::bit_lookup_is_row_major_msb_first ... ok
+test image::mono_icon::tests::draw_skips_off_pixels_and_tints_on_pixels ... ok
+test image::mono_icon::tests::same_icon_draws_in_multiple_colors ... ok
+test image::mono_icon::tests::validates_dimensions ... ok
+test image::simg::tests::decode_tiny_tga ... ok
+test image::simg::tests::encode_roundtrip ... ok
+test image::simg::tests::malformed_rejects_safely ... ok
+test image::simg::tests::malformed_v2_does_not_become_tga ... ok
+test image::simg::tests::origin_bit_flips_rows ... ok
+test image::simg::tests::png_and_jpeg_use_renderer_argb_layout ... ok
+test image::simg::tests::simg_v2_roundtrip_matches_legacy_pixels ... ok
+test layout::tests::axis_policies_are_independent ... ok
+test layout::tests::column_fill_consumes_vertical_remainder ... ok
+test layout::tests::distribution_redistributes_space_after_maximum ... ok
+test layout::tests::fill_grows_and_shrinks_with_available_space ... ok
+test layout::tests::fill_on_both_axes_tracks_parent ... ok
+test layout::tests::fixed_sizing_remains_fixed_across_parent_resize ... ok
+test layout::tests::flex_weights_divide_remaining_space_deterministically ... ok
+test image::simg::tests::scale_preserves_aspect_ratio ... ok
+test layout::tests::invalidation_only_relayouts_on_change_or_explicit_request ... ok
+test layout::tests::legacy_default_retains_previous_geometry ... ok
+test layout::tests::linear_layout_keeps_tiny_rectangles_valid_and_spacers_are_intent_only ... ok
+test layout::tests::min_and_max_constraints_are_respected ... ok
+test layout::tests::repeated_layout_is_stable ... ok
+test layout::tests::row_fill_consumes_horizontal_remainder_with_exact_padding_and_gap ... ok
+test layout::tests::row_flex_weights_and_constraints_are_deterministic ... ok
+test layout::tests::zero_and_tiny_dimensions_are_valid ... ok
+test material::tests::canonical_start_values_are_preserved_and_shared ... ok
+test material::tests::glass_sample_applies_opacity ... ok
+test material::tests::noise_is_deterministic_and_spatially_stable ... ok
+test material::tests::opacity_and_noise_are_clamped ... ok
+test material::tests::opaque_accessibility_fallback_disables_alpha_and_noise ... ok
+test material::tests::outer_effect_geometry_expands_the_window_corner ... ok
+test material::tests::role_presets_keep_application_content_opaque ... ok
+test material::tests::solid_sample_is_opaque_and_ignores_noise ... ok
+test material::tests::straight_alpha_blend_matches_color_blend_over ... ok
+test material::tests::straight_alpha_layers_preserve_alpha_and_normalized_color ... ok
+test material::tests::straight_alpha_over_transparent_keeps_unpremultiplied_rgb ... ok
+test material::tests::text_ambient_shadow_only_for_low_contrast_glass ... ok
+test material::tests::titlebar_and_root_share_hue_family ... ok
+test material::tests::window_hierarchy_keeps_cards_denser_and_content_opaque ... ok
+test paint::material_tests::channel_order_tga_bgra_to_argb ... ok
+test paint::material_tests::cover_image_is_explicitly_opaque ... ok
+test paint::material_tests::native_size_radius_zero_matches_direct_sample ... ok
+test paint::material_tests::opaque_and_tinted_tga_paths_never_drop_alpha ... ok
+test paint::material_tests::paint_material_replaces_previous_frame_alpha ... ok
+test paint::material_tests::rounded_glass_noise_never_forces_pixels_opaque ... ok
+test paint::material_tests::rounded_icon_clips_corners_and_keeps_centre ... ok
+test paint::material_tests::scaled_icon_bilinear_avoids_red_fringe_from_transparent_texels ... ok
+test paint::material_tests::tga_icon_keeps_straight_alpha_on_transparent_canvas ... ok
+test paint::material_tests::tga_icon_over_opaque_content_remains_opaque ... ok
+test scroll::tests::clamp_after_content_shrinks ... ok
+test scroll::tests::clamp_after_viewport_grows ... ok
+test scroll::tests::content_equal_to_viewport_has_zero_offset ... ok
+test scroll::tests::content_larger_than_viewport_has_positive_max ... ok
+test scroll::tests::content_smaller_than_viewport_has_zero_offset ... ok
+test scroll::tests::drag_thumb_to_middle ... ok
+test scroll::tests::drag_thumb_to_top_and_bottom ... ok
+test scroll::tests::ensure_visible_above_viewport ... ok
+test scroll::tests::ensure_visible_already_visible_does_nothing ... ok
+test scroll::tests::ensure_visible_below_viewport ... ok
+test scroll::tests::hit_test_scrollbar_distinguishes_thumb_from_track ... ok
+test scroll::tests::independent_states_do_not_interfere ... ok
+test scroll::tests::max_offset_does_not_underflow ... ok
+test scroll::tests::page_scroll_does_not_underflow ... ok
+test scroll::tests::reset_offset_when_setting_geometry ... ok
+test scroll::tests::scroll_by_clamps_at_limits ... ok
+test scroll::tests::scroll_by_positive_and_negative ... ok
+test scroll::tests::thumb_at_bottom_when_scrolled_to_bottom ... ok
+test scroll::tests::thumb_at_top_when_scrolled_to_top ... ok
+test scroll::tests::thumb_size_proportional ... ok
+test scroll::tests::track_click_above_thumb_pages_up ... ok
+test scroll::tests::track_click_below_thumb_pages_down ... ok
+test scroll::tests::very_small_geometry_is_stable ... ok
+test scroll::tests::wheel_delta_supports_hid_and_fixed_point_steps ... ok
+test scroll::tests::wheel_retains_hid_magnitude_and_partial_fixed_point_detents ... ok
+test scroll::tests::zero_height_viewport_is_stable ... ok
+test theme::tests::dark_chrome_shares_panel_hue_family ... ok
+test theme::tests::inactive_title_remains_readable ... ok
+test theme::tests::selection_is_restrained_not_saturated_accent ... ok
+test widgets::digital_number::tests::leading_zeros_format ... ok
+test widgets::digital_number::tests::draw_does_not_panic ... ok
+test widgets::digital_number::tests::segment_masks_for_digits ... ok
+test widgets::digital_number::tests::measurement_independent_of_value ... ok
+test widgets::conversation_bubble::tests::bubbles_draw_with_and_without_detail ... ok
+test widgets::digital_number::tests::signed_and_decimal_strings ... ok
+test widgets::digital_number::tests::unsupported_chars_become_blank_not_corrupt ... ok
+test widgets::digital_number::tests::validates_supported_and_rejects_letters ... ok
+test widgets::disclosure::tests::disclosure_toggles_from_keyboard_and_only_focused_clicks ... ok
+test widgets::disclosure::tests::property_grid_measurement_and_hitboxes_are_bounded ... ok
+test widgets::document_canvas::tests::browser_hit_testing_starts_at_viewport_origin_and_scrolls_in_document_space ... ok
+test widgets::document_canvas::tests::browser_presentation_uses_the_entire_canvas_as_document_viewport ... ok
+test widgets::document_canvas::tests::browser_scene_draws_decoded_raster_image ... ok
+test widgets::document_canvas::tests::byte_at_x_on_line_snaps_to_boundaries ... ok
+test widgets::document_canvas::tests::byte_offset_at_x_always_returns_code_point_boundary ... ok
+test widgets::document_canvas::tests::byte_offset_at_x_ascii_fixed_width ... ok
+test widgets::document_canvas::tests::byte_offset_at_x_empty_text ... ok
+test widgets::document_canvas::tests::caret_roundtrip_ascii ... ok
+test widgets::document_canvas::tests::caret_x_at_byte_ascii ... ok
+test widgets::document_canvas::tests::caret_x_at_byte_empty_text ... ok
+test widgets::document_canvas::tests::caret_x_on_line_correct ... ok
+test widgets::document_canvas::tests::click_to_line_and_byte_multiline ... ok
+test widgets::document_canvas::tests::content_rect_stays_within_page ... ok
+test widgets::document_canvas::tests::css_generic_font_lists_resolve_without_html_knowledge ... ok
+test widgets::document_canvas::tests::cursor_shape_discriminants_match_display_server ... ok
+test widgets::document_canvas::tests::hit_target_is_deterministic ... ok
+test widgets::document_canvas::tests::draw_multiline_active_text_renders_lines_and_caret ... ok
+test widgets::document_canvas::tests::find_line_for_byte ... ok
+test widgets::document_canvas::tests::hit_target_returns_none_outside_content_rect ... ok
+test widgets::document_canvas::tests::hit_target_returns_text_for_text_item ... ok
+test widgets::document_canvas::tests::hit_target_returns_link_for_link_text_item ... ok
+test widgets::document_canvas::tests::hit_target_scene_link_takes_priority_over_text ... ok
+test widgets::document_canvas::tests::draw_with_edit_state_renders_caret_for_active_text_item ... ok
+test widgets::document_canvas::tests::hit_target_unicode_text_is_safe ... ok
+test widgets::document_canvas::tests::layout_empty_text_is_single_empty_line ... ok
+test widgets::document_canvas::tests::draw_without_edit_state_does_not_render_caret ... ok
+test widgets::document_canvas::tests::layout_explicit_newlines ... ok
+test widgets::document_canvas::tests::hit_target_scene_text_returns_text ... ok
+test widgets::document_canvas::tests::hit_target_returns_none_for_non_interactive_rect ... ok
+test widgets::document_canvas::tests::layout_soft_wrap_at_space ... ok
+test widgets::document_canvas::tests::layout_no_space_fallback_wrap ... ok
+test widgets::document_canvas::tests::line_home_and_end_bytes ... ok
+test widgets::document_canvas::tests::layout_wrap_preserves_emoji_unicode_boundaries ... ok
+test widgets::document_canvas::tests::empty_document_draw_does_not_panic ... ok
+test widgets::document_canvas::tests::layout_newline_at_end_creates_trailing_line ... ok
+test widgets::document_canvas::tests::hit_target_returns_none_for_empty_canvas ... ok
+test widgets::document_canvas::tests::mode_defaults_to_editable ... ok
+test widgets::document_canvas::tests::replacement_patch_requires_the_producer_to_swap_the_scene ... ok
+test widgets::document_canvas::tests::resizing_rich_layout_reflows_without_changing_styles ... ok
+test widgets::document_canvas::tests::retained_scene_applies_insert_remove_update_and_reorder ... ok
+test widgets::document_canvas::tests::retained_scene_indexes_and_diff_are_stable ... ok
+test widgets::document_canvas::tests::retained_scene_selects_read_only_mode_and_hit_tests_in_document_coordinates ... ok
+test widgets::document_canvas::tests::rich_layout_wraps_and_hit_tests_with_actual_style_metrics ... ok
+test widgets::document_canvas::tests::linear_and_radial_gradients_paint_without_panic ... ok
+test widgets::document_canvas::tests::sample_items_can_be_constructed ... ok
+test widgets::document_canvas::tests::text_edit_state_clear_resets_all_fields ... ok
+test widgets::document_canvas::tests::text_edit_state_defaults_to_inactive ... ok
+test widgets::document_canvas::tests::writer_presentation_keeps_only_page_workspace_and_document_margin ... ok
+test widgets::document_editor::tests::active_typing_style_creates_and_combines_normalized_runs ... ok
+test widgets::document_editor::tests::alignment_applies_to_all_touched_paragraphs ... ok
+test widgets::document_editor::tests::blank_lines_trailing_newline_and_empty_document_have_caret_rows ... ok
+test widgets::document_editor::tests::delete_forward_at_line_end_merges_logical_lines ... ok
+test widgets::document_editor::tests::enter_and_boundary_affinity_inherit_left_style ... ok
+test widgets::document_editor::tests::enter_at_start_middle_and_end_preserves_trailing_lines ... ok
+test widgets::document_editor::tests::font_size_selection_and_typing_state_are_distinct ... ok
+test widgets::document_editor::tests::heading_enter_resets_at_end_and_preserves_in_middle ... ok
+test widgets::document_editor::tests::horizontal_navigation_crosses_newlines_and_empty_document_is_stable ... ok
+test widgets::document_editor::tests::insert_delete_replace_and_paragraph_merge_preserve_styles ... ok
+test widgets::document_editor::tests::insertion_newlines_and_cross_line_deletion_are_utf8_safe ... ok
+test widgets::document_editor::tests::navigation_crosses_lines_and_preserves_preferred_x ... ok
+test widgets::document_editor::tests::ordinary_navigation_collapses_selection_to_nearest_edge ... ok
+test widgets::document_editor::tests::page_navigation_uses_viewport_geometry_and_keeps_caret_visible ... ok
+test widgets::document_editor::tests::scrolling_follows_caret_and_clamps_after_delete_and_resize ... ok
+test widgets::document_editor::tests::selection_delete_replace_and_multiline_paste ... ok
+test widgets::document_editor::tests::selection_toggle_uses_uniform_and_mixed_semantics ... ok
+test widgets::document_editor::tests::shift_selection_spans_wrapped_and_logical_lines ... ok
+test widgets::document_editor::tests::unicode_selection_formats_only_valid_byte_range ... ok
+test widgets::document_editor::tests::wrapping_resize_and_hit_testing_use_visual_lines ... ok
+test widgets::drive_card::tests::builders_set_fields ... ok
+test widgets::drive_card::tests::hit_test_bounds_and_disabled ... ok
+test widgets::drive_card::tests::state_interactive ... ok
+test widgets::drive_card::tests::usage_clamped ... ok
+test widgets::icon_button::tests::disabled_icon_button_does_not_hit ... ok
+test widgets::icon_button::tests::enabled_icon_button_uses_full_hit_area ... ok
+test widgets::rich_document::tests::creates_empty_regular_and_combined_documents ... ok
+test widgets::rich_document::tests::formats_across_paragraphs_and_composes_styles ... ok
+test widgets::rich_document::tests::formats_partial_full_and_multiple_runs_with_normalization ... ok
+test widgets::rich_document::tests::paragraph_styles_and_font_sizes_are_structural_and_normalized ... ok
+test widgets::rich_document::tests::replacement_preserves_surrounding_styles_and_removes_empty_runs ... ok
+test widgets::rich_document::tests::uniform_query_reports_mixed_selection ... ok
+test widgets::search_palette::tests::field_bounds_query_length ... ok
+test widgets::search_palette::tests::layout_is_centered_and_in_bounds ... ok
+test widgets::search_palette::tests::page_count_math ... ok
+test widgets::search_palette::tests::row_and_dot_hit_tests ... ok
+test widgets::secret_input::tests::secret_input_is_bounded_and_ignores_control_characters ... ok
+test widgets::secret_input::tests::unicode_backspace_clears_removed_bytes ... ok
+test widgets::section::tests::section_reports_containment ... ok
+test widgets::section::tests::state_selects_distinct_fills ... ok
+test widgets::sidebar::tests::segmented_tabs_hit_test_uses_physical_left_to_right_geometry ... ok
+test widgets::sidebar_item::tests::builders_set_fields ... ok
+test widgets::sidebar_item::tests::card_rect_is_inset ... ok
+test widgets::sidebar_item::tests::hit_test_respects_disabled_and_bounds ... ok
+test widgets::drive_card::tests::draw_card_minimal_no_panic ... ok
+test widgets::owl_avatar::tests::avatar_draws_every_state ... ok
+test widgets::sidebar_item::tests::state_interactive ... ok
+test widgets::slider::tests::clamps_value_to_range ... ok
+test widgets::slider::tests::horizontal_click_updates_value ... ok
+test widgets::slider::tests::horizontal_pointer_geometry_maps_start_half_and_end ... ok
+test widgets::slider::tests::vertical_click_updates_value ... ok
+test widgets::solar_clock::tests::format_hhmm_zero_padded ... ok
+test widgets::solar_clock::tests::layout_is_square_centered ... ok
+test widgets::solar_clock::tests::major_rays_at_cardinals ... ok
+test widgets::solar_clock::tests::midnight_and_noon_boundaries ... ok
+test widgets::solar_clock::tests::minute_hour_progress_normalization ... ok
+test widgets::solar_clock::tests::ray_table_has_unit_length ... ok
+test widgets::solar_clock::tests::second_ray_activation_counts ... ok
+test widgets::solar_clock::tests::snapshot_dirty_layers ... ok
+test widgets::sidebar_item::tests::draw_all_states_does_not_panic ... ok
+test widgets::table::sorting_tests::controlled_sort_toggles_and_switches ... ok
+test widgets::table::sorting_tests::optional_headers_never_select_rows_and_offsets_clamp ... ok
+test widgets::table::sorting_tests::small_scrollview_track_and_disabled_column_are_safe ... ok
+test widgets::table::sorting_tests::typed_keys_and_identity_ties ... ok
+test widgets::text_buffer::tests::arrow_and_home_end ... ok
+test widgets::text_buffer::tests::backspace_joins_lines ... ok
+test widgets::solar_clock::tests::draw_representative_times_no_panic ... ok
+test widgets::text_buffer::tests::counts_words_and_chars ... ok
+test widgets::text_buffer::tests::delete_forward_joins_lines ... ok
+test widgets::text_buffer::tests::empty_buffer_has_one_blank_line ... ok
+test widgets::text_buffer::tests::empty_content_detection ... ok
+test widgets::text_buffer::tests::insert_and_split_lines ... ok
+test widgets::drive_card::tests::draw_card_all_states_no_panic ... ok
+test widgets::text_buffer::tests::utf8_persian_round_trip ... ok
+test widgets::text_context_menu::tests::editable_menu_exposes_local_shortcuts_and_state ... ok
+test widgets::text_context_menu::tests::read_only_menu_omits_mutating_commands ... ok
+test widgets::drive_card::tests::draw_row_all_states_no_panic ... ok
+test widgets::text_editor::tests::context_menu_keeps_mouse_press_until_click ... ok
+test widgets::text_editor::tests::editable_surface_handles_selection_and_deletion ... ok
+test widgets::text_editor::tests::mouse_wheel_scrolls_and_clamps_inside_editor ... ok
+test widgets::text_editor::tests::read_only_surface_selects_but_does_not_delete ... ok
+test widgets::text_input::tests::context_menu_keeps_mouse_press_until_click ... ok
+test widgets::text_input::tests::select_all_and_delete_use_local_shortcuts ... ok
+test widgets::text_input::tests::shift_navigation_creates_selection ... ok
+test widgets::text_input::tests::utf8_editing_keeps_boundaries_valid ... ok
+test widgets::tree_view::tests::collapse_branch_hides_descendants_only ... ok
+test widgets::tree_view::tests::expand_branch_adds_descendants_in_order ... ok
+test widgets::tree_view::tests::initially_expanded_root_shows_first_level_children ... ok
+test widgets::tree_view::tests::indentation_depth_matches_visible_hierarchy ... ok
+test widgets::tree_view::tests::invalid_expanded_id_is_cleaned_on_rebuild ... ok
+test widgets::tree_view::tests::invalid_selected_id_is_cleaned_on_rebuild ... ok
+test widgets::tree_view::tests::repeated_rebuilds_are_stable ... ok
+test widgets::tree_view::tests::root_row_generation_is_stable ... ok
+test widgets::tree_view::tests::selection_changes_and_marks_visible_row ... ok
+test widgets::tree_view::tests::selection_does_not_change_expansion_state ... ok
+test widgets::workspace_switcher::tests::card_hit_test_maps_indices ... ok
+test widgets::workspace_switcher::tests::layout_fits_four_cards_on_thinkpad_and_vmware ... ok
+test widgets::workspace_switcher::tests::layout_stays_above_dock_and_below_top ... ok
+test widgets::workspace_switcher::tests::overflow_label_is_bounded ... ok
+test widgets::world_map::tests::equator_prime_meridian_center ... ok
+test widgets::world_map::tests::letterbox_preserves_aspect ... ok
+test widgets::world_map::tests::longitude_wrapping ... ok
+test widgets::world_map::tests::marker_hit_testing ... ok
+test widgets::world_map::tests::outside_click_emits_outside ... ok
+test widgets::world_map::tests::point_outside_map_is_none ... ok
+test widgets::world_map::tests::poles_and_dateline ... ok
+test widgets::world_map::tests::projection_round_trip_tolerance ... ok
+test widgets::world_map::tests::silhouette_has_land_and_ocean ... ok
+test widgets::world_map::tests::write_combined_widget_preview ... ok
+test widgets::world_map::tests::draw_no_panic ... ok
+test widgets::certificate_panel::tests::renders_backend_fields_and_security_states ... ok
+test widgets::tree_view::tests::deep_tree_rebuild_avoids_recursive_walks ... ok
+
+test result: ok. 290 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

@@ -3,9 +3,9 @@ use alloc::{collections::VecDeque, vec::Vec};
 use crate::{
     dos, load_com_with_command_tail, load_program, ArenaError, CpuState, DosHandleTable,
     DosMemoryArena, DosPath, DriveTable, ExecutableFormat, GuestMemory, GuestVideoMode,
-    IoOperation, IoTrap, IoWidth, LoadedProgram, LoaderError, Rgb8, TextCell, TextModeSurface,
-    VgaDacEntry, DEFAULT_ATTRIBUTE, TEXT_COLUMNS, TEXT_ROWS, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT,
-    VIDEO_SEGMENT,
+    IoOperation, IoTrap, IoWidth, LoadedProgram, LoaderError, Rgb8, TextAttribute,
+    TextAttributeMode, TextCell, TextModeSurface, VgaDacEntry, DEFAULT_ATTRIBUTE, TEXT_COLUMNS,
+    TEXT_ROWS, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT, VIDEO_SEGMENT,
 };
 
 const BDA_SEGMENT: u16 = 0x0040;
@@ -15,6 +15,8 @@ const BDA_PAGE_SIZE: u16 = 0x004c;
 const BDA_CURSOR_POSITIONS: u16 = 0x0050;
 const BDA_CURSOR_SHAPE: u16 = 0x0060;
 const BDA_ACTIVE_PAGE: u16 = 0x0062;
+const BDA_VIDEO_STATE_OFFSET: u16 = 0x0049;
+const BDA_VIDEO_STATE_BYTES: usize = 0x60;
 const ENVIRONMENT_MAX_BYTES: usize = 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,6 +38,11 @@ pub enum Trap {
     },
     InvalidSegmentRegister {
         encoding: u8,
+    },
+    SegmentLimit {
+        segment: u16,
+        offset: u32,
+        width: u8,
     },
     MalformedPrefix {
         cs: u16,
@@ -76,6 +83,7 @@ impl Trap {
             Self::UnsupportedInterrupt { .. } => "Unsupported DOS or BIOS interrupt",
             Self::UnterminatedDosString { .. } => "Unterminated DOS string",
             Self::InvalidSegmentRegister { .. } => "Invalid segment register",
+            Self::SegmentLimit { .. } => "Guest operand exceeds real-mode segment limit",
             Self::MalformedPrefix { .. } => "Malformed instruction prefix",
             Self::InvalidVideoRectangle => "Invalid video rectangle",
             Self::UnsupportedVideoMode { .. } => "Unsupported BIOS video mode",
@@ -200,6 +208,8 @@ pub enum CpuProfile {
     I8086,
     I80186,
     I80286,
+    /// Partial integer-only 386 real-mode implementation; unsupported forms trap.
+    I80386RealMode,
 }
 
 impl CpuProfile {
@@ -239,6 +249,9 @@ pub struct GuestTime {
 
 #[derive(Clone, Debug)]
 pub struct DosProcess {
+    pub(crate) searches: Vec<crate::DirectoryEntry>,
+    pub(crate) search_index: usize,
+    vectors_on_entry: [(u16, u16); 256],
     pub psp_segment: u16,
     pub parent_psp: Option<u16>,
     pub environment_segment: u16,
@@ -269,6 +282,8 @@ pub struct Runtime {
     pub(crate) cursor_shape: u16,
     video_mode: GuestVideoMode,
     video_mode_generation: u64,
+    text_attribute_mode: TextAttributeMode,
+    text_attribute_generation: u64,
     io: crate::io::GuestIoDispatcher,
     pub(crate) mouse: crate::DosMouse,
     cooperative_yield_requested: bool,
@@ -285,8 +300,6 @@ pub struct Runtime {
     pub(crate) handles: DosHandleTable,
     pub(crate) dta_segment: u16,
     pub(crate) dta_offset: u16,
-    pub(crate) searches: Vec<crate::DirectoryEntry>,
-    pub(crate) search_index: usize,
     pub(crate) arena: DosMemoryArena,
     pub(crate) active_process: DosProcess,
     pub(crate) parent_process: Option<DosProcess>,
@@ -296,7 +309,7 @@ pub struct Runtime {
     guest_unix_time: u64,
     environment_app_id: Vec<u8>,
     executable_path: Vec<u8>,
-    interrupt_vectors: [(u16, u16); 256],
+    pub(crate) break_check_enabled: bool,
 }
 
 impl Runtime {
@@ -311,6 +324,9 @@ impl Runtime {
         let mut memory = GuestMemory::new();
         let cpu = load_com_with_command_tail(&mut memory, image, command_tail)?;
         let active_process = DosProcess {
+            searches: Vec::new(),
+            search_index: 0,
+            vectors_on_entry: [(0, 0); 256],
             psp_segment: crate::PSP_SEGMENT,
             parent_psp: None,
             environment_segment: 0,
@@ -338,6 +354,8 @@ impl Runtime {
             cursor_shape: 0x0607,
             video_mode: GuestVideoMode::Text80x25Color,
             video_mode_generation: 0,
+            text_attribute_mode: TextAttributeMode::Blink,
+            text_attribute_generation: 0,
             io: crate::io::GuestIoDispatcher::default(),
             mouse: crate::DosMouse::default(),
             cooperative_yield_requested: false,
@@ -354,8 +372,6 @@ impl Runtime {
             handles: DosHandleTable::new(),
             dta_segment: crate::PSP_SEGMENT,
             dta_offset: 0x0080,
-            searches: Vec::new(),
-            search_index: 0,
             arena: DosMemoryArena::new(),
             active_process,
             parent_process: None,
@@ -365,10 +381,13 @@ impl Runtime {
             guest_unix_time: 0,
             environment_app_id: b"org.sunlight.chronos".to_vec(),
             executable_path: b"C:\\PROGRAM.COM".to_vec(),
-            interrupt_vectors: [(0, 0); 256],
+            break_check_enabled: false,
         };
         let _ = runtime.arena.allocate(0x1000, crate::PSP_SEGMENT);
         runtime.initialize_environment();
+        runtime.initialize_interrupts();
+        runtime.active_process.vectors_on_entry = runtime.vector_snapshot();
+        runtime.memory.write_u16(0x0040, 0x0010, 0x0020);
         runtime.reset_video();
         Ok(runtime)
     }
@@ -376,17 +395,16 @@ impl Runtime {
     pub fn from_program(image: &[u8], command_tail: &[u8]) -> Result<Self, LoaderError> {
         let mut runtime = Self::from_com_with_command_tail(&[], &[])?;
         runtime.memory.clear();
+        runtime.initialize_interrupts();
+        runtime.memory.write_u16(0x0040, 0x0010, 0x0020);
         runtime.arena = DosMemoryArena::new();
         runtime.drives = DriveTable::new();
         runtime.handles = DosHandleTable::new();
         runtime.keyboard.clear();
         runtime.pending_input = None;
-        runtime.searches.clear();
-        runtime.search_index = 0;
         runtime.parent_process = None;
         runtime.recovered_child_trap = None;
         runtime.last_delivered_child_result = None;
-        runtime.interrupt_vectors = [(0, 0); 256];
         runtime.mouse.reset();
         runtime.cooperative_yield_requested = false;
         runtime.cooperative_yielded_last_slice = false;
@@ -415,6 +433,7 @@ impl Runtime {
                 requested: 0,
                 largest: runtime.arena.largest_available(),
             })?;
+        runtime.arena.sync_mcbs(&mut runtime.memory);
         runtime.install_initial_program(program);
         runtime.active_process.environment_segment = environment_segment;
         runtime.active_process.environment_owned = true;
@@ -425,6 +444,9 @@ impl Runtime {
     fn install_initial_program(&mut self, program: LoadedProgram) {
         self.cpu = program.cpu;
         self.active_process = DosProcess {
+            searches: Vec::new(),
+            search_index: 0,
+            vectors_on_entry: self.vector_snapshot(),
             psp_segment: program.psp_segment,
             parent_psp: None,
             environment_segment: 0,
@@ -475,12 +497,64 @@ impl Runtime {
         }
     }
 
+    fn vector_snapshot(&self) -> [(u16, u16); 256] {
+        core::array::from_fn(|n| self.interrupt_vector(n as u8))
+    }
+
+    fn release_process_vectors(&mut self, process: &DosProcess) {
+        // Restore only vectors whose backing allocation is about to be freed.
+        // A suspended parent's handler remains valid and must survive child exit.
+        for n in 0..256 {
+            let vector = self.interrupt_vector(n as u8);
+            let address = GuestMemory::physical_address(vector.0, vector.1);
+            if self.arena.blocks().iter().any(|block| {
+                let start = usize::from(block.segment) * 16;
+                block.owner_psp == Some(process.psp_segment)
+                    && (start..start + usize::from(block.paragraphs) * 16).contains(&address)
+            }) {
+                let (segment, offset) = process.vectors_on_entry[n];
+                self.set_interrupt_vector(n as u8, segment, offset);
+            }
+        }
+    }
+
+    fn initialize_interrupts(&mut self) {
+        self.memory.install_firmware();
+        self.set_interrupt_vector(
+            0x15,
+            crate::memory::INT15_SEGMENT,
+            crate::memory::INT15_OFFSET,
+        );
+        self.set_interrupt_vector(0x1f, crate::font::ROM_SEGMENT, 0x400);
+        self.set_interrupt_vector(0x43, crate::font::ROM_SEGMENT, 0x800);
+        // DOS multiplex has an end-of-chain handler even with no TSR installed.
+        // Ordinary guest IRET supports both tail jumps and PUSHF/CALL FAR chains.
+        // DOS-owned low memory, separate from SFT and country case mapping.
+        self.memory.write_u8(0x0800, 0x0400, 0xcf);
+        self.set_interrupt_vector(0x2f, 0x0800, 0x0400);
+    }
+
     pub(crate) fn interrupt_vector(&self, interrupt: u8) -> (u16, u16) {
-        self.interrupt_vectors[interrupt as usize]
+        let address = u16::from(interrupt) * 4;
+        (
+            self.memory.read_u16(0, address + 2),
+            self.memory.read_u16(0, address),
+        )
+    }
+
+    pub(crate) fn enter_guest_interrupt(&mut self, segment: u16, offset: u16) {
+        self.push_u16(self.cpu.flags | 2);
+        self.push_u16(self.cpu.cs);
+        self.push_u16(self.cpu.ip);
+        self.cpu.flags &= !(CpuState::FLAG_IF | CpuState::FLAG_TF);
+        self.cpu.cs = segment;
+        self.cpu.ip = offset;
     }
 
     pub(crate) fn set_interrupt_vector(&mut self, interrupt: u8, segment: u16, offset: u16) {
-        self.interrupt_vectors[interrupt as usize] = (segment, offset);
+        self.memory.write_u16(0, u16::from(interrupt) * 4, offset);
+        self.memory
+            .write_u16(0, u16::from(interrupt) * 4 + 2, segment);
     }
 
     pub fn set_application_id(&mut self, app_id: &[u8]) {
@@ -524,12 +598,49 @@ impl Runtime {
     }
 
     pub(crate) fn allocate_memory(&mut self, paragraphs: u16) -> Result<u16, ArenaError> {
-        self.arena
-            .allocate(paragraphs, self.active_process.psp_segment)
+        let result = self
+            .arena
+            .allocate(paragraphs, self.active_process.psp_segment);
+        self.arena.sync_mcbs(&mut self.memory);
+        result
+    }
+
+    fn release_vectors_in_range(&mut self, start: usize, end: usize) {
+        for n in 0..256 {
+            let (segment, offset) = self.interrupt_vector(n as u8);
+            if (start..end).contains(&GuestMemory::physical_address(segment, offset)) {
+                let previous = self.active_process.vectors_on_entry[n];
+                // The entry snapshot may itself refer to this block (e.g. a
+                // parent block explicitly freed later). Never restore freed code.
+                let address = GuestMemory::physical_address(previous.0, previous.1);
+                let (segment, offset) = if (start..end).contains(&address) {
+                    if n == 0x2f {
+                        (0x0800, 0x0400)
+                    } else {
+                        (0, 0)
+                    }
+                } else {
+                    previous
+                };
+                self.set_interrupt_vector(n as u8, segment, offset);
+            }
+        }
     }
 
     pub(crate) fn free_memory(&mut self, segment: u16) -> Result<(), ArenaError> {
-        self.arena.free(segment, self.active_process.psp_segment)
+        let paragraphs = self
+            .arena
+            .blocks()
+            .iter()
+            .find(|block| block.segment == segment)
+            .map(|block| block.paragraphs);
+        let result = self.arena.free(segment, self.active_process.psp_segment);
+        if result.is_ok() {
+            let start = usize::from(segment) * 16;
+            self.release_vectors_in_range(start, start + usize::from(paragraphs.unwrap()) * 16);
+        }
+        self.arena.sync_mcbs(&mut self.memory);
+        result
     }
 
     pub(crate) fn resize_memory(
@@ -537,8 +648,28 @@ impl Runtime {
         segment: u16,
         paragraphs: u16,
     ) -> Result<(), ArenaError> {
-        self.arena
-            .resize(segment, paragraphs, self.active_process.psp_segment)
+        let old_paragraphs = self
+            .arena
+            .blocks()
+            .iter()
+            .find(|block| block.segment == segment)
+            .map(|block| block.paragraphs);
+        let result = self
+            .arena
+            .resize(segment, paragraphs, self.active_process.psp_segment);
+        if result.is_ok() && old_paragraphs.is_some_and(|old| paragraphs < old) {
+            let start = usize::from(segment) * 16;
+            self.release_vectors_in_range(
+                start + usize::from(paragraphs) * 16,
+                start + usize::from(old_paragraphs.unwrap()) * 16,
+            );
+        }
+        if result.is_ok() && segment == self.active_process.psp_segment {
+            self.active_process.allocation_paragraphs = paragraphs;
+            self.memory.write_u16(segment, 2, segment + paragraphs);
+        }
+        self.arena.sync_mcbs(&mut self.memory);
+        result
     }
 
     pub(crate) fn largest_available_memory(&self) -> u16 {
@@ -565,25 +696,32 @@ impl Runtime {
             .to_vec();
         let parent_psp = self.active_process.psp_segment;
         let inherited_environment = self.environment_bytes(requested_environment)?;
-        let program = load_program(
+        // Reserve the environment before the executable can request the largest block.
+        let saved_arena = self.arena.clone();
+        let environment_segment = self.write_environment(
+            parent_psp,
+            &inherited_environment,
+            path.display().as_bytes(),
+        )?;
+        let program = match load_program(
             &mut self.memory,
             &mut self.arena,
             &image,
             command_tail,
             Some(parent_psp),
-            0,
-        )?;
-        let environment_segment = match self.write_environment(
-            program.psp_segment,
-            &inherited_environment,
-            path.display().as_bytes(),
+            environment_segment,
         ) {
-            Ok(segment) => segment,
+            Ok(program) => program,
             Err(error) => {
-                self.arena.free_owner(program.psp_segment);
+                self.arena = saved_arena;
+                self.arena.sync_mcbs(&mut self.memory);
                 return Err(error);
             }
         };
+        self.arena
+            .reassign_owner(environment_segment, program.psp_segment)
+            .expect("reserved environment exists");
+        self.arena.sync_mcbs(&mut self.memory);
         self.memory
             .write_u16(program.psp_segment, 0x002c, environment_segment);
         self.active_process.cpu = self.cpu;
@@ -593,6 +731,9 @@ impl Runtime {
         self.active_process.handles = self.handles.clone();
         self.active_process.current_drive = self.drives.current_drive;
         let mut child = DosProcess {
+            searches: Vec::new(),
+            search_index: 0,
+            vectors_on_entry: self.vector_snapshot(),
             psp_segment: program.psp_segment,
             parent_psp: Some(parent_psp),
             environment_segment,
@@ -615,8 +756,6 @@ impl Runtime {
         self.dta_offset = self.active_process.dta_offset;
         self.handles = self.active_process.handles.clone();
         self.drives.current_drive = self.active_process.current_drive;
-        self.searches.clear();
-        self.search_index = 0;
         self.pending_input = None;
         Ok(())
     }
@@ -681,6 +820,7 @@ impl Runtime {
                 largest: self.arena.largest_available(),
             })?;
         self.memory.write_slice(segment, 0, &contents)?;
+        self.arena.sync_mcbs(&mut self.memory);
         Ok(segment)
     }
 
@@ -698,6 +838,7 @@ impl Runtime {
             }
         })?;
         self.memory.write_slice(segment, 0, &contents)?;
+        self.arena.sync_mcbs(&mut self.memory);
         Ok(segment)
     }
 
@@ -715,15 +856,15 @@ impl Runtime {
                 .expect("restore_parent requires suspended parent"),
         );
         child.handles.close_nonstandard();
+        self.release_process_vectors(&child);
         self.arena.free_owner(child.psp_segment);
+        self.arena.sync_mcbs(&mut self.memory);
         self.active_process.child_result = Some(result);
         self.cpu = self.active_process.cpu;
         self.dta_segment = self.active_process.dta_segment;
         self.dta_offset = self.active_process.dta_offset;
         self.handles = self.active_process.handles.clone();
         self.drives.current_drive = self.active_process.current_drive;
-        self.searches.clear();
-        self.search_index = 0;
         self.pending_input = None;
         self.state = GuestState::Running;
     }
@@ -883,6 +1024,36 @@ impl Runtime {
         self.video_mode_generation
     }
 
+    pub const fn text_attribute_mode(&self) -> TextAttributeMode {
+        self.text_attribute_mode
+    }
+
+    /// Advances whenever text attribute bit-7 semantics change, without
+    /// rewriting guest `0xB8000` bytes.
+    pub const fn text_attribute_generation(&self) -> u64 {
+        self.text_attribute_generation
+    }
+
+    pub fn text_attribute(&self, attribute: u8) -> TextAttribute {
+        TextAttribute::decode(attribute, self.text_attribute_mode)
+    }
+
+    /// True when the visible text page contains at least one attribute whose
+    /// bit 7 is a blink marker under the current mode.
+    pub fn has_blink_attributes(&self) -> bool {
+        if self.video_mode != GuestVideoMode::Text80x25Color
+            || self.text_attribute_mode != TextAttributeMode::Blink
+        {
+            return false;
+        }
+        (0..TEXT_COLUMNS * TEXT_ROWS).any(|index| {
+            self.memory
+                .read_display_byte(VIDEO_SEGMENT, (index * 2 + 1) as u16)
+                & 0x80
+                != 0
+        })
+    }
+
     pub const fn framebuffer_generation(&self) -> u64 {
         self.memory.framebuffer_generation()
     }
@@ -915,7 +1086,7 @@ impl Runtime {
         if x >= crate::VGA_WIDTH || y >= VGA_HEIGHT {
             return None;
         }
-        Some(self.memory.read_u8(
+        Some(self.memory.read_display_byte(
             crate::VGA_FRAMEBUFFER_SEGMENT,
             (y * crate::VGA_WIDTH + x) as u16,
         ))
@@ -928,7 +1099,8 @@ impl Runtime {
         for offset in 0..VGA_FRAMEBUFFER_BYTES {
             hash ^= self
                 .memory
-                .read_u8(crate::VGA_FRAMEBUFFER_SEGMENT, offset as u16) as u64;
+                .read_display_byte(crate::VGA_FRAMEBUFFER_SEGMENT, offset as u16)
+                as u64;
             hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         }
         hash
@@ -971,6 +1143,14 @@ impl Runtime {
         woke
     }
 
+    /// Number of untranslated BIOS key events pending for the guest.
+    ///
+    /// This is diagnostic state only; BIOS keyboard calls remain the sole
+    /// mechanism by which a guest consumes events.
+    pub fn queued_key_count(&self) -> usize {
+        self.keyboard.len()
+    }
+
     pub fn inject_ascii(&mut self, ascii: u8) -> bool {
         self.inject_key(BiosKey {
             ascii,
@@ -999,6 +1179,7 @@ impl Runtime {
         }
         let state_before = self.state.clone();
         let mode_generation_before = self.video_mode_generation;
+        let text_attribute_generation_before = self.text_attribute_generation;
         let framebuffer_generation_before = self.memory.framebuffer_generation();
         let palette_generation_before = self.palette_generation();
         let mouse_generation_before = self.mouse.generation();
@@ -1026,6 +1207,7 @@ impl Runtime {
             || self.memory.framebuffer_generation() != framebuffer_generation_before
             || self.palette_generation() != palette_generation_before
             || self.video_mode_generation != mode_generation_before
+            || self.text_attribute_generation != text_attribute_generation_before
             || self.mouse.generation() != mouse_generation_before
             || self.mouse.overlay_generation() != overlay_generation_before
             || self.state != state_before
@@ -1043,9 +1225,13 @@ impl Runtime {
         let instruction_ip = self.cpu.ip;
         let mut segment_override = None;
         let mut repeat = None;
+        let mut operand32 = false;
+        let mut address32 = false;
         let opcode = loop {
             let opcode = self.fetch_u8();
             match opcode {
+                0x66 if self.cpu_profile == CpuProfile::I80386RealMode => operand32 = true,
+                0x67 if self.cpu_profile == CpuProfile::I80386RealMode => address32 = true,
                 0x26 => segment_override = Some(self.cpu.es),
                 0x2e => segment_override = Some(self.cpu.cs),
                 0x36 => segment_override = Some(self.cpu.ss),
@@ -1054,7 +1240,7 @@ impl Runtime {
                 0xf3 => repeat = Some(true),
                 _ => break opcode,
             }
-            if self.cpu.ip.wrapping_sub(instruction_ip) > 5 {
+            if self.cpu.ip.wrapping_sub(instruction_ip) >= 15 {
                 self.state = GuestState::Trapped(Trap::MalformedPrefix {
                     cs: instruction_cs,
                     ip: instruction_ip,
@@ -1062,7 +1248,16 @@ impl Runtime {
                 return;
             }
         };
-        let result = self.execute(opcode, segment_override, repeat, instruction_ip);
+        let result = if address32 && opcode == 0xd7 {
+            self.execute_xlat(segment_override, true)
+        } else if address32 {
+            // Staged explicitly: never decode a 32-bit EA as a 16-bit address.
+            Err(self.bad_opcode(instruction_ip))
+        } else if operand32 {
+            self.execute32(opcode, segment_override, repeat, instruction_ip)
+        } else {
+            self.execute(opcode, segment_override, repeat, instruction_ip)
+        };
         if let Err(trap) = result {
             if self.parent_process.is_some() {
                 self.recovered_child_trap = Some(trap);
@@ -1078,6 +1273,157 @@ impl Runtime {
         }
     }
 
+    fn fetch_u32(&mut self) -> u32 {
+        let lo = self.fetch_u16() as u32;
+        lo | ((self.fetch_u16() as u32) << 16)
+    }
+
+    // Validate the complete operand before writing any byte. A20 stays disabled.
+    fn validate_rm32(&self, operand: ModRm) -> Result<(), Trap> {
+        if let Some((segment, offset)) = operand.memory {
+            if offset > 0xfffc {
+                return Err(Trap::SegmentLimit {
+                    segment,
+                    offset: u32::from(offset),
+                    width: 4,
+                });
+            }
+        }
+        Ok(())
+    }
+    fn read_rm32(&self, operand: ModRm) -> Result<u32, Trap> {
+        self.validate_rm32(operand)?;
+        Ok(match operand.memory {
+            None => self.cpu.reg32(operand.rm),
+            Some((seg, off)) => {
+                self.memory.read_u16(seg, off) as u32
+                    | ((self.memory.read_u16(seg, off + 2) as u32) << 16)
+            }
+        })
+    }
+    fn write_rm32(&mut self, operand: ModRm, value: u32) -> Result<(), Trap> {
+        self.validate_rm32(operand)?;
+        if let Some((seg, off)) = operand.memory {
+            self.memory.write_u16(seg, off, value as u16);
+            self.memory.write_u16(seg, off + 2, (value >> 16) as u16);
+        } else {
+            self.cpu.set_reg32(operand.rm, value);
+        }
+        Ok(())
+    }
+    fn execute32(
+        &mut self,
+        opcode: u8,
+        segment: Option<u16>,
+        repeat: Option<bool>,
+        ip: u16,
+    ) -> Result<(), Trap> {
+        if repeat.is_some() {
+            return Err(self.bad_opcode(ip));
+        }
+        match opcode {
+            0xd7 => self.execute_xlat(segment, false)?,
+            0x99 => {
+                let eax = self.cpu.reg32(0);
+                self.cpu
+                    .set_reg32(2, if eax & 0x8000_0000 != 0 { u32::MAX } else { 0 });
+            }
+            0xb8..=0xbf => {
+                let value = self.fetch_u32();
+                self.cpu.set_reg32(opcode - 0xb8, value);
+            }
+            0x89 | 0x8b | 0xc7 => {
+                let operand = self.decode_modrm(segment)?;
+                match opcode {
+                    0x89 => self.write_rm32(operand, self.cpu.reg32(operand.register))?,
+                    0x8b => {
+                        let value = self.read_rm32(operand)?;
+                        self.cpu.set_reg32(operand.register, value);
+                    }
+                    _ => {
+                        if operand.register != 0 {
+                            return Err(self.bad_opcode(ip));
+                        }
+                        let value = self.fetch_u32();
+                        self.write_rm32(operand, value)?;
+                    }
+                }
+            }
+            0x0f => {
+                let second = self.fetch_u8();
+                if second == 0xaf {
+                    return self.imul_truncated(second, segment, ip, true);
+                }
+                if !matches!(second, 0xa4 | 0xa5 | 0xac | 0xad) {
+                    return Err(self.bad_opcode(ip));
+                }
+                let operand = self.decode_modrm(segment)?;
+                let count = if second & 1 == 0 {
+                    self.fetch_u8()
+                } else {
+                    self.cpu.cl()
+                } & 31;
+                let value = self.read_rm32(operand)?;
+                if count != 0 {
+                    let source = self.cpu.reg32(operand.register);
+                    let left = second & 8 == 0;
+                    let result = if left {
+                        (value << count) | (source >> (32 - count))
+                    } else {
+                        (value >> count) | (source << (32 - count))
+                    };
+                    let carry = if left {
+                        (value >> (32 - count)) & 1 != 0
+                    } else {
+                        (value >> (count - 1)) & 1 != 0
+                    };
+                    self.write_rm32(operand, result)?;
+                    self.set_flag(CpuState::FLAG_CF, carry);
+                    self.set_flag(CpuState::FLAG_ZF, result == 0);
+                    self.set_flag(CpuState::FLAG_SF, result >> 31 != 0);
+                    self.set_flag(CpuState::FLAG_PF, Self::parity(result as u8));
+                    if count == 1 {
+                        self.set_flag(CpuState::FLAG_OF, (value ^ result) >> 31 != 0);
+                    }
+                }
+            }
+            0x69 | 0x6b => self.imul_truncated(opcode, segment, ip, true)?,
+            0xf7 => {
+                let operand = self.decode_modrm(segment)?;
+                match operand.register {
+                    4 | 5 => {
+                        let value = self.read_rm32(operand)?;
+                        self.multiply_accumulator(value, 32, operand.register == 5);
+                    }
+                    7 => {
+                        let divisor = self.read_rm32(operand)? as i32 as i64;
+                        let dividend =
+                            (i64::from(self.cpu.reg32(2)) << 32) | i64::from(self.cpu.reg32(0));
+                        let quotient = dividend
+                            .checked_div(divisor)
+                            .and_then(|value| i32::try_from(value).ok())
+                            .ok_or(Trap::DivideError {
+                                cs: self.cpu.cs,
+                                ip,
+                            })?;
+                        // Keep the existing IDIV policy of preserving undefined status flags.
+                        self.cpu.set_reg32(0, quotient as u32);
+                        self.cpu.set_reg32(2, (dividend % divisor) as u32);
+                    }
+                    _ => return Err(self.bad_opcode(ip)),
+                }
+            }
+            0xf6 => self.group_three(opcode, segment, ip)?,
+            0xc0 | 0xc1 | 0xd0..=0xd3 => self.group_shift(opcode, segment, ip, true)?,
+            // Byte operations retain their width under 66h.
+            0xb0..=0xb7 | 0x88 | 0x8a | 0xc6 | 0x90 | 0xd4 => {
+                self.execute(opcode, segment, repeat, ip)?
+            }
+            _ => return Err(self.bad_opcode(ip)),
+        }
+        Ok(())
+    }
+
     fn execute(
         &mut self,
         opcode: u8,
@@ -1086,6 +1432,20 @@ impl Runtime {
         start_ip: u16,
     ) -> Result<(), Trap> {
         match opcode {
+            0xd7 => self.execute_xlat(override_segment, false)?,
+            0xd4 => self.execute_aam(start_ip)?,
+            0x69 | 0x6b => self.imul_truncated(opcode, override_segment, start_ip, false)?,
+            0x0f => {
+                if self.cpu_profile != CpuProfile::I80386RealMode {
+                    return Err(self.bad_opcode(start_ip));
+                }
+                let second = self.fetch_u8();
+                if second != 0xaf {
+                    return Err(self.bad_opcode(start_ip));
+                }
+                self.imul_truncated(second, override_segment, start_ip, false)?;
+            }
+
             0x90 => {}
             0xb0..=0xb7 => {
                 let value = self.fetch_u8();
@@ -1242,10 +1602,16 @@ impl Runtime {
                     self.cpu.ip = self.cpu.ip.wrapping_add(displacement as i16 as u16);
                 }
             }
-            0xe2 => {
+            0xe0..=0xe2 => {
                 let displacement = self.fetch_u8() as i8;
                 self.cpu.cx = self.cpu.cx.wrapping_sub(1);
-                if self.cpu.cx != 0 {
+                let zero = self.cpu.flags & CpuState::FLAG_ZF != 0;
+                let condition = match opcode {
+                    0xe0 => !zero,
+                    0xe1 => zero,
+                    _ => true,
+                };
+                if self.cpu.cx != 0 && condition {
                     self.cpu.ip = self.cpu.ip.wrapping_add(displacement as i16 as u16);
                 }
             }
@@ -1261,13 +1627,14 @@ impl Runtime {
                 } else {
                     None
                 };
-                crate::io::execute_io_instruction(
-                    &mut self.io,
-                    &mut self.cpu,
-                    opcode,
-                    immediate_port,
-                )
-                .map_err(|trap| self.guest_io_trap(trap, start_ip))?;
+                self.io
+                    .execute(
+                        self.memory.vga_addressing_enabled(),
+                        &mut self.cpu,
+                        opcode,
+                        immediate_port,
+                    )
+                    .map_err(|trap| self.guest_io_trap(trap, start_ip))?;
             }
             0x04 => {
                 let left = self.cpu.al();
@@ -1398,7 +1765,9 @@ impl Runtime {
                 }
             }
             0xf6 | 0xf7 => self.group_three(opcode, override_segment, start_ip)?,
-            0xd0..=0xd3 => self.group_shift(opcode, override_segment, start_ip)?,
+            0xc0 | 0xc1 | 0xd0..=0xd3 => {
+                self.group_shift(opcode, override_segment, start_ip, false)?
+            }
             0xff => self.group_five(override_segment, start_ip)?,
             0x68 | 0x6a | 0xc8 | 0xc9 => self.execute_80186(opcode, start_ip)?,
             0xcc => dos::dispatch(self, 3)?,
@@ -1607,6 +1976,91 @@ impl Runtime {
         Ok(())
     }
 
+    // Undefined arithmetic flags are retained, matching the existing shift policy.
+    fn multiply(&mut self, left: u32, right: u32, bits: u32, signed: bool) -> u64 {
+        let mask = (1u64 << bits) - 1;
+        let (product, overflow) = if signed {
+            let extend = |value: u32| ((value as i64) << (64 - bits)) >> (64 - bits);
+            let product = extend(left) * extend(right);
+            let low = ((product << (64 - bits)) >> (64 - bits)) as i64;
+            (product as u64, product != low)
+        } else {
+            let product = (left as u64 & mask) * (right as u64 & mask);
+            (product, product >> bits != 0)
+        };
+        self.set_flag(CpuState::FLAG_CF, overflow);
+        self.set_flag(CpuState::FLAG_OF, overflow);
+        product
+    }
+
+    fn multiply_accumulator(&mut self, value: u32, bits: u32, signed: bool) {
+        let left = match bits {
+            8 => self.cpu.al() as u32,
+            16 => self.cpu.ax as u32,
+            _ => self.cpu.reg32(0),
+        };
+        let product = self.multiply(left, value, bits, signed);
+        match bits {
+            8 => self.cpu.ax = product as u16,
+            16 => {
+                self.cpu.ax = product as u16;
+                self.cpu.dx = (product >> 16) as u16;
+            }
+            _ => {
+                self.cpu.set_reg32(0, product as u32);
+                self.cpu.set_reg32(2, (product >> 32) as u32);
+            }
+        }
+    }
+
+    fn imul_truncated(
+        &mut self,
+        opcode: u8,
+        segment: Option<u16>,
+        ip: u16,
+        dword: bool,
+    ) -> Result<(), Trap> {
+        if (opcode == 0xaf && self.cpu_profile != CpuProfile::I80386RealMode)
+            || (opcode != 0xaf && !self.cpu_profile.supports_80186())
+        {
+            return Err(Trap::CpuProfileViolation {
+                cs: self.cpu.cs,
+                ip,
+                opcode,
+            });
+        }
+        let operand = self.decode_modrm(segment)?;
+        let source = if dword {
+            self.read_rm32(operand)?
+        } else {
+            self.read_rm16(operand) as u32
+        };
+        let other = match opcode {
+            0xaf => {
+                if dword {
+                    self.cpu.reg32(operand.register)
+                } else {
+                    self.cpu.reg16(operand.register) as u32
+                }
+            }
+            0x6b => self.fetch_u8() as i8 as i32 as u32,
+            _ => {
+                if dword {
+                    self.fetch_u32()
+                } else {
+                    self.fetch_u16() as u32
+                }
+            }
+        };
+        let product = self.multiply(source, other, if dword { 32 } else { 16 }, true);
+        if dword {
+            self.cpu.set_reg32(operand.register, product as u32);
+        } else {
+            self.cpu.set_reg16(operand.register, product as u16);
+        }
+        Ok(())
+    }
+
     fn group_three(
         &mut self,
         opcode: u8,
@@ -1651,35 +2105,8 @@ impl Runtime {
                     self.write_rm8(operand, result);
                 }
             }
-            4 => {
-                if word {
-                    let product = self.cpu.ax as u32 * value;
-                    self.cpu.ax = product as u16;
-                    self.cpu.dx = (product >> 16) as u16;
-                    self.set_flag(CpuState::FLAG_CF, self.cpu.dx != 0);
-                    self.set_flag(CpuState::FLAG_OF, self.cpu.dx != 0);
-                } else {
-                    let product = self.cpu.al() as u16 * value as u16;
-                    self.cpu.ax = product;
-                    self.set_flag(CpuState::FLAG_CF, product > 0xff);
-                    self.set_flag(CpuState::FLAG_OF, product > 0xff);
-                }
-            }
-            5 => {
-                if word {
-                    let product = self.cpu.ax as i16 as i32 * value as u16 as i16 as i32;
-                    self.cpu.ax = product as u16;
-                    self.cpu.dx = (product >> 16) as u16;
-                    let fits = product == self.cpu.ax as i16 as i32;
-                    self.set_flag(CpuState::FLAG_CF, !fits);
-                    self.set_flag(CpuState::FLAG_OF, !fits);
-                } else {
-                    let product = self.cpu.al() as i8 as i16 * value as u8 as i8 as i16;
-                    self.cpu.ax = product as u16;
-                    let fits = product == self.cpu.al() as i8 as i16;
-                    self.set_flag(CpuState::FLAG_CF, !fits);
-                    self.set_flag(CpuState::FLAG_OF, !fits);
-                }
+            4 | 5 => {
+                self.multiply_accumulator(value, if word { 16 } else { 8 }, operand.register == 5)
             }
             6 => {
                 if value == 0 {
@@ -1722,13 +2149,13 @@ impl Runtime {
                 if word {
                     let dividend = ((self.cpu.dx as i32) << 16) | self.cpu.ax as i32;
                     let divisor = value as u16 as i16 as i32;
-                    let quotient = dividend / divisor;
-                    if !(i16::MIN as i32..=i16::MAX as i32).contains(&quotient) {
-                        return Err(Trap::DivideError {
+                    let quotient = dividend
+                        .checked_div(divisor)
+                        .and_then(|value| i16::try_from(value).ok())
+                        .ok_or(Trap::DivideError {
                             cs: self.cpu.cs,
                             ip: start_ip,
-                        });
-                    }
+                        })?;
                     self.cpu.ax = quotient as u16;
                     self.cpu.dx = (dividend % divisor) as u16;
                 } else {
@@ -1755,16 +2182,54 @@ impl Runtime {
         opcode: u8,
         override_segment: Option<u16>,
         start_ip: u16,
+        operand32: bool,
     ) -> Result<(), Trap> {
+        if matches!(opcode, 0xc0 | 0xc1) && !self.cpu_profile.supports_80186() {
+            return Err(Trap::CpuProfileViolation {
+                cs: self.cpu.cs,
+                ip: start_ip,
+                opcode,
+            });
+        }
         let operand = self.decode_modrm(override_segment)?;
-        let count = match opcode {
+        // Group 2 /6 is reserved; do not silently treat it as SHR.
+        if operand.register == 6 {
+            return Err(self.bad_opcode(start_ip));
+        }
+        let raw_count = match opcode {
+            0xc0 | 0xc1 => self.fetch_u8(),
             0xd0 | 0xd1 => 1,
-            _ => self.cpu.cl() & 0x1f,
+            _ => self.cpu.cl(),
         };
+        // 8086 consumes all eight CL bits. 186/286 bound counts to five bits.
+        let mut count = if self.cpu_profile == CpuProfile::I8086 {
+            raw_count
+        } else {
+            raw_count & 0x1f
+        };
+        // Through-carry rotations have a width+1 ring. Full-ring counts
+        // leave both the operand and flags unchanged on the later profiles.
+        if self.cpu_profile != CpuProfile::I8086 && matches!(operand.register, 2 | 3) {
+            count %= if opcode & 1 == 0 {
+                9
+            } else if operand32 {
+                33
+            } else {
+                17
+            };
+        }
+        let word = opcode & 1 != 0;
+        if word && operand32 {
+            let old = self.read_rm32(operand)?;
+            if count != 0 {
+                let value = self.shift_width(operand.register, old, count, 32, start_ip)?;
+                self.write_rm32(operand, value)?;
+            }
+            return Ok(());
+        }
         if count == 0 {
             return Ok(());
         }
-        let word = opcode & 1 != 0;
         if word {
             let value = self.shift16(operand.register, self.read_rm16(operand), count, start_ip)?;
             self.write_rm16(operand, value);
@@ -1942,6 +2407,48 @@ impl Runtime {
                 base.wrapping_add(displacement),
             )),
         })
+    }
+
+    /// XLAT uses the address-size-selected BX/EBX plus unsigned AL, then reads
+    /// one byte through the ordinary guest memory bus. Real-mode segment
+    /// limits still apply when a 32-bit address calculation is selected.
+    fn execute_xlat(&mut self, override_segment: Option<u16>, address32: bool) -> Result<(), Trap> {
+        let offset = if address32 {
+            self.cpu.reg32(3).wrapping_add(u32::from(self.cpu.al()))
+        } else {
+            u32::from(self.cpu.bx.wrapping_add(u16::from(self.cpu.al())))
+        };
+        if offset > u32::from(u16::MAX) {
+            return Err(Trap::SegmentLimit {
+                segment: override_segment.unwrap_or(self.cpu.ds),
+                offset,
+                width: 1,
+            });
+        }
+        let segment = override_segment.unwrap_or(self.cpu.ds);
+        let value = self.memory.read_u8(segment, offset as u16);
+        self.cpu.set_al(value);
+        Ok(())
+    }
+
+    /// ASCII-adjust-after-multiply is always an 8-bit operation.  Its
+    /// immediate radix is part of the instruction even when a 66h operand
+    /// override selected this dispatcher through the byte-operation fallback.
+    fn execute_aam(&mut self, start_ip: u16) -> Result<(), Trap> {
+        let base = self.fetch_u8();
+        if base == 0 {
+            return Err(Trap::DivideError {
+                cs: self.cpu.cs,
+                ip: start_ip,
+            });
+        }
+        let al = self.cpu.al();
+        self.cpu.set_ah(al / base);
+        self.cpu.set_al(al % base);
+        // CF, AF, and OF are undefined and retain Chronos's existing policy;
+        // SF, ZF, and PF describe the resulting AL.
+        self.flags8(self.cpu.al());
+        Ok(())
     }
 
     fn read_rm8(&self, operand: ModRm) -> u8 {
@@ -2200,125 +2707,78 @@ impl Runtime {
         result
     }
 
-    fn shift8(&mut self, kind: u8, mut value: u8, count: u8, ip: u16) -> Result<u8, Trap> {
-        if kind > 7 {
-            return Err(self.bad_opcode(ip));
-        }
-        for _ in 0..count {
-            let carry = match kind {
-                0 => {
-                    let carry = value & 0x80 != 0;
-                    value = value.rotate_left(1);
-                    carry
-                }
-                1 => {
-                    let carry = value & 1 != 0;
-                    value = value.rotate_right(1);
-                    carry
-                }
-                2 => {
-                    let carry = value & 0x80 != 0;
-                    let old_carry = self.cpu.flags & CpuState::FLAG_CF != 0;
-                    value = (value << 1) | old_carry as u8;
-                    carry
-                }
-                3 => {
-                    let carry = value & 1 != 0;
-                    let old_carry = self.cpu.flags & CpuState::FLAG_CF != 0;
-                    value = (value >> 1) | ((old_carry as u8) << 7);
-                    carry
-                }
-                4 => {
-                    let carry = value & 0x80 != 0;
-                    value <<= 1;
-                    carry
-                }
-                5 | 6 => {
-                    let carry = value & 1 != 0;
-                    value >>= 1;
-                    carry
-                }
-                7 => {
-                    let carry = value & 1 != 0;
-                    value = (value as i8 >> 1) as u8;
-                    carry
-                }
-                _ => unreachable!("shift kind is constrained to 0..=7"),
-            };
-            self.set_flag(CpuState::FLAG_CF, carry);
-        }
-        if !matches!(kind, 0..=3) {
-            self.flags8(value);
-        }
-        if count == 1 {
-            let overflow = match kind {
-                0 => ((value >> 7) ^ (value & 1)) != 0,
-                1 => value & 0x80 != 0,
-                2 | 4 => (value & 0x80 != 0) ^ (self.cpu.flags & CpuState::FLAG_CF != 0),
-                3 => value & 0x80 != 0,
-                _ => false,
-            };
-            self.set_flag(CpuState::FLAG_OF, overflow);
-        }
-        Ok(value)
+    fn shift8(&mut self, kind: u8, value: u8, count: u8, ip: u16) -> Result<u8, Trap> {
+        self.shift_width(kind, value as u32, count, 8, ip)
+            .map(|v| v as u8)
     }
-
-    fn shift16(&mut self, kind: u8, mut value: u16, count: u8, ip: u16) -> Result<u16, Trap> {
-        if kind > 7 {
+    fn shift16(&mut self, kind: u8, value: u16, count: u8, ip: u16) -> Result<u16, Trap> {
+        self.shift_width(kind, value as u32, count, 16, ip)
+            .map(|v| v as u16)
+    }
+    fn shift_width(
+        &mut self,
+        kind: u8,
+        mut value: u32,
+        count: u8,
+        bits: u32,
+        ip: u16,
+    ) -> Result<u32, Trap> {
+        if kind > 7 || kind == 6 {
             return Err(self.bad_opcode(ip));
         }
+        if count == 0 {
+            return Ok(value);
+        }
+        let mask = u32::MAX >> (32 - bits);
+        let sign = 1u32 << (bits - 1);
+        let original = value;
         for _ in 0..count {
+            let low = value & 1;
+            let high = value & sign != 0;
+            let carry_in = (self.cpu.flags & CpuState::FLAG_CF != 0) as u32;
             let carry = match kind {
                 0 => {
-                    let carry = value & 0x8000 != 0;
-                    value = value.rotate_left(1);
-                    carry
+                    value = ((value << 1) | high as u32) & mask;
+                    high
                 }
                 1 => {
-                    let carry = value & 1 != 0;
-                    value = value.rotate_right(1);
-                    carry
+                    value = (value >> 1) | (low << (bits - 1));
+                    low != 0
                 }
                 2 => {
-                    let carry = value & 0x8000 != 0;
-                    let old_carry = self.cpu.flags & CpuState::FLAG_CF != 0;
-                    value = (value << 1) | old_carry as u16;
-                    carry
+                    value = ((value << 1) | carry_in) & mask;
+                    high
                 }
                 3 => {
-                    let carry = value & 1 != 0;
-                    let old_carry = self.cpu.flags & CpuState::FLAG_CF != 0;
-                    value = (value >> 1) | ((old_carry as u16) << 15);
-                    carry
+                    value = (value >> 1) | (carry_in << (bits - 1));
+                    low != 0
                 }
                 4 => {
-                    let carry = value & 0x8000 != 0;
-                    value <<= 1;
-                    carry
+                    value = (value << 1) & mask;
+                    high
                 }
-                5 | 6 => {
-                    let carry = value & 1 != 0;
+                5 => {
                     value >>= 1;
-                    carry
+                    low != 0
                 }
                 7 => {
-                    let carry = value & 1 != 0;
-                    value = (value as i16 >> 1) as u16;
-                    carry
+                    value = (value >> 1) | (value & sign);
+                    low != 0
                 }
-                _ => unreachable!("shift kind is constrained to 0..=7"),
+                _ => unreachable!(),
             };
             self.set_flag(CpuState::FLAG_CF, carry);
         }
-        if !matches!(kind, 0..=3) {
-            self.flags16(value);
+        if kind >= 4 {
+            self.set_flag(CpuState::FLAG_ZF, value == 0);
+            self.set_flag(CpuState::FLAG_SF, value & sign != 0);
+            self.set_flag(CpuState::FLAG_PF, Self::parity(value as u8));
         }
         if count == 1 {
             let overflow = match kind {
-                0 => ((value >> 15) ^ (value & 1)) != 0,
-                1 => value & 0x8000 != 0,
-                2 | 4 => (value & 0x8000 != 0) ^ (self.cpu.flags & CpuState::FLAG_CF != 0),
-                3 => value & 0x8000 != 0,
+                0 | 2 | 4 => (value & sign != 0) ^ (self.cpu.flags & CpuState::FLAG_CF != 0),
+                1 | 3 => ((value >> (bits - 1)) ^ (value >> (bits - 2))) & 1 != 0,
+                5 => original & sign != 0,
                 _ => false,
             };
             self.set_flag(CpuState::FLAG_OF, overflow);
@@ -2349,12 +2809,17 @@ impl Runtime {
     }
 
     pub(crate) fn exit(&mut self, code: u8) -> Result<(), Trap> {
+        self.active_process.searches.clear();
+        self.active_process.search_index = 0;
         if self.parent_process.is_some() {
             self.restore_parent(ChildResult {
                 code,
                 termination: TerminationType::Normal,
             });
         } else {
+            self.release_process_vectors(&self.active_process.clone());
+            self.arena.free_owner(self.active_process.psp_segment);
+            self.arena.sync_mcbs(&mut self.memory);
             self.state = GuestState::Exited { code };
         }
         Ok(())
@@ -2493,6 +2958,17 @@ impl Runtime {
     }
 
     pub(crate) fn set_video_mode(&mut self, mode: GuestVideoMode) {
+        self.set_interrupt_vector(
+            0x43,
+            crate::font::ROM_SEGMENT,
+            match mode {
+                GuestVideoMode::Text80x25Color => 0x800,
+                GuestVideoMode::Vga320x200x256 => 0,
+            },
+        );
+        // A VGA BIOS mode set reprograms the Attribute Controller mode-control
+        // bit to its documented default: text attribute bit 7 blinks.
+        self.set_text_attribute_mode(TextAttributeMode::Blink);
         self.video_mode = mode;
         self.video_mode_generation = self.video_mode_generation.wrapping_add(1);
         self.cursor_column = 0;
@@ -2500,6 +2976,21 @@ impl Runtime {
         self.memory
             .write_u8(BDA_SEGMENT, BDA_VIDEO_MODE, mode.bios_mode());
         self.memory.write_u8(BDA_SEGMENT, BDA_ACTIVE_PAGE, 0);
+        self.memory.write_u16(BDA_SEGMENT, 0x4e, 0); // Page offset
+        self.memory.write_u16(BDA_SEGMENT, 0x63, 0x3d4); // Color CRTC
+        self.memory
+            .write_u8(BDA_SEGMENT, 0x84, mode.character_rows() - 1);
+        self.memory
+            .write_u16(BDA_SEGMENT, 0x85, mode.character_height());
+        self.memory.write_u8(
+            BDA_SEGMENT,
+            0x88,
+            (crate::video::EGA_FEATURE_BITS << 4) | crate::video::EGA_SWITCH_SETTINGS,
+        );
+        for page in 0..8 {
+            self.memory
+                .write_u16(BDA_SEGMENT, BDA_CURSOR_POSITIONS + page * 2, 0);
+        }
         match mode {
             GuestVideoMode::Text80x25Color => {
                 self.mouse.leave_graphics_mode();
@@ -2507,11 +2998,7 @@ impl Runtime {
                 self.cursor_shape = 0x0607;
                 self.memory
                     .write_u16(BDA_SEGMENT, BDA_COLUMNS, TEXT_COLUMNS as u16);
-                self.memory.write_u16(
-                    BDA_SEGMENT,
-                    BDA_PAGE_SIZE,
-                    (TEXT_COLUMNS * TEXT_ROWS * 2) as u16,
-                );
+                self.memory.write_u16(BDA_SEGMENT, BDA_PAGE_SIZE, 0x1000);
             }
             GuestVideoMode::Vga320x200x256 => {
                 self.io.reset_mode13();
@@ -2528,6 +3015,18 @@ impl Runtime {
             .write_u16(BDA_SEGMENT, BDA_CURSOR_SHAPE, self.cursor_shape);
         self.sync_cursor_bda();
     }
+
+    /// Selects how text attribute bit 7 is interpreted. This is the virtual
+    /// counterpart of the VGA Attribute Controller mode-control bit, not a
+    /// hardware-port implementation. Character and attribute bytes in guest
+    /// memory are never rewritten by this change.
+    pub(crate) fn set_text_attribute_mode(&mut self, mode: TextAttributeMode) {
+        if self.text_attribute_mode != mode {
+            self.text_attribute_mode = mode;
+            self.text_attribute_generation = self.text_attribute_generation.wrapping_add(1);
+        }
+    }
+
     fn sync_cursor_bda(&mut self) {
         self.memory.write_u16(
             BDA_SEGMENT,
@@ -2545,6 +3044,74 @@ impl Runtime {
         self.memory
             .write_u16(BDA_SEGMENT, BDA_CURSOR_SHAPE, self.cursor_shape);
     }
+
+    /// Copies the documented 96-byte video BIOS data area
+    /// (`0040:0049h..0040:00A8h`) out of authoritative guest memory.
+    pub(crate) fn read_video_bda(&self, out: &mut [u8; BDA_VIDEO_STATE_BYTES]) -> bool {
+        self.memory
+            .read_slice(BDA_SEGMENT, BDA_VIDEO_STATE_OFFSET, out)
+            .is_ok()
+    }
+
+    /// Restores the video BIOS data area into the live model. The whole area
+    /// is validated before any state changes, so a rejected buffer leaves both
+    /// the model and guest memory untouched. Only the fields this virtual VGA
+    /// derives from the BDA are checked; the remaining bytes are guest-owned
+    /// BDA storage and are restored verbatim by the caller.
+    pub(crate) fn restore_video_bda(&mut self, bytes: &[u8; BDA_VIDEO_STATE_BYTES]) -> bool {
+        let mode = match bytes[0] {
+            0x03 => GuestVideoMode::Text80x25Color,
+            0x13 => GuestVideoMode::Vga320x200x256,
+            _ => return false,
+        };
+        let word = |index: usize| u16::from_le_bytes([bytes[index], bytes[index + 1]]);
+        let (columns, page_size) = match mode {
+            GuestVideoMode::Text80x25Color => (TEXT_COLUMNS as u16, 0x1000),
+            GuestVideoMode::Vga320x200x256 => (40, VGA_FRAMEBUFFER_BYTES as u16),
+        };
+        // 0040:004Ah columns, 0040:004Ch page size, 0040:004Eh page offset.
+        if word(0x01) != columns || word(0x03) != page_size || word(0x05) != 0 {
+            return false;
+        }
+        // 0040:0050h..005Fh: eight page cursors. Only page zero is modeled.
+        for page in 1..8 {
+            if word(0x07 + page * 2) != 0 {
+                return false;
+            }
+        }
+        let cursor = word(0x07);
+        let column = usize::from(cursor as u8);
+        let row = usize::from((cursor >> 8) as u8);
+        if column >= TEXT_COLUMNS || row >= TEXT_ROWS {
+            return false;
+        }
+        let shape = word(0x17); // 0040:0060h
+        if bytes[0x19] != 0 {
+            return false; // 0040:0062h active page
+        }
+        if word(0x1a) != 0x3d4 {
+            return false; // 0040:0063h color CRTC base
+        }
+        if bytes[0x3b] != mode.character_rows() - 1 || word(0x3c) != mode.character_height() {
+            return false; // 0040:0084h rows-1, 0040:0085h character height
+        }
+        if bytes[0x3f] != (crate::video::EGA_FEATURE_BITS << 4) | crate::video::EGA_SWITCH_SETTINGS
+        {
+            return false; // 0040:0088h feature/switch settings
+        }
+
+        if self.video_mode != mode {
+            self.video_mode = mode;
+            self.video_mode_generation = self.video_mode_generation.wrapping_add(1);
+            if mode == GuestVideoMode::Text80x25Color {
+                self.mouse.leave_graphics_mode();
+            }
+        }
+        self.set_cursor(column, row);
+        self.set_cursor_shape(shape);
+        true
+    }
+
     pub(crate) fn put_cell(&mut self, column: usize, row: usize, character: u8, attribute: u8) {
         if column < TEXT_COLUMNS && row < TEXT_ROWS {
             let offset = ((row * TEXT_COLUMNS + column) * 2) as u16;
@@ -2588,6 +3155,39 @@ impl Runtime {
             }
         }
         self.sync_cursor_bda();
+    }
+    pub(crate) fn scroll_down(
+        &mut self,
+        top: usize,
+        left: usize,
+        bottom: usize,
+        right: usize,
+        lines: usize,
+        attribute: u8,
+    ) -> Result<(), Trap> {
+        if top > bottom || left > right || bottom >= TEXT_ROWS || right >= TEXT_COLUMNS {
+            return Err(Trap::InvalidVideoRectangle);
+        }
+        let height = bottom - top + 1;
+        let lines = if lines == 0 {
+            height
+        } else {
+            lines.min(height)
+        };
+        for row in (top..=bottom).rev() {
+            for column in left..=right {
+                let cell = if row >= top + lines {
+                    self.cell(column, row - lines)
+                } else {
+                    TextCell {
+                        character: b' ',
+                        attribute,
+                    }
+                };
+                self.put_cell(column, row, cell.character, cell.attribute);
+            }
+        }
+        Ok(())
     }
     pub(crate) fn scroll_up(
         &mut self,
@@ -2696,12 +3296,1303 @@ mod tests {
     use super::{translate_key_press, BiosKey, GuestState, HostKeyEvent, Runtime};
     use crate::{
         CpuState, DosDrive, GuestVideoMode, IoOperation, IoWidth, MouseViewport, Rgb8,
-        TerminationType, Trap, CHRONOS_INTERACTIVE_COM, DEFAULT_VGA_PALETTE, HELLO_CHRONOS_COM,
-        PSP_SEGMENT, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT,
+        TerminationType, TextAttributeMode, Trap, CHRONOS_INTERACTIVE_COM, DEFAULT_ATTRIBUTE,
+        DEFAULT_VGA_PALETTE, HELLO_CHRONOS_COM, PSP_SEGMENT, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT,
     };
 
     fn runtime_for(bytes: &[u8]) -> Runtime {
         Runtime::from_com(bytes).unwrap()
+    }
+
+    fn runtime386(bytes: &[u8]) -> Runtime {
+        let mut r = runtime_for(bytes);
+        r.set_cpu_profile(crate::CpuProfile::I80386RealMode);
+        r
+    }
+
+    #[test]
+    fn multiplication_full_product_boundary_tables() {
+        // Independently specified full products and signed/unsigned overflow.
+        let cases: &[(u32, u32, u32, bool, u64, bool)] = &[
+            (8, 6, 7, false, 42, false),
+            (8, 0xff, 2, true, 0xffff_ffff_ffff_fffe, false),
+            (8, 0x80, 0xff, true, 128, true),
+            (8, 0x80, 1, true, 0xffff_ffff_ffff_ff80, false),
+            (8, 0xff, 0xff, false, 0xfe01, true),
+            (16, 0x7fff, 1, true, 0x7fff, false),
+            (16, 0x8000, 0xffff, true, 0x8000, true),
+            (16, 0xffff, 0xffff, true, 1, false),
+            (16, 0xffff, 0xffff, false, 0xfffe0001, true),
+            (32, 95, 1024, true, 0x17c00, false),
+            (32, 0xffff_fffe, 3, true, 0xffff_ffff_ffff_fffa, false),
+            (32, 0xffff_fffe, 0xffff_fffd, true, 6, false),
+            (32, 0x7fff_ffff, 1, true, 0x7fff_ffff, false),
+            (32, 0x7fff_ffff, 2, true, 0xffff_fffe, true),
+            (32, 0x8000_0000, 1, true, 0xffff_ffff_8000_0000, false),
+            (32, 0x8000_0000, 0xffff_ffff, true, 0x8000_0000, true),
+            (
+                32,
+                0xffff_ffff,
+                0xffff_ffff,
+                false,
+                0xffff_fffe_0000_0001,
+                true,
+            ),
+            (32, 0xffff_ffff, 0, false, 0, false),
+            (32, 0, 0x8000_0000, true, 0, false),
+        ];
+        for &(bits, left, right, signed, expected, overflow) in cases {
+            let mut code = Vec::new();
+            if bits == 32 {
+                code.push(0x66);
+            }
+            code.extend_from_slice(&[
+                if bits == 8 { 0xf6 } else { 0xf7 },
+                if signed { 0xe9 } else { 0xe1 },
+            ]);
+            let mut r = runtime386(&code);
+            for index in 0..8 {
+                r.cpu.set_reg32(index, 0xabcd1234 + index as u32);
+            }
+            r.cpu.set_reg32(0, left);
+            r.cpu.set_reg32(1, right);
+            r.cpu.flags = 0xf7d6;
+            let before = r.cpu;
+            r.step();
+            assert!(!matches!(r.state(), GuestState::Trapped(_)));
+            assert_eq!(r.cpu.ip, 0x100 + code.len() as u16);
+            let actual = match bits {
+                8 => r.cpu.ax as u64,
+                16 => ((r.cpu.dx as u64) << 16) | r.cpu.ax as u64,
+                _ => ((r.cpu.reg32(2) as u64) << 32) | r.cpu.reg32(0) as u64,
+            };
+            let mask = if bits == 32 {
+                u64::MAX
+            } else {
+                (1u64 << (bits * 2)) - 1
+            };
+            assert_eq!(actual, expected & mask, "{bits} {left:x} {right:x}");
+            assert_eq!(r.cpu.flags & 0x801, if overflow { 0x801 } else { 0 });
+            assert_eq!(r.cpu.flags & !0x801, before.flags & !0x801);
+            for index in [1, 3, 4, 5, 6, 7] {
+                assert_eq!(r.cpu.reg32(index), before.reg32(index));
+            }
+            if bits < 32 {
+                assert_eq!(r.cpu.gpr_upper, before.gpr_upper);
+            }
+            if bits == 8 {
+                assert_eq!(r.cpu.reg32(2), before.reg32(2));
+            }
+        }
+    }
+
+    #[test]
+    fn idiv_register_results_and_faults() {
+        for word in [false, true] {
+            let bits = if word { 16 } else { 32 };
+            let min = -(1i64 << (bits - 1));
+            let max = -min - 1;
+            let mask = ((1u64 << bits) - 1) as u32;
+            let code = if word {
+                &[0xf7, 0xfb][..]
+            } else {
+                &[0x66, 0xf7, 0xfb][..]
+            };
+            for (dividend, divisor, result) in [
+                (23, 4, Some((5, 3))),
+                (-23, 4, Some((-5, -3))),
+                (23, -4, Some((-5, 3))),
+                (-23, -4, Some((5, -3))),
+                (0, -1, Some((0, 0))),
+                (min, 1, Some((min, 0))),
+                (max, 1, Some((max, 0))),
+                (1i64 << bits, 4, Some((1i64 << (bits - 2), 0))),
+                (5, 0, None),
+                (max + 1, 1, None),
+                (min - 1, 1, None),
+                (min, -1, None),
+                (if word { i64::from(i32::MIN) } else { i64::MIN }, -1, None),
+            ] {
+                let mut r = runtime386(code);
+                for index in 0..8 {
+                    r.cpu.set_reg32(index, 0x1234_5678 + u32::from(index));
+                }
+                let put = |cpu: &mut CpuState, index, value: i64| {
+                    cpu.set_reg32(index, (cpu.reg32(index) & !mask) | (value as u32 & mask));
+                };
+                put(&mut r.cpu, 0, dividend);
+                put(&mut r.cpu, 2, dividend >> bits);
+                put(&mut r.cpu, 3, divisor);
+                r.cpu.flags = 0x0ed7;
+                let mut expected = r.cpu;
+                let start = expected.ip;
+                r.step();
+                expected.ip += code.len() as u16;
+                if let Some((quotient, remainder)) = result {
+                    put(&mut expected, 0, quotient);
+                    put(&mut expected, 2, remainder);
+                    assert_eq!(r.state(), &GuestState::Running);
+                    assert_eq!(r.instructions_retired(), 1);
+                } else {
+                    assert!(
+                        matches!(r.state(), GuestState::Trapped(Trap::DivideError { cs, ip })
+                        if *cs == expected.cs && *ip == start)
+                    );
+                    assert_eq!(r.instructions_retired(), 0);
+                }
+                assert_eq!(r.cpu, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn idiv_memory_prefixes_and_segment_limit() {
+        // ES:[0200] as a dword, then DS:[0200] as a word.
+        let mut r = runtime386(&[0x26, 0x66, 0xf7, 0x3e, 0, 2, 0xf7, 0x3e, 0, 2]);
+        r.cpu.es = 0x3000;
+        r.cpu.set_reg32(0, 0x0001_0005);
+        r.memory.write_u16(r.cpu.es, 0x200, 0);
+        r.memory.write_u16(r.cpu.es, 0x202, 1);
+        r.memory.write_u16(r.cpu.ds, 0x200, 2);
+        r.memory.write_u16(r.cpu.ds, 0x202, 1);
+        r.step();
+        assert_eq!((r.cpu.reg32(0), r.cpu.reg32(2), r.cpu.ip), (1, 5, 0x106));
+        r.cpu.ax = 13;
+        r.cpu.dx = 0;
+        r.step();
+        assert_eq!((r.cpu.reg32(0), r.cpu.reg32(2), r.cpu.ip), (6, 1, 0x10a));
+        assert_eq!(r.instructions_retired(), 2);
+
+        let mut invalid = runtime386(&[0x66, 0xf7, 0x3e, 0xfd, 0xff]);
+        let mut expected = invalid.cpu;
+        invalid.step();
+        assert!(matches!(
+            invalid.state(),
+            GuestState::Trapped(Trap::SegmentLimit { segment, offset: 0xfffd, width: 4 })
+                if *segment == expected.ds
+        ));
+        assert_eq!(invalid.instructions_retired(), 0);
+        expected.ip += 5;
+        assert_eq!(invalid.cpu, expected);
+    }
+
+    #[test]
+    fn multiplication_memory_widths_and_segment_boundary() {
+        for (code, bits) in [
+            (&[0xf6, 0x26, 0xfc, 0xff][..], 8),
+            (&[0xf7, 0x26, 0xfc, 0xff][..], 16),
+            (&[0x66, 0xf7, 0x26, 0xfc, 0xff][..], 32),
+        ] {
+            let mut r = runtime386(code);
+            r.cpu.set_reg32(0, 3);
+            r.memory.write_u16(r.cpu.ds, 0xfffc, 7);
+            r.memory.write_u16(r.cpu.ds, 0xfffe, 0);
+            r.step();
+            assert_eq!(r.cpu.ax, 21);
+            assert_eq!(r.cpu.flags & 0x801, 0);
+            if bits == 32 {
+                assert_eq!(r.cpu.reg32(2), 0);
+            }
+        }
+        for code in [
+            &[0x66, 0x69, 0xc1, 0xfe, 0xff, 0xff, 0xff][..],
+            &[0x66, 0x6b, 0xc1, 0xfe][..],
+        ] {
+            let mut r = runtime386(code);
+            r.cpu.set_reg32(1, 0x8000_0000);
+            r.step();
+            assert_eq!(r.cpu.reg32(0), 0);
+            assert_eq!(r.cpu.flags & 0x801, 0x801);
+            assert_eq!(r.cpu.reg32(1), 0x8000_0000);
+        }
+        let mut r = runtime_for(&[0x6b, 0xc1, 0xfe]);
+        r.set_cpu_profile(crate::CpuProfile::I80186);
+        r.cpu.cx = 3;
+        r.step();
+        assert_eq!(r.cpu.ax, 0xfffa);
+    }
+
+    #[test]
+    fn multiplication_memory_immediates_profiles_and_prefixes() {
+        for dword in [false, true] {
+            for opcode in [0x69, 0x6b, 0xaf] {
+                let mut code = vec![0x26];
+                if dword {
+                    code.push(0x66);
+                }
+                if opcode == 0xaf {
+                    code.push(0x0f);
+                }
+                code.extend_from_slice(&[opcode, 0x0e, 0x00, 0x02]); // ES:[0200] -> (E)CX
+                if opcode == 0x6b {
+                    code.push(0xfe);
+                }
+                if opcode == 0x69 {
+                    code.extend_from_slice(&[0xfe, 0xff]);
+                    if dword {
+                        code.extend_from_slice(&[0xff, 0xff]);
+                    }
+                }
+                code.extend_from_slice(&[0xb9, 0x34, 0x12]);
+                let mut r = runtime386(&code);
+                r.cpu.es = 0x3000;
+                r.memory.write_u16(0x3000, 0x200, 3);
+                r.memory.write_u16(0x3000, 0x202, 0);
+                r.cpu.set_reg32(1, 0xffff_fffe);
+                let before = r.cpu;
+                r.step();
+                assert_eq!(r.cpu.reg16(1), 0xfffa);
+                if dword {
+                    assert_eq!(r.cpu.reg32(1), 0xffff_fffa);
+                }
+                assert_eq!(r.cpu.flags & 0x801, 0);
+                assert_eq!(r.cpu.reg32(0), before.reg32(0));
+                assert_eq!(r.cpu.reg32(2), before.reg32(2));
+                assert_eq!(r.cpu.ip, 0x100 + code.len() as u16 - 3);
+                r.step(); // operand prefix expires
+                assert_eq!(r.cpu.cx, 0x1234);
+            }
+        }
+        let mut memory = runtime386(&[0x26, 0x66, 0xf7, 0x2e, 0x00, 0x02]);
+        memory.cpu.es = 0x3000;
+        memory.memory.write_u16(0x3000, 0x200, 0xfffe);
+        memory.memory.write_u16(0x3000, 0x202, 0xffff);
+        memory.cpu.set_reg32(0, 3);
+        memory.step();
+        assert_eq!(memory.cpu.reg32(0), 0xffff_fffa);
+        assert_eq!(memory.cpu.reg32(2), 0xffff_ffff);
+        let mut invalid = runtime386(&[0x66, 0xf7, 0x2e, 0xfd, 0xff]);
+        let before = invalid.cpu;
+        invalid.step();
+        assert!(matches!(
+            invalid.state(),
+            GuestState::Trapped(Trap::SegmentLimit { .. })
+        ));
+        assert_eq!(invalid.cpu.ax, before.ax);
+        assert_eq!(invalid.cpu.dx, before.dx);
+        assert_eq!(invalid.cpu.flags, before.flags);
+        for code in [
+            &[0x69, 0xc1, 1, 0][..],
+            &[0x6b, 0xc1, 1][..],
+            &[0x66, 0xf7, 0xe9][..],
+            &[0x0f, 0xaf, 0xc1][..],
+        ] {
+            let mut r = runtime_for(code);
+            r.step();
+            assert!(matches!(r.state(), GuestState::Trapped(_)));
+        }
+        let mut overflow = runtime386(&[0x66, 0x0f, 0xaf, 0xc1]);
+        overflow.cpu.set_reg32(0, 0x8000_0000);
+        overflow.cpu.set_reg32(1, 0xffff_ffff);
+        overflow.step();
+        assert_eq!(overflow.cpu.reg32(0), 0x8000_0000);
+        assert_eq!(overflow.cpu.flags & 0x801, 0x801);
+    }
+
+    #[test]
+    fn dword_aliases_prefix_lifetime_and_dn_shift() {
+        let mut r = runtime386(&[
+            0x66, 0xb8, 0x78, 0x56, 0x34, 0x12, 0xb8, 0x5f, 0, 0xb4, 0xab, 0xb0, 0xcd, 0x66, 0xc1,
+            0xe0, 0x10, 0x90,
+        ]);
+        r.step();
+        assert_eq!(r.cpu.reg32(0), 0x12345678);
+        r.step();
+        assert_eq!(r.cpu.reg32(0), 0x1234005f);
+        r.step();
+        r.step();
+        assert_eq!(r.cpu.reg32(0), 0x1234abcd);
+        r.step();
+        assert_eq!(r.cpu.reg32(0), 0xabcd0000);
+        assert_eq!(r.cpu.ip, 0x111);
+        r.step();
+        assert_eq!(r.cpu.ip, 0x112);
+        for index in 0..8 {
+            r.cpu.set_reg32(index, 0xfeed1234);
+            r.cpu.set_reg16(index, 0xabcd);
+            assert_eq!(r.cpu.reg32(index), 0xfeedabcd);
+        }
+    }
+
+    #[test]
+    fn cwd_sign_extends_ax_without_changing_flags_or_other_state() {
+        for (ax, expected_dx) in [
+            (0x0001, 0x0000),
+            (0x7fff, 0x0000),
+            (0x8000, 0xffff),
+            (0xffff, 0xffff),
+            (0x0000, 0x0000),
+        ] {
+            let mut r = runtime386(&[0x99]);
+            r.cpu.ax = ax;
+            r.cpu.dx = 0x1234;
+            r.cpu.flags = 0xfed7;
+            let before = r.cpu;
+            r.step();
+            assert_eq!(r.cpu.dx, expected_dx, "AX={ax:04x}");
+            let mut expected = before;
+            expected.dx = expected_dx;
+            expected.ip = 0x101;
+            assert_eq!(r.cpu, expected);
+        }
+    }
+
+    #[test]
+    fn cdq_sign_extends_eax_and_operand_override_is_consumed_once() {
+        for (eax, expected_edx) in [
+            (1, 0),
+            (0x7fff_ffff, 0),
+            (0x8000_0000, u32::MAX),
+            (u32::MAX, u32::MAX),
+            (0, 0),
+        ] {
+            let mut r = runtime386(&[0x66, 0x99, 0x99]);
+            r.cpu.set_reg32(0, eax);
+            r.cpu.set_reg32(2, 0x1234_5678);
+            r.cpu.flags = 0xa5d7;
+            let before = r.cpu;
+            r.step();
+            assert_eq!(r.cpu.reg32(2), expected_edx, "EAX={eax:08x}");
+            assert_eq!(r.cpu.reg32(0), eax);
+            assert_eq!(r.cpu.flags, 0xa5d7);
+            assert_eq!(r.cpu.ip, 0x102);
+            assert_eq!(r.instructions_retired(), 1);
+            let mut expected = before;
+            expected.set_reg32(2, expected_edx);
+            expected.ip = 0x102;
+            assert_eq!(r.cpu, expected);
+            // The following unprefixed 99 is CWD, proving 66 does not leak.
+            let expected_dx = if eax as u16 & 0x8000 != 0 { 0xffff } else { 0 };
+            r.step();
+            assert_eq!(r.cpu.dx, expected_dx, "subsequent CWD after EAX={eax:08x}");
+            assert_eq!(r.cpu.reg32(0), eax);
+            assert_eq!(r.cpu.flags, 0xa5d7);
+            assert_eq!(r.cpu.ip, 0x103);
+            assert_eq!(r.instructions_retired(), 2);
+        }
+    }
+
+    #[test]
+    fn aam_honors_its_immediate_radix_and_byte_width() {
+        for (al, base, quotient, remainder) in [
+            (0, 10, 0, 0),
+            (9, 10, 0, 9),
+            (10, 10, 1, 0),
+            (99, 10, 9, 9),
+            (17, 3, 5, 2),
+            (255, 16, 15, 15),
+            (255, 254, 1, 1),
+            (128, 255, 0, 128),
+            (255, 255, 1, 0),
+        ] {
+            // 66 must not widen AAM; the following AAM proves both immediate
+            // operands were consumed and that the override did not leak.
+            let mut r = runtime386(&[0x66, 0xd4, base, 0xd4, 2]);
+            for index in 0..8 {
+                r.cpu.set_reg32(index, 0xa5a5_0000 | u32::from(index));
+            }
+            r.cpu.set_al(al);
+            r.cpu.set_ah(0xcc);
+            r.cpu.flags = 0xfbd7;
+            if remainder & 0x80 != 0 {
+                r.cpu.flags &= !CpuState::FLAG_SF;
+            }
+            let before = r.cpu;
+            r.step();
+            assert_eq!((r.cpu.ah(), r.cpu.al()), (quotient, remainder));
+            assert_eq!(r.cpu.ip, 0x103);
+            assert_eq!(r.instructions_retired(), 1);
+            assert_eq!(r.cpu.reg32(0) & !0xffff, before.reg32(0) & !0xffff);
+            for index in 1..8 {
+                assert_eq!(r.cpu.reg32(index), before.reg32(index));
+            }
+            // AAM defines PF, ZF, and SF from AL; its remaining arithmetic
+            // flags are undefined and retain the emulator's prior values.
+            assert_eq!(
+                r.cpu.flags & !(CpuState::FLAG_PF | CpuState::FLAG_ZF | CpuState::FLAG_SF),
+                before.flags & !(CpuState::FLAG_PF | CpuState::FLAG_ZF | CpuState::FLAG_SF)
+            );
+            assert_eq!(r.cpu.flags & CpuState::FLAG_ZF != 0, remainder == 0);
+            assert_eq!(r.cpu.flags & CpuState::FLAG_SF != 0, remainder & 0x80 != 0);
+            assert_eq!(
+                r.cpu.flags & CpuState::FLAG_PF != 0,
+                remainder.count_ones() % 2 == 0
+            );
+            r.step();
+            assert_eq!(r.cpu.ip, 0x105);
+            assert_eq!((r.cpu.ah(), r.cpu.al()), (remainder / 2, remainder % 2));
+        }
+    }
+
+    #[test]
+    fn aam_base_zero_uses_divide_error_without_partial_state() {
+        let mut r = runtime386(&[0xd4, 0]);
+        r.cpu.set_reg32(0, 0xface_beef);
+        r.cpu.flags = 0xfad7;
+        let mut expected = r.cpu;
+        let start = expected.ip;
+        r.step();
+        expected.ip += 2;
+        assert!(matches!(
+            r.state(),
+            GuestState::Trapped(Trap::DivideError { cs, ip }) if *cs == expected.cs && *ip == start
+        ));
+        assert_eq!(r.cpu, expected);
+        assert_eq!(r.instructions_retired(), 0);
+    }
+
+    #[test]
+    fn dword_shift_matrix_flags_counts_and_memory() {
+        for kind in [0u8, 1, 2, 3, 4, 5, 7] {
+            for count in [0u8, 1, 16, 31, 32, 33, 255] {
+                for opcode in [0xc1u8, 0xd1, 0xd3] {
+                    let effective = if opcode == 0xd1 { 1 } else { count & 31 };
+                    let mut expected = 0x80000001u32;
+                    let mut carry = true;
+                    for _ in 0..effective {
+                        let low = expected & 1 != 0;
+                        let high = expected >> 31 != 0;
+                        expected = match kind {
+                            0 => expected.rotate_left(1),
+                            1 => expected.rotate_right(1),
+                            2 => (expected << 1) | carry as u32,
+                            3 => (expected >> 1) | ((carry as u32) << 31),
+                            4 => expected << 1,
+                            5 => expected >> 1,
+                            _ => ((expected as i32) >> 1) as u32,
+                        };
+                        carry = if matches!(kind, 0 | 2 | 4) { high } else { low };
+                    }
+                    for memory in [false, true] {
+                        let mut bytes = vec![
+                            0x26,
+                            0x66,
+                            opcode,
+                            (kind << 3) | if memory { 6 } else { 0xc0 },
+                        ];
+                        if memory {
+                            bytes.extend_from_slice(&[1, 2]);
+                        }
+                        if opcode == 0xc1 {
+                            bytes.push(count);
+                        }
+                        let mut r = runtime386(&bytes);
+                        r.cpu.es = 0xffff;
+                        r.cpu.cx = count as u16;
+                        r.cpu.flags = 0x0ad7;
+                        r.cpu.set_reg32(0, 0x80000001);
+                        r.memory.write_u16(r.cpu.es, 0x201, 1);
+                        r.memory.write_u16(r.cpu.es, 0x203, 0x8000);
+                        r.step();
+                        assert_eq!(r.instructions_retired(), 1);
+                        let actual = if memory {
+                            r.memory.read_u16(r.cpu.es, 0x201) as u32
+                                | ((r.memory.read_u16(r.cpu.es, 0x203) as u32) << 16)
+                        } else {
+                            r.cpu.reg32(0)
+                        };
+                        assert_eq!(
+                            actual, expected,
+                            "kind={kind} count={count} opcode={opcode:x}"
+                        );
+                        assert_eq!(r.cpu.ip, 0x100 + bytes.len() as u16);
+                        if effective == 0 {
+                            assert_eq!(r.cpu.flags, 0x0ad7);
+                        } else {
+                            assert_eq!(r.cpu.flags & CpuState::FLAG_CF != 0, carry);
+                            if kind >= 4 {
+                                assert_eq!(r.cpu.flags & CpuState::FLAG_ZF != 0, expected == 0);
+                                assert_eq!(
+                                    r.cpu.flags & CpuState::FLAG_SF != 0,
+                                    expected >> 31 != 0
+                                );
+                                assert_eq!(
+                                    r.cpu.flags & CpuState::FLAG_PF != 0,
+                                    (expected as u8).count_ones() % 2 == 0
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn double_shifts_use_full_source_and_mask_counts() {
+        for (second, expected) in [(0xac, 0x123489ab), (0xa4, 0xcdef5678)] {
+            let mut r = runtime386(&[0x66, 0x0f, second, 0xd0, 16]);
+            r.cpu.set_reg32(0, 0x89abcdef);
+            r.cpu.set_reg32(2, 0x56781234);
+            r.step();
+            assert_eq!(r.cpu.reg32(0), expected);
+            assert_eq!(r.cpu.reg32(2), 0x56781234);
+            assert_eq!(r.cpu.ip, 0x105);
+        }
+        for second in [0xa4, 0xa5, 0xac, 0xad] {
+            for count in [0u8, 1, 31, 32, 33] {
+                let mut r = runtime386(&[0x66, 0x0f, second, 0x16, 0xfc, 0xff, count]);
+                r.cpu.cx = count as u16;
+                r.cpu.set_reg32(2, 0x80000001);
+                r.memory.write_u16(r.cpu.ds, 0xfffc, 0x4567);
+                r.memory.write_u16(r.cpu.ds, 0xfffe, 0x8123);
+                r.cpu.flags = 0x246;
+                r.step();
+                let n = count & 31;
+                let expected = if n == 0 {
+                    0x81234567
+                } else if second & 8 == 0 {
+                    ((0x8123456780000001u64 << n) >> 32) as u32
+                } else {
+                    (0x8000000181234567u64 >> n) as u32
+                };
+                assert_eq!(
+                    r.memory.read_u16(r.cpu.ds, 0xfffc) as u32
+                        | ((r.memory.read_u16(r.cpu.ds, 0xfffe) as u32) << 16),
+                    expected
+                );
+                if n == 0 {
+                    assert_eq!(r.cpu.flags, 0x246);
+                }
+                if n == 1 {
+                    assert_eq!(
+                        r.cpu.flags & CpuState::FLAG_OF != 0,
+                        (expected ^ 0x81234567) >> 31 != 0
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn dword_mov_unaligned_memory_and_nested_interrupt_aliases() {
+        let mut r = runtime386(&[
+            0x66, 0xc7, 0x06, 1, 2, 0x78, 0x56, 0x34, 0x12, 0x66, 0x8b, 0x06, 1, 2, 0x66, 0x89,
+            0xc3, 0xcd, 0x60,
+        ]);
+        r.memory.write_u16(0, 0x60 * 4, 0x300);
+        r.memory.write_u16(0, 0x60 * 4 + 2, r.cpu.cs);
+        r.memory.write_u16(0, 0x61 * 4, 0x310);
+        r.memory.write_u16(0, 0x61 * 4 + 2, r.cpu.cs);
+        r.memory
+            .write_slice(r.cpu.cs, 0x300, &[0xcd, 0x61, 0xcf])
+            .unwrap();
+        r.memory
+            .write_slice(r.cpu.cs, 0x310, &[0xb4, 0xab, 0xcf])
+            .unwrap();
+        let sp = r.cpu.sp;
+        r.run_slice(8);
+        assert_eq!(r.cpu.reg32(0), 0x1234ab78);
+        assert_eq!(r.cpu.reg32(3), 0x12345678);
+        assert_eq!(r.cpu.sp, sp);
+        assert_eq!(r.cpu.ip, 0x113);
+    }
+
+    #[test]
+    fn staged_prefixes_and_segment_limits_fail_without_operand_writes() {
+        for bytes in [
+            &[0x67, 0x66, 0xc1, 0xe0, 16][..],
+            &[0x66, 0x01, 0xc0],
+            &[0x66, 0xc1, 0x26, 0xfd, 0xff, 1],
+            &[0xf0, 0x66, 0xc1, 0xe0, 1],
+        ] {
+            let mut r = runtime386(bytes);
+            r.cpu.set_reg32(0, 0x12345678);
+            r.cpu.flags = 0x246;
+            r.memory.write_u16(r.cpu.ds, 0xfffd, 0xabcd);
+            r.step();
+            assert!(matches!(r.state(), GuestState::Trapped(_)));
+            assert_eq!(r.cpu.reg32(0), 0x12345678);
+            assert_eq!(r.cpu.flags, 0x246);
+            assert_eq!(r.memory.read_u16(r.cpu.ds, 0xfffd), 0xabcd);
+        }
+        let mut old = runtime_for(&[0x66, 0xc1, 0xe0, 16]);
+        old.step();
+        assert!(matches!(old.state(), GuestState::Trapped(_)));
+    }
+
+    #[test]
+    fn xlat_uses_segment_override_preserves_state_and_consumes_prefixes() {
+        for (prefix, segment) in [
+            (0x26, 0x2222),
+            (0x2e, 0x1111),
+            (0x36, 0x4444),
+            (0x3e, 0x3333),
+        ] {
+            let mut r = runtime_for(&[prefix, 0xd7, 0x90]);
+            r.cpu.ds = 0x3333;
+            r.cpu.es = 0x2222;
+            r.cpu.cs = 0x1111;
+            r.cpu.ss = 0x4444;
+            r.memory
+                .write_slice(r.cpu.cs, 0x100, &[prefix, 0xd7, 0xa0, 0x00, 0x02])
+                .unwrap();
+            r.cpu.bx = 0x1200;
+            r.cpu.ax = 0xabff;
+            r.cpu.flags = 0x0ed7;
+            r.memory.write_u8(segment, 0x12ff, 0x5a);
+            r.memory.write_u8(0x3333, 0x12ff, 0xc3);
+            r.memory.write_u8(0x3333, 0x0200, 0x66);
+            r.memory.write_u8(0x2222, 0x0200, 0x77);
+            let bx = r.cpu.bx;
+            let flags = r.cpu.flags;
+            r.step();
+            assert_eq!(
+                r.cpu.ax,
+                if prefix == 0x3e { 0xabc3 } else { 0xab5a },
+                "prefix {prefix:02x}"
+            );
+            assert_eq!(r.cpu.bx, bx);
+            assert_eq!(r.cpu.flags, flags);
+            assert_eq!(r.cpu.ip, 0x102);
+            assert_eq!(r.instructions_retired(), 1);
+            r.step();
+            assert_eq!(
+                r.cpu.al(),
+                0x66,
+                "segment override leaked after {prefix:02x}"
+            );
+            assert_eq!(r.cpu.ip, 0x105);
+            assert_eq!(r.instructions_retired(), 2);
+        }
+    }
+
+    #[test]
+    fn xlat_address_and_operand_size_prefixes_follow_independent_rules() {
+        let mut r = runtime386(&[0x67, 0x26, 0x66, 0xd7]);
+        r.cpu.es = 0x2222;
+        r.cpu.bx = 0x1000;
+        r.cpu.set_reg32(3, 0x0000_2000);
+        r.cpu.set_reg32(0, 0xcafe_00ff);
+        r.cpu.flags = 0x0ed7;
+        r.memory.write_u8(0x2222, 0x20ff, 0x81);
+        let flags = r.cpu.flags;
+        r.step();
+        assert_eq!(r.cpu.reg32(0), 0xcafe_0081);
+        assert_eq!(r.cpu.reg32(3), 0x0000_2000);
+        assert_eq!(r.cpu.flags, flags);
+        assert_eq!(r.cpu.ip, 0x104);
+        assert_eq!(r.instructions_retired(), 1);
+
+        let mut operand_only = runtime386(&[0x66, 0xd7]);
+        operand_only.cpu.bx = 0x1000;
+        operand_only.cpu.set_reg32(0, 0xdead_00ff);
+        operand_only
+            .memory
+            .write_u8(operand_only.cpu.ds, 0x10ff, 0x5e);
+        operand_only.step();
+        assert_eq!(operand_only.cpu.reg32(0), 0xdead_005e);
+        assert_eq!(operand_only.cpu.ip, 0x102);
+
+        let mut overflow = runtime386(&[0x67, 0xd7]);
+        overflow.cpu.set_reg32(3, 0x0000_ffff);
+        overflow.cpu.set_al(1);
+        overflow.step();
+        assert!(matches!(
+            overflow.state(),
+            GuestState::Trapped(Trap::SegmentLimit {
+                offset: 0x1_0000,
+                width: 1,
+                ..
+            })
+        ));
+
+        let mut protected = runtime_for(&[0x26, 0xd7]);
+        protected.cpu.es = 0xa000;
+        protected.cpu.bx = 0;
+        protected.cpu.set_al(0);
+        protected.memory.write_u8(0xa000, 0, 0x12);
+        protected.memory.set_vga_addressing_enabled(false);
+        protected.step();
+        assert_eq!(protected.cpu.al(), 0xff);
+    }
+
+    #[test]
+    fn xlat_uses_ds_by_default_and_last_segment_prefix_wins() {
+        let mut r = runtime_for(&[0xd7]);
+        r.cpu.ds = 0x3333;
+        r.cpu.bx = 0x0100;
+        r.cpu.set_al(0x80);
+        r.memory.write_u8(r.cpu.ds, 0x0180, 0x42);
+        r.step();
+        assert_eq!(r.cpu.al(), 0x42);
+
+        let mut wrapped = runtime_for(&[0xd7]);
+        wrapped.cpu.ds = 0x3333;
+        wrapped.cpu.bx = 0xffff;
+        wrapped.cpu.set_al(1);
+        wrapped.memory.write_u8(0x3333, 0, 0x9b);
+        wrapped.step();
+        assert_eq!(wrapped.cpu.al(), 0x9b);
+
+        let mut conflict = runtime_for(&[0x26, 0x3e, 0xd7]);
+        conflict.cpu.es = 0x2222;
+        conflict.cpu.ds = 0x3333;
+        conflict.cpu.bx = 0x0100;
+        conflict.memory.write_u8(0x2222, 0x0100, 0x11);
+        conflict.memory.write_u8(0x3333, 0x0100, 0x22);
+        conflict.step();
+        assert_eq!(conflict.cpu.al(), 0x22);
+
+        for prefix in [0x64, 0x65] {
+            let mut unsupported = runtime386(&[prefix, 0xd7]);
+            unsupported.cpu.set_al(0x03);
+            unsupported.step();
+            assert!(matches!(
+                unsupported.state(),
+                GuestState::Trapped(Trap::UnsupportedOpcode { .. })
+            ));
+            assert_eq!(unsupported.cpu.al(), 0x03);
+            assert_eq!(unsupported.instructions_retired(), 0);
+        }
+    }
+
+    #[test]
+    fn immediate_count_shift_executes_dn_instruction() {
+        let mut runtime = runtime_for(&[0xc1, 0xe7, 0x02]);
+        runtime.set_cpu_profile(crate::CpuProfile::I80286);
+        runtime.cpu.di = 1;
+        runtime.step();
+        assert_eq!(runtime.cpu.di, 4);
+        assert_eq!(runtime.cpu.ip, 0x103);
+        assert_eq!(runtime.state(), &GuestState::Running);
+    }
+
+    #[test]
+    fn group_two_instruction_matrix() {
+        // Expected result, carry, and one-bit overflow, independently tabulated.
+        for (kind, byte, word, cf, of) in [
+            (0, 0x03, 0x0003, true, true),
+            (1, 0xc0, 0xc000, true, false),
+            (2, 0x03, 0x0003, true, true),
+            (3, 0xc0, 0xc000, true, false),
+            (4, 0x02, 0x0002, true, true),
+            (5, 0x40, 0x4000, true, true),
+            (7, 0xc0, 0xc000, true, false),
+        ] {
+            for (opcode, wide) in [
+                (0xc0, false),
+                (0xc1, true),
+                (0xd0, false),
+                (0xd1, true),
+                (0xd2, false),
+                (0xd3, true),
+            ] {
+                let mut r = runtime_for(&[opcode, 0xc0 | kind << 3, 1]);
+                r.set_cpu_profile(crate::CpuProfile::I80286);
+                r.cpu.ax = if wide { 0x8001 } else { 0x5581 };
+                r.cpu.cx = 1;
+                r.cpu.flags = 0xf057;
+                let before = r.cpu;
+                r.step();
+                assert_eq!(r.state(), &GuestState::Running);
+                assert_eq!(r.cpu.ax, if wide { word } else { 0x5500 | byte });
+                assert_eq!(r.cpu.flags & CpuState::FLAG_CF != 0, cf);
+                assert_eq!(r.cpu.flags & CpuState::FLAG_OF != 0, of);
+                assert_eq!(r.cpu.ip, 0x100 + if opcode < 0xd0 { 3 } else { 2 });
+                assert_eq!(r.cpu.cx, before.cx);
+                assert_eq!(r.cpu.sp, before.sp);
+                // AF is undefined for shifts: assert only preserved control flags.
+                assert_eq!(r.cpu.flags & 0xf700, before.flags & 0xf700);
+                if kind < 4 {
+                    assert_eq!(r.cpu.flags & 0xd4, before.flags & 0xd4);
+                } else {
+                    assert_eq!(r.cpu.flags & CpuState::FLAG_ZF, 0);
+                    assert_eq!(r.cpu.flags & CpuState::FLAG_SF != 0, kind == 7);
+                    assert_eq!(
+                        r.cpu.flags & CpuState::FLAG_PF != 0,
+                        kind == 7 || (wide && kind == 5)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn immediate_group_two_memory_matches_registers() {
+        for opcode in [0xc0, 0xc1] {
+            for kind in [0, 1, 2, 3, 4, 5, 7] {
+                for count in [0, 1, 2, 9, 17, 32, 255] {
+                    let mut reg = runtime_for(&[opcode, 0xc0 | kind << 3, count]);
+                    let mut mem = runtime_for(&[opcode, 0x40 | kind << 3, 0xff, count]);
+                    for r in [&mut reg, &mut mem] {
+                        r.set_cpu_profile(crate::CpuProfile::I80286);
+                        r.cpu.ax = 0x8181;
+                        r.cpu.bx = 0x2001;
+                        r.cpu.si = 0;
+                        r.cpu.flags = 0xf8d7;
+                    }
+                    mem.memory.write_u16(mem.cpu.ds, 0x2000, 0x8181);
+                    reg.step();
+                    mem.step();
+                    assert_eq!(mem.state(), &GuestState::Running);
+                    let mask = if opcode == 0xc0 { 0xff } else { 0xffff };
+                    assert_eq!(
+                        mem.memory.read_u16(mem.cpu.ds, 0x2000) & mask,
+                        reg.cpu.ax & mask
+                    );
+                    assert_eq!(mem.cpu.flags, reg.cpu.flags);
+                    assert_eq!(mem.cpu.ax, 0x8181);
+                    assert_eq!(mem.cpu.bx, 0x2001);
+                    assert_eq!(mem.cpu.ip, 0x104);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rotate_rings_and_arithmetic_shift_boundaries() {
+        for (opcode, bits, initial) in [(0xc0, 8u32, 0x81u32), (0xc1, 16, 0x8001)] {
+            for kind in [0, 1, 2, 3, 7] {
+                for count in [0u8, 2, 8, 9, 16, 17, 31, 32, 33, 255] {
+                    let mut r = runtime_for(&[opcode, 0xc0 | kind << 3, count]);
+                    r.set_cpu_profile(crate::CpuProfile::I80286);
+                    r.cpu.ax = initial as u16;
+                    r.cpu.flags = 0xf8d7;
+                    let original_flags = r.cpu.flags;
+                    let mask = (1u32 << bits) - 1;
+                    let mut result = initial;
+                    let mut carry = true;
+                    let mut steps = count & 31;
+                    if kind == 2 || kind == 3 {
+                        steps %= (bits + 1) as u8;
+                    }
+                    for _ in 0..steps {
+                        let high = result & (1 << (bits - 1)) != 0;
+                        let low = result & 1 != 0;
+                        (result, carry) = match kind {
+                            0 => (((result << 1) | high as u32) & mask, high),
+                            1 => ((result >> 1) | ((low as u32) << (bits - 1)), low),
+                            2 => (((result << 1) | carry as u32) & mask, high),
+                            3 => ((result >> 1) | ((carry as u32) << (bits - 1)), low),
+                            _ => ((result >> 1) | ((high as u32) << (bits - 1)), low),
+                        };
+                    }
+                    r.step();
+                    assert_eq!(r.cpu.ax as u32 & mask, result);
+                    assert_eq!(r.cpu.flags & CpuState::FLAG_CF != 0, carry);
+                    if steps == 0 {
+                        assert_eq!(r.cpu.flags, original_flags);
+                    }
+                    if kind < 4 {
+                        assert_eq!(r.cpu.flags & 0xd4, original_flags & 0xd4);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn shift_counts_and_profile_rules() {
+        for (wide, width) in [(false, 8), (true, 16)] {
+            for count in [0, 1, 2, width, width + 1, 31, 32, 33, 255] {
+                let mut r = runtime_for(&[if wide { 0xc1 } else { 0xc0 }, 0xe0, count]);
+                r.set_cpu_profile(crate::CpuProfile::I80286);
+                r.cpu.ax = 0x8181;
+                r.cpu.flags = 0xf8d7;
+                let before = r.cpu.flags;
+                r.step();
+                let bits = count & 31;
+                let mask = if wide { 0xffff } else { 0xff };
+                let initial: u32 = if wide { 0x8181 } else { 0x81 };
+                let expected = (initial << bits) & mask;
+                assert_eq!(r.cpu.ax & mask as u16, expected as u16);
+                assert_eq!(r.cpu.ip, 0x103);
+                if bits == 0 {
+                    assert_eq!(r.cpu.flags, before);
+                }
+                // CF/OF are deliberately not asserted when architecturally undefined.
+                if bits > 0 && bits < width {
+                    assert_eq!(
+                        r.cpu.flags & CpuState::FLAG_CF != 0,
+                        initial & (1 << (width - bits)) != 0
+                    );
+                }
+            }
+        }
+        for (profile, expected) in [
+            (crate::CpuProfile::I8086, 0),
+            (crate::CpuProfile::I80186, 0x81),
+            (crate::CpuProfile::I80286, 0x81),
+        ] {
+            let mut r = runtime_for(&[0xd2, 0xe0]);
+            r.set_cpu_profile(profile);
+            r.cpu.ax = 0x81;
+            r.cpu.cx = 32;
+            r.step();
+            assert_eq!(r.cpu.ax, expected);
+        }
+        for opcode in [0xc0, 0xc1] {
+            let mut r = runtime_for(&[opcode, 0xe0, 1]);
+            r.step();
+            assert!(matches!(
+                r.state(),
+                GuestState::Trapped(Trap::CpuProfileViolation { .. })
+            ));
+        }
+        for opcode in [0xc0, 0xc1, 0xd0, 0xd1, 0xd2, 0xd3] {
+            let mut r = runtime_for(&[opcode, 0xf0, 0]);
+            r.set_cpu_profile(crate::CpuProfile::I80286);
+            r.step();
+            assert!(matches!(
+                r.state(),
+                GuestState::Trapped(Trap::UnsupportedOpcode { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn immediate_shift_memory_displacement_override_and_wrap() {
+        // ES override, [BP-1], imm8; word straddles the 20-bit physical boundary.
+        let mut r = runtime_for(&[0x26, 0xc1, 0x66, 0xff, 2]);
+        r.set_cpu_profile(crate::CpuProfile::I80286);
+        r.cpu.es = 0xffff;
+        r.cpu.bp = 0x10;
+        r.memory.write_u16(0xffff, 0xf, 0x4001);
+        let before = r.cpu;
+        r.step();
+        assert_eq!(r.memory.read_u16(0xffff, 0xf), 4);
+        assert_eq!(r.cpu.ip, 0x105);
+        assert_eq!(r.cpu.bp, before.bp);
+        assert_eq!(r.cpu.es, before.es);
+        assert_eq!(r.cpu.flags & CpuState::FLAG_CF, CpuState::FLAG_CF);
+        // Direct disp16 byte operand; all flags preserved at zero count.
+        let mut r = runtime_for(&[0xc0, 0x26, 0x00, 0x40, 0]);
+        r.set_cpu_profile(crate::CpuProfile::I80286);
+        r.memory.write_u8(r.cpu.ds, 0x4000, 0x81);
+        let flags = r.cpu.flags;
+        r.step();
+        assert_eq!(r.cpu.ip, 0x105);
+        assert_eq!(r.cpu.flags, flags);
+        assert_eq!(r.memory.read_u8(r.cpu.ds, 0x4000), 0x81);
+    }
+
+    #[test]
+    fn guest_installs_queries_invokes_and_restores_multiplex_vector() {
+        let mut r = runtime_for(&[
+            0xba, 0x00, 0x02, // MOV DX,0200
+            0xb8, 0x2f, 0x25, 0xcd, 0x21, // set DS:DX
+            0xb8, 0x2f, 0x35, 0xcd, 0x21, // get ES:BX
+            0xcd, 0x2f, 0xf4,
+        ]);
+        r.memory
+            .write_slice(r.cpu.ds, 0x200, &[0xb9, 0x34, 0x12, 0xcf])
+            .unwrap();
+        let segment = r.cpu.ds;
+        r.run_slice(20);
+        assert_eq!(r.state(), &GuestState::Halted);
+        assert_eq!((r.cpu.es, r.cpu.bx, r.cpu.cx), (segment, 0x200, 0x1234));
+        // Execute DOS restoration, using a separate code location.
+        r.memory
+            .write_slice(segment, 0x300, &[0xb8, 0x2f, 0x25, 0xcd, 0x21])
+            .unwrap();
+        r.cpu.ip = 0x300;
+        r.cpu.ds = 0x0800;
+        r.cpu.dx = 0x0400;
+        r.state = GuestState::Running;
+        r.run_slice(2);
+        assert_eq!(r.interrupt_vector(0x2f), (0x0800, 0x0400));
+    }
+
+    #[test]
+    fn nested_guest_interrupts_and_far_call_chains_restore_stack_and_flags() {
+        let mut r = runtime_for(&[0xcd, 0x60, 0xf4]);
+        // PUSHF; CALL FAR predecessor; INT 61; IRET.
+        r.memory
+            .write_slice(
+                0x2000,
+                0x20,
+                &[0x9c, 0x9a, 0x40, 0x00, 0x00, 0x20, 0xcd, 0x61, 0xcf],
+            )
+            .unwrap();
+        r.memory.write_slice(0x2000, 0x40, &[0x43, 0xcf]).unwrap();
+        r.memory.write_slice(0x2000, 0x60, &[0x41, 0xcf]).unwrap();
+        // Direct IVT stores, independent of DOS AH=25.
+        r.memory.write_u16(0, 0x180, 0x20);
+        r.memory.write_u16(0, 0x182, 0x2000);
+        r.memory.write_u16(0, 0x184, 0x60);
+        r.memory.write_u16(0, 0x186, 0x2000);
+        r.cpu.flags = 0x0303;
+        let before = r.cpu;
+        r.step();
+        assert_eq!(r.memory.read_u16(before.ss, r.cpu.sp), before.ip + 2);
+        assert_eq!(r.memory.read_u16(before.ss, r.cpu.sp + 2), before.cs);
+        assert_eq!(r.memory.read_u16(before.ss, r.cpu.sp + 4), before.flags);
+        r.run_slice(20);
+        assert_eq!(r.state(), &GuestState::Halted);
+        assert_eq!((r.cpu.bx, r.cpu.cx), (before.bx + 1, before.cx + 1));
+        assert_eq!(
+            (r.cpu.sp, r.cpu.cs, r.cpu.flags),
+            (before.sp, before.cs, before.flags)
+        );
+    }
+
+    #[test]
+    fn bios_system_fallback_uses_the_guest_frame_and_preserves_registers() {
+        for (ax, bx, flags) in [(0x1022, 0, 0x0fd6), (0x885a, 0xbeef, 0x0443)] {
+            let mut r = runtime_for(&[0xcd, 0x15, 0xf4]);
+            r.cpu.ax = ax;
+            r.cpu.bx = bx;
+            r.cpu.flags = flags;
+            r.cpu.bp = 0x4567;
+            r.cpu.ds = 0x3456;
+            r.cpu.gpr_upper = [0x1234; 8];
+            let before = r.cpu;
+            let handler = r.interrupt_vector(0x15);
+            assert_ne!(handler, (0, 0));
+            // Writes through a segment alias cannot overwrite the predecessor.
+            r.memory.write_u8(handler.0 - 1, handler.1 + 0x10, 0xf4);
+            r.step();
+            assert_eq!((r.cpu.cs, r.cpu.ip), handler);
+            assert_eq!(r.cpu.sp, before.sp - 6);
+            assert_eq!(
+                r.cpu.flags,
+                flags & !(CpuState::FLAG_IF | CpuState::FLAG_TF)
+            );
+            assert_eq!(r.memory.read_u16(before.ss, r.cpu.sp), before.ip + 2);
+            assert_eq!(r.memory.read_u16(before.ss, r.cpu.sp + 2), before.cs);
+            assert_eq!(r.memory.read_u16(before.ss, r.cpu.sp + 4), flags);
+            r.run_slice(6);
+            assert_eq!(
+                r.cpu,
+                CpuState {
+                    ax: 0x8600 | (ax & 0xff),
+                    ip: before.ip + 2,
+                    flags: flags | CpuState::FLAG_CF,
+                    ..before
+                }
+            );
+            assert_eq!(r.instructions_retired(), 7);
+        }
+    }
+
+    #[test]
+    fn bios_system_hook_can_handle_or_chain_to_saved_predecessor() {
+        for form in 0..3 {
+            // Install the hook via DOS (MOV AX,2515h; INT 21h).
+            let mut r = runtime_for(&[0xb8, 0x15, 0x25, 0xcd, 0x21, 0xcd, 0x15, 0xf4]);
+            let (segment, offset) = r.interrupt_vector(0x15);
+            let [lo, hi] = offset.to_le_bytes();
+            let [seg_lo, seg_hi] = segment.to_le_bytes();
+            r.cpu.ds = 0x2000;
+            r.cpu.dx = 0x20;
+            let hook = match form {
+                0 => alloc::vec![0xb8, 0x34, 0x12, 0xcf], // private hook result
+                1 => alloc::vec![0x41, 0xea, lo, hi, seg_lo, seg_hi], // INC CX; JMP FAR
+                // PUSHF; CALL FAR; ADC DX,0 observes predecessor CF; IRET.
+                _ => alloc::vec![0x9c, 0x9a, lo, hi, seg_lo, seg_hi, 0x83, 0xd2, 0, 0xcf],
+            };
+            r.memory.write_slice(0x2000, 0x20, &hook).unwrap();
+            r.run_slice(2);
+            assert_eq!(r.interrupt_vector(0x15), (0x2000, 0x20));
+            r.cpu.ax = 0x195a;
+            r.cpu.cx = 0;
+            r.cpu.flags = 0x0202;
+            let before = r.cpu;
+            r.run_slice(20);
+            assert_eq!(r.state(), &GuestState::Halted);
+            assert_eq!(
+                r.cpu,
+                CpuState {
+                    ax: if form == 0 { 0x1234 } else { 0x865a },
+                    cx: u16::from(form == 1),
+                    dx: before.dx + u16::from(form == 2),
+                    flags: before.flags | u16::from(form == 1),
+                    ip: before.ip + 3,
+                    ..before
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn bios_system_calls_reuse_the_stack_and_finish_within_the_slice_budget() {
+        // INT 15h; LOOP back to INT; HLT.
+        let mut r = runtime_for(&[0xcd, 0x15, 0xe2, 0xfc, 0xf4]);
+        r.cpu.cx = 10_000;
+        r.cpu.ax = 0xff55;
+        let sp = r.cpu.sp;
+        let vector = r.interrupt_vector(0x15);
+        r.run_slice(80_001);
+        assert_eq!(r.state(), &GuestState::Halted);
+        assert_eq!(r.instructions_retired(), 80_001);
+        assert_eq!((r.cpu.sp, r.cpu.cx, r.cpu.ax), (sp, 0, 0x8655));
+        assert_eq!(r.interrupt_vector(0x15), vector);
+
+        // A guest may deliberately recurse. It consumes the normal slice
+        // budget; the host never recursively dispatches the interrupt.
+        let mut r = runtime_for(&[0xcd, 0x15]);
+        let entry = (r.cpu.cs, r.cpu.ip);
+        r.set_interrupt_vector(0x15, entry.0, entry.1);
+        r.run_slice(64);
+        assert_eq!(r.state(), &GuestState::Running);
+        assert_eq!(r.instructions_retired(), 64);
+        assert_eq!(
+            r.last_slice_stop_reason,
+            crate::SliceStopReason::BudgetExhausted
+        );
+    }
+
+    #[test]
+    fn multiplex_predecessor_accepts_far_call_and_tail_jump() {
+        for handler in [
+            alloc::vec![0x9c, 0x9a, 0x00, 0x04, 0x00, 0x08, 0xcf],
+            alloc::vec![0xea, 0x00, 0x04, 0x00, 0x08],
+        ] {
+            let mut r = runtime_for(&[0xcd, 0x2f, 0xf4]);
+            r.memory.write_slice(0x2000, 0, &handler).unwrap();
+            r.set_interrupt_vector(0x2f, 0x2000, 0);
+            let before = r.cpu;
+            r.run_slice(12);
+            assert_eq!(r.state(), &GuestState::Halted);
+            assert_eq!((r.cpu.sp, r.cpu.flags), (before.sp, before.flags));
+        }
+    }
+
+    #[test]
+    fn interrupt_pointer_and_stack_wrap_within_private_megabyte() {
+        let mut r = runtime_for(&[0xcd, 0x60]);
+        r.set_interrupt_vector(0x60, 0xffff, 0x0010); // wraps to IVT byte zero
+        r.memory.write_u8(0, 0, 0xcf);
+        r.cpu.ss = 0xffff;
+        r.cpu.sp = 0x0004;
+        let before = r.cpu;
+        r.run_slice(2);
+        assert_eq!(
+            (r.cpu.cs, r.cpu.ip, r.cpu.sp),
+            (before.cs, before.ip + 2, before.sp)
+        );
+        let mut r = runtime_for(&[0xcd, 0x60]);
+        // Real mode has no invalid segment encoding: invalid code traps safely.
+        r.set_interrupt_vector(0x60, 0xf000, 0);
+        r.memory.write_u8(0xf000, 0, 0x0f);
+        r.run_slice(2);
+        assert!(matches!(r.state(), GuestState::Trapped(_)));
+        let mut r = runtime_for(&[0xcd, 0x60]);
+        r.step();
+        assert!(matches!(
+            r.state(),
+            GuestState::Trapped(Trap::UnsupportedInterrupt {
+                interrupt: 0x60,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn repeated_children_release_own_vectors_but_preserve_parent_handler() {
+        let mut r = runtime_for(&[0x90]);
+        r.resize_memory(r.current_psp(), 0x100).unwrap();
+        let parent = r.current_psp();
+        r.set_interrupt_vector(0x60, parent, 0x80);
+        let path = r.drives.parse_path(b"C:\\HOOK.COM").unwrap();
+        r.drives
+            .add_base_file(
+                crate::DosDrive::C,
+                "HOOK.COM",
+                alloc::vec![
+                    0xba, 0x00, 0x01, 0xb8, 0x61, 0x25, 0xcd, 0x21, 0xb8, 0x00, 0x4c, 0xcd, 0x21,
+                ],
+            )
+            .unwrap();
+        for _ in 0..3 {
+            r.exec(path.clone(), b"", 0).unwrap();
+            r.run_slice(5);
+            assert_eq!(r.current_psp(), parent);
+            assert_eq!(r.interrupt_vector(0x60), (parent, 0x80));
+            assert_eq!(r.interrupt_vector(0x61), (0, 0));
+        }
+    }
+
+    #[test]
+    fn released_and_shrunk_allocations_cannot_leave_live_vectors() {
+        let mut r = runtime_for(&[0xb8, 0x00, 0x4c, 0xcd, 0x21]);
+        let psp = r.current_psp();
+        r.set_interrupt_vector(0x60, psp, 0x1800);
+        r.resize_memory(psp, 0x100).unwrap();
+        assert_eq!(r.interrupt_vector(0x60), (0, 0));
+        let block = r.allocate_memory(0x20).unwrap();
+        r.set_interrupt_vector(0x2f, block, 0);
+        r.free_memory(block).unwrap();
+        assert_eq!(r.interrupt_vector(0x2f), (0x0800, 0x0400));
+        r.set_interrupt_vector(0x2f, psp, 0x100);
+        r.run_slice(2);
+        assert_eq!(r.state(), &GuestState::Exited { code: 0 });
+        assert_eq!(r.interrupt_vector(0x2f), (0x0800, 0x0400));
+    }
+
+    #[test]
+    fn installed_multiplex_handler_runs_in_guest_and_iret_restores_the_frame() {
+        let mut runtime = runtime_for(&[0xcd, 0x2f, 0xf4]);
+        runtime
+            .memory
+            .write_slice(0x2000, 0x20, &[0xbb, 0x4e, 0x44, 0xcf])
+            .unwrap();
+        runtime.set_interrupt_vector(0x2f, 0x2000, 0x20);
+        assert_eq!(runtime.memory.read_u16(0, 0xbc), 0x20);
+        assert_eq!(runtime.memory.read_u16(0, 0xbe), 0x2000);
+        runtime.cpu.flags = CpuState::FLAG_IF | CpuState::FLAG_TF | CpuState::FLAG_CF | 2;
+        let before = runtime.cpu;
+        runtime.run_slice(1);
+        assert_eq!((runtime.cpu.cs, runtime.cpu.ip), (0x2000, 0x20));
+        assert_eq!(runtime.cpu.sp, before.sp.wrapping_sub(6));
+        assert_eq!(
+            runtime.cpu.flags & (CpuState::FLAG_IF | CpuState::FLAG_TF),
+            0
+        );
+        assert_eq!(
+            runtime.memory.read_u16(before.ss, runtime.cpu.sp),
+            before.ip + 2
+        );
+        runtime.run_slice(3);
+        assert_eq!(runtime.state(), &GuestState::Halted);
+        assert_eq!(runtime.cpu.bx, 0x444e);
+        assert_eq!(runtime.cpu.cs, before.cs);
+        assert_eq!(runtime.cpu.sp, before.sp);
+        assert_eq!(runtime.cpu.flags, before.flags);
+        runtime.set_interrupt_vector(0x2f, 0, 0);
+        assert_eq!(runtime.interrupt_vector(0x2f), (0, 0));
+        assert_eq!(runtime.memory.read_u16(0, 0xbe), 0);
+    }
+
+    #[test]
+    fn conditional_loops_decrement_cx_preserve_flags_and_wrap_zero() {
+        for opcode in [0xe0, 0xe1] {
+            for zero in [false, true] {
+                for count in [0u16, 1, 2] {
+                    // A taken branch skips MOV AL,1 and lands on HLT.
+                    let mut runtime = runtime_for(&[opcode, 2, 0xb0, 1, 0xf4]);
+                    runtime.cpu.cx = count;
+                    runtime.cpu.flags = CpuState::FLAG_CF
+                        | CpuState::FLAG_IF
+                        | 2
+                        | if zero { CpuState::FLAG_ZF } else { 0 };
+                    let flags = runtime.cpu.flags;
+                    runtime.run_slice(3);
+                    let remaining = count.wrapping_sub(1);
+                    let taken = remaining != 0 && (zero == (opcode == 0xe1));
+                    assert_eq!(runtime.cpu.cx, remaining);
+                    assert_eq!(runtime.cpu.al(), if taken { 0 } else { 1 });
+                    assert_eq!(runtime.cpu.flags, flags);
+                    assert_eq!(runtime.state(), &GuestState::Halted);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn software_fpu_interrupt_uses_the_authoritative_guest_ivt() {
+        let mut runtime = runtime_for(&[0xcd, 0x37, 0xf4]);
+        runtime.memory.write_u16(0, 0x37 * 4, 0x20);
+        runtime.memory.write_u16(0, 0x37 * 4 + 2, 0x2000);
+        runtime
+            .memory
+            .write_slice(0x2000, 0x20, &[0xb8, 0x34, 0x12, 0xcf])
+            .unwrap();
+        runtime.run_slice(4);
+        assert_eq!(runtime.state(), &GuestState::Halted);
+        assert_eq!(runtime.cpu.ax, 0x1234);
+        assert_eq!(runtime.cpu.cs, PSP_SEGMENT);
     }
 
     #[test]
@@ -3092,11 +4983,463 @@ mod tests {
     }
 
     #[test]
+    fn ega_configuration_guest_interrupt_preserves_state_and_memory() {
+        for al in [0, 0x1a, 0xff] {
+            for bh in [0, 0xaa, 0xff] {
+                let mut r = runtime_for(&[0xcd, 0x10, 0xcd, 0x10]);
+                r.cpu.ax = 0x1200 | al;
+                r.cpu.bx = (bh << 8) | 0x10;
+                r.cpu.cx = 0xffff;
+                r.cpu.dx = 0x2345;
+                r.cpu.si = 0x6789;
+                r.cpu.di = 0xabcd;
+                r.cpu.bp = 0xef01;
+                r.cpu.flags = 0x0ed7;
+                let before = r.cpu;
+                let memory: Vec<_> = (0..0x100000)
+                    .map(|p| r.memory.read_u8((p >> 4) as u16, (p & 15) as u16))
+                    .collect();
+                r.step();
+                let mut expected = before;
+                expected.bx = 0;
+                expected.cx = 9;
+                expected.ip += 2;
+                assert_eq!(r.cpu, expected);
+                assert_eq!(r.state(), &GuestState::Running);
+                r.cpu.ax = before.ax;
+                r.cpu.bx = before.bx;
+                r.step();
+                expected.ip += 2;
+                assert_eq!(r.cpu, expected);
+                for (p, byte) in memory.into_iter().enumerate() {
+                    assert_eq!(r.memory.read_u8((p >> 4) as u16, (p & 15) as u16), byte);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn video_profile_bda_and_mode_queries_agree() {
+        let mut r = runtime_for(&[0xcd, 0x10]);
+        for (mode, columns, page_size, points) in [(3, 80, 0x1000, 16), (0x13, 40, 64000, 8)] {
+            r.cpu.ip = 0x100;
+            r.cpu.ax = mode;
+            r.step();
+            assert_eq!(r.memory.read_u8(0x40, 0x49), mode as u8);
+            assert_eq!(r.memory.read_u16(0x40, 0x4a), columns);
+            assert_eq!(r.memory.read_u16(0x40, 0x4c), page_size);
+            assert_eq!(r.memory.read_u16(0x40, 0x4e), 0);
+            assert_eq!(r.memory.read_u8(0x40, 0x62), 0);
+            assert_eq!(r.memory.read_u16(0x40, 0x63), 0x3d4);
+            assert_eq!(r.memory.read_u8(0x40, 0x84), 24);
+            assert_eq!(r.memory.read_u16(0x40, 0x85), points);
+            assert_eq!(r.memory.read_u8(0x40, 0x88), 9);
+            r.cpu.ip = 0x100;
+            r.cpu.ax = 0x0f00;
+            r.cpu.bx = 0xaaff;
+            r.step();
+            assert_eq!(r.cpu.ax, (columns << 8) | mode);
+            assert_eq!(r.cpu.bx, 0x00ff);
+        }
+    }
+
+    #[test]
+    fn bios_text_write_preserves_cursor_and_does_not_scroll() {
+        let mut r = runtime_for(&[0xcd, 0x10]);
+        r.set_cursor(79, 24);
+        r.cpu.ax = 0x095a;
+        r.cpu.bx = 0x004e;
+        r.cpu.cx = 0xffff;
+        r.step();
+        assert_eq!(
+            r.cell(79, 24),
+            crate::TextCell {
+                character: b'Z',
+                attribute: 0x4e
+            }
+        );
+        assert_eq!(r.cell(0, 0).character, b' ');
+        assert_eq!((r.cursor_column(), r.cursor_row()), (79, 24));
+        assert_eq!(r.memory.read_u16(0x40, 0x50), 0x184f);
+        r.memory.write_u16(0xb800, 3998, 0x1f58);
+        r.cpu.ip = 0x100;
+        r.cpu.ax = 0x0800;
+        r.step();
+        assert_eq!(r.cpu.ax, 0x1f58);
+    }
+
+    #[test]
+    fn bios_cursor_and_single_page_contract() {
+        let mut r = runtime_for(&[0xcd, 0x10]);
+        for (ax, bx, cx, dx) in [
+            (0x0100, 0, 0x2007, 0),
+            (0x0200, 0, 0, 0x0304),
+            (0x0500, 0, 0, 0),
+            (0x0300, 0x00ab, 0, 0),
+        ] {
+            r.cpu.ip = 0x100;
+            r.cpu.ax = ax;
+            r.cpu.bx = bx;
+            r.cpu.cx = cx;
+            r.cpu.dx = dx;
+            r.step();
+        }
+        assert_eq!(r.cpu.bx, 0x00ab);
+        assert_eq!(r.cpu.cx, 0x2007);
+        assert_eq!(r.cpu.dx, 0x0304);
+        assert_eq!(r.memory.read_u16(0x40, 0x50), 0x0304);
+        assert_eq!(r.memory.read_u16(0x40, 0x60), 0x2007);
+        assert!(!r.text_cursor_visible());
+    }
+
+    #[test]
+    fn vga_decoder_controls_guest_memory_and_dac_without_changing_display() {
+        let mut r = runtime_for(&[0xcd, 0x10, 0xef, 0xee, 0xee, 0xee, 0xec, 0xe4, 0x61]);
+        r.memory.write_u16(0xb800, 0, 0x8f41);
+        r.memory.write_u8(0xa000, 0, 4);
+        r.memory.write_u8(0xb7ff, 15, 0x55);
+        r.cpu.gpr_upper = [0x1234; 8];
+        r.cpu.bx = 0xa532;
+        r.cpu.cx = 0x4321;
+        r.cpu.si = 0xabcd;
+        r.cpu.di = 0xef01;
+        let cell = r.cell(0, 0);
+        let palette = r.palette_checksum();
+        let generation = r.framebuffer_generation();
+        let mode = r.video_mode();
+        let attr = r.text_attribute_mode();
+        let start = r.cpu.ip;
+        // Valid requests are idempotent; reserved AL=12h cannot look like success.
+        for (al, flags, status, enabled) in [
+            (1, 0x0ed7, 0x12, false),
+            (1, 2, 0x12, false),
+            (0x12, 0x0202, 0, false),
+            (0, 3, 0x12, true),
+            (0, 0x0202, 0x12, true),
+        ] {
+            r.cpu.ip = start;
+            r.cpu.ax = 0x1200 | al;
+            r.cpu.flags = flags;
+            let mut expected = r.cpu;
+            expected.set_al(status);
+            expected.ip += 2;
+            r.step();
+            assert_eq!(r.state(), &GuestState::Running);
+            assert_eq!(r.cpu, expected);
+            assert_eq!(r.memory.vga_addressing_enabled(), enabled);
+
+            let mut bytes = [0; 2];
+            r.memory.read_slice(0xb7ff, 15, &mut bytes).unwrap();
+            assert_eq!(bytes, [0x55, if enabled { b'A' } else { 0xff }]);
+            if !enabled {
+                r.memory.write_u16(0xb800, 0, 0x2342);
+                r.memory.write_slice(0xa000, 0, &[9]).unwrap();
+                assert_eq!(r.memory.read_u16(0xb800, 0), 0xffff);
+                assert_eq!(r.memory.read_u8(0xa000, 0), 0xff);
+                assert!(!r.memory.range_is_ram(0xb8000, 2));
+            } else {
+                assert_eq!(r.memory.read_u16(0xb800, 0), 0x8f41);
+                assert_eq!(r.memory.read_u8(0xa000, 0), 4);
+            }
+
+            // OUT DX,AX programs the write index and red component.
+            // Finish a complete RGB triplet; a disconnected DAC must
+            // ignore the entire sequence. Use the default RGB on enable.
+            let entry = r.palette_entries()[4];
+            r.cpu.dx = 0x3c8;
+            r.cpu.ax = u16::from_le_bytes([4, if enabled { entry.red_6bit } else { 1 }]);
+            r.step();
+            r.cpu.dx = 0x3c9;
+            r.cpu.set_al(if enabled { entry.green_6bit } else { 2 });
+            r.step();
+            r.cpu.set_al(if enabled { entry.blue_6bit } else { 3 });
+            r.step();
+            r.cpu.dx = 0x3c7;
+            r.cpu.set_al(4);
+            r.step();
+            r.cpu.dx = 0x3c9;
+            r.step(); // DAC data read
+            assert_eq!(
+                r.cpu.al(),
+                if enabled {
+                    r.palette_entries()[4].red_6bit
+                } else {
+                    0xff
+                }
+            );
+            r.step(); // system control port B remains accessible
+            assert_ne!(r.cpu.al(), 0xff);
+            assert_eq!(r.cell(0, 0), cell);
+            assert_eq!(r.video_mode(), mode);
+            assert_eq!(r.text_attribute_mode(), attr);
+            assert_eq!(r.framebuffer_index(0, 0), Some(4));
+            assert_eq!(r.framebuffer_generation(), generation);
+            assert_eq!(r.palette_checksum(), palette);
+        }
+    }
+
+    #[test]
+    fn vga_decoder_service_respects_guest_int10_hook() {
+        let mut r = runtime_for(&[0xcd, 0x10, 0xf4]);
+        r.memory.write_u16(0, 0x40, 0x20);
+        r.memory.write_u16(0, 0x42, 0x2000);
+        r.memory
+            .write_slice(0x2000, 0x20, &[0xb8, 0x34, 0x12, 0xcf])
+            .unwrap();
+        r.cpu.ax = 0x1201;
+        r.cpu.bx = 0x0032;
+        r.cpu.flags = 0x0203;
+        r.run_slice(4);
+        assert_eq!(r.cpu.ax, 0x1234);
+        assert_eq!(r.cpu.flags, 0x0203);
+        assert!(r.memory.vga_addressing_enabled());
+        assert_eq!(r.state(), &GuestState::Halted);
+    }
+
+    #[test]
+    fn unsupported_video_requests_trap_without_changing_display() {
+        for (ax, bx) in [
+            (0x1200, 0x11),
+            (0x12ff, 0xff),
+            (0x1a00, 0),
+            (0x0501, 0),
+            (0x0300, 0x100),
+            (0x0800, 0x100),
+            (0x0900, 0x100),
+            (0x0200, 0x100),
+        ] {
+            let mut r = runtime_for(&[0xcd, 0x10]);
+            r.cpu.ax = ax;
+            r.cpu.bx = bx;
+            let generation = r.video_mode_generation();
+            r.step();
+            assert!(matches!(
+                r.state(),
+                GuestState::Trapped(Trap::UnsupportedInterrupt {
+                    interrupt: 0x10,
+                    ..
+                })
+            ));
+            assert_eq!(r.video_mode_generation(), generation);
+            assert_eq!(r.memory.read_u8(0x40, 0x62), 0);
+            assert_eq!(r.cell(0, 0).character, b' ');
+        }
+    }
+
+    fn video_bytes(runtime: &Runtime) -> Vec<u8> {
+        (0..crate::VIDEO_BYTES)
+            .map(|offset| runtime.memory.read_u8(0xb800, offset as u16))
+            .collect()
+    }
+
+    #[test]
+    fn blink_intensity_service_dispatches_through_guest_int_and_preserves_state() {
+        // Authentic DN-9 input: AX=1003h, BL=00h, BH=00h.
+        let mut r = runtime_for(&[0xcd, 0x10, 0xcd, 0x10]);
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0000;
+        r.cpu.cx = 0x1234;
+        r.cpu.dx = 0x5678;
+        r.cpu.si = 0x9abc;
+        r.cpu.di = 0xdef0;
+        r.cpu.bp = 0x1357;
+        r.cpu.flags = 0x0ed7;
+        let before = r.cpu;
+        r.step();
+        let mut expected = before;
+        expected.ip += 2;
+        assert_eq!(r.cpu, expected);
+        assert_eq!(r.state(), &GuestState::Running);
+        assert_eq!(
+            r.text_attribute_mode(),
+            TextAttributeMode::BackgroundIntensity
+        );
+
+        // BL=01h selects blinking again through a second guest INT 10h.
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0001;
+        let before = r.cpu;
+        r.step();
+        let mut expected = before;
+        expected.ip += 2;
+        assert_eq!(r.cpu, expected);
+        assert_eq!(r.text_attribute_mode(), TextAttributeMode::Blink);
+    }
+
+    #[test]
+    fn documented_bh_is_accepted_and_other_bl_values_leave_state_unchanged() {
+        for bh in [0x00, 0xaa, 0xff] {
+            let mut r = runtime_for(&[0xcd, 0x10]);
+            r.cpu.ax = 0x1003;
+            r.cpu.bx = (bh << 8) | 0x00;
+            let before = r.cpu;
+            r.step();
+            let mut expected = before;
+            expected.ip += 2;
+            assert_eq!(r.cpu, expected);
+            assert_eq!(
+                r.text_attribute_mode(),
+                TextAttributeMode::BackgroundIntensity
+            );
+        }
+
+        for bl in [0x02, 0x7f, 0xff] {
+            let mut r = runtime_for(&[0xcd, 0x10]);
+            let generation = r.text_attribute_generation();
+            r.cpu.ax = 0x1003;
+            r.cpu.bx = 0x0000 | bl;
+            let before = r.cpu;
+            r.step();
+            let mut expected = before;
+            expected.ip += 2;
+            assert_eq!(r.cpu, expected);
+            assert_eq!(r.state(), &GuestState::Running);
+            assert_eq!(r.text_attribute_mode(), TextAttributeMode::Blink);
+            assert_eq!(r.text_attribute_generation(), generation);
+        }
+    }
+
+    #[test]
+    fn mode_switch_changes_interpretation_without_rewriting_b8000_bytes() {
+        let mut r = runtime_for(&[0xcd, 0x10]);
+        r.put_cell(0, 0, b'A', 0x8f);
+        r.put_cell(1, 0, b'B', 0x4e);
+        let before = video_bytes(&r);
+        let blinking = r.text_attribute(0x8f);
+        assert_eq!(blinking.background, 0x00);
+        assert!(blinking.blink);
+
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0000;
+        r.step();
+
+        assert_eq!(video_bytes(&r), before);
+        assert_eq!(r.cell(0, 0).character, b'A');
+        assert_eq!(r.cell(0, 0).attribute, 0x8f);
+        let intense = r.text_attribute(0x8f);
+        assert_eq!(intense.foreground, 0x0f);
+        assert_eq!(intense.background, 0x08);
+        assert!(!intense.blink);
+        let unchanged = r.text_attribute(0x4e);
+        assert_eq!(unchanged.foreground, 0x0e);
+        assert_eq!(unchanged.background, 0x04);
+    }
+
+    #[test]
+    fn bios_and_direct_guest_writes_use_the_shared_attribute_mode() {
+        // BIOS AH=09h writes the raw attribute unchanged.
+        let mut r = runtime_for(&[0xcd, 0x10]);
+        r.cpu.ax = 0x095a;
+        r.cpu.bx = 0x008f;
+        r.cpu.cx = 1;
+        r.step();
+        assert_eq!(r.cell(0, 0).attribute, 0x8f);
+        r.cpu.ip = 0x100;
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0000;
+        r.step();
+        assert_eq!(r.cell(0, 0).attribute, 0x8f);
+        assert_eq!(r.text_attribute(r.cell(0, 0).attribute).background, 0x08);
+
+        // Direct guest video-memory writes through ES:B800 are equally raw.
+        let mut r = runtime_for(&[
+            0xb8, 0x00, 0xb8, // MOV AX,B800h
+            0x8e, 0xc0, // MOV ES,AX
+            0x26, 0xc6, 0x06, 0x01, 0x00, 0x8f, // MOV byte ES:[0001],8Fh
+        ]);
+        r.run_slice(4);
+        assert_eq!(r.memory.read_u8(0xb800, 1), 0x8f);
+        r.cpu.ip = 0x100;
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0001;
+        r.step();
+        assert_eq!(r.memory.read_u8(0xb800, 1), 0x8f);
+        assert_eq!(r.text_attribute(0x8f).background, 0x00);
+        assert!(r.text_attribute(0x8f).blink);
+    }
+
+    #[test]
+    fn attribute_mode_switch_reports_a_slice_change_and_keeps_page_and_cursor() {
+        let mut r = runtime_for(&[0xcd, 0x10]);
+        r.set_cursor(7, 3);
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0000;
+        let generation = r.text_attribute_generation();
+        assert!(r.run_slice(1));
+        assert_eq!(r.text_attribute_generation(), generation + 1);
+        assert_eq!(r.memory.read_u8(0x40, 0x62), 0);
+        assert_eq!((r.cursor_column(), r.cursor_row()), (7, 3));
+        assert_eq!(r.memory.read_u16(0x40, 0x50), 0x0307);
+        // A runnable guest that does not touch the mode reports no change.
+        r.cpu.ip = 0x100;
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0000;
+        assert!(!r.run_slice(1));
+    }
+
+    #[test]
+    fn video_mode_set_restores_the_blink_default_and_blink_scan_follows_mode() {
+        let mut r = runtime_for(&[0xcd, 0x10, 0xcd, 0x10]);
+        r.cpu.ax = 0x1003;
+        r.cpu.bx = 0x0000;
+        r.step();
+        assert_eq!(
+            r.text_attribute_mode(),
+            TextAttributeMode::BackgroundIntensity
+        );
+        r.put_cell(0, 0, b'X', 0x8f);
+        assert!(!r.has_blink_attributes());
+
+        r.cpu.ip = 0x100;
+        r.cpu.ax = 0x0003;
+        r.step();
+        assert_eq!(r.text_attribute_mode(), TextAttributeMode::Blink);
+        assert_eq!(r.cell(0, 0).attribute, DEFAULT_ATTRIBUTE);
+        assert!(!r.has_blink_attributes());
+
+        r.put_cell(0, 0, b'X', 0x8f);
+        assert!(r.has_blink_attributes());
+        r.put_cell(0, 0, b'X', 0x7f);
+        assert!(!r.has_blink_attributes());
+    }
+
+    #[test]
+    fn bios_scroll_down_copies_backwards_and_clips_to_window() {
+        let mut r = runtime_for(&[0xcd, 0x10]);
+        for row in 0..4 {
+            r.put_cell(1, row, b'A' + row as u8, 7);
+        }
+        r.cpu.ax = 0x0701;
+        r.cpu.bx = 0x1f00;
+        r.cpu.cx = 0x0101;
+        r.cpu.dx = 0x0301;
+        r.step();
+        assert_eq!(r.cell(1, 0).character, b'A');
+        assert_eq!(
+            r.cell(1, 1),
+            crate::TextCell {
+                character: b' ',
+                attribute: 0x1f
+            }
+        );
+        assert_eq!(r.cell(1, 2).character, b'B');
+        assert_eq!(r.cell(1, 3).character, b'C');
+        r.cpu.ip = 0x100;
+        r.cpu.ax = 0x0700;
+        r.step();
+        assert_eq!(r.cell(1, 3).character, b' ');
+        r.cpu.ip = 0x100;
+        r.cpu.cx = 0x0401;
+        r.step();
+        assert_eq!(r.state(), &GuestState::Trapped(Trap::InvalidVideoRectangle));
+    }
+
+    #[test]
     fn bios_data_area_and_video_calls_share_the_b8000_model() {
         let mut runtime = runtime_for(&[]);
         assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x03);
         assert_eq!(runtime.memory.read_u16(0x40, 0x4a), 80);
-        assert_eq!(runtime.memory.read_u16(0x40, 0x4c), 4000);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x4c), 0x1000);
 
         runtime.cpu.set_ah(0x09);
         runtime.cpu.set_al(b'Z');
@@ -3268,6 +5611,7 @@ mod tests {
         program[4..6].copy_from_slice(&1u16.to_le_bytes());
         program[8..10].copy_from_slice(&2u16.to_le_bytes());
         program[0x18..0x1a].copy_from_slice(&0x1cu16.to_le_bytes());
+        program[12..14].copy_from_slice(&1u16.to_le_bytes());
         program[32..].copy_from_slice(image);
         program
     }
@@ -3384,7 +5728,7 @@ mod tests {
         assert_eq!(runtime.video_mode(), GuestVideoMode::Text80x25Color);
         assert_eq!(runtime.memory.read_u8(0x40, 0x49), 0x03);
         assert_eq!(runtime.memory.read_u16(0x40, 0x4a), 80);
-        assert_eq!(runtime.memory.read_u16(0x40, 0x4c), 4000);
+        assert_eq!(runtime.memory.read_u16(0x40, 0x4c), 0x1000);
         assert_eq!(runtime.cursor_shape(), 0x0607);
         assert!(runtime.text_cursor_visible());
         assert_eq!((runtime.cursor_column(), runtime.cursor_row()), (0, 0));
@@ -4410,5 +6754,81 @@ mod tests {
         assert_eq!(runtime.framebuffer_generation(), framebuffer_generation);
         assert!(runtime.palette_generation() >= target_generation);
         assert_eq!(runtime.unsupported_io_attempts(), 0);
+    }
+    #[test]
+    fn dos_memory_interrupts_enforce_owner_and_report_growth_limit() {
+        let mut r = runtime_for(&[0xcd, 0x21]);
+        let psp = r.current_psp();
+        let saved = r.arena.blocks().to_vec();
+        let call = |r: &mut Runtime, ax, bx, es| {
+            r.cpu.cs = psp;
+            r.cpu.ip = 0x100;
+            r.cpu.ax = ax;
+            r.cpu.bx = bx;
+            r.cpu.es = es;
+            r.step();
+        };
+        call(&mut r, 0x4800, 0x20, 0);
+        assert_eq!(r.cpu.flags & CpuState::FLAG_CF, 0);
+        let first = r.cpu.ax;
+        call(&mut r, 0x4800, 0x20, 0);
+        let second = r.cpu.ax;
+        call(&mut r, 0x4900, 0, second);
+        assert_eq!(r.cpu.flags & CpuState::FLAG_CF, 0);
+        call(&mut r, 0x4a00, 0x10, first);
+        assert_eq!(r.memory.read_u16(first - 1, 3), 0x10);
+        call(&mut r, 0x4a00, 0x30, first);
+        assert_eq!(r.cpu.flags & CpuState::FLAG_CF, 0);
+        let before = r.arena.blocks().to_vec();
+        let limit = 0xa000 - first;
+        call(&mut r, 0x4a00, 0xffff, first);
+        assert_eq!((r.cpu.ax, r.cpu.bx), (8, limit));
+        assert_ne!(r.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(r.arena.blocks(), before.as_slice());
+        let foreign = r.arena.allocate(1, 0x2222).unwrap();
+        call(&mut r, 0x4900, 0, foreign);
+        assert_eq!(r.cpu.ax, 9);
+        call(&mut r, 0x4a00, 1, foreign);
+        assert_eq!(r.cpu.ax, 9);
+        assert_ne!(r.cpu.flags & CpuState::FLAG_CF, 0);
+        r.arena.free_owner(0x2222);
+        call(&mut r, 0x4900, 0, first);
+        call(&mut r, 0x4900, 0, first);
+        assert_eq!(r.cpu.ax, 9);
+        assert_ne!(r.cpu.flags & CpuState::FLAG_CF, 0);
+        assert_eq!(r.arena.blocks(), saved.as_slice());
+        call(&mut r, 0x4800, 0xffff, 0);
+        assert_eq!((r.cpu.ax, r.cpu.bx), (8, r.arena.largest_available()));
+    }
+
+    #[test]
+    fn maximum_mz_child_releases_environment_and_process_on_repeated_exit() {
+        let mut r = Runtime::from_program(&mz_program(&[0x90, 0xf4]), b"").unwrap();
+        let mut child = mz_program(&[0xb8, 0, 0x4c, 0xcd, 0x21]);
+        child[12..14].copy_from_slice(&0xffffu16.to_le_bytes());
+        r.drives_mut()
+            .add_base_file(DosDrive::C, "MAX.EXE", child)
+            .unwrap();
+        let saved = r.arena.blocks().to_vec();
+        r.drives_mut()
+            .add_base_file(DosDrive::C, "BAD.EXE", vec![b'M', b'Z'])
+            .unwrap();
+        let bad = r.drives().parse_path(b"C:/BAD.EXE").unwrap();
+        assert!(r.exec(bad, b"", 0).is_err());
+        assert_eq!(r.arena.blocks(), saved.as_slice());
+        for _ in 0..16 {
+            let path = r.drives().parse_path(b"C:/MAX.EXE").unwrap();
+            r.exec(path, b"", 0).unwrap();
+            let psp = r.current_psp();
+            let env = r.memory.read_u16(psp, 0x2c);
+            assert!(r.arena.contains_allocated(env, psp));
+            assert_eq!(r.memory.read_u16(psp, 2), 0xa000);
+            assert_eq!(r.arena.largest_available(), 0);
+            r.run_slice(2);
+            assert_eq!(r.arena.blocks(), saved.as_slice());
+        }
+        r.exit(0).unwrap();
+        assert_eq!(r.arena.blocks().len(), 1);
+        assert_eq!(r.arena.largest_available(), 0x9000);
     }
 }

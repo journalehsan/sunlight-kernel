@@ -1,0 +1,7 @@
+Command: ./tools/test.sh
+Result: exit 101
+Captured stdout/stderr: empty
+
+The script's EXIT trap removes its temporary build log. No QEMU process was
+left running. The previous DN-14 saved platform log also contains only
+"exit=101".
