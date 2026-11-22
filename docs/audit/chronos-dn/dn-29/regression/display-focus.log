@@ -1,0 +1,2240 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+warning: unexpected `cfg` condition value: `sunlightos`
+ --> sunlight-libc/src/lib.rs:3:33
+  |
+3 |     all(feature = "native-std", target_os = "sunlightos"),
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:19:43
+   |
+19 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:32:43
+   |
+32 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:35:33
+   |
+35 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:43:33
+   |
+43 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:50:43
+   |
+50 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:55:45
+   |
+55 | #[cfg(any(test, all(feature = "native-std", target_os = "sunlightos")))]
+   |                                             ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:64:43
+   |
+64 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:68:43
+   |
+68 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:71:43
+   |
+71 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:74:43
+   |
+74 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:79:35
+   |
+79 | #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:82:35
+   |
+82 | #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:91:43
+   |
+91 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:100:43
+    |
+100 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:991:43
+    |
+991 | #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:994:33
+    |
+994 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:996:33
+    |
+996 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/lib.rs:999:33
+    |
+999 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-libc/src/lib.rs:1002:33
+     |
+1002 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-libc/src/lib.rs:1005:33
+     |
+1005 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-libc/src/lib.rs:1008:33
+     |
+1008 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/temp.rs:60:44
+   |
+60 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:680:44
+    |
+680 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:689:44
+    |
+689 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:698:44
+    |
+698 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:715:44
+    |
+715 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:787:29
+    |
+787 |     any(target_os = "none", target_os = "sunlightos")
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/env.rs:65:33
+   |
+65 | #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/errno.rs:55:44
+   |
+55 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+ --> sunlight-libc/src/fd.rs:7:36
+  |
+7 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/fd.rs:33:36
+   |
+33 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/fd.rs:59:36
+   |
+59 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:35:27
+   |
+35 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:40:27
+   |
+40 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:48:27
+   |
+48 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:52:27
+   |
+52 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:56:27
+   |
+56 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:71:27
+   |
+71 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:82:27
+   |
+82 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:86:27
+   |
+86 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/termios.rs:93:27
+   |
+93 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/termios.rs:100:27
+    |
+100 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:141:44
+    |
+141 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:158:44
+    |
+158 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:174:44
+    |
+174 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:191:44
+    |
+191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:207:44
+    |
+207 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:119:29
+    |
+119 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:268:29
+    |
+268 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:284:29
+    |
+284 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:872:27
+    |
+872 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:877:27
+    |
+877 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:882:27
+    |
+882 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/net_bridge.rs:887:27
+    |
+887 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:155:44
+    |
+155 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:167:44
+    |
+167 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:179:44
+    |
+179 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:191:44
+    |
+191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:206:44
+    |
+206 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:221:44
+    |
+221 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:484:27
+    |
+484 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:532:27
+    |
+532 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:557:44
+    |
+557 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:571:44
+    |
+571 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:586:44
+    |
+586 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:604:44
+    |
+604 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:616:44
+    |
+616 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/time.rs:134:44
+    |
+134 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/time.rs:203:44
+    |
+203 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/time.rs:555:27
+    |
+555 | #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/tls.rs:58:7
+   |
+58 | #[cfg(target_os = "sunlightos")]
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/tls.rs:75:7
+   |
+75 | #[cfg(target_os = "sunlightos")]
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/tls.rs:90:11
+   |
+90 | #[cfg(not(target_os = "sunlightos"))]
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: field `terminal` is never read
+   --> sunlight-libc/src/sun_exec.rs:787:5
+    |
+781 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+787 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `key` and `value` are never read
+  --> sunlight-libc/src/tls.rs:21:16
+   |
+20 | pub(crate) struct Specific {
+   |                   -------- fields in this struct
+21 |     pub(crate) key: usize,
+   |                ^^^
+22 |     pub(crate) value: *mut u8,
+   |                ^^^^^
+   |
+   = note: `Specific` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: fields `control` and `previous` are never read
+  --> sunlight-libc/src/tls.rs:32:16
+   |
+31 | pub(crate) struct OnceFrame {
+   |                   --------- fields in this struct
+32 |     pub(crate) control: *const AtomicU32,
+   |                ^^^^^^^
+33 |     pub(crate) previous: *mut OnceFrame,
+   |                ^^^^^^^^
+
+warning: `sunlight-libc` (lib) generated 77 warnings
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2512:28
+     |
+2512 | #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                            ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2029:48
+     |
+2029 |                     #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `sunlight-ui` (lib) generated 2 warnings
+warning: sun-font@0.2.8759-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+warning: unused imports: `DEFAULT_MODE_PREVIEW_TIMEOUT_MS`, `MouseMsg`, `WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT`, `WiseOwlLifecycleMsg`, `endpoint_bind`, `endpoint_create`, `endpoint_destroy`, `ipc_recv_timeout`, `ipc_recv`, `ipc_reply`, `nameserver_register`, and `self`
+  --> services/sunlight-display/src/main.rs:18:5
+   |
+18 |     endpoint_bind, endpoint_create, endpoint_destroy, ipc_call_timeout, ipc_recv, ipc_recv_timeout,
+   |     ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^                    ^^^^^^^^  ^^^^^^^^^^^^^^^^
+19 |     ipc_reply, kill,
+   |     ^^^^^^^^^
+20 |     launch_trace::{self, LaunchSource, LaunchTrace},
+   |                    ^^^^
+21 |     monotonic_millis, nameserver_lookup_timeout, nameserver_register,
+   |                                                  ^^^^^^^^^^^^^^^^^^^
+...
+24 |     DisplayModeReadOnlyReason, EndpointId, IpcMsg, MezzoMsg, MouseMsg, NotificationKind,
+   |                                                              ^^^^^^^^
+25 |     NotificationPriority, PixelFormat, ScreenBackend, WiseOwlLifecycleMsg,
+   |                                                       ^^^^^^^^^^^^^^^^^^^
+26 |     DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+27 |     WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: static `ICON_SYM_CLOSE_TGA` is never used
+  --> services/sunlight-display/src/main.rs:36:8
+   |
+36 | static ICON_SYM_CLOSE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_close.tga"));
+   |        ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `is_empty`, `len`, and `as_ptr` are never used
+  --> services/sunlight-display/src/main.rs:85:8
+   |
+80 | impl PixelBuffer {
+   | ---------------- methods in this implementation
+...
+85 |     fn is_empty(&self) -> bool {
+   |        ^^^^^^^^
+...
+89 |     fn len(&self) -> usize {
+   |        ^^^
+...
+93 |     fn as_ptr(&self) -> *const u32 {
+   |        ^^^^^^
+
+warning: function `launch_runner` is never used
+   --> services/sunlight-display/src/main.rs:147:4
+    |
+147 | fn launch_runner(state: &mut CompositorState) {
+    |    ^^^^^^^^^^^^^
+
+warning: function `find_window_by_title_prefix` is never used
+   --> services/sunlight-display/src/main.rs:162:4
+    |
+162 | fn find_window_by_title_prefix(state: &CompositorState, prefix: &[u8]) -> Option<(usize, u64)> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `launch_clipman` is never used
+   --> services/sunlight-display/src/main.rs:171:4
+    |
+171 | fn launch_clipman(state: &mut CompositorState) {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `toggle_clipman` is never used
+   --> services/sunlight-display/src/main.rs:186:4
+    |
+186 | fn toggle_clipman(state: &mut CompositorState) {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `launch_emoji_picker` is never used
+   --> services/sunlight-display/src/main.rs:204:4
+    |
+204 | fn launch_emoji_picker(state: &mut CompositorState) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `toggle_emoji_picker` is never used
+   --> services/sunlight-display/src/main.rs:219:4
+    |
+219 | fn toggle_emoji_picker(state: &mut CompositorState) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `launch_vortex_shell` is never used
+   --> services/sunlight-display/src/main.rs:237:4
+    |
+237 | fn launch_vortex_shell(state: &mut CompositorState) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `INPUT_DEBUG` is never used
+   --> services/sunlight-display/src/main.rs:243:7
+    |
+243 | const INPUT_DEBUG: bool = false;
+    |       ^^^^^^^^^^^
+
+warning: constant `DRAG_THRESHOLD_PX` is never used
+   --> services/sunlight-display/src/main.rs:246:7
+    |
+246 | const DRAG_THRESHOLD_PX: i32 = 4;
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `COUNTER_LOG_INTERVAL` is never used
+   --> services/sunlight-display/src/main.rs:247:7
+    |
+247 | const COUNTER_LOG_INTERVAL: u64 = 64;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `KEY_TAB` is never used
+   --> services/sunlight-display/src/main.rs:248:7
+    |
+248 | const KEY_TAB: u8 = 0x0F;
+    |       ^^^^^^^
+
+warning: constant `KEY_ALT` is never used
+   --> services/sunlight-display/src/main.rs:250:7
+    |
+250 | const KEY_ALT: u8 = 0x38;
+    |       ^^^^^^^
+
+warning: constant `KEY_R` is never used
+   --> services/sunlight-display/src/main.rs:251:7
+    |
+251 | const KEY_R: u8 = 0x13;
+    |       ^^^^^
+
+warning: constant `KEY_V` is never used
+   --> services/sunlight-display/src/main.rs:252:7
+    |
+252 | const KEY_V: u8 = 0x2F;
+    |       ^^^^^
+
+warning: constant `KEY_W` is never used
+   --> services/sunlight-display/src/main.rs:253:7
+    |
+253 | const KEY_W: u8 = 0x11;
+    |       ^^^^^
+
+warning: constant `KEY_PERIOD` is never used
+   --> services/sunlight-display/src/main.rs:255:7
+    |
+255 | const KEY_PERIOD: u8 = 0x34;
+    |       ^^^^^^^^^^
+
+warning: constant `KEY_SPACE` is never used
+   --> services/sunlight-display/src/main.rs:256:7
+    |
+256 | const KEY_SPACE: u8 = 0x39;
+    |       ^^^^^^^^^
+
+warning: constant `KEY_LEFT_SUPER` is never used
+   --> services/sunlight-display/src/main.rs:257:7
+    |
+257 | const KEY_LEFT_SUPER: u8 = 0x5B;
+    |       ^^^^^^^^^^^^^^
+
+warning: constant `KEY_RIGHT_SUPER` is never used
+   --> services/sunlight-display/src/main.rs:258:7
+    |
+258 | const KEY_RIGHT_SUPER: u8 = 0x5C;
+    |       ^^^^^^^^^^^^^^^
+
+warning: constant `KEY_L` is never used
+   --> services/sunlight-display/src/main.rs:259:7
+    |
+259 | const KEY_L: u8 = 0x26;
+    |       ^^^^^
+
+warning: constant `ALT_TAB_REPEAT_MS` is never used
+   --> services/sunlight-display/src/main.rs:260:7
+    |
+260 | const ALT_TAB_REPEAT_MS: u64 = 120;
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_WIDTH` is never used
+   --> services/sunlight-display/src/main.rs:262:7
+    |
+262 | const NOTIFICATION_WIDTH: u32 = 320;
+    |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_HEIGHT` is never used
+   --> services/sunlight-display/src/main.rs:263:7
+    |
+263 | const NOTIFICATION_HEIGHT: u32 = 78;
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_MARGIN_X` is never used
+   --> services/sunlight-display/src/main.rs:264:7
+    |
+264 | const NOTIFICATION_MARGIN_X: i32 = 12;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_MARGIN_Y` is never used
+   --> services/sunlight-display/src/main.rs:265:7
+    |
+265 | const NOTIFICATION_MARGIN_Y: i32 = 52;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_GAP` is never used
+   --> services/sunlight-display/src/main.rs:266:7
+    |
+266 | const NOTIFICATION_GAP: i32 = 8;
+    |       ^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_TIMEOUT_MS` is never used
+   --> services/sunlight-display/src/main.rs:267:7
+    |
+267 | const NOTIFICATION_TIMEOUT_MS: u64 = 30_000;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_MIN_TIMEOUT_MS` is never used
+   --> services/sunlight-display/src/main.rs:268:7
+    |
+268 | const NOTIFICATION_MIN_TIMEOUT_MS: u64 = 5_000;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_POLL_MS` is never used
+   --> services/sunlight-display/src/main.rs:269:7
+    |
+269 | const NOTIFICATION_POLL_MS: u64 = 100;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `OVERLAY_DECORATION_POLL_MS` is never used
+   --> services/sunlight-display/src/main.rs:270:7
+    |
+270 | const OVERLAY_DECORATION_POLL_MS: u64 = 100;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_TEXT_MARGIN_X` is never used
+   --> services/sunlight-display/src/main.rs:272:7
+    |
+272 | const NOTIFICATION_TEXT_MARGIN_X: i32 = 14;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_TEXT_MARGIN_Y` is never used
+   --> services/sunlight-display/src/main.rs:273:7
+    |
+273 | const NOTIFICATION_TEXT_MARGIN_Y: i32 = 12;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_CLOSE_SIZE` is never used
+   --> services/sunlight-display/src/main.rs:274:7
+    |
+274 | const NOTIFICATION_CLOSE_SIZE: u32 = 18;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variants `Hand`, `Moving`, `Waiting`, `Question`, and `Text` are never constructed
+   --> services/sunlight-display/src/main.rs:419:5
+    |
+417 | enum CursorShape {
+    |      ----------- variants in this enum
+418 |     Pointer = 0,
+419 |     Hand = 1,
+    |     ^^^^
+...
+424 |     Moving = 6,
+    |     ^^^^^^
+425 |     Waiting = 7,
+    |     ^^^^^^^
+426 |     Question = 8,
+    |     ^^^^^^^^
+427 |     Text = 9,
+    |     ^^^^
+    |
+    = note: `CursorShape` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: associated function `from_u8` is never used
+   --> services/sunlight-display/src/main.rs:431:8
+    |
+430 | impl CursorShape {
+    | ---------------- associated function in this implementation
+431 |     fn from_u8(v: u8) -> Self {
+    |        ^^^^^^^
+
+warning: method `apply_shm_title` is never used
+   --> services/sunlight-display/src/main.rs:578:8
+    |
+481 | impl WindowConfig {
+    | ----------------- method in this implementation
+...
+578 |     fn apply_shm_title(&mut self, shm_ptr: *const u8, shm_len: usize) {
+    |        ^^^^^^^^^^^^^^^
+
+warning: multiple variants are never constructed
+   --> services/sunlight-display/src/main.rs:600:5
+    |
+599 | enum ResizeEdge {
+    |      ---------- variants in this enum
+600 |     Left,
+    |     ^^^^
+601 |     Right,
+    |     ^^^^^
+602 |     Top,
+    |     ^^^
+603 |     Bottom,
+    |     ^^^^^^
+604 |     CornerTL,
+    |     ^^^^^^^^
+605 |     CornerTR,
+    |     ^^^^^^^^
+606 |     CornerBL,
+    |     ^^^^^^^^
+607 |     CornerBR,
+    |     ^^^^^^^^
+    |
+    = note: `ResizeEdge` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: field `window_id` is never read
+   --> services/sunlight-display/src/main.rs:612:5
+    |
+611 | struct MoveDrag {
+    |        -------- field in this struct
+612 |     window_id: u64,
+    |     ^^^^^^^^^
+    |
+    = note: `MoveDrag` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: multiple fields are never read
+   --> services/sunlight-display/src/main.rs:617:5
+    |
+616 | struct ResizeDrag {
+    |        ---------- fields in this struct
+617 |     window_id: u64,
+    |     ^^^^^^^^^
+...
+620 |     anchor_mx: i32,
+    |     ^^^^^^^^^
+621 |     anchor_my: i32,
+    |     ^^^^^^^^^
+622 |     anchor_wx: i32,
+    |     ^^^^^^^^^
+623 |     anchor_wy: i32,
+    |     ^^^^^^^^^
+624 |     anchor_ww: i32,
+    |     ^^^^^^^^^
+625 |     anchor_wh: i32,
+    |     ^^^^^^^^^
+    |
+    = note: `ResizeDrag` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: variants `Move` and `Resize` are never constructed
+   --> services/sunlight-display/src/main.rs:630:5
+    |
+628 | enum ActiveDrag {
+    |      ---------- variants in this enum
+629 |     None,
+630 |     Move(MoveDrag),
+    |     ^^^^
+631 |     Resize(ResizeDrag),
+    |     ^^^^^^
+
+warning: function `resize_from_left` is never used
+   --> services/sunlight-display/src/main.rs:684:4
+    |
+684 | fn resize_from_left(win: &mut Window, anchor_x: i32, anchor_w: i32, delta_x: i32) {
+    |    ^^^^^^^^^^^^^^^^
+
+warning: function `resize_from_top` is never used
+   --> services/sunlight-display/src/main.rs:692:4
+    |
+692 | fn resize_from_top(win: &mut Window, anchor_y: i32, anchor_h: i32, delta_y: i32) {
+    |    ^^^^^^^^^^^^^^^
+
+warning: multiple fields are never read
+   --> services/sunlight-display/src/main.rs:706:5
+    |
+704 | struct Window {
+    |        ------ fields in this struct
+705 |     id: u64,
+706 |     shm_cap: CapabilityToken,
+    |     ^^^^^^^
+...
+721 |     saved_x: u32,
+    |     ^^^^^^^
+722 |     saved_y: u32,
+    |     ^^^^^^^
+723 |     saved_w: u32,
+    |     ^^^^^^^
+724 |     saved_h: u32,
+    |     ^^^^^^^
+...
+749 |     saved_unrolled_h: u32,
+    |     ^^^^^^^^^^^^^^^^
+...
+754 |     first_present_logged: bool,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: method `client_origin` is never used
+   --> services/sunlight-display/src/main.rs:804:8
+    |
+763 | impl Window {
+    | ----------- method in this implementation
+...
+804 |     fn client_origin(&self) -> (u32, u32) {
+    |        ^^^^^^^^^^^^^
+
+warning: function `replace_client_surface` is never used
+   --> services/sunlight-display/src/main.rs:874:4
+    |
+874 | fn replace_client_surface(win: &mut Window, width: u32, height: u32) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `raw_buttons_before`, `raw_buttons_after`, `target_window`, `focused_window`, `button`, and `pressed` are never read
+   --> services/sunlight-display/src/main.rs:952:5
+    |
+949 | struct PointerButtonEvent {
+    |        ------------------ fields in this struct
+...
+952 |     raw_buttons_before: u8,
+    |     ^^^^^^^^^^^^^^^^^^
+953 |     raw_buttons_after: u8,
+    |     ^^^^^^^^^^^^^^^^^
+954 |     delivered_buttons: u8,
+955 |     target_window: u64,
+    |     ^^^^^^^^^^^^^
+956 |     focused_window: u64,
+    |     ^^^^^^^^^^^^^^
+957 |     captured_window: u64,
+958 |     button: u8,
+    |     ^^^^^^
+959 |     pressed: bool,
+    |     ^^^^^^^
+    |
+    = note: `PointerButtonEvent` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `clear` is never used
+    --> services/sunlight-display/src/main.rs:1002:8
+     |
+ 978 | impl PointerWheelEventQueue {
+     | --------------------------- method in this implementation
+...
+1002 |     fn clear(&mut self) {
+     |        ^^^^^
+
+warning: method `clear` is never used
+    --> services/sunlight-display/src/main.rs:1022:8
+     |
+1007 | impl PointerButtonEventQueue {
+     | ---------------------------- method in this implementation
+...
+1022 |     fn clear(&mut self) {
+     |        ^^^^^
+
+warning: field `id` is never read
+    --> services/sunlight-display/src/main.rs:1034:5
+     |
+1033 | struct Notification {
+     |        ------------ field in this struct
+1034 |     id: u64,
+     |     ^^
+     |
+     = note: `Notification` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: struct `NotificationWire` is never constructed
+    --> services/sunlight-display/src/main.rs:1045:8
+     |
+1045 | struct NotificationWire {
+     |        ^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_WIRE_VERSION` is never used
+    --> services/sunlight-display/src/main.rs:1059:7
+     |
+1059 | const NOTIFICATION_WIRE_VERSION: u8 = 1;
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `NOTIFICATION_FLAG_SILENT` is never used
+    --> services/sunlight-display/src/main.rs:1060:7
+     |
+1060 | const NOTIFICATION_FLAG_SILENT: u8 = 1;
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `alt_tab_chord_active` and `alt_tab_next_repeat_ms` are never read
+    --> services/sunlight-display/src/main.rs:1081:5
+     |
+1079 | struct KeyboardState {
+     |        ------------- fields in this struct
+1080 |     pressed: [bool; 256],
+1081 |     alt_tab_chord_active: bool,
+     |     ^^^^^^^^^^^^^^^^^^^^
+1082 |     alt_tab_next_repeat_ms: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `KeyboardState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: methods `alt_down`, `super_down`, and `clear_alt_tab_repeat` are never used
+    --> services/sunlight-display/src/main.rs:1113:8
+     |
+1088 | impl KeyboardState {
+     | ------------------ methods in this implementation
+...
+1113 |     fn alt_down(&self) -> bool {
+     |        ^^^^^^^^
+...
+1117 |     fn super_down(&self) -> bool {
+     |        ^^^^^^^^^^
+...
+1121 |     fn clear_alt_tab_repeat(&mut self) {
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple fields are never read
+    --> services/sunlight-display/src/main.rs:1148:5
+     |
+1141 | struct CompositorState {
+     |        --------------- fields in this struct
+...
+1148 |     pointer: PointerPolicy,
+     |     ^^^^^^^
+...
+1154 |     pending_move_drag: Option<(u64, i32, i32)>,
+     |     ^^^^^^^^^^^^^^^^^
+...
+1166 |     back_buffer: PixelBuffer,
+     |     ^^^^^^^^^^^
+...
+1175 |     virtio_scanout_enabled: bool,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+...
+1180 |     software_cursor: SoftwareCursorState,
+     |     ^^^^^^^^^^^^^^^
+...
+1183 |     session_active: bool,
+     |     ^^^^^^^^^^^^^^
+1184 |     /// Precomputed anti-aliased corner coverage for the inner chrome radius.
+1185 |     inner_corner_mask: mask::CornerMask,
+     |     ^^^^^^^^^^^^^^^^^
+...
+1190 |     notifications: Vec<Notification>,
+     |     ^^^^^^^^^^^^^
+1191 |     next_notification_id: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^
+1192 |     /// True after spawning Vortex and before a Desktop-layer window appears.
+1193 |     vortex_launch_pending: bool,
+     |     ^^^^^^^^^^^^^^^^^^^^^
+1194 |     last_mouse_generation: u32,
+     |     ^^^^^^^^^^^^^^^^^^^^^
+1195 |     /// Window ID that received the most recent titlebar click (for double-click detection).
+1196 |     last_titlebar_click_win_id: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+1197 |     /// Monotonic timestamp (ms) of the most recent titlebar click.
+1198 |     last_titlebar_click_ms: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+...
+1203 |     last_chrome_hover: Option<(u64, HitZone)>,
+     |     ^^^^^^^^^^^^^^^^^
+...
+1207 |     app_tracker: app_lifecycle::AppTracker,
+     |     ^^^^^^^^^^^
+...
+1210 |     lock_authority_endpoint: Option<EndpointId>,
+     |     ^^^^^^^^^^^^^^^^^^^^^^^
+1211 |     lock_authority: CapabilityToken,
+     |     ^^^^^^^^^^^^^^
+
+warning: multiple fields are never read
+    --> services/sunlight-display/src/main.rs:1218:5
+     |
+1217 | struct ModeSnapshot {
+     |        ------------ fields in this struct
+1218 |     backend: backend::DisplayBackend,
+     |     ^^^^^^^
+1219 |     width: u32,
+     |     ^^^^^
+1220 |     height: u32,
+     |     ^^^^^^
+1221 |     pitch: u32,
+     |     ^^^^^
+1222 |     bits_per_pixel: u32,
+     |     ^^^^^^^^^^^^^^
+1223 |     framebuffer: *mut u32,
+     |     ^^^^^^^^^^^
+1224 |     back_buffer_len: usize,
+     |     ^^^^^^^^^^^^^^^
+1225 |     mouse_x: u16,
+     |     ^^^^^^^
+1226 |     mouse_y: u16,
+     |     ^^^^^^^
+1227 |     windows: Vec<WindowGeometrySnapshot>,
+     |     ^^^^^^^
+1228 |     persisted_mode: [u8; 32],
+     |     ^^^^^^^^^^^^^^
+1229 |     persisted_mode_len: usize,
+     |     ^^^^^^^^^^^^^^^^^^
+
+warning: multiple fields are never read
+    --> services/sunlight-display/src/main.rs:1234:5
+     |
+1233 | struct WindowGeometrySnapshot {
+     |        ---------------------- fields in this struct
+1234 |     id: u64,
+     |     ^^
+1235 |     x: u32,
+     |     ^
+1236 |     y: u32,
+     |     ^
+1237 |     width: u32,
+     |     ^^^^^
+1238 |     height: u32,
+     |     ^^^^^^
+1239 |     saved_x: u32,
+     |     ^^^^^^^
+1240 |     saved_y: u32,
+     |     ^^^^^^^
+1241 |     saved_w: u32,
+     |     ^^^^^^^
+1242 |     saved_h: u32,
+     |     ^^^^^^^
+1243 |     state: WindowState,
+     |     ^^^^^
+1244 |     rolled_up: bool,
+     |     ^^^^^^^^^
+1245 |     saved_unrolled_h: u32,
+     |     ^^^^^^^^^^^^^^^^
+     |
+     = note: `WindowGeometrySnapshot` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: fields `token`, `owner_pid`, `deadline_ms`, and `previous` are never read
+    --> services/sunlight-display/src/main.rs:1249:5
+     |
+1248 | struct ModeTransaction {
+     |        --------------- fields in this struct
+1249 |     token: u64,
+     |     ^^^^^
+1250 |     owner_pid: u64,
+     |     ^^^^^^^^^
+1251 |     deadline_ms: u64,
+     |     ^^^^^^^^^^^
+1252 |     previous: ModeSnapshot,
+     |     ^^^^^^^^
+
+warning: enum `ModeRevertReason` is never used
+    --> services/sunlight-display/src/main.rs:1257:6
+     |
+1257 | enum ModeRevertReason {
+     |      ^^^^^^^^^^^^^^^^
+
+warning: multiple fields are never read
+    --> services/sunlight-display/src/main.rs:1283:5
+     |
+1282 | struct SoftwareCursorState {
+     |        ------------------- fields in this struct
+1283 |     pixels: [u32; CURSOR_W * CURSOR_H],
+     |     ^^^^^^
+1284 |     x: u32,
+     |     ^
+1285 |     y: u32,
+     |     ^
+1286 |     w: u32,
+     |     ^
+1287 |     h: u32,
+     |     ^
+1288 |     shape: CursorShape,
+     |     ^^^^^
+1289 |     valid: bool,
+     |     ^^^^^
+     |
+     = note: `SoftwareCursorState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: multiple fields are never read
+    --> services/sunlight-display/src/main.rs:1308:5
+     |
+1307 | struct DebugCounters {
+     |        ------------- fields in this struct
+1308 |     mouse_event_count: u64,
+     |     ^^^^^^^^^^^^^^^^^
+1309 |     raw_mouse_packet_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+1310 |     raw_dx_min: i32,
+     |     ^^^^^^^^^^
+1311 |     raw_dx_max: i32,
+     |     ^^^^^^^^^^
+1312 |     raw_dy_min: i32,
+     |     ^^^^^^^^^^
+1313 |     raw_dy_max: i32,
+     |     ^^^^^^^^^^
+1314 |     final_dx_min: i32,
+     |     ^^^^^^^^^^^^
+1315 |     final_dx_max: i32,
+     |     ^^^^^^^^^^^^
+1316 |     final_dy_min: i32,
+     |     ^^^^^^^^^^^^
+1317 |     final_dy_max: i32,
+     |     ^^^^^^^^^^^^
+1318 |     clamped_motion_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^
+1319 |     delta_capped_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^
+1320 |     hw_cursor_move_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^
+1321 |     sw_cursor_move_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^
+1322 |     sw_cursor_redraw_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+1323 |     desktop_redraw_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^
+...
+1326 |     full_present_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^
+1327 |     /// GPU partial-rect flushes (VirtIO present_rect).
+1328 |     present_rect_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^
+1329 |     framebuffer_copy_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+1330 |     /// Window move drags that started after exceeding the drag threshold.
+1331 |     drag_started_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^
+1332 |     alt_tab_trigger_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^
+1333 |     alt_tab_repeat_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^
+1334 |     display_poll_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^
+1335 |     events_available_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+1336 |     wrong_window_poll_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^^
+1337 |     pointer_other_window_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+1338 |     pointer_button_queued_count: u64,
+1339 |     pointer_button_dequeued_count: u64,
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `DebugCounters` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: function `log_framebuffer_copy_geometry` is never used
+    --> services/sunlight-display/src/main.rs:1384:4
+     |
+1384 | fn log_framebuffer_copy_geometry(state: &CompositorState, rows: usize, row_pixels: usize) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `mark_dirty_full` is never used
+    --> services/sunlight-display/src/main.rs:1500:4
+     |
+1500 | fn mark_dirty_full(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^
+
+warning: function `is_titlebar_control_zone` is never used
+    --> services/sunlight-display/src/main.rs:1893:4
+     |
+1893 | fn is_titlebar_control_zone(zone: HitZone) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `chrome_hover_at` is never used
+    --> services/sunlight-display/src/main.rs:1901:4
+     |
+1901 | fn chrome_hover_at(state: &CompositorState, cx: u32, cy: u32) -> Option<(u64, HitZone)> {
+     |    ^^^^^^^^^^^^^^^
+
+warning: function `mark_chrome_hover_dirty` is never used
+    --> services/sunlight-display/src/main.rs:1913:4
+     |
+1913 | fn mark_chrome_hover_dirty(state: &mut CompositorState, hover: Option<(u64, HitZone)>) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `raise_window_by_id` is never used
+    --> services/sunlight-display/src/main.rs:1934:4
+     |
+1934 | fn raise_window_by_id(state: &mut CompositorState, id: u64) {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `has_desktop_window` is never used
+    --> services/sunlight-display/src/main.rs:1952:4
+     |
+1952 | fn has_desktop_window(state: &CompositorState) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: constant `MANUAL_LOCK_TIMEOUT_MS` is never used
+    --> services/sunlight-display/src/main.rs:1983:7
+     |
+1983 | const MANUAL_LOCK_TIMEOUT_MS: u64 = 5_000;
+     |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `request_manual_lock` is never used
+    --> services/sunlight-display/src/main.rs:1986:4
+     |
+1986 | fn request_manual_lock() {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `ensure_vortex_shell` is never used
+    --> services/sunlight-display/src/main.rs:2035:4
+     |
+2035 | fn ensure_vortex_shell(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `notification_color` is never used
+    --> services/sunlight-display/src/main.rs:2039:4
+     |
+2039 | fn notification_color(kind: NotificationKind) -> Color {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `notification_text` is never used
+    --> services/sunlight-display/src/main.rs:2047:4
+     |
+2047 | fn notification_text(bytes: &[u8], len: usize) -> String {
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: function `notification_fit` is never used
+    --> services/sunlight-display/src/main.rs:2052:4
+     |
+2052 | fn notification_fit(text: &str, max_chars: usize) -> String {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `notification_toast_rect` is never used
+    --> services/sunlight-display/src/main.rs:2068:4
+     |
+2068 | fn notification_toast_rect(canvas_w: u32, idx_from_top: usize) -> Option<Rect> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `notification_close_rect` is never used
+    --> services/sunlight-display/src/main.rs:2080:4
+     |
+2080 | fn notification_close_rect(toast: Rect) -> Rect {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `dismiss_notification_at_point` is never used
+    --> services/sunlight-display/src/main.rs:2089:4
+     |
+2089 | fn dismiss_notification_at_point(state: &mut CompositorState, point: Point) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `trace_for_pid` is never used
+    --> services/sunlight-display/src/main.rs:2143:4
+     |
+2143 | fn trace_for_pid(state: &CompositorState, pid: u64) -> LaunchTrace {
+     |    ^^^^^^^^^^^^^
+
+warning: function `launch_source_from_u64` is never used
+    --> services/sunlight-display/src/main.rs:2152:4
+     |
+2152 | fn launch_source_from_u64(value: u64) -> LaunchSource {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `window_title_str` is never used
+    --> services/sunlight-display/src/main.rs:2162:4
+     |
+2162 | fn window_title_str(title: &[u8; 64]) -> &str {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `local_notification_identity` is never used
+    --> services/sunlight-display/src/main.rs:2234:4
+     |
+2234 | fn local_notification_identity(title: &str) -> u64 {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `push_notification` is never used
+    --> services/sunlight-display/src/main.rs:2247:4
+     |
+2247 | fn push_notification(
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: function `prune_notifications` is never used
+    --> services/sunlight-display/src/main.rs:2279:4
+     |
+2279 | fn prune_notifications(state: &mut CompositorState, now: u64) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `ingest_notification` is never used
+    --> services/sunlight-display/src/main.rs:2287:4
+     |
+2287 | fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) -> NotificationAcceptance {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `draw_notifications` is never used
+    --> services/sunlight-display/src/main.rs:2512:4
+     |
+2512 | fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `cycle_focus` is never used
+    --> services/sunlight-display/src/main.rs:2588:4
+     |
+2588 | fn cycle_focus(state: &mut CompositorState) -> bool {
+     |    ^^^^^^^^^^^
+
+warning: enum `AltTabTriggerSource` is never used
+    --> services/sunlight-display/src/main.rs:2624:6
+     |
+2624 | enum AltTabTriggerSource {
+     |      ^^^^^^^^^^^^^^^^^^^
+
+warning: function `trigger_alt_tab` is never used
+    --> services/sunlight-display/src/main.rs:2629:4
+     |
+2629 | fn trigger_alt_tab(state: &mut CompositorState, source: AltTabTriggerSource) {
+     |    ^^^^^^^^^^^^^^^
+
+warning: function `close_window` is never used
+    --> services/sunlight-display/src/main.rs:2661:4
+     |
+2661 | fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<u64>) -> bool {
+     |    ^^^^^^^^^^^^
+
+warning: function `sweep_app_zombies` is never used
+    --> services/sunlight-display/src/main.rs:2746:4
+     |
+2746 | fn sweep_app_zombies(state: &mut CompositorState, now: u64) -> bool {
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: function `prune_dead_owner_windows` is never used
+    --> services/sunlight-display/src/main.rs:2769:4
+     |
+2769 | fn prune_dead_owner_windows(state: &mut CompositorState) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `list_window_reply` is never used
+    --> services/sunlight-display/src/main.rs:2830:4
+     |
+2830 | fn list_window_reply(win: &Window, active_ws: u32) -> IpcMsg {
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: function `list_window_at` is never used
+    --> services/sunlight-display/src/main.rs:2863:4
+     |
+2863 | fn list_window_at(state: &CompositorState, idx: usize) -> IpcMsg {
+     |    ^^^^^^^^^^^^^^
+
+warning: function `activate_window` is never used
+    --> services/sunlight-display/src/main.rs:2871:4
+     |
+2871 | fn activate_window(state: &mut CompositorState, win_id: u64) -> bool {
+     |    ^^^^^^^^^^^^^^^
+
+warning: constant `TITLEBAR_DIVIDER_ACTIVE` is never used
+    --> services/sunlight-display/src/main.rs:2911:7
+     |
+2911 | const TITLEBAR_DIVIDER_ACTIVE: u32 = SUNLIGHT_THEME.chrome.titlebar_divider_active.0 & 0x00FF_FFFF;
+     |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TITLEBAR_DIVIDER_INACTIVE` is never used
+    --> services/sunlight-display/src/main.rs:2912:7
+     |
+2912 | const TITLEBAR_DIVIDER_INACTIVE: u32 =
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MIN_WIN_W` is never used
+    --> services/sunlight-display/src/main.rs:2932:7
+     |
+2932 | const MIN_WIN_W: u32 = 200;
+     |       ^^^^^^^^^
+
+warning: constant `MIN_WIN_H` is never used
+    --> services/sunlight-display/src/main.rs:2933:7
+     |
+2933 | const MIN_WIN_H: u32 = 100;
+     |       ^^^^^^^^^
+
+warning: field `ambient_shadow_rgb` is never read
+    --> services/sunlight-display/src/main.rs:2943:5
+     |
+2939 | struct SolarDecorationTheme {
+     |        -------------------- field in this struct
+...
+2943 |     ambient_shadow_rgb: u32,
+     |     ^^^^^^^^^^^^^^^^^^
+     |
+     = note: `SolarDecorationTheme` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: constant `DOUBLE_CLICK_MS` is never used
+    --> services/sunlight-display/src/main.rs:3009:7
+     |
+3009 | const DOUBLE_CLICK_MS: u64 = 400;
+     |       ^^^^^^^^^^^^^^^
+
+warning: method `to_horizon` is never used
+    --> services/sunlight-display/src/main.rs:3040:8
+     |
+3039 | impl WindowControlKind {
+     | ---------------------- method in this implementation
+3040 |     fn to_horizon(self) -> Option<sunlight_ui::HorizonControl> {
+     |        ^^^^^^^^^^
+
+warning: variants `Dock` and `Tooltip` are never constructed
+    --> services/sunlight-display/src/main.rs:3061:5
+     |
+3058 | enum SurfaceRole {
+     |      ----------- variants in this enum
+...
+3061 |     Dock,
+     |     ^^^^
+3062 |     PopupOrMenu,
+3063 |     Tooltip,
+     |     ^^^^^^^
+     |
+     = note: `SurfaceRole` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `cursor_origin` is never used
+    --> services/sunlight-display/src/main.rs:3142:4
+     |
+3142 | fn cursor_origin(shape: CursorShape, cx: u32, cy: u32) -> (i32, i32) {
+     |    ^^^^^^^^^^^^^
+
+warning: function `clear_back_buffer` is never used
+    --> services/sunlight-display/src/main.rs:3151:4
+     |
+3151 | fn clear_back_buffer(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: function `first_visible_layer_replaces_background` is never used
+    --> services/sunlight-display/src/main.rs:3162:4
+     |
+3162 | fn first_visible_layer_replaces_background(state: &CompositorState) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `back_buffer_canvas` is never used
+    --> services/sunlight-display/src/main.rs:3192:4
+     |
+3192 | fn back_buffer_canvas<'a>(state: &CompositorState, pixels: &'a mut [u32]) -> Canvas<'a> {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `present_back_buffer` is never used
+    --> services/sunlight-display/src/main.rs:3201:4
+     |
+3201 | fn present_back_buffer(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `present_rect` is never used
+    --> services/sunlight-display/src/main.rs:3265:4
+     |
+3265 | fn present_rect(state: &mut CompositorState, r: Rect) {
+     |    ^^^^^^^^^^^^
+
+warning: function `cursor_rect` is never used
+    --> services/sunlight-display/src/main.rs:3344:4
+     |
+3344 | fn cursor_rect(state: &CompositorState, cx: u32, cy: u32) -> Option<Rect> {
+     |    ^^^^^^^^^^^
+
+warning: function `title_len` is never used
+    --> services/sunlight-display/src/main.rs:3358:4
+     |
+3358 | fn title_len(title: &[u8; 64]) -> usize {
+     |    ^^^^^^^^^
+
+warning: function `draw_title` is never used
+    --> services/sunlight-display/src/main.rs:3418:4
+     |
+3418 | fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Color) {
+     |    ^^^^^^^^^^
+
+warning: function `draw_window_control` is never used
+    --> services/sunlight-display/src/main.rs:3432:4
+     |
+3432 | fn draw_window_control(
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `control_strip_left` is never used
+    --> services/sunlight-display/src/main.rs:3465:4
+     |
+3465 | fn control_strip_left(win: &Window, wx: u32, wy: u32, chrome_w: u32) -> i32 {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `overlay_decoration_timeout_pending` is never used
+    --> services/sunlight-display/src/main.rs:3650:4
+     |
+3650 | fn overlay_decoration_timeout_pending(state: &CompositorState) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `compositor_poll_timeout_ms` is never used
+    --> services/sunlight-display/src/main.rs:3718:4
+     |
+3718 | fn compositor_poll_timeout_ms(state: &CompositorState) -> Option<u64> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `draw_structural_rim` is never used
+    --> services/sunlight-display/src/main.rs:3877:4
+     |
+3877 | fn draw_structural_rim(canvas: &mut Canvas<'_>, outer: Rect, radius: u32) {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `composite_window` is never used
+    --> services/sunlight-display/src/main.rs:3904:4
+     |
+3904 | fn composite_window(
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `draw_cursor_sprite` is never used
+    --> services/sunlight-display/src/main.rs:4263:4
+     |
+4263 | fn draw_cursor_sprite(
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `save_software_cursor_under` is never used
+    --> services/sunlight-display/src/main.rs:4309:4
+     |
+4309 | fn save_software_cursor_under(state: &mut CompositorState, back_buffer: &[u32]) -> Option<Rect> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `restore_software_cursor_under` is never used
+    --> services/sunlight-display/src/main.rs:4330:4
+     |
+4330 | fn restore_software_cursor_under(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `draw_cursor` is never used
+    --> services/sunlight-display/src/main.rs:4351:4
+     |
+4351 | fn draw_cursor(state: &mut CompositorState, back_buffer: &mut [u32]) {
+     |    ^^^^^^^^^^^
+
+warning: function `present_dirty_regions` is never used
+    --> services/sunlight-display/src/main.rs:4368:4
+     |
+4368 | fn present_dirty_regions(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `move_software_cursor` is never used
+    --> services/sunlight-display/src/main.rs:4381:4
+     |
+4381 | fn move_software_cursor(state: &mut CompositorState) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `move_hw_cursor` is never used
+    --> services/sunlight-display/src/main.rs:4464:4
+     |
+4464 | fn move_hw_cursor(state: &mut CompositorState, x: u32, y: u32) -> bool {
+     |    ^^^^^^^^^^^^^^
+
+warning: function `debug_log_window_state` is never used
+    --> services/sunlight-display/src/main.rs:4505:4
+     |
+4505 | fn debug_log_window_state(state: &CompositorState, win_id: u64) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `redraw_scene` is never used
+    --> services/sunlight-display/src/main.rs:4611:4
+     |
+4611 | fn redraw_scene(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^
+
+warning: struct `LogLine` is never constructed
+    --> services/sunlight-display/src/main.rs:4687:8
+     |
+4687 | struct LogLine {
+     |        ^^^^^^^
+
+warning: multiple associated items are never used
+    --> services/sunlight-display/src/main.rs:4693:8
+     |
+4692 | impl LogLine {
+     | ------------ associated items in this implementation
+4693 |     fn new() -> Self {
+     |        ^^^
+...
+4700 |     fn push_str(&mut self, s: &str) {
+     |        ^^^^^^^^
+...
+4709 |     fn push_dec(&mut self, v: u32) {
+     |        ^^^^^^^^
+...
+4713 |     fn push_dec_u64(&mut self, v: u64) {
+     |        ^^^^^^^^^^^^
+...
+4733 |     fn push_hex(&mut self, v: u32) {
+     |        ^^^^^^^^
+...
+4745 |     fn push_dim(&mut self, w: u32, h: u32) {
+     |        ^^^^^^^^
+...
+4751 |     fn flush(&self) {
+     |        ^^^^^
+
+warning: function `log_client_surface_resize` is never used
+    --> services/sunlight-display/src/main.rs:4758:4
+     |
+4758 | fn log_client_surface_resize(win: &Window) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `alloc_page_aligned_pixels` is never used
+    --> services/sunlight-display/src/main.rs:4778:4
+     |
+4778 | fn alloc_page_aligned_pixels(words: usize, fill: u32) -> PixelBuffer {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `ensure_compositor_buffer` is never used
+    --> services/sunlight-display/src/main.rs:4857:4
+     |
+4857 | fn ensure_compositor_buffer(state: &mut CompositorState) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `ensure_limine_framebuffer_mapped` is never used
+    --> services/sunlight-display/src/main.rs:4882:4
+     |
+4882 | fn ensure_limine_framebuffer_mapped(state: &mut CompositorState) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_gpu_proxy_error` is never used
+    --> services/sunlight-display/src/main.rs:4933:4
+     |
+4933 | fn log_gpu_proxy_error(step: &str, e: sunlight_ipc::gpu_proxy::GpuProxyError) {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `setup_virtio_backend` is never used
+    --> services/sunlight-display/src/main.rs:4955:4
+     |
+4955 | fn setup_virtio_backend(gw: u32, gh: u32) -> Result<PixelBuffer, &'static str> {
+     |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `VMWARE_MODE_CANDIDATES` is never used
+    --> services/sunlight-display/src/main.rs:4972:7
+     |
+4972 | const VMWARE_MODE_CANDIDATES: &[(u32, u32)] = &[
+     |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `current_display_mode` is never used
+    --> services/sunlight-display/src/main.rs:4987:4
+     |
+4987 | fn current_display_mode(state: &CompositorState) -> DisplayMode {
+     |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `vmware_mode_at` is never used
+    --> services/sunlight-display/src/main.rs:4998:4
+     |
+4998 | fn vmware_mode_at(state: &CompositorState, index: usize) -> Option<DisplayMode> {
+     |    ^^^^^^^^^^^^^^
+
+warning: function `display_mode_count` is never used
+    --> services/sunlight-display/src/main.rs:5050:4
+     |
+5050 | fn display_mode_count(state: &CompositorState) -> u32 {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `mode_management` is never used
+    --> services/sunlight-display/src/main.rs:5056:4
+     |
+5056 | fn mode_management(
+     |    ^^^^^^^^^^^^^^^
+
+warning: function `restart_desktop_shell` is never used
+    --> services/sunlight-display/src/main.rs:5083:4
+     |
+5083 | fn restart_desktop_shell(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `clamp_windows_after_mode_change` is never used
+    --> services/sunlight-display/src/main.rs:5119:4
+     |
+5119 | fn clamp_windows_after_mode_change(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `apply_svga_info` is never used
+    --> services/sunlight-display/src/main.rs:5149:4
+     |
+5149 | fn apply_svga_info(state: &mut CompositorState, info: sunlight_ipc::SvgaDisplayInfo) -> bool {
+     |    ^^^^^^^^^^^^^^^
+
+warning: function `apply_exact_vmware_mode` is never used
+    --> services/sunlight-display/src/main.rs:5209:4
+     |
+5209 | fn apply_exact_vmware_mode(state: &mut CompositorState, width: u32, height: u32) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `mode_transaction_revert_reason` is never used
+    --> services/sunlight-display/src/main.rs:5240:4
+     |
+5240 | fn mode_transaction_revert_reason(state: &CompositorState, now: u64) -> Option<ModeRevertReason> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `restore_window_geometry` is never used
+    --> services/sunlight-display/src/main.rs:5251:4
+     |
+5251 | fn restore_window_geometry(state: &mut CompositorState, snapshot: &ModeSnapshot) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `revert_mode_transaction` is never used
+    --> services/sunlight-display/src/main.rs:5274:4
+     |
+5274 | fn revert_mode_transaction(state: &mut CompositorState, reason: ModeRevertReason) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `mode_change_authorized` is never used
+    --> services/sunlight-display/src/main.rs:5340:4
+     |
+5340 | fn mode_change_authorized(state: &CompositorState, caller_pid: u64) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `format_mode_preference` is never used
+    --> services/sunlight-display/src/main.rs:5346:4
+     |
+5346 | fn format_mode_preference(width: u32, height: u32, out: &mut [u8]) -> usize {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `parse_mode_preference` is never used
+    --> services/sunlight-display/src/main.rs:5371:4
+     |
+5371 | fn parse_mode_preference(bytes: &[u8]) -> Option<(u32, u32)> {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `apply_stored_vmware_mode` is never used
+    --> services/sunlight-display/src/main.rs:5389:4
+     |
+5389 | fn apply_stored_vmware_mode(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `activate_virtio_scanout` is never used
+    --> services/sunlight-display/src/main.rs:5419:4
+     |
+5419 | fn activate_virtio_scanout(state: &mut CompositorState) {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `debug_dim` is never used
+    --> services/sunlight-display/src/main.rs:5452:4
+     |
+5452 | fn debug_dim(w: u32, h: u32) {
+     |    ^^^^^^^^^
+
+warning: function `debug_hex` is never used
+    --> services/sunlight-display/src/main.rs:5458:4
+     |
+5458 | fn debug_hex(val: u32) {
+     |    ^^^^^^^^^
+
+warning: function `debug_dec_u64` is never used
+    --> services/sunlight-display/src/main.rs:5495:4
+     |
+5495 | fn debug_dec_u64(val: u64) {
+     |    ^^^^^^^^^^^^^
+
+warning: function `log_debug_counters` is never used
+    --> services/sunlight-display/src/main.rs:5555:4
+     |
+5555 | fn log_debug_counters(state: &CompositorState, reason: &str) {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: constant `ZOMBIE_SWEEP_INTERVAL_MS` is never used
+ --> services/sunlight-display/src/app_lifecycle.rs:5:7
+  |
+5 | const ZOMBIE_SWEEP_INTERVAL_MS: u64 = 1000;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TERMINATE_GRACE_PERIOD_MS` is never used
+ --> services/sunlight-display/src/app_lifecycle.rs:6:7
+  |
+6 | const TERMINATE_GRACE_PERIOD_MS: u64 = 500;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SIGKILL` is never used
+ --> services/sunlight-display/src/app_lifecycle.rs:7:7
+  |
+7 | const SIGKILL: u32 = 9;
+  |       ^^^^^^^
+
+warning: field `0` is never read
+  --> services/sunlight-display/src/app_lifecycle.rs:42:15
+   |
+42 |     Terminate(u64),
+   |     --------- ^^^
+   |     |
+   |     field in this variant
+   |
+help: consider changing the field to be of unit type to suppress this warning while preserving the field numbering, or remove the field
+   |
+42 -     Terminate(u64),
+42 +     Terminate(()),
+   |
+
+warning: struct `SweepResult` is never constructed
+  --> services/sunlight-display/src/app_lifecycle.rs:46:12
+   |
+46 | pub struct SweepResult {
+   |            ^^^^^^^^^^^
+
+warning: field `next_zombie_sweep_ms` is never read
+  --> services/sunlight-display/src/app_lifecycle.rs:53:9
+   |
+51 | pub struct AppTracker {
+   |            ---------- field in this struct
+52 |     apps: Vec<AppInstance>,
+53 |     pub next_zombie_sweep_ms: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `remove_instance_for_pid` and `sweep_zombies` are never used
+   --> services/sunlight-display/src/app_lifecycle.rs:189:12
+    |
+ 56 | impl AppTracker {
+    | --------------- methods in this implementation
+...
+189 |     pub fn remove_instance_for_pid(&mut self, pid: u64) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+206 |     pub fn sweep_zombies(&mut self, now_ms: u64) -> SweepResult {
+    |            ^^^^^^^^^^^^^
+
+warning: fields `fb` and `pitch_words` are never read
+  --> services/sunlight-display/src/backend.rs:12:14
+   |
+12 |     Limine { fb: *mut u32, pitch_words: usize },
+   |     ------   ^^            ^^^^^^^^^^^
+   |     |
+   |     fields in this variant
+   |
+   = note: `DisplayBackend` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: variants `VirtioGpu` and `VmwareSvga` are never constructed
+  --> services/sunlight-display/src/backend.rs:14:5
+   |
+10 | pub enum DisplayBackend {
+   |          -------------- variants in this enum
+...
+14 |     VirtioGpu { width: u32, height: u32 },
+   |     ^^^^^^^^^
+15 |     /// VMware SVGA II legacy framebuffer + FIFO UPDATE (syscalls 127-128).
+16 |     VmwareSvga {
+   |     ^^^^^^^^^^
+   |
+   = note: `DisplayBackend` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `needs_full_present` is never used
+  --> services/sunlight-display/src/dirty.rs:63:12
+   |
+15 | impl DirtyList {
+   | -------------- method in this implementation
+...
+63 |     pub fn needs_full_present(&self) -> bool {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: fields `radius` and `data` are never read
+  --> services/sunlight-display/src/mask.rs:10:9
+   |
+ 9 | pub struct CornerMask {
+   |            ---------- fields in this struct
+10 |     pub radius: u32,
+   |         ^^^^^^
+...
+14 |     data: [[u8; MAX_RADIUS]; MAX_RADIUS],
+   |     ^^^^
+
+warning: method `coverage` is never used
+  --> services/sunlight-display/src/mask.rs:51:12
+   |
+17 | impl CornerMask {
+   | --------------- method in this implementation
+...
+51 |     pub fn coverage(&self, lx: i32, ly: i32, w: i32, h: i32) -> u8 {
+   |            ^^^^^^^^
+
+warning: fields `final_dx`, `delta_capped`, and `position_clamped` are never read
+  --> services/sunlight-display/src/pointer_policy.rs:39:9
+   |
+38 | pub struct MotionOutcome {
+   |            ------------- fields in this struct
+39 |     pub final_dx: i32,
+   |         ^^^^^^^^
+40 |     pub final_dy: i32,
+41 |     pub delta_capped: bool,
+   |         ^^^^^^^^^^^^
+42 |     pub position_clamped: bool,
+   |         ^^^^^^^^^^^^^^^^
+   |
+   = note: `MotionOutcome` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `set_motion_settings` is never used
+   --> services/sunlight-display/src/pointer_policy.rs:133:12
+    |
+ 54 | impl PointerPolicy {
+    | ------------------ method in this implementation
+...
+133 |     pub fn set_motion_settings(&mut self, sensitivity_fp: i32, acceleration_enabled: bool) {
+    |            ^^^^^^^^^^^^^^^^^^^
+
+warning: `sunlight-display` (bin "sunlight-display" test) generated 172 warnings (run `cargo fix --bin "sunlight-display" -p sunlight-display --tests` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.26s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_display-a752c251e364317d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_display-9ece677e93a6be0a)
+
+running 9 tests
+test tests::ctrl_k_falls_back_to_shell_only_without_a_focused_application ... ok
+test tests::client_capture_delivers_outside_motion_and_focus_loss_ends_it ... ok
+test tests::desktop_overlay_routes_input_above_on_top_apps_and_restores_focus ... ok
+test tests::focus_transfer_marks_old_and_new_extended_effect_bounds ... ok
+test tests::search_release_clears_latch_while_palette_owns_focus ... ok
+test tests::secure_lock_routes_focus_pointer_and_polls_only_to_presenter ... ok
+test tests::session_handoff_discards_stale_keys_and_releases_ctrl_without_losing_focus ... ok
+test tests::solar_focus_policy_is_active_floating_app_only ... ok
+test tests::unpresented_window_is_not_composited_focused_or_pointer_eligible ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 0.00s
+

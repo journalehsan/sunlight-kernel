@@ -392,6 +392,40 @@ mod tests {
         }
     }
     #[test]
+    fn shift_breaks_clear_only_the_addressed_side_in_either_order() {
+        for (first, second, first_bit, second_bit) in [(0x2a, 0x36, 1, 2), (0x36, 0x2a, 2, 1)] {
+            let mut keyboard = Keyboard::default();
+            for (scan, held) in [
+                (first, first_bit),
+                (second, 3),
+                (first | 0x80, second_bit),
+                (0x4d, second_bit),
+                (second | 0x80, 0),
+                (0xcd, 0),
+                (first, first_bit),
+                (first, first_bit),
+                (second, 3),
+                (first | 0x80, second_bit),
+                (0x4d, second_bit),
+                (first, 3),
+                (second | 0x80, first_bit),
+                (first | 0x80, 0),
+                (0x4d, 0),
+            ] {
+                let extended = scan & 0x7f == 0x4d;
+                let (event, commit) = keyboard.process(scan, extended);
+                let (code, pressed, shift, _, _, _, _) = sunlight_ipc::unpack_key_event(event);
+                assert_eq!(
+                    (code, pressed, shift),
+                    (scan & 0x7f, scan < 0x80, held != 0)
+                );
+                assert_eq!(keyboard.mods.sides & 3, held, "scan={scan:02x}");
+                assert_eq!(commit, None);
+            }
+        }
+    }
+
+    #[test]
     fn composition_cancel_and_backspace_are_private() {
         let mut k = Keyboard::default();
         k.process(0x1d, false);

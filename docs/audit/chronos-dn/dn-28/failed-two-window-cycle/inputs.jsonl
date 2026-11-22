@@ -1,0 +1,142 @@
+{"keys": ["ret"]}
+{"type": "root"}
+{"keys": ["ret"]}
+{"capture": "desktop"}
+{"keys": ["meta_l", "k"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"type": "mines"}
+{"capture": "focus-peer-search"}
+{"keys": ["ret"]}
+{"capture": "focus-peer-first"}
+{"keys": ["meta_l", "k"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"type": "dos navigator"}
+{"capture": "dn-1-search"}
+{"keys": ["ret"]}
+{"capture": "dn-1-first"}
+{"keys": ["f10"]}
+{"capture": "dn-1-f10"}
+{"keys": ["m"]}
+{"keys": ["n"]}
+{"capture": "dn-1-manager-new"}
+{"keys": ["c"]}
+{"capture": "dn-1-new-panels"}
+{"keys": ["tab"]}
+{"keys": ["down"]}
+{"capture": "dn-1-directory-selected"}
+{"keys": ["ret"]}
+{"capture": "dn-1-directory-opened"}
+{"keys": ["ctrl", "f3"]}
+{"capture": "dn-1-ctrl-f3"}
+{"keys": ["esc"]}
+{"capture": "dn-1-escape"}
+{"keys": ["kp_add"]}
+{"capture": "mask-initial"}
+{"keys": ["home"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"capture": "plain-right"}
+{"keys": ["left"]}
+{"capture": "plain-left"}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"edge": "shift", "down": true}
+{"keys": ["left"]}
+{"capture": "shift-before-loss"}
+{"action": "alt-tab to peer while shift held"}
+{"keys": ["alt", "tab"]}
+{"capture": "shift-lost"}
+{"action": "alt-tab to chronos while shift held"}
+{"keys": ["alt", "tab"]}
+{"capture": "shift-regained"}
+{"keys": ["right"]}
+{"capture": "shift-ordinary-held"}
+{"edge": "shift", "down": false}
+{"capture": "shift-release-shift"}
+{"keys": ["left"]}
+{"capture": "shift-ordinary-released"}
+{"edge": "shift", "down": true}
+{"keys": ["left"]}
+{"capture": "shift-fresh-make"}
+{"edge": "shift", "down": false}
+{"keys": ["right"]}
+{"capture": "shift-fresh-break"}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"edge": "shift_r", "down": true}
+{"keys": ["left"]}
+{"capture": "shift_r-before-loss"}
+{"action": "alt-tab to peer while shift held"}
+{"keys": ["alt", "tab"]}
+{"capture": "shift_r-lost"}
+{"action": "alt-tab to chronos while shift held"}
+{"keys": ["alt", "tab"]}
+{"capture": "shift_r-regained"}
+{"keys": ["right"]}
+{"capture": "shift_r-ordinary-held"}
+{"edge": "shift_r", "down": false}
+{"capture": "shift_r-release-shift_r"}
+{"keys": ["left"]}
+{"capture": "shift_r-ordinary-released"}
+{"edge": "shift_r", "down": true}
+{"keys": ["left"]}
+{"capture": "shift_r-fresh-make"}

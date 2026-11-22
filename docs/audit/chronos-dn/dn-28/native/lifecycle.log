@@ -1,0 +1,13 @@
+3835:[CHRONOS] DOS session completed code=
+3846:[SCHED] process_mark_finished pid=40 name='sunlight-chronos' reason=exit code=0
+3848:[SCHED] process_reaped pid=40 name='sunlight-chronos' user_frames=2820 page_tables=13 swap_blocks=0 ipc_cleared=0
+3857:[APP_LIFECYCLE] app_instance_removed pid=40 name=DOS Navigator 1.51
+4854:[CHRONOS] DOS session completed code=
+4865:[SCHED] process_mark_finished pid=41 name='sunlight-chronos' reason=exit code=0
+4867:[SCHED] process_reaped pid=41 name='sunlight-chronos' user_frames=2820 page_tables=13 swap_blocks=0 ipc_cleared=0
+4877:[APP_LIFECYCLE] app_instance_removed pid=41 name=DOS Navigator 1.51
+5344:[CHRONOS] DOS session completed code=
+5355:[APP_LIFECYCLE] app_terminate_requested pid=42 name=Sunlight Mines signal=SIGTERM
+5361:[SCHED] process_mark_finished pid=42 name='sunlight-chronos' reason=exit code=143
+5363:[SCHED] process_reaped pid=42 name='sunlight-chronos' user_frames=2820 page_tables=13 swap_blocks=0 ipc_cleared=0
+5370:[APP_LIFECYCLE] app_instance_removed pid=42 name=Sunlight Mines

@@ -1,0 +1,63 @@
+Sunlight0S.
+
+a
+
+o
+
+%
+
+Sun, Nov 22
+
+4:47 PM
+
+® W a
+
+[
+
+-
+
+Sunlight Mines
+
+°
+
+- 0Ox
+
+| 5
+
+Sunlight Mines
+
+sunight
+
+16-bit real-made guest
+
+Home
+
+10
+
+000
+
+-
+
+o
+
+Ne
+
+vork
+
+2
+
+DOS .COM / MZ
+
+Yielded until timer
+
+INT 16h / B8000
+
+DOS .COM / MZ
+
+Running
+
+INT 16h / B8000
+
+w a
+
+mreceheoBEE

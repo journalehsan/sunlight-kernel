@@ -1951,3 +1951,30 @@ In the 4 GiB QEMU desktop, either Shift key with Left/Right extends or
 contracts the visible selection around its original anchor. Releasing
 Shift ends extension; the next plain arrow clears the highlight. See the
 [audit screenshots and scanout checks](../audit/chronos-dn/dn-27/README.md#authentic-sunapp-result).
+
+## DN-28: Focus and modifier recovery
+
+Chronos clears its guest-visible transient modifier bits when its window loses
+focus. The keyboard service continues tracking physical make and break edges;
+focus regain does not reconstruct a Shift side from an aggregate modifier
+snapshot. A fresh Shift make restores that side, and the BIOS flags and modeled
+BDA bits use the same state. The [DN-28 audit](../audit/chronos-dn/dn-28/README.md)
+separates this policy and host regression evidence from actual desktop results.
+
+In the DN-28 QEMU replay, left Shift, right Shift and both Shift keys were
+held across a real desktop focus cycle. The first Right after return cleared
+the selection, and a fresh Shift cycle selected again. Native direct BIOS/BDA
+readback and a break lost to another window remain separate open checks; see
+the [evidence and limitations](../audit/chronos-dn/dn-28/README.md#native-qemu-focus-replay).
+
+## DN-29: Overlapping Shift keys
+
+In the stock QEMU desktop replay, either Shift key can be released first
+in Select → File mask. The remaining key continues extending selection;
+after both releases, a plain arrow clears it. A fresh Shift make extends
+selection again. A separate native real-mode probe verified that both INT
+16h modifier queries agree with the modeled bits at `0040:0017`, preserve
+the expected AX and FLAGS behavior, and show no stale Shift after focus
+loss or regain. The PS/2 trace still shows the remaining physical side held
+between the delayed breaks. See the [DN-29 audit](../audit/chronos-dn/dn-29/README.md)
+for keyboard traces, native readbacks, scanout, and package hashes.

@@ -1,0 +1,51 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/chronos_core-de74b54906008db4)
+
+running 39 tests
+test dos::tests::console_handle_enter_supplies_cr_lf_without_a_second_keypress ... ok
+test dos::tests::bios_reports_shift_sides_and_merged_ctrl_alt ... ok
+test dos::tests::country_selection_errors_and_set_do_not_write_buffer ... ok
+test dos::tests::console_handle_reads_block_until_a_guest_key_arrives ... ok
+test dos::tests::date_and_time_are_guest_visible_but_not_settable ... ok
+test dos::tests::directory_search_filters_effective_entries_and_exhausts ... ok
+test dos::tests::absent_multiplex_executes_guest_iret_for_arbitrary_functions ... ok
+test dos::tests::directory_search_rejects_bad_paths_and_dta_without_partial_write ... ok
+test dos::tests::country_info_layout_boundaries_and_preserved_registers ... ok
+test dos::tests::dos_buffered_input_drains_typeahead_and_reserves_carriage_return ... ok
+test dos::tests::disk_space_rejects_unrepresentable_or_inconsistent_metadata ... ok
+test dos::tests::dos_byte_echo_status_and_flush ... ok
+test dos::tests::enhanced_keyboard_read_consumes_in_order_and_waits_when_empty ... ok
+test dos::tests::duplicated_stdout_can_be_redirected_and_restored ... ok
+test dos::tests::dos_byte_reads_share_extended_tail_without_exposing_it_to_bios ... ok
+test dos::tests::list_of_lists_exposes_a_bounded_terminating_sft_capacity_chain ... ok
+test dos::tests::disk_space_uses_dos_selectors_without_changing_drive_or_flags ... ok
+test dos::tests::ctrl_break_flag_is_guest_local_and_unknown_functions_are_rejected ... ok
+test dos::tests::drive_selection_and_find_first_write_a_dta_result ... ok
+test dos::tests::directory_search_isolated_across_exec_and_discarded_on_exit ... ok
+test dos::tests::file_services_use_handles_carry_and_guest_buffers ... ok
+test dos::tests::extended_error_query_is_safe_and_reports_no_pending_error ... ok
+test dos::tests::enhanced_keyboard_status_reports_and_preserves_the_next_event ... ok
+test dos::tests::parse_filename_builds_uppercase_fcb_and_reports_wildcards ... ok
+test dos::tests::translated_controls_preserve_fifo_and_bios_status_read_semantics ... ok
+test dos::tests::video_state_save_writes_documented_header_and_bda ... ok
+test dos::tests::video_state_size_query_reports_documented_blocks_and_preserves_state ... ok
+test dos::tests::video_state_restore_of_graphics_bda_switches_the_model ... ok
+test dos::tests::video_state_repeated_save_restore_is_deterministic ... ok
+test dos::tests::keypad_and_navigation_int16_matrix ... ok
+test dos::tests::equipment_query_matches_bda_and_advertises_no_coprocessor ... ok
+test dos::tests::unsupported_lfn_multiplex_returns_a_dos_error_without_trapping ... ok
+test dos::tests::video_state_invalid_subfunction_and_save_restore_are_not_advertised ... ok
+test dos::tests::guest_bda_and_bios_agree_on_modeled_keyboard_flags ... ok
+test dos::tests::video_state_save_restore_round_trips_text_mode_state ... ok
+test dos::tests::ioctl_reports_console_handles_as_character_devices ... ok
+test dos::tests::video_state_buffers_must_fit_guest_ram_and_fail_without_partial_writes ... ok
+test dos::tests::video_state_query_rejects_unmodeled_areas_and_reserved_bits ... ok
+test dos::tests::country_case_mapping_is_far_callable_and_preserves_state ... ok
+
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.03s
+

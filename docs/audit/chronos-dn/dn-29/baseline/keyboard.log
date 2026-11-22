@@ -1,0 +1,63 @@
+2729:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2735:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2737:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2744:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2750:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2756:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2826:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2832:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2834:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2840:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2842:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2848:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2850:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2853:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2859:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2879:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2885:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2891:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2897:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2903:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2909:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2911:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2917:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2924:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2926:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2932:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3002:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3008:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3010:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3016:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3018:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3025:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3027:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3029:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+3035:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3055:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3061:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3068:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3074:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+3080:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3086:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3088:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+3094:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3100:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3103:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3109:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3180:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3186:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3188:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3194:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3196:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3202:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3204:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3207:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3209:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+4483:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+4489:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4519:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+4525:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4571:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 115 }) queued_before=0
+4577:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0
+4583:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: true, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 157 }) queued_before=0
+4589:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: true, super_key: false } key=None queued_before=0

@@ -2779,6 +2779,138 @@ mod tests {
     }
 
     #[test]
+    fn shift_focus_cleanup_and_fresh_edges_follow_physical_snapshots() {
+        for sides in [&[0x2a][..], &[0x36][..], &[0x2a, 0x36][..]] {
+            let mut app = ChronosApp::new();
+            app.runtime = Runtime::from_com(&[0xb4, 0x02, 0xcd, 0x16, 0xeb, 0xfa]).unwrap();
+            app.runtime.memory.write_u8(0x40, 0x17, 0xd0);
+            let check = |app: &ChronosApp, expected| {
+                assert_eq!(app.runtime.cpu.al(), expected);
+                assert_eq!(app.runtime.memory.read_u8(0x40, 0x17), 0xd0 | expected);
+            };
+            check(&app, 0);
+            let edge = |app: &mut ChronosApp, code, pressed, shift| {
+                app.update(Event::KeyPress {
+                    keycode: code,
+                    extended: false,
+                    pressed,
+                    shift,
+                    ctrl: false,
+                    alt: false,
+                    super_key: false,
+                });
+            };
+            for &side in sides {
+                edge(&mut app, side, true, true);
+            }
+            let expected = sides
+                .iter()
+                .fold(0, |bits, side| bits | if *side == 0x2a { 2 } else { 1 });
+            check(&app, expected);
+            app.update(Event::FocusChanged { focused: false });
+            check(&app, 0);
+            app.update(Event::FocusChanged { focused: true });
+            // A held snapshot on an ordinary key cannot invent a side edge.
+            edge(&mut app, 0x4d, true, true);
+            check(&app, 0);
+            edge(&mut app, 0x4d, false, true);
+            for (i, &side) in sides.iter().enumerate() {
+                edge(&mut app, side, false, i + 1 < sides.len());
+                check(&app, 0);
+            }
+            edge(&mut app, sides[0], true, true);
+            check(&app, if sides[0] == 0x2a { 2 } else { 1 });
+            edge(&mut app, sides[0], false, false);
+            check(&app, 0);
+
+            // The original break can be routed to another focused window.
+            edge(&mut app, sides[0], true, true);
+            app.update(Event::FocusChanged { focused: false });
+            app.update(Event::FocusChanged { focused: true });
+            edge(&mut app, 0x4d, true, false);
+            check(&app, 0);
+            edge(&mut app, 0x4d, false, false);
+            edge(&mut app, sides[0], true, true);
+            check(&app, if sides[0] == 0x2a { 2 } else { 1 });
+            edge(&mut app, sides[0], false, false);
+            check(&app, 0);
+        }
+    }
+
+    #[test]
+    fn overlapping_shift_edges_keep_guest_bios_and_bda_in_sync() {
+        for (first, second, first_bit, second_bit) in [(0x2a, 0x36, 2, 1), (0x36, 0x2a, 1, 2)] {
+            let mut app = ChronosApp::new();
+            app.runtime = Runtime::from_com(&[
+                0xb8, 0x40, 0x00, 0x8e, 0xc0, 0x26, 0xc6, 0x06, 0x17, 0x00, 0xd0, 0x26, 0xa0, 0x17,
+                0x00, 0xb4, 0x02, 0xcd, 0x16, 0xb4, 0x12, 0xcd, 0x16, 0xeb, 0xf2,
+            ])
+            .unwrap();
+            for _ in 0..3 {
+                app.runtime.step();
+            }
+            let check = |app: &mut ChronosApp, expected: u8| {
+                let runtime = &mut app.runtime;
+                runtime.cpu.ip = 0x010b;
+                runtime.cpu.flags = 0x0247;
+                runtime.step();
+                assert_eq!(runtime.cpu.al(), 0xd0 | expected);
+                for expected_ax in [0x0200 | u16::from(expected), u16::from(expected)] {
+                    runtime.step();
+                    runtime.step();
+                    assert_eq!((runtime.cpu.ax, runtime.cpu.flags), (expected_ax, 0x0247));
+                }
+                assert_eq!(runtime.queued_key_count(), 0);
+            };
+            let edge = |app: &mut ChronosApp, keycode, pressed, shift| {
+                app.update(Event::KeyPress {
+                    keycode,
+                    extended: false,
+                    pressed,
+                    shift,
+                    ctrl: false,
+                    alt: false,
+                    super_key: false,
+                });
+            };
+            check(&mut app, 0);
+            for (code, pressed, held, flags) in [
+                (first, true, true, first_bit),
+                (second, true, true, 3),
+                (first, false, true, second_bit),
+                (second, false, false, 0),
+                (first, true, true, first_bit),
+                (first, true, true, first_bit),
+                (second, true, true, 3),
+                (first, false, true, second_bit),
+                (first, true, true, 3),
+                (second, false, true, first_bit),
+                (first, false, false, 0),
+                (first, true, true, first_bit),
+                (second, true, true, 3),
+            ] {
+                edge(&mut app, code, pressed, held);
+                check(&mut app, flags);
+            }
+            for focused in [false, true] {
+                app.update(Event::FocusChanged { focused });
+                check(&mut app, 0);
+            }
+            for (code, pressed, held, flags) in [
+                (first, false, true, 0),
+                (second, false, false, 0),
+                (first, true, true, first_bit),
+                (first, false, false, 0),
+                (second, true, true, second_bit),
+                (second, false, false, 0),
+            ] {
+                edge(&mut app, code, pressed, held);
+                check(&mut app, flags);
+            }
+        }
+    }
+
+    #[test]
     fn physical_keypad_and_modifier_releases_reach_the_guest_once() {
         let mut app = ChronosApp::new();
         app.runtime = Runtime::from_com(&[

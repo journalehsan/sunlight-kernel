@@ -1,0 +1,26 @@
+initial                          00D0 0200 0247 0000 0247
+shift-make                       00D2 0202 0247 0002 0247
+shift-both                       00D3 0203 0247 0003 0247
+shift-first-break                00D1 0201 0247 0001 0247
+shift-second-break               00D0 0200 0247 0000 0247
+shift-before-focus-loss          00D3 0203 0247 0003 0247
+shift-focus-lost                 00D0 0200 0247 0000 0247
+shift-focus-regained             00D0 0200 0247 0000 0247
+shift-delayed-first-break        00D0 0200 0247 0000 0247
+shift-delayed-held-snapshot      00D0 0200 0247 0000 0247
+shift-delayed-second-break       00D0 0200 0247 0000 0247
+shift-fresh-make                 00D1 0201 0247 0001 0247
+shift-fresh-break                00D0 0200 0247 0000 0247
+shift_r-make                     00D1 0201 0247 0001 0247
+shift_r-both                     00D3 0203 0247 0003 0247
+shift_r-first-break              00D2 0202 0247 0002 0247
+shift_r-second-break             00D0 0200 0247 0000 0247
+shift_r-before-focus-loss        00D3 0203 0247 0003 0247
+shift_r-focus-lost               00D0 0200 0247 0000 0247
+shift_r-focus-regained           00D0 0200 0247 0000 0247
+shift_r-delayed-first-break      00D0 0200 0247 0000 0247
+shift_r-delayed-held-snapshot    00D0 0200 0247 0000 0247
+shift_r-delayed-second-break     00D0 0200 0247 0000 0247
+shift_r-fresh-make               00D2 0202 0247 0002 0247
+shift_r-fresh-break              00D0 0200 0247 0000 0247
+25 native scanout samples matched

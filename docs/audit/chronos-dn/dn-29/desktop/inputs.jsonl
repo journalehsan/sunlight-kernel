@@ -1,0 +1,110 @@
+{"serial_bytes": 70234, "keys": ["ret"]}
+{"serial_bytes": 70269, "type": "root"}
+{"serial_bytes": 70269, "keys": ["ret"]}
+{"serial_bytes": 77200, "keys": ["meta_l", "k"]}
+{"serial_bytes": 77200, "type": "dos navigator"}
+{"serial_bytes": 79629, "keys": ["ret"]}
+{"serial_bytes": 104783, "keys": ["f10"]}
+{"serial_bytes": 105249, "keys": ["m"]}
+{"serial_bytes": 105770, "keys": ["n"]}
+{"serial_bytes": 106291, "keys": ["c"]}
+{"serial_bytes": 106811, "keys": ["tab"]}
+{"serial_bytes": 107167, "keys": ["down"]}
+{"serial_bytes": 107523, "keys": ["ret"]}
+{"serial_bytes": 107880, "keys": ["ctrl", "f3"]}
+{"serial_bytes": 107880, "keys": ["esc"]}
+{"serial_bytes": 109004, "keys": ["kp_add"]}
+{"serial_bytes": 110694, "keys": ["home"]}
+{"serial_bytes": 111160, "keys": ["delete"]}
+{"serial_bytes": 111626, "keys": ["delete"]}
+{"serial_bytes": 112092, "keys": ["delete"]}
+{"serial_bytes": 112558, "keys": ["delete"]}
+{"serial_bytes": 113024, "keys": ["delete"]}
+{"serial_bytes": 113490, "keys": ["delete"]}
+{"serial_bytes": 113956, "keys": ["delete"]}
+{"serial_bytes": 114679, "keys": ["delete"]}
+{"serial_bytes": 115145, "type": "abcdef"}
+{"serial_bytes": 118525, "keys": ["home"]}
+{"serial_bytes": 118991, "keys": ["right"]}
+{"serial_bytes": 119457, "keys": ["right"]}
+{"serial_bytes": 119923, "keys": ["right"]}
+{"serial_bytes": 120903, "frame": "shift-plain", "observed": "", "expected": ""}
+{"serial_bytes": 120903, "edge": "shift", "down": true}
+{"serial_bytes": 121061, "edge": "shift_r", "down": true}
+{"serial_bytes": 121476, "keys": ["left"]}
+{"serial_bytes": 122454, "frame": "shift-both-left", "observed": "c", "expected": "c"}
+{"serial_bytes": 122454, "keys": ["right"]}
+{"serial_bytes": 123432, "frame": "shift-both-right", "observed": "", "expected": ""}
+{"serial_bytes": 123432, "keys": ["right"]}
+{"serial_bytes": 124812, "frame": "shift-both-extend", "observed": "d", "expected": "d"}
+{"serial_bytes": 124812, "edge": "shift", "down": false}
+{"serial_bytes": 124971, "keys": ["right"]}
+{"serial_bytes": 125949, "frame": "shift-one-held", "observed": "de", "expected": "de"}
+{"serial_bytes": 125949, "edge": "shift_r", "down": false}
+{"serial_bytes": 126109, "keys": ["left"]}
+{"serial_bytes": 127089, "frame": "shift-both-released", "observed": "", "expected": ""}
+{"serial_bytes": 127089, "edge": "shift_r", "down": true}
+{"serial_bytes": 127247, "keys": ["left"]}
+{"serial_bytes": 128225, "frame": "shift-fresh", "observed": "d", "expected": "d"}
+{"serial_bytes": 128225, "edge": "shift_r", "down": false}
+{"serial_bytes": 128528, "keys": ["right"]}
+{"serial_bytes": 129365, "frame": "shift-fresh-released", "observed": "", "expected": ""}
+{"serial_bytes": 129365, "keys": ["home"]}
+{"serial_bytes": 129672, "keys": ["right"]}
+{"serial_bytes": 130554, "keys": ["right"]}
+{"serial_bytes": 130861, "keys": ["right"]}
+{"serial_bytes": 132000, "frame": "shift_r-plain", "observed": "", "expected": ""}
+{"serial_bytes": 132000, "edge": "shift_r", "down": true}
+{"serial_bytes": 132158, "edge": "shift", "down": true}
+{"serial_bytes": 132316, "keys": ["left"]}
+{"serial_bytes": 133294, "frame": "shift_r-both-left", "observed": "c", "expected": "c"}
+{"serial_bytes": 133294, "keys": ["right"]}
+{"serial_bytes": 134272, "frame": "shift_r-both-right", "observed": "", "expected": ""}
+{"serial_bytes": 134272, "keys": ["right"]}
+{"serial_bytes": 135627, "frame": "shift_r-both-extend", "observed": "d", "expected": "d"}
+{"serial_bytes": 135627, "edge": "shift_r", "down": false}
+{"serial_bytes": 135786, "keys": ["right"]}
+{"serial_bytes": 136764, "frame": "shift_r-one-held", "observed": "de", "expected": "de"}
+{"serial_bytes": 136764, "edge": "shift", "down": false}
+{"serial_bytes": 136924, "keys": ["left"]}
+{"serial_bytes": 138306, "frame": "shift_r-both-released", "observed": "", "expected": ""}
+{"serial_bytes": 138306, "edge": "shift", "down": true}
+{"serial_bytes": 138721, "keys": ["left"]}
+{"serial_bytes": 139699, "frame": "shift_r-fresh", "observed": "d", "expected": "d"}
+{"serial_bytes": 139699, "edge": "shift", "down": false}
+{"serial_bytes": 139859, "keys": ["right"]}
+{"serial_bytes": 140839, "frame": "shift_r-fresh-released", "observed": "", "expected": ""}
+{"serial_bytes": 140839, "keys": ["esc"]}
+{"serial_bytes": 141817, "keys": ["kp_add"]}
+{"serial_bytes": 142124, "keys": ["ret"]}
+{"serial_bytes": 143265, "keys": ["alt", "x"]}
+{"serial_bytes": 144561, "keys": ["y"]}
+{"serial_bytes": 150011, "keys": ["meta_l", "k"]}
+{"serial_bytes": 150011, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "keys": ["backspace"]}
+{"serial_bytes": 150124, "type": "dos navigator"}
+{"serial_bytes": 150124, "keys": ["ret"]}
+{"serial_bytes": 175692, "keys": ["alt", "x"]}
+{"serial_bytes": 176988, "keys": ["y"]}

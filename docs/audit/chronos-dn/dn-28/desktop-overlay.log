@@ -1,0 +1,83 @@
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+desktop
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-search
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-first
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-f10
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-manager-new
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-new-panels
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-directory-selected
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-directory-opened
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-ctrl-f3
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+dn-1-escape
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+mask-initial
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+plain-right
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+plain-left
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+shift-before-loss
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+shift-lost
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+shift-regained
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+shift-ordinary-held
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+shift-release-shift
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+shift-ordinary-released
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+shift-fresh-make
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/chronos-dn/dn-28/desktop.py", line 140, in <module>
+    shot(f"{side}-fresh-break")
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/chronos-dn/dn-28/desktop.py", line 30, in shot
+    text = None if options.trace_only else guest.capture(name)
+                                           ~~~~~~~~~~~~~^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/desktop_tty_ux_gate.py", line 100, in capture
+    text = subprocess.check_output(["tesseract", str(png), "stdout", "--psm", "11"],
+                                   stderr=subprocess.DEVNULL, text=True)
+  File "/usr/lib/python3.14/subprocess.py", line 473, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               **kwargs).stdout
+               ^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 557, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1208, in communicate
+    stdout = self.stdout.read()
+KeyboardInterrupt

@@ -1,0 +1,56 @@
+{"serial_bytes": 70234, "keys": ["ret"]}
+{"serial_bytes": 70269, "keys": ["ret"]}
+{"serial_bytes": 76735, "keys": ["meta_l", "k"]}
+{"serial_bytes": 77313, "keys": ["ret"]}
+{"serial_bytes": 99656, "keys": ["alt", "tab"]}
+{"serial_bytes": 100806, "frame": "initial"}
+{"serial_bytes": 104535, "edge": "shift", "down": true}
+{"serial_bytes": 104693, "frame": "shift-make"}
+{"serial_bytes": 104950, "edge": "shift_r", "down": true}
+{"serial_bytes": 105365, "frame": "shift-both"}
+{"serial_bytes": 105698, "edge": "shift", "down": false}
+{"serial_bytes": 105857, "frame": "shift-first-break"}
+{"serial_bytes": 106114, "edge": "shift_r", "down": false}
+{"serial_bytes": 106274, "frame": "shift-second-break"}
+{"serial_bytes": 106531, "edge": "shift_r", "down": true}
+{"serial_bytes": 106689, "frame": "shift_r-make"}
+{"serial_bytes": 106946, "edge": "shift", "down": true}
+{"serial_bytes": 107361, "frame": "shift_r-both"}
+{"serial_bytes": 107618, "edge": "shift_r", "down": false}
+{"serial_bytes": 107777, "frame": "shift_r-first-break"}
+{"serial_bytes": 108034, "edge": "shift", "down": false}
+{"serial_bytes": 108194, "frame": "shift_r-second-break"}
+{"serial_bytes": 108451, "edge": "shift", "down": true}
+{"serial_bytes": 108609, "edge": "shift_r", "down": true}
+{"serial_bytes": 109024, "frame": "shift-before-focus-loss"}
+{"serial_bytes": 109281, "keys": ["alt", "tab"]}
+{"serial_bytes": 109438, "frame": "shift-focus-lost"}
+{"serial_bytes": 109695, "keys": ["alt", "tab"]}
+{"serial_bytes": 109695, "frame": "shift-focus-regained"}
+{"serial_bytes": 110111, "edge": "shift", "down": false}
+{"serial_bytes": 110527, "frame": "shift-delayed-first-break"}
+{"serial_bytes": 110784, "keys": ["right"]}
+{"serial_bytes": 111138, "frame": "shift-delayed-held-snapshot"}
+{"serial_bytes": 111395, "edge": "shift_r", "down": false}
+{"serial_bytes": 111555, "frame": "shift-delayed-second-break"}
+{"serial_bytes": 111812, "edge": "shift_r", "down": true}
+{"serial_bytes": 111970, "frame": "shift-fresh-make"}
+{"serial_bytes": 112886, "edge": "shift_r", "down": false}
+{"serial_bytes": 113046, "frame": "shift-fresh-break"}
+{"serial_bytes": 113303, "edge": "shift_r", "down": true}
+{"serial_bytes": 113461, "edge": "shift", "down": true}
+{"serial_bytes": 113619, "frame": "shift_r-before-focus-loss"}
+{"serial_bytes": 113876, "keys": ["alt", "tab"]}
+{"serial_bytes": 114290, "frame": "shift_r-focus-lost"}
+{"serial_bytes": 114547, "keys": ["alt", "tab"]}
+{"serial_bytes": 114547, "frame": "shift_r-focus-regained"}
+{"serial_bytes": 114963, "edge": "shift_r", "down": false}
+{"serial_bytes": 115122, "frame": "shift_r-delayed-first-break"}
+{"serial_bytes": 115379, "keys": ["right"]}
+{"serial_bytes": 115990, "frame": "shift_r-delayed-held-snapshot"}
+{"serial_bytes": 116247, "edge": "shift", "down": false}
+{"serial_bytes": 116407, "frame": "shift_r-delayed-second-break"}
+{"serial_bytes": 116664, "edge": "shift", "down": true}
+{"serial_bytes": 116822, "frame": "shift_r-fresh-make"}
+{"serial_bytes": 117244, "edge": "shift", "down": false}
+{"serial_bytes": 117496, "frame": "shift_r-fresh-break"}

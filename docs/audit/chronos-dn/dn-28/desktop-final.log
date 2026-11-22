@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/chronos-dn/dn-28/desktop.py", line 61, in <module>
+    guest.wait("[TTY]  Login screen ready", timeout=80)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/desktop_tty_ux_gate.py", line 67, in wait
+    time.sleep(.1)
+    ~~~~~~~~~~^^^^
+KeyboardInterrupt

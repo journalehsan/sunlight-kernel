@@ -1,0 +1,91 @@
+{"keys": ["ret"]}
+{"type": "root"}
+{"keys": ["ret"]}
+{"capture": "desktop"}
+{"keys": ["meta_l", "k"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"type": "dos navigator"}
+{"capture": "dn-1-search"}
+{"keys": ["ret"]}
+{"capture": "dn-1-first"}
+{"keys": ["f10"]}
+{"capture": "dn-1-f10"}
+{"keys": ["m"]}
+{"keys": ["n"]}
+{"capture": "dn-1-manager-new"}
+{"keys": ["c"]}
+{"capture": "dn-1-new-panels"}
+{"keys": ["tab"]}
+{"keys": ["down"]}
+{"capture": "dn-1-directory-selected"}
+{"keys": ["ret"]}
+{"capture": "dn-1-directory-opened"}
+{"keys": ["ctrl", "f3"]}
+{"capture": "dn-1-ctrl-f3"}
+{"keys": ["esc"]}
+{"capture": "dn-1-escape"}
+{"keys": ["kp_add"]}
+{"capture": "mask-initial"}
+{"keys": ["home"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"capture": "plain-right"}
+{"keys": ["left"]}
+{"capture": "plain-left"}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"edge": "shift", "down": true}
+{"keys": ["left"]}
+{"capture": "shift-before-loss"}
+{"action": "open desktop search while shift held"}
+{"keys": ["meta_l", "k"]}
+{"capture": "shift-lost"}
+{"action": "dismiss search and regain chronos focus"}
+{"keys": ["esc"]}
+{"capture": "shift-regained"}
+{"keys": ["right"]}
+{"capture": "shift-ordinary-held"}
+{"edge": "shift", "down": false}
+{"capture": "shift-release-shift"}
+{"keys": ["left"]}
+{"capture": "shift-ordinary-released"}
+{"edge": "shift", "down": true}
+{"keys": ["left"]}
+{"capture": "shift-fresh-make"}
+{"edge": "shift", "down": false}
+{"keys": ["right"]}
+{"capture": "shift-fresh-break"}
