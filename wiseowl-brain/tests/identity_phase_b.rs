@@ -98,3 +98,24 @@ fn four_services_bind_reconnect_and_reject_wrong_identity() {
     assert!(memory.mismatch_detected());
     assert_eq!(status_b.continuity_generation, 1);
 }
+
+#[test]
+fn observable_identity_reports_only_validated_installation_facts() {
+    use wiseowl_brain::observable::identity_response;
+    use wiseowl_memorydb::identity_status::IdentityStatus;
+
+    let mut status = IdentityStatus::ready(new_identity(31));
+    let fingerprint = core::str::from_utf8(&status.fingerprint).unwrap();
+    assert_eq!(
+        identity_response(Some(status)),
+        format!("Validated Wise Owl installation {fingerprint}. Personal identity unknown.")
+            .as_str()
+    );
+    status.fingerprint = [0; 8];
+    for absent in [Some(status), None] {
+        assert_eq!(
+            identity_response(absent),
+            "Wise Owl installation identity unavailable. Personal identity unknown."
+        );
+    }
+}

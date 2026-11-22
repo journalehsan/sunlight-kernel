@@ -1,8 +1,8 @@
 use alloc::{vec, vec::Vec};
 
 use crate::{
-    CpuState, DosDrive, DosError, DosHandle, DosPath, GuestVideoMode, OpenMode,
-    Runtime, TextAttributeMode, Trap, DEFAULT_ATTRIBUTE, TEXT_COLUMNS,
+    CpuState, DosDrive, DosError, DosHandle, DosPath, GuestVideoMode, OpenMode, Runtime,
+    TextAttributeMode, Trap, DEFAULT_ATTRIBUTE, TEXT_COLUMNS,
 };
 
 pub const DOS_VERSION_MAJOR: u8 = 5;
@@ -314,15 +314,15 @@ fn dispatch_video_state(runtime: &mut Runtime) -> Result<(), Trap> {
 }
 
 fn dispatch_keyboard(runtime: &mut Runtime) -> Result<(), Trap> {
-    match runtime.cpu.ah() {
-        // The current input pipeline stores unified BIOS key events (ASCII
-        // plus scan code), including ASCII-zero extended keys.  It therefore
-        // uses the same queue for legacy and enhanced reads and status calls.
-        0x00 | 0x10 => runtime.wait_for_key(crate::runtime::InputMode::Bios),
+    let function = runtime.cpu.ah();
+    let enhanced = function & 0x10 != 0;
+    match function {
+        0x00 | 0x10 => runtime.wait_for_key(crate::runtime::InputMode::Bios { enhanced }),
         0x01 | 0x11 => {
             if let Some(key) = runtime.peek_key() {
-                runtime.cpu.ax = u16::from_le_bytes([key.ascii, key.scan_code]);
+                runtime.cpu.ax = key.bios_word(enhanced);
                 runtime.cpu.flags &= !CpuState::FLAG_ZF;
+                runtime.trace_keyboard_return(function);
             } else {
                 runtime.cpu.flags |= CpuState::FLAG_ZF;
             }
@@ -352,7 +352,7 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
         }
         0x06 => {
             if let Some(key) = runtime.pop_key() {
-                runtime.cpu.set_al(key.ascii);
+                runtime.cpu.set_al(key.console_byte());
                 runtime.cpu.flags &= !CpuState::FLAG_ZF;
             } else {
                 runtime.cpu.flags |= CpuState::FLAG_ZF;
@@ -443,7 +443,12 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
                 .and_then(crate::DriveSpace::dos_registers)
             {
                 Some(registers) => {
-                    (runtime.cpu.ax, runtime.cpu.bx, runtime.cpu.cx, runtime.cpu.dx) = registers;
+                    (
+                        runtime.cpu.ax,
+                        runtime.cpu.bx,
+                        runtime.cpu.cx,
+                        runtime.cpu.dx,
+                    ) = registers;
                 }
                 None => runtime.cpu.ax = u16::MAX,
             }
@@ -1293,12 +1298,272 @@ mod tests {
     use crate::{BiosKey, CpuState, DosDrive, DosError, Runtime, PSP_SEGMENT};
 
     #[test]
+    fn translated_controls_preserve_fifo_and_bios_status_read_semantics() {
+        use crate::{translate_key_press, HostKeyEvent};
+        let main = HostKeyEvent {
+            keycode: 0x1c,
+            extended: false,
+            pressed: true,
+            shift: false,
+            ctrl: false,
+            alt: false,
+        };
+        let keypad = HostKeyEvent {
+            extended: true,
+            ..main
+        };
+        let ctrl_f3 = HostKeyEvent {
+            keycode: 0x3d,
+            ctrl: true,
+            ..main
+        };
+        let alt_x = HostKeyEvent {
+            keycode: 0x2d,
+            alt: true,
+            ..main
+        };
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        for event in [main, keypad, ctrl_f3, ctrl_f3, alt_x] {
+            runtime.inject_key(translate_key_press(event).unwrap());
+            assert_eq!(
+                translate_key_press(HostKeyEvent {
+                    pressed: false,
+                    ..event
+                }),
+                None
+            );
+        }
+        for (i, word) in [0x1c0d, 0xe00d, 0x6000, 0x6000, 0x2d00]
+            .into_iter()
+            .enumerate()
+        {
+            for (function, expected) in [
+                (0x01, if word == 0xe00d { 0x1c0d } else { word }),
+                (0x11, word),
+                (0x10, word),
+            ] {
+                runtime.cpu.ax = u16::from(function as u8) << 8;
+                runtime.cpu.bx = 0xabcd;
+                runtime.cpu.flags = 0x0247;
+                let mut expected_cpu = runtime.cpu;
+                expected_cpu.ax = expected;
+                if function != 0x10 {
+                    expected_cpu.flags &= !CpuState::FLAG_ZF;
+                }
+                dispatch(&mut runtime, 0x16).unwrap();
+                assert_eq!(runtime.cpu, expected_cpu);
+                assert_eq!(
+                    runtime.queued_key_count(),
+                    5 - i - usize::from(function == 0x10)
+                );
+            }
+        }
+        runtime.cpu.ax = 0x0000;
+        dispatch(&mut runtime, 0x16).unwrap();
+        assert_eq!(*runtime.state(), crate::GuestState::WaitingForInput);
+        assert!(runtime.inject_key(translate_key_press(keypad).unwrap()));
+        assert_eq!(runtime.cpu.ax, 0x1c0d);
+        assert_eq!(runtime.queued_key_count(), 0);
+    }
+
+    #[test]
+    fn keypad_and_navigation_int16_matrix() {
+        // Expected enhanced AX from SeaBIOS 1.16.2; legacy differs for E0.
+        use crate::HostKeyEvent;
+        let mut runtime = Runtime::from_com(&[0xf4]).unwrap();
+        let bare = HostKeyEvent {
+            keycode: 0x45,
+            extended: false,
+            pressed: true,
+            shift: false,
+            ctrl: false,
+            alt: false,
+        };
+        for num_lock in [false, true] {
+            std::println!("DN25 num={}", u8::from(num_lock));
+            if num_lock {
+                // Typematic make must not invert the lock a second time.
+                for event in [
+                    bare,
+                    bare,
+                    HostKeyEvent {
+                        pressed: false,
+                        ..bare
+                    },
+                ] {
+                    assert_eq!(runtime.translate_host_key(event), None);
+                }
+            }
+            for (shift, ctrl, alt) in [
+                (false, false, false),
+                (true, false, false),
+                (false, true, false),
+                (false, false, true),
+            ] {
+                for (scan, number, control) in [
+                    (0x47, 0x4737, 0x7700),
+                    (0x48, 0x4838, 0x8d00),
+                    (0x49, 0x4939, 0x8400),
+                    (0x4b, 0x4b34, 0x7300),
+                    (0x4c, 0x4c35, 0x8f00),
+                    (0x4d, 0x4d36, 0x7400),
+                    (0x4f, 0x4f31, 0x7500),
+                    (0x50, 0x5032, 0x9100),
+                    (0x51, 0x5133, 0x7600),
+                    (0x52, 0x5230, 0x9200),
+                    (0x53, 0x532e, 0x9300),
+                ] {
+                    let plain = number & 0xff00;
+                    let keypad = if alt {
+                        None
+                    } else {
+                        Some(if ctrl {
+                            control
+                        } else if num_lock ^ shift {
+                            number
+                        } else {
+                            plain
+                        })
+                    };
+                    check_key(
+                        &mut runtime,
+                        HostKeyEvent {
+                            keycode: scan,
+                            shift,
+                            ctrl,
+                            alt,
+                            ..bare
+                        },
+                        keypad,
+                        keypad,
+                    );
+                    if scan != 0x4c {
+                        let legacy = if alt {
+                            plain + 0x5000
+                        } else if ctrl {
+                            control
+                        } else {
+                            plain
+                        };
+                        let enhanced = if alt { legacy } else { legacy | 0xe0 };
+                        check_key(
+                            &mut runtime,
+                            HostKeyEvent {
+                                keycode: scan,
+                                extended: true,
+                                shift,
+                                ctrl,
+                                alt,
+                                ..bare
+                            },
+                            Some(enhanced),
+                            Some(legacy),
+                        );
+                    }
+                }
+                for (scan, extended, enhanced, legacy, control, alternate) in [
+                    (0x37, false, 0x372a, 0x372a, 0x9600, 0x3700),
+                    (0x4a, false, 0x4a2d, 0x4a2d, 0x8e00, 0x4a00),
+                    (0x4e, false, 0x4e2b, 0x4e2b, 0x9000, 0x4e00),
+                    (0x35, true, 0xe02f, 0x352f, 0x9500, 0xa400),
+                    (0x1c, false, 0x1c0d, 0x1c0d, 0x1c0a, 0x1c00),
+                    (0x1c, true, 0xe00d, 0x1c0d, 0xe00a, 0xa600),
+                ] {
+                    let (enhanced, legacy) = if alt {
+                        (alternate, alternate)
+                    } else if ctrl && scan == 0x1c {
+                        (control, 0x1c0a)
+                    } else if ctrl {
+                        (control, control)
+                    } else {
+                        (enhanced, legacy)
+                    };
+                    check_key(
+                        &mut runtime,
+                        HostKeyEvent {
+                            keycode: scan,
+                            extended,
+                            shift,
+                            ctrl,
+                            alt,
+                            ..bare
+                        },
+                        Some(enhanced),
+                        Some(legacy),
+                    );
+                }
+                runtime.release_host_keys();
+                runtime.cpu.ax = 0x02ff;
+                dispatch(&mut runtime, 0x16).unwrap();
+                assert_eq!(runtime.cpu.ax, 0x0200 | (u16::from(num_lock) << 5));
+            }
+        }
+    }
+
+    fn check_key(
+        runtime: &mut Runtime,
+        event: crate::HostKeyEvent,
+        enhanced: Option<u16>,
+        legacy: Option<u16>,
+    ) {
+        let key = runtime.translate_host_key(event);
+        if let Some(key) = key {
+            runtime.inject_key(key);
+        }
+        let release = crate::HostKeyEvent {
+            pressed: false,
+            ..event
+        };
+        assert_eq!(runtime.translate_host_key(release), None);
+        runtime.cpu.bx = 0xabcd;
+        runtime.cpu.cx = 0x1234;
+        runtime.cpu.dx = 0x9876;
+        let functions = [(0x01, legacy), (0x11, enhanced), (0x10, enhanced)];
+        for (function, word) in functions {
+            if function == 0x10 && word.is_none() {
+                continue;
+            }
+            runtime.cpu.ax = (function << 8) | 0x5a;
+            runtime.cpu.flags = 0x0247;
+            let mut expected = runtime.cpu;
+            if let Some(word) = word {
+                expected.ax = word;
+                if function != 0x10 {
+                    expected.flags &= !CpuState::FLAG_ZF;
+                }
+            }
+            dispatch(runtime, 0x16).unwrap();
+            assert_eq!(
+                runtime.cpu, expected,
+                "{event:?}, INT 16h AH={function:02x}"
+            );
+            assert_eq!(
+                runtime.queued_key_count(),
+                usize::from(word.is_some() && function != 0x10)
+            );
+            std::println!(
+                "DN25 scan={:02x} e0={} shift={} ctrl={} alt={} ah={:02x} ax={:04x} flags={:04x} bx={:04x} cx={:04x} dx={:04x} depth={}",
+                event.keycode, u8::from(event.extended), u8::from(event.shift),
+                u8::from(event.ctrl), u8::from(event.alt), function, runtime.cpu.ax,
+                runtime.cpu.flags, runtime.cpu.bx, runtime.cpu.cx, runtime.cpu.dx,
+                runtime.queued_key_count()
+            );
+        }
+    }
+
+    #[test]
     fn enhanced_keyboard_read_consumes_in_order_and_waits_when_empty() {
         let mut runtime = Runtime::from_com(&[0xcd, 0x16, 0xcd, 0x16, 0xcd, 0x16]).unwrap();
         runtime.cpu.flags = 0x0247;
         runtime.cpu.bx = 0x1234;
-        let arrow = BiosKey { ascii: 0, scan_code: 0x50 };
-        let letter = BiosKey { ascii: b'a', scan_code: 0x1e };
+        let arrow = BiosKey {
+            ascii: 0,
+            scan_code: 0x50,
+        };
+        let letter = BiosKey {
+            ascii: b'a',
+            scan_code: 0x1e,
+        };
         runtime.inject_key(arrow);
         runtime.inject_key(letter);
         for (word, remaining) in [(0x5000, 1), (0x1e61, 0)] {

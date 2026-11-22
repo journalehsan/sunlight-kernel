@@ -172,6 +172,44 @@ fn scancode_to_ascii(scancode: u8, mods: &Modifiers) -> Option<u8> {
     }
 }
 
+/// Decode the prefixes needed by the physical event protocol. Pause has
+/// no event in that protocol; its embedded Ctrl and Num Lock bytes are not
+/// separate keys.
+#[derive(Default)]
+pub struct Set1Decoder {
+    extended: bool,
+    pause_bytes: usize,
+}
+
+impl Set1Decoder {
+    pub fn push(&mut self, byte: u8) -> Option<(u8, bool)> {
+        const PAUSE_TAIL: [u8; 5] = [0x1d, 0x45, 0xe1, 0x9d, 0xc5];
+        if self.pause_bytes != 0 {
+            let next = self.pause_bytes - 1;
+            self.pause_bytes = 0;
+            if byte == PAUSE_TAIL[next] {
+                if next + 1 < PAUSE_TAIL.len() {
+                    self.pause_bytes = next + 2;
+                }
+                return None;
+            }
+            // Recover on the first unexpected byte.
+        }
+        match byte {
+            0xe1 => {
+                self.extended = false;
+                self.pause_bytes = 1;
+                None
+            }
+            0xe0 => {
+                self.extended = true;
+                None
+            }
+            _ => Some((byte, core::mem::take(&mut self.extended))),
+        }
+    }
+}
+
 /// Native scalar composition: Ctrl+Shift+U, one to six hex digits, Enter.
 /// Preedit stays private here; Escape cancels and Backspace removes a digit.
 /// No partial text reaches an application or diagnostic output.
@@ -272,6 +310,21 @@ impl Keyboard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pause_does_not_emit_phantom_ctrl_or_num_lock() {
+        let mut decoder = Set1Decoder::default();
+        for byte in [0xe1, 0x1d, 0x45, 0xe1, 0x9d, 0xc5] {
+            assert_eq!(decoder.push(byte), None);
+        }
+        assert_eq!(decoder.push(0x45), Some((0x45, false)));
+        assert_eq!(decoder.push(0xc5), Some((0xc5, false)));
+        assert_eq!(decoder.push(0xe0), None);
+        assert_eq!(decoder.push(0x48), Some((0x48, true)));
+        assert_eq!(decoder.push(0x48), Some((0x48, false)));
+        assert_eq!(decoder.push(0xe1), None);
+        assert_eq!(decoder.push(0x48), Some((0x48, false)));
+    }
+
     fn unicode(k: &mut Keyboard, digits: &[u8]) -> Option<char> {
         k.process(0x1d, false);
         k.process(0x2a, false);

@@ -123,6 +123,10 @@ fn decode_resize_surface_reply(reply: &IpcMsg) -> Option<ResizeSurfaceReply> {
 /// backspace, and enter without Ctrl/Alt/Super become [`Event::Key`]; everything else becomes
 /// [`Event::KeyPress`] (including key-up and pure modifiers).
 fn decode_key_event_word(key_word: u64) -> Option<Event> {
+    decode_key_event_word_with_controls(key_word, false)
+}
+
+fn decode_key_event_word_with_controls(key_word: u64, physical_controls: bool) -> Option<Event> {
     if sunlight_ipc::is_text_commit(key_word) {
         return sunlight_ipc::unpack_text_commit(key_word)
             .filter(|c| !c.is_control())
@@ -142,8 +146,8 @@ fn decode_key_event_word(key_word: u64) -> Option<Event> {
                 0x20..=0x7E if key_word & sunlight_ipc::KEY_SEPARATE_TEXT == 0 => {
                     return Some(Event::key(ch as char))
                 }
-                0x08 => return Some(Event::key('\u{8}')),
-                b'\r' | b'\n' => return Some(Event::key('\n')),
+                0x08 if !physical_controls => return Some(Event::key('\u{8}')),
+                b'\r' | b'\n' if !physical_controls => return Some(Event::key('\n')),
                 _ => {}
             }
         }
@@ -352,6 +356,7 @@ pub struct Window {
     /// Last cursor shape sent to the compositor, to avoid redundant IPC.
     current_cursor: CursorShape,
     window_valid: bool,
+    physical_controls: bool,
 }
 
 // SAFETY: the buffer pointer is valid for the lifetime of the Window.
@@ -493,7 +498,21 @@ impl Window {
             },
             current_cursor: CursorShape::Pointer,
             window_valid: true,
+            physical_controls: false,
         })
+    }
+
+    /// Keep Enter and Backspace as physical events. Text commits are unchanged.
+    pub fn use_physical_keyboard_controls(&mut self) {
+        self.physical_controls = true;
+    }
+
+    fn decode_key(&self, word: u64) -> Option<Event> {
+        if self.physical_controls {
+            decode_key_event_word_with_controls(word, true)
+        } else {
+            decode_key_event_word(word)
+        }
     }
 
     pub const fn id(&self) -> u64 {
@@ -647,7 +666,7 @@ impl Window {
             // If no mouse edge was stashed, keep the key for the next poll so
             // FocusChanged does not steal the user's first keystroke.
             if self.pending_event.is_none() {
-                if let Some(key_event) = decode_key_event_word(key_word) {
+                if let Some(key_event) = self.decode_key(key_word) {
                     self.pending_event = Some(key_event);
                 } else if let Some(wheel_event) = wheel_event {
                     self.pending_event = Some(wheel_event);
@@ -663,7 +682,7 @@ impl Window {
             self.prev_pointer_captured = pointer_captured;
         }
 
-        if let Some(key_event) = decode_key_event_word(key_word) {
+        if let Some(key_event) = self.decode_key(key_word) {
             return key_event;
         }
 
@@ -993,6 +1012,27 @@ mod tests {
                 SgpMsg::EVENT_FLAG_WINDOW_VALID | SgpMsg::EVENT_FLAG_RESIZED,
             )
             .with_cap(0, CapabilityToken(7))
+    }
+
+    #[test]
+    fn physical_controls_preserve_enter_identity_for_opted_in_windows() {
+        let main =
+            sunlight_ipc::pack_key_event(0x1c, true, false, false, false, false, Some(b'\r'));
+        let keypad = sunlight_ipc::pack_key_event(0x1c, true, false, false, false, false, None)
+            | sunlight_ipc::KEY_EXTENDED;
+        assert_eq!(decode_key_event_word(main), Some(Event::Key('\n')));
+        for (raw, expected_extended) in [(main, false), (keypad, true)] {
+            assert!(matches!(
+                super::decode_key_event_word_with_controls(raw, true),
+                Some(Event::KeyPress { keycode: 0x1c, pressed: true, extended, .. })
+                    if extended == expected_extended
+            ));
+        }
+        let text = sunlight_ipc::pack_text_commit('a');
+        assert_eq!(
+            super::decode_key_event_word_with_controls(text, true),
+            Some(Event::Key('a'))
+        );
     }
 
     #[test]

@@ -180,14 +180,28 @@ or the normal 500 ms caret phase change.
 
 ## Input
 
-`sunlight-ui::Event::Key` supplies printable text once. `KeyPress` supplies
-control and extended PS/2-set-1 keys so printable input is not duplicated.
-The translation yields `BiosKey { ascii, scan_code }`; extended keys carry
-ASCII zero. Shift/Ctrl/Alt state is exposed through `INT 16h/AH=02h`.
+`sunlight-ui::Event::Key` supplies printable text once. Physical
+`KeyPress` events carry set 1 scan codes, E0 identity, make/break and a
+modifier snapshot. Chronos uses physical events for keypad input, including
+digits and arithmetic, because BIOS callers need their scan codes.
 
-- `INT 16h/AH=00h`: blocking read without polling.
-- `INT 16h/AH=01h`: nonblocking check preserving the queued key and `ZF`.
-- `INT 16h/AH=02h`: available modifier flags.
+Num Lock is per Chronos session, starts off, and toggles on a fresh physical
+Num Lock press. Shift reverses numeric and navigation mode for keypad digits
+and decimal. Ctrl and Alt select their BIOS variants; Alt with a keypad digit
+or decimal produces no immediate BIOS word. Dedicated navigation keeps its
+E0 identity in enhanced returns; ordinary keypad navigation returns AL=00h.
+Focus loss drops held modifier and Num Lock press state while retaining the
+toggle. The guest toggle does not follow the host LED or another window.
+
+- `INT 16h/AH=00h` and `10h`: blocking legacy and enhanced reads from one FIFO.
+- `INT 16h/AH=01h` and `11h`: legacy and enhanced status peeks; ZF is set
+  when empty, and no entry is consumed.
+- Enhanced navigation reports AL=E0h where applicable. Legacy status/read
+  clear that marker and present keypad Enter and divide as 1C0Dh and 352Fh
+  in their unmodified forms.
+- `INT 16h/AH=02h`: available Shift, Ctrl, Alt and Num Lock flags. Physical
+  side-specific flags and a hardware BIOS Data Area ring are outside this
+  interface.
 - `INT 21h/AH=01h`, `06h`, `07h`, `08h`, `0Ah`, `0Bh`, and `0Ch`: basic DOS
   console reads, nonblocking status, queue flushing, and line editing.
 

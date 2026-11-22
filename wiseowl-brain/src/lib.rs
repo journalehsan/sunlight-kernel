@@ -23,6 +23,7 @@ pub mod identity_binding;
 pub mod kv_client;
 pub mod memory_layers;
 pub mod mtm;
+pub mod observable;
 pub mod native_ipc;
 pub mod outcome;
 pub mod pipeline;

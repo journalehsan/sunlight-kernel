@@ -4579,6 +4579,7 @@ fn setup_key_injection() {
         "phase3.9" => build_phase3_9_sequence(),
         "storage-runtime" => build_storage_runtime_sequence(),
         "storage-fstab" => build_storage_fstab_sequence(),
+        "wiseowl-wo-b1" => build_wo_b1_sequence(),
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
         "wiseowl_graphical_console_v1" => build_wiseowl_graphical_console_v1_sequence(),
@@ -4904,6 +4905,35 @@ fn build_storage_fstab_sequence() -> [u8; 12288] {
 
 /// Wise Owl Phase 3.75 native integration sequence. Test-only keyboard
 /// injection drives the real shell, CLIs, sunlightd supervisor, IPC and SHM.
+#[cfg(feature = "key_inject")]
+fn build_wo_b1_sequence() -> [u8; 12288] {
+    let mut s = [0; 12288];
+    let mut len = 0;
+    append_injected_delay(&mut s, &mut len, 512);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    append_injected_delay(&mut s, &mut len, 96);
+    for code in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+    append_injected_delay(&mut s, &mut len, 512);
+    for command in [
+        "wiseowl-brainctl observe identity",
+        "wiseowl-brainctl observe choose machine brief",
+        "wiseowl-brainctl preferences set show-index-status false",
+        "wiseowl-brainctl preferences set show-machine-summary true",
+        "wiseowl-brainctl observe choose machine brief",
+        "wiseowl-brainctl observe choose machine brief no-machine",
+        "wiseowl-brainctl preferences set show-machine-summary false",
+        "wiseowl-brainctl observe choose machine brief",
+        "sunlightctl restart sunlight-kv",
+        "wiseowl-brainctl observe choose machine brief",
+    ] {
+        append_injected_command(&mut s, &mut len, command.as_bytes());
+        append_injected_delay(&mut s, &mut len, 320);
+    }
+    s
+}
+
 #[cfg(feature = "key_inject")]
 fn build_wiseowl_phase375_sequence() -> [u8; 12288] {
     let mut s = [0u8; 12288];

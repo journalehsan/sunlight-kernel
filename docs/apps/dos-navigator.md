@@ -1818,6 +1818,9 @@ files above 65,536 bytes and select the 386 profile.
 
 ## DN-23: Desktop SunApp
 
+The interaction and shutdown observations in this section are the DN-23
+baseline. See DN-24 below for the current controls and exit procedure.
+
 [DosNavigator.sunapp](../../DosNavigator.sunapp) includes the original 1.51
 distribution, based on Dos Navigator by RIT Research Labs. Its original
 redistribution notice is in `Program/README.TXT`.
@@ -1858,3 +1861,56 @@ python3 tools/dos_navigator_package.py --archive target/dos-navigator/dn151.zip 
 
 See the [DN-23 audit](../audit/chronos-dn/dn-23/README.md) for the integrity
 inventory and separate host, platform, and desktop results.
+
+## DN-24: Native controls and shutdown
+
+On the Sunlight desktop, open **DOS Navigator 1.51** from search or All
+apps. Both C: panels show the bundled files. Use **Tab** to switch panels
+and the arrows to select an item. **Enter** and **keypad Enter** open the
+selected directory. **F10** opens the menu; **Manager → New** (**M**, **N**)
+or **Ctrl+F3** opens the drive picker. Press **C** to select C:, or
+**Escape** to dismiss the picker or menu.
+
+With the file panels active, **Alt+X** opens DN's quit confirmation.
+You can also choose **File → Exit** from the menu. Press **Y** to
+confirm. The packaged session flushes its private overlay and closes
+Chronos automatically when the original DOS launcher finishes. The
+desktop reaps Chronos after its ordinary native exit. **Ctrl+W** is
+no longer part of the DN exit procedure. Other Chronos bundles retain
+their existing exit behavior unless their manifest opts into closing
+the window after the final DOS process exits.
+
+The [DN-24 audit](../audit/chronos-dn/dn-24/) separates the native
+keyboard and lifecycle evidence, and records the remaining limits.
+
+## DN-25: Compatibility matrix
+
+These statuses describe the tested packaged DOS Navigator 1.51 workflow
+in Sunlight QEMU. The [DN-25 audit](../audit/chronos-dn/dn-25/README.md)
+records the [216-case BIOS matrix](../audit/chronos-dn/dn-25/keyboard-matrix.csv)
+separately from native application evidence. A host check alone cannot
+upgrade a desktop result.
+
+| Capability | Test method | Result | Evidence | Remaining limitation |
+| --- | --- | --- | --- | --- |
+| Startup and packaging | Verify the package and launch twice from desktop search | PASS | [Package](../audit/chronos-dn/dn-25/package.log), [launches](../audit/chronos-dn/dn-25/native/lifecycle.log) | Fresh diskless session; no installed-disk soak |
+| Panel creation | Check launch, then F10 → Manager → New → C on both runs | PASS | [Both panels](../audit/chronos-dn/dn-25/native/dn-1-new-panels.png) | Saved layouts and other drives not covered |
+| Directory enumeration | Inspect populated C: panels and open COLORS | PASS | [Opened directory](../audit/chronos-dn/dn-25/native/dn-1-directory-opened.png) | Bundled files only |
+| Keyboard input overall | PS/2 input through the desktop; inspect DN BIOS reads and scanout | PARTIAL | [Native keyboard trace](../audit/chronos-dn/dn-25/native/keyboard.log) | Full modal and hardware parity untested |
+| Dedicated E0 navigation | Send all ten keys; inspect enhanced words and panel selection | PARTIAL | [Page Down](../audit/chronos-dn/dn-25/native/dn-1-dedicated-pgdn.png), [Insert](../audit/chronos-dn/dn-25/native/dn-1-dedicated-insert.png), [Delete](../audit/chronos-dn/dn-25/native/dn-1-dedicated-delete.png) | Delete was consumed; file deletion was not verified |
+| Keypad navigation | Keypad 8/2 with lock off; Shift+keypad 8 with lock on | PASS | [Lock off](../audit/chronos-dn/dn-25/native/dn-1-keypad-down-num-off.png), [Shift override](../audit/chronos-dn/dn-25/native/dn-1-shift-keypad-num-on.png) | Native test exercised representative navigation keys |
+| Keypad digits and decimal | Toggle session Num Lock and enter all ten digits plus decimal | PASS | [DN command line](../audit/chronos-dn/dn-25/native/dn-1-keypad-command-line-num-on.png) | Command text only; no command executed |
+| Keypad operators | Send keypad +, −, ×, ÷ and inspect enhanced reads and select dialog | PASS | [Select dialog](../audit/chronos-dn/dn-25/native/dn-1-keypad-arithmetic.png), [reads](../audit/chronos-dn/dn-25/native/keyboard.log) | DN interprets the operators in context; no claim about every dialog |
+| Main and keypad Enter | Open COLORS with main Enter on run 1 and keypad Enter on run 2 | PASS | [Run 1](../audit/chronos-dn/dn-25/native/dn-1-directory-opened.png), [run 2](../audit/chronos-dn/dn-25/native/dn-2-directory-opened.png) | Unmodified app behavior; modified words checked separately |
+| Shift, Ctrl, Alt and release | Shift keypad reversal, Ctrl+Up, Alt keypad suppression, then plain Up | PARTIAL | [Input and BIOS trace](../audit/chronos-dn/dn-25/native/keyboard.log) | One modifier at a time; no complete left/right or combined modifier coverage |
+| Menu navigation | F10, Manager → New, Ctrl+F3, Escape | PASS | [F10](../audit/chronos-dn/dn-25/native/dn-1-f10.png), [Ctrl+F3](../audit/chronos-dn/dn-25/native/dn-1-ctrl-f3.png) | Other menus and modal contexts not exhausted |
+| File selection | Tab, arrows, Insert; observe selected filename/count | PASS | [Selected file](../audit/chronos-dn/dn-25/native/dn-1-dedicated-insert.png) | No copy, move or confirmed deletion in this pass |
+| DOS guest exit | Alt+X → Y in both launches | PASS | [Quit dialog](../audit/chronos-dn/dn-25/native/dn-1-alt-x.png), [code 0](../audit/chronos-dn/dn-25/native/lifecycle.log) | Tested from active file panels |
+| Chronos session completion | Observe overlay flush, window close and native exit code 0 twice | PASS | [Lifecycle](../audit/chronos-dn/dn-25/native/lifecycle.log) | No persistence or resource leak soak |
+| Desktop cleanup | Observe owner detach, process reap and restored desktop twice | PASS | [Run 1](../audit/chronos-dn/dn-25/native/dn-1-restored.png), [run 2](../audit/chronos-dn/dn-25/native/dn-2-restored.png) | Desktop Ctrl+W was unnecessary for DN |
+| Native QEMU workflow | Run packaged DN and Mines from the desktop on the final ISO | PASS | [Inputs](../audit/chronos-dn/dn-25/native/inputs.jsonl), [desktop driver](../audit/chronos-dn/dn-25/verified-desktop.log) | OVMF, PS/2, two vCPUs, 4 GiB; physical hardware untested |
+| Phase 3.0 platform boot | Run independent boot gate | PASS | [4 GiB result](../audit/chronos-dn/dn-25/platform.log) | Default 1 GiB attempt missed timezone after mapping failures; see audit |
+
+Num Lock in these tests is local to the Chronos session and starts off.
+With the lock on, Shift temporarily restores keypad navigation. The
+guest input setting does not follow the host keyboard LED.

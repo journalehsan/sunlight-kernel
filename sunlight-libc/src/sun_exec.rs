@@ -18,7 +18,7 @@ const MAX_ARG_LEN: usize = 96;
 const MAX_MANIFEST_BYTES: usize = 8192;
 const MAX_BUNDLE_PATH: usize = MAX_PATH - 14;
 const CHRONOS_RUNTIME_PATH: &[u8] = b"/bin/sunlight-chronos";
-const CHRONOS_BUNDLE_ARG_COUNT: usize = 10;
+const CHRONOS_BUNDLE_ARG_COUNT: usize = 11;
 pub const ACTION_ALIAS_MODEL_VERSION: u16 = 1;
 
 /// Runtime selected by a validated external application bundle.  Native
@@ -677,6 +677,7 @@ fn launch_chronos_bundle(
         descriptor.display_name,
         b"--chronos-cpu",
         descriptor.cpu,
+        b"--chronos-exit-on-completion",
     ];
     // terminal=false indicates a pure graphical app (no generic shell banner expected)
     // The document scope policy is sent as one extra bounded argument when
@@ -688,7 +689,11 @@ fn launch_chronos_bundle(
     };
     launch_runtime(
         request.trace,
-        &args,
+        &args[..if descriptor.exit_on_completion {
+            args.len()
+        } else {
+            args.len() - 1
+        }],
         if descriptor.documents_read_write {
             &document_args
         } else {
@@ -780,6 +785,7 @@ struct ChronosManifest<'a> {
     cpu: &'a [u8],
     documents_read_write: bool,
     terminal: bool,
+    exit_on_completion: bool,
 }
 
 fn parse_chronos_manifest<'a>(
@@ -831,6 +837,11 @@ fn parse_chronos_manifest<'a>(
     }
     let term_raw = toml_value(source, b"chronos", b"terminal").unwrap_or(b"true");
     let terminal = term_raw != b"false" && term_raw != b"0";
+    let exit_on_completion = match toml_value(source, b"chronos", b"on_exit") {
+        None | Some(b"keep-window") => false,
+        Some(b"close-window") => true,
+        _ => return Err(LaunchError::InvalidBundle),
+    };
     Ok(ChronosManifest {
         app_id,
         display_name,
@@ -838,6 +849,7 @@ fn parse_chronos_manifest<'a>(
         cpu,
         documents_read_write,
         terminal,
+        exit_on_completion,
     })
 }
 

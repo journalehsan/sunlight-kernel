@@ -149,9 +149,35 @@ pub struct BiosKey {
     pub scan_code: u8,
 }
 
+impl BiosKey {
+    pub(crate) fn bios_word(self, enhanced: bool) -> u16 {
+        let ascii = if !enhanced || self.ascii == 0xf0 {
+            self.console_byte()
+        } else {
+            self.ascii
+        };
+        let scan = match (enhanced, self.scan_code, ascii) {
+            (false, 0xe0, 0x0d | 0x0a) => 0x1c,
+            (false, 0xe0, b'/') => 0x35,
+            _ => self.scan_code,
+        };
+        u16::from_le_bytes([ascii, scan])
+    }
+
+    // BIOS markers are not characters for DOS's byte-oriented console.
+    pub(crate) fn console_byte(self) -> u8 {
+        if self.scan_code != 0 && matches!(self.ascii, 0xe0 | 0xf0) {
+            0
+        } else {
+            self.ascii
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HostKeyEvent {
     pub keycode: u8,
+    pub extended: bool,
     pub pressed: bool,
     pub shift: bool,
     pub ctrl: bool,
@@ -162,17 +188,93 @@ pub struct HostKeyEvent {
 /// text should be injected through `Event::Key`; this path is for controls and
 /// extended keys, preventing duplicate printable events.
 pub fn translate_key_press(event: HostKeyEvent) -> Option<BiosKey> {
+    translate_key(event, false)
+}
+
+fn translate_key(event: HostKeyEvent, num_lock: bool) -> Option<BiosKey> {
     if !event.pressed {
         return None;
     }
     let scan_code = event.keycode;
+    let modified = |scan_code, ascii| Some(BiosKey { ascii, scan_code });
+    if scan_code == 0x1c {
+        return if event.alt {
+            modified(if event.extended { 0xa6 } else { 0x1c }, 0)
+        } else {
+            modified(
+                if event.extended { 0xe0 } else { 0x1c },
+                if event.ctrl { b'\n' } else { b'\r' },
+            )
+        };
+    }
+    // PS/2 set 1 keypad words and E0 navigation, as in SeaBIOS 1.16.2.
+    if let Some((digit, ctrl_scan)) = match scan_code {
+        0x47 => Some((b'7', 0x77)),
+        0x48 => Some((b'8', 0x8d)),
+        0x49 => Some((b'9', 0x84)),
+        0x4b => Some((b'4', 0x73)),
+        0x4c if !event.extended => Some((b'5', 0x8f)),
+        0x4d => Some((b'6', 0x74)),
+        0x4f => Some((b'1', 0x75)),
+        0x50 => Some((b'2', 0x91)),
+        0x51 => Some((b'3', 0x76)),
+        0x52 => Some((b'0', 0x92)),
+        0x53 => Some((b'.', 0x93)),
+        _ => None,
+    } {
+        return if event.alt {
+            if event.extended {
+                modified(scan_code + 0x50, 0)
+            } else {
+                // No immediate BIOS word for Alt plus a keypad digit or decimal.
+                None
+            }
+        } else if event.extended {
+            modified(if event.ctrl { ctrl_scan } else { scan_code }, 0xe0)
+        } else if event.ctrl {
+            modified(ctrl_scan, 0)
+        } else {
+            modified(scan_code, if num_lock ^ event.shift { digit } else { 0 })
+        };
+    }
+    if let Some((plain_scan, ascii, ctrl_scan, alt_scan, alt_ascii)) =
+        match (event.extended, scan_code) {
+            (false, 0x37) => Some((0x37, b'*', 0x96, 0x37, 0xf0)),
+            (false, 0x4a) => Some((0x4a, b'-', 0x8e, 0x4a, 0xf0)),
+            (false, 0x4e) => Some((0x4e, b'+', 0x90, 0x4e, 0xf0)),
+            (true, 0x35) => Some((0xe0, b'/', 0x95, 0xa4, 0)),
+            _ => None,
+        }
+    {
+        return if event.alt {
+            modified(alt_scan, alt_ascii)
+        } else if event.ctrl {
+            modified(ctrl_scan, 0)
+        } else {
+            modified(plain_scan, ascii)
+        };
+    }
+    if !event.extended && (0x3b..=0x44).contains(&scan_code) {
+        let base = if event.alt {
+            0x68
+        } else if event.ctrl {
+            0x5e
+        } else if event.shift {
+            0x54
+        } else {
+            0x3b
+        };
+        return modified(base + scan_code - 0x3b, 0);
+    }
+    if !event.extended && event.alt && matches!(scan_code, 0x10..=0x19 | 0x1e..=0x26 | 0x2c..=0x32)
+    {
+        return modified(scan_code, 0);
+    }
     let ascii = match scan_code {
         0x01 => 0x1b,
         0x0e => 0x08,
         0x0f => b'\t',
-        0x1c => b'\r',
         0x39 => b' ',
-        0x47 | 0x48 | 0x49 | 0x4b | 0x4d | 0x4f | 0x50 | 0x51 | 0x52 | 0x53 | 0x3b..=0x44 => 0,
         _ => return None,
     };
     Some(BiosKey { ascii, scan_code })
@@ -180,7 +282,9 @@ pub fn translate_key_press(event: HostKeyEvent) -> Option<BiosKey> {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum InputMode {
-    Bios,
+    Bios {
+        enhanced: bool,
+    },
     Dos {
         echo: bool,
     },
@@ -276,6 +380,8 @@ pub struct Runtime {
     pub text: TextModeSurface,
     state: GuestState,
     keyboard: VecDeque<BiosKey>,
+    keyboard_trace: Option<fn(u8, u16, u16, usize)>,
+    keyboard_trace_remaining: u16,
     pending_input: Option<InputMode>,
     pub(crate) cursor_column: usize,
     pub(crate) cursor_row: usize,
@@ -293,6 +399,8 @@ pub struct Runtime {
     last_slice_stop_reason: SliceStopReason,
     last_wake_source: Option<GuestWakeSource>,
     wake_generation: u64,
+    num_lock: bool,
+    num_lock_down: bool,
     shift: bool,
     ctrl: bool,
     alt: bool,
@@ -348,6 +456,8 @@ impl Runtime {
             text: TextModeSurface::new(),
             state: GuestState::Ready,
             keyboard: VecDeque::new(),
+            keyboard_trace: None,
+            keyboard_trace_remaining: 0,
             pending_input: None,
             cursor_column: 0,
             cursor_row: 0,
@@ -365,6 +475,8 @@ impl Runtime {
             last_slice_stop_reason: SliceStopReason::NotRun,
             last_wake_source: None,
             wake_generation: 0,
+            num_lock: false,
+            num_lock_down: false,
             shift: false,
             ctrl: false,
             alt: false,
@@ -1130,6 +1242,22 @@ impl Runtime {
         matches!(self.video_mode, GuestVideoMode::Text80x25Color) && self.cursor_shape & 0x2000 == 0
     }
 
+    /// Observe successful BIOS key status and read returns for a bounded replay.
+    /// Empty polling is deliberately omitted.
+    pub fn trace_keyboard(&mut self, max_returns: u16, observer: fn(u8, u16, u16, usize)) {
+        self.keyboard_trace = Some(observer);
+        self.keyboard_trace_remaining = max_returns;
+    }
+
+    pub(crate) fn trace_keyboard_return(&mut self, function: u8) {
+        if self.keyboard_trace_remaining != 0 {
+            if let Some(observer) = self.keyboard_trace {
+                self.keyboard_trace_remaining -= 1;
+                observer(function, self.cpu.ax, self.cpu.flags, self.keyboard.len());
+            }
+        }
+    }
+
     pub fn inject_key(&mut self, key: BiosKey) -> bool {
         self.keyboard.push_back(key);
         let woke = self.wake_yielded(GuestWakeSource::Keyboard);
@@ -1162,6 +1290,24 @@ impl Runtime {
         self.shift = shift;
         self.ctrl = ctrl;
         self.alt = alt;
+    }
+
+    pub fn release_host_keys(&mut self) {
+        self.update_modifiers(false, false, false);
+        self.num_lock_down = false;
+    }
+
+    /// The guest owns its lock state; transient modifiers come from each host snapshot.
+    pub fn translate_host_key(&mut self, event: HostKeyEvent) -> Option<BiosKey> {
+        self.update_modifiers(event.shift, event.ctrl, event.alt);
+        if !event.extended && event.keycode == 0x45 {
+            if event.pressed && !self.num_lock_down {
+                self.num_lock = !self.num_lock;
+            }
+            self.num_lock_down = event.pressed;
+            return None;
+        }
+        translate_key(event, self.num_lock)
     }
 
     pub fn run_slice(&mut self, budget: usize) -> bool {
@@ -2837,7 +2983,10 @@ impl Runtime {
         self.keyboard.clear();
     }
     pub(crate) fn shift_flags(&self) -> u8 {
-        (self.shift as u8) | ((self.ctrl as u8) << 2) | ((self.alt as u8) << 3)
+        (self.shift as u8)
+            | ((self.ctrl as u8) << 2)
+            | ((self.alt as u8) << 3)
+            | ((self.num_lock as u8) << 5)
     }
     pub(crate) fn wait_for_key(&mut self, mode: InputMode) -> Result<(), Trap> {
         self.pending_input = Some(mode);
@@ -2857,23 +3006,25 @@ impl Runtime {
             self.state = GuestState::WaitingForInput;
             return;
         };
+        let ascii = key.console_byte();
         match mode {
-            InputMode::Bios => {
-                self.cpu.ax = u16::from_le_bytes([key.ascii, key.scan_code]);
+            InputMode::Bios { enhanced } => {
+                self.cpu.ax = key.bios_word(enhanced);
+                self.trace_keyboard_return(if enhanced { 0x10 } else { 0x00 });
                 self.pending_input = None;
                 self.state = GuestState::Running;
             }
             InputMode::Dos { echo } => {
-                self.cpu.set_al(key.ascii);
+                self.cpu.set_al(ascii);
                 if echo {
-                    self.teletype(key.ascii, DEFAULT_ATTRIBUTE);
+                    self.teletype(ascii, DEFAULT_ATTRIBUTE);
                 }
                 self.pending_input = None;
                 self.state = GuestState::Running;
             }
             InputMode::ConsoleRead { segment, offset } => {
-                self.memory.write_u8(segment, offset, key.ascii);
-                if key.ascii == b'\r' {
+                self.memory.write_u8(segment, offset, ascii);
+                if ascii == b'\r' {
                     self.teletype(b'\r', DEFAULT_ATTRIBUTE);
                     // DOS console handles expose Enter as the two-byte CR/LF
                     // sequence.  A one-byte read returns CR first, then the
@@ -2884,7 +3035,7 @@ impl Runtime {
                         scan_code: 0,
                     });
                 } else {
-                    self.teletype(key.ascii, DEFAULT_ATTRIBUTE);
+                    self.teletype(ascii, DEFAULT_ATTRIBUTE);
                 }
                 self.cpu.ax = 1;
                 self.cpu.flags &= !CpuState::FLAG_CF;
@@ -2897,7 +3048,7 @@ impl Runtime {
                 maximum,
                 mut length,
             } => {
-                if key.ascii == b'\r' {
+                if ascii == b'\r' {
                     self.memory
                         .write_u8(segment, offset.wrapping_add(1), length);
                     self.memory.write_u8(
@@ -2909,7 +3060,7 @@ impl Runtime {
                     self.teletype(b'\n', DEFAULT_ATTRIBUTE);
                     self.pending_input = None;
                     self.state = GuestState::Running;
-                } else if key.ascii == 0x08 {
+                } else if ascii == 0x08 {
                     if length > 0 {
                         length -= 1;
                         self.memory
@@ -2923,16 +3074,16 @@ impl Runtime {
                         length,
                     });
                     self.state = GuestState::WaitingForInput;
-                } else if key.ascii >= 0x20 && length < maximum {
+                } else if ascii >= 0x20 && length < maximum {
                     self.memory.write_u8(
                         segment,
                         offset.wrapping_add(2).wrapping_add(length as u16),
-                        key.ascii,
+                        ascii,
                     );
                     length += 1;
                     self.memory
                         .write_u8(segment, offset.wrapping_add(1), length);
-                    self.teletype(key.ascii, DEFAULT_ATTRIBUTE);
+                    self.teletype(ascii, DEFAULT_ATTRIBUTE);
                     self.pending_input = Some(InputMode::Line {
                         segment,
                         offset,
@@ -5538,13 +5689,14 @@ mod tests {
         assert_eq!(
             translate_key_press(HostKeyEvent {
                 keycode: 0x48,
+                extended: true,
                 pressed: true,
                 shift: false,
                 ctrl: false,
                 alt: false
             }),
             Some(BiosKey {
-                ascii: 0,
+                ascii: 0xe0,
                 scan_code: 0x48
             })
         );
@@ -5665,6 +5817,55 @@ mod tests {
                 termination: super::TerminationType::Normal
             })
         );
+    }
+
+    #[test]
+    fn final_dos_exit_releases_parent_after_child_recovery_and_retains_status() {
+        for code in [0, 42] {
+            let parent = mz_program(&[
+                0xb4, 0x4d, 0xcd, 0x21, // get child exit status
+                0xb4, 0x00, 0xcd, 0x16, // leave the session open
+                0xb8, code, 0x4c, 0xcd, 0x21, // terminate the last process
+            ]);
+            let mut runtime = Runtime::from_program(&parent, b"").unwrap();
+            runtime
+                .drives_mut()
+                .add_base_file(DosDrive::C, "CHILD.COM", vec![0xb8, 7, 0x4c, 0xcd, 0x21])
+                .unwrap();
+            let path = runtime.drives().parse_path(b"C:\\CHILD.COM").unwrap();
+            let parent_psp = runtime.current_psp();
+            runtime.exec(path, b"", 0).unwrap();
+            let child_psp = runtime.current_psp();
+            assert_ne!(parent_psp, child_psp);
+            runtime.run_slice(32);
+            assert_eq!(runtime.current_psp(), parent_psp);
+            assert!(runtime.parent_process.is_none());
+            assert_eq!(*runtime.state(), GuestState::WaitingForInput);
+            assert_eq!(runtime.last_delivered_child_result().unwrap().code, 7);
+            assert!(runtime
+                .arena
+                .blocks()
+                .iter()
+                .any(|block| block.owner_psp == Some(parent_psp)));
+            assert!(runtime
+                .arena
+                .blocks()
+                .iter()
+                .all(|block| block.owner_psp != Some(child_psp)));
+
+            runtime.inject_ascii(b'x');
+            runtime.run_slice(32);
+            assert_eq!(*runtime.state(), GuestState::Exited { code });
+            assert!(runtime
+                .arena
+                .blocks()
+                .iter()
+                .all(|block| block.owner_psp.is_none()));
+            let retired = runtime.instructions_retired();
+            runtime.run_slice(32);
+            assert_eq!(runtime.instructions_retired(), retired);
+            assert_eq!(*runtime.state(), GuestState::Exited { code });
+        }
     }
 
     #[test]

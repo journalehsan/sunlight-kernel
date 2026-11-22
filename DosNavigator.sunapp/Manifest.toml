@@ -22,6 +22,7 @@ memory_kb = 640
 code_page = 437
 video = "auto"
 terminal = false
+on_exit = "close-window"
 
 [storage]
 c_base = ["Program"]

@@ -1,0 +1,54 @@
+1623: [SYSCALL] spawn: /bin/sunlight-chronos pid=39 ppid=36
+1664: [APP_LIFECYCLE] app_instance_created pid=39 name=DOS Navi policy=ExitOnLastWindowClosed
+1666: [APP_LIFECYCLE] app_window_attached pid=39 win_id=3
+1668: [APP_LIFECYCLE] app_lifecycle_policy pid=39 policy=ExitOnLastWindowClosed
+1683: launch[1] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=12500 delta=160ms pid=39
+2152: [SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.FLG
+2153: [SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.FLG result=allow reason=AllowedCurrentUserHome err=None
+2166: [SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.HIS
+2167: [SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.HIS result=allow reason=AllowedCurrentUserHome err=None
+2168-2169: [CHRONOS] DOS session completed code=0
+2172: [APP_LIFECYCLE] app_window_detached pid=39 win_id=3 remaining=0
+2174: [APP_LIFECYCLE] app_last_window_closed pid=39 name=DOS Navigator 1.51 policy=ExitOnLastWindowClosed
+2177: [SCHED] FINISHED process pid=39 name='sunlight-chronos'
+2179: [SCHED] process_mark_finished pid=39 name='sunlight-chronos' reason=exit code=0
+2180: [SCHED] terminating pid=39 name='sunlight-chronos' reason=exit
+2181: [SCHED] process_reaped pid=39 name='sunlight-chronos' user_frames=2819 page_tables=13 swap_blocks=0 ipc_cleared=0
+2182: [SCHED] process_resource_cleanup_summary pid=39 frames=2819 pts=13 swap=0 ipc_entries_cleared=0
+2188: [APP_LIFECYCLE] app_exited pid=39 name=DOS Navigator 1.51 (detected_dead)
+2190: [APP_LIFECYCLE] app_instance_removed pid=39 name=DOS Navigator 1.51
+2230: [SYSCALL] spawn: /bin/sunlight-chronos pid=40 ppid=36
+2271: [APP_LIFECYCLE] app_instance_created pid=40 name=DOS Navi policy=ExitOnLastWindowClosed
+2273: [APP_LIFECYCLE] app_window_attached pid=40 win_id=4
+2275: [APP_LIFECYCLE] app_lifecycle_policy pid=40 policy=ExitOnLastWindowClosed
+2286: launch[2] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=52710 delta=120ms pid=40
+2762: [SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.FLG
+2763: [SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.FLG result=allow reason=AllowedCurrentUserHome err=None
+2776: [SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.HIS
+2777: [SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.HIS result=allow reason=AllowedCurrentUserHome err=None
+2778-2779: [CHRONOS] DOS session completed code=0
+2782: [APP_LIFECYCLE] app_window_detached pid=40 win_id=4 remaining=0
+2784: [APP_LIFECYCLE] app_last_window_closed pid=40 name=DOS Navigator 1.51 policy=ExitOnLastWindowClosed
+2787: [SCHED] FINISHED process pid=40 name='sunlight-chronos'
+2789: [SCHED] process_mark_finished pid=40 name='sunlight-chronos' reason=exit code=0
+2790: [SCHED] terminating pid=40 name='sunlight-chronos' reason=exit
+2791: [SCHED] process_reaped pid=40 name='sunlight-chronos' user_frames=2819 page_tables=13 swap_blocks=0 ipc_cleared=0
+2792: [SCHED] process_resource_cleanup_summary pid=40 frames=2819 pts=13 swap=0 ipc_entries_cleared=0
+2794: [APP_LIFECYCLE] app_exited pid=40 name=DOS Navigator 1.51 (detected_dead)
+2796: [APP_LIFECYCLE] app_instance_removed pid=40 name=DOS Navigator 1.51
+2840: [SYSCALL] spawn: /bin/sunlight-chronos pid=41 ppid=36
+2872: [APP_LIFECYCLE] app_instance_created pid=41 name=Sunlight policy=ExitOnLastWindowClosed
+2874: [APP_LIFECYCLE] app_window_attached pid=41 win_id=5
+2876: [APP_LIFECYCLE] app_lifecycle_policy pid=41 policy=ExitOnLastWindowClosed
+2896: launch[3] source=unknown Sunlight Mines phase=window_visible_on_screen timestamp_ms=93000 delta=120ms pid=41
+3253-3254: [CHRONOS] DOS session completed code=0
+3261: [APP_LIFECYCLE] app_window_detached pid=41 win_id=5 remaining=0
+3263: [APP_LIFECYCLE] app_last_window_closed pid=41 name=Sunlight Mines policy=ExitOnLastWindowClosed
+3265: [APP_LIFECYCLE] app_terminate_requested pid=41 name=Sunlight Mines signal=SIGTERM
+3269: [SCHED] FINISHED process pid=41 name='sunlight-chronos'
+3271: [SCHED] process_mark_finished pid=41 name='sunlight-chronos' reason=exit code=143
+3272: [SCHED] terminating pid=41 name='sunlight-chronos' reason=exit
+3273: [SCHED] process_reaped pid=41 name='sunlight-chronos' user_frames=2819 page_tables=13 swap_blocks=0 ipc_cleared=0
+3274: [SCHED] process_resource_cleanup_summary pid=41 frames=2819 pts=13 swap=0 ipc_entries_cleared=0
+3276: [APP_LIFECYCLE] app_exited pid=41 name=Sunlight Mines (detected_dead)
+3278: [APP_LIFECYCLE] app_instance_removed pid=41 name=Sunlight Mines

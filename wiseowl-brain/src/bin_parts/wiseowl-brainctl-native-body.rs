@@ -47,7 +47,7 @@ fn main() {
 fn run_cli(arg_storage: &[&str]) {
     if arg_storage.len() < 2 {
         serial_println!(
-            "[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context> [options]"
+            "[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context|preferences|observe> [options]"
         );
         process_yield();
         return;
@@ -59,12 +59,51 @@ fn run_cli(arg_storage: &[&str]) {
         "greet" => cmd_greet(arg_storage),
         "context" => cmd_context(arg_storage),
         "preferences" => cmd_preferences(arg_storage),
+        "observe" => cmd_observe(&arg_storage[2..]),
         _ => {
-            serial_println!("[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context|preferences> ...");
+            serial_println!("[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context|preferences|observe> ...");
         }
     }
 
     process_yield();
+}
+
+fn cmd_observe(args: &[&str]) {
+    use wiseowl_brain::observable::{self, Summary};
+    let parse = |s: &str| match s {
+        "brief" => Some(Summary::Brief),
+        "machine" => Some(Summary::Machine),
+        "index" => Some(Summary::Index),
+        "full" => Some(Summary::Full),
+        _ => None,
+    };
+    let response = match args {
+        ["identity"] => observable::identity_response(
+            wiseowl_brain::adapters::WiseOwlStatusContextSource::query_native().identity_status,
+        ),
+        ["choose", a, b, tail @ ..] if tail.is_empty() || *tail == ["no-machine"] => {
+            let (Some(a), Some(b)) = (parse(a), parse(b)) else {
+                serial_println!("[WISEOWL-OBSERVE] Options: brief, machine, index, full.");
+                return;
+            };
+            let Ok(uid) = u32::try_from(sunlight_ipc::getuid()) else {
+                return;
+            };
+            observable::decide(
+                &wiseowl_brain::kv_client::native::NativeKvStore,
+                uid,
+                [a, b],
+                !tail.is_empty(),
+            )
+        }
+        _ => {
+            serial_println!("[WISEOWL-OBSERVE] Usage: observe identity | observe choose OPTION OPTION [no-machine]");
+            return;
+        }
+    };
+    #[cfg(target_os = "sunlightos")]
+    println!("{}", response);
+    serial_println!("[WISEOWL-OBSERVE] {}", response);
 }
 
 fn connect() -> Option<CapabilityToken> {

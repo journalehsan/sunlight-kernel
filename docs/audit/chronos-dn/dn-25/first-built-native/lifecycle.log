@@ -1,0 +1,49 @@
+[CHRONOS] guest runtime initialized
+[CHRONOS] DOS drives seeded
+[CHRONOS] connecting display window
+[APP_LIFECYCLE] app_instance_created pid=39 name=DOS Navi policy=ExitOnLastWindowClosed
+[APP_LIFECYCLE] app_window_attached pid=39 win_id=3
+[APP_LIFECYCLE] app_lifecycle_policy pid=39 policy=ExitOnLastWindowClosed
+[CHRONOS] window connected
+launch[1] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=14960 delta=260ms pid=39
+[CHRONOS] DOS session completed code=
+0
+[APP_LIFECYCLE] app_window_detached pid=39 win_id=3 remaining=0
+[APP_LIFECYCLE] app_last_window_closed pid=39 name=DOS Navigator 1.51 policy=ExitOnLastWindowClosed
+[SCHED] process_mark_finished pid=39 name='sunlight-chronos' reason=exit code=0
+[SCHED] process_reaped pid=39 name='sunlight-chronos' user_frames=2819 page_tables=13 swap_blocks=0 ipc_cleared=0
+[APP_LIFECYCLE] app_exited pid=39 name=DOS Navigator 1.51 (detected_dead)
+[APP_LIFECYCLE] app_instance_removed pid=39 name=DOS Navigator 1.51
+[CHRONOS] guest runtime initialized
+[CHRONOS] DOS drives seeded
+[CHRONOS] connecting display window
+[APP_LIFECYCLE] app_instance_created pid=40 name=DOS Navi policy=ExitOnLastWindowClosed
+[APP_LIFECYCLE] app_window_attached pid=40 win_id=4
+[APP_LIFECYCLE] app_lifecycle_policy pid=40 policy=ExitOnLastWindowClosed
+[CHRONOS] window connected
+launch[2] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=138770 delta=180ms pid=40
+[CHRONOS] DOS session completed code=
+0
+[APP_LIFECYCLE] app_window_detached pid=40 win_id=4 remaining=0
+[APP_LIFECYCLE] app_last_window_closed pid=40 name=DOS Navigator 1.51 policy=ExitOnLastWindowClosed
+[SCHED] process_mark_finished pid=40 name='sunlight-chronos' reason=exit code=0
+[SCHED] process_reaped pid=40 name='sunlight-chronos' user_frames=2819 page_tables=13 swap_blocks=0 ipc_cleared=0
+[APP_LIFECYCLE] app_exited pid=40 name=DOS Navigator 1.51 (detected_dead)
+[APP_LIFECYCLE] app_instance_removed pid=40 name=DOS Navigator 1.51
+[CHRONOS] guest runtime initialized
+[CHRONOS] DOS drives seeded
+[CHRONOS] connecting display window
+[APP_LIFECYCLE] app_instance_created pid=41 name=Sunlight policy=ExitOnLastWindowClosed
+[APP_LIFECYCLE] app_window_attached pid=41 win_id=5
+[APP_LIFECYCLE] app_lifecycle_policy pid=41 policy=ExitOnLastWindowClosed
+[CHRONOS] window connected
+launch[3] source=unknown Sunlight Mines phase=window_visible_on_screen timestamp_ms=189070 delta=150ms pid=41
+[CHRONOS] DOS session completed code=
+0
+[APP_LIFECYCLE] app_window_detached pid=41 win_id=5 remaining=0
+[APP_LIFECYCLE] app_last_window_closed pid=41 name=Sunlight Mines policy=ExitOnLastWindowClosed
+[APP_LIFECYCLE] app_terminate_requested pid=41 name=Sunlight Mines signal=SIGTERM
+[SCHED] process_mark_finished pid=41 name='sunlight-chronos' reason=exit code=143
+[SCHED] process_reaped pid=41 name='sunlight-chronos' user_frames=2819 page_tables=13 swap_blocks=0 ipc_cleared=0
+[APP_LIFECYCLE] app_exited pid=41 name=Sunlight Mines (detected_dead)
+[APP_LIFECYCLE] app_instance_removed pid=41 name=Sunlight Mines

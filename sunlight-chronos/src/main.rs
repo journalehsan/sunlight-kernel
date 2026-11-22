@@ -8,9 +8,9 @@ use alloc::format;
 use alloc::{collections::VecDeque, string::String, vec, vec::Vec};
 
 use chronos_core::{
-    display_char, translate_key_press, BiosKey, GuestState, GuestStateKind, GuestVideoMode,
-    GuestWaitReason, HostKeyEvent, MouseViewport, Rgb8, Runtime, SliceStopReason,
-    TextAttributeMode, CHRONOS_INTERACTIVE_COM, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT, VGA_WIDTH,
+    display_char, BiosKey, GuestState, GuestStateKind, GuestVideoMode, GuestWaitReason,
+    HostKeyEvent, MouseViewport, Rgb8, Runtime, SliceStopReason, TextAttributeMode,
+    CHRONOS_INTERACTIVE_COM, VGA_FRAMEBUFFER_BYTES, VGA_HEIGHT, VGA_WIDTH,
 };
 #[cfg(not(test))]
 use chronos_core::{DosDrive, DosEntry, LoaderError, MzError, UnsupportedExecutable};
@@ -118,6 +118,10 @@ struct ChronosApp {
     #[cfg(not(test))]
     storage: Option<ChronosStorage>,
     persisted: bool,
+    exit_on_completion: bool,
+    native_exit_code: Option<u8>,
+    #[cfg(not(test))]
+    key_trace_remaining: u16,
     status: [u8; 32],
     status_len: usize,
     trap_logged: bool,
@@ -156,6 +160,10 @@ impl ChronosApp {
             #[cfg(not(test))]
             storage: None,
             persisted: false,
+            exit_on_completion: false,
+            native_exit_code: None,
+            #[cfg(not(test))]
+            key_trace_remaining: 0,
             status: [0; 32],
             status_len: 0,
             trap_logged: false,
@@ -219,6 +227,10 @@ impl ChronosApp {
             title: config.title,
             storage: Some(storage),
             persisted: false,
+            exit_on_completion: config.exit_on_completion,
+            native_exit_code: None,
+            #[cfg(not(test))]
+            key_trace_remaining: 0,
             status: [0; 32],
             status_len: 0,
             trap_logged: false,
@@ -597,6 +609,41 @@ impl ChronosApp {
         }
     }
 
+    #[cfg(not(test))]
+    fn trace_key(&mut self, event: Event, key: Option<BiosKey>) {
+        if self.key_trace_remaining != 0 {
+            self.key_trace_remaining -= 1;
+            debug_log(&format!(
+                "[CHRONOS-KEY] host={event:?} key={key:?} queued_before={}\n",
+                self.runtime.queued_key_count()
+            ));
+        }
+    }
+
+    fn finish_session(&mut self) {
+        let GuestState::Exited { code } = *self.runtime.state() else {
+            return;
+        };
+        if self.persisted {
+            return;
+        }
+        self.persisted = true;
+        #[cfg(not(test))]
+        {
+            if let Some(storage) = &self.storage {
+                persist_drives(&self.runtime, storage);
+            }
+            debug_log("[CHRONOS] DOS session completed code=");
+            debug_log_u32(u32::from(code));
+            debug_log("\n");
+        }
+        if self.exit_on_completion {
+            self.native_exit_code = Some(code);
+            #[cfg(not(test))]
+            sunlight_ui::app::request_close();
+        }
+    }
+
     fn run_scheduled_slice(
         &mut self,
         now_ms: u64,
@@ -624,6 +671,7 @@ impl ChronosApp {
         let changed = self.runtime.run_slice(budget);
         self.schedule_after_slice(now_ms);
         self.record_wake_evidence(source);
+        self.finish_session();
         Some(changed)
     }
 
@@ -870,14 +918,6 @@ impl App for ChronosApp {
                             }
                         }
                     };
-                    if matches!(self.runtime.state(), GuestState::Exited { .. }) && !self.persisted
-                    {
-                        self.persisted = true;
-                        #[cfg(not(test))]
-                        if let Some(storage) = &self.storage {
-                            persist_drives(&self.runtime, storage);
-                        }
-                    }
                     self.record_cursor_damage(old_guest_cursor)
                         || cursor_changed
                         || presentation_changed
@@ -908,6 +948,9 @@ impl App for ChronosApp {
             Event::FocusChanged { focused } => {
                 let old = self.guest_cursor_rect();
                 self.focused = focused;
+                if !focused {
+                    self.runtime.release_host_keys();
+                }
                 self.runtime.mouse_focus_changed(focused);
                 set_client_cursor(CursorShape::Pointer);
                 let changed = self.record_cursor_damage(old);
@@ -933,30 +976,38 @@ impl App for ChronosApp {
                     '\u{8}' => 0x08,
                     _ => ch as u8,
                 };
-                let input_changed = self.runtime.inject_key(BiosKey {
+                let key = BiosKey {
                     ascii,
                     scan_code: 0,
-                });
+                };
+                #[cfg(not(test))]
+                self.trace_key(event, Some(key));
+                let input_changed = self.runtime.inject_key(key);
                 let changed = input_changed | self.update_status_from_runtime();
                 self.advance_after_native_event(changed, RuntimeWakeSource::Keyboard)
             }
             Event::KeyPress {
                 keycode,
+                extended,
                 pressed,
                 shift,
                 ctrl,
                 alt,
-                ..
+                super_key,
             } => {
-                self.runtime.update_modifiers(shift, ctrl, alt);
-                let key = translate_key_press(HostKeyEvent {
+                let key = self.runtime.translate_host_key(HostKeyEvent {
                     keycode,
-                    pressed,
+                    extended,
+                    pressed: pressed && !super_key,
                     shift,
                     ctrl,
                     alt,
                 });
-                if let Some(key) = key.filter(|key| key.ascii == 0 || key.ascii < 0x20) {
+                // Space already arrives through the text-commit channel.
+                let key = key.filter(|key| key.ascii != b' ');
+                #[cfg(not(test))]
+                self.trace_key(event, key);
+                if let Some(key) = key {
                     let input_changed = self.runtime.inject_key(key);
                     let changed = input_changed | self.update_status_from_runtime();
                     self.advance_after_native_event(changed, RuntimeWakeSource::Keyboard)
@@ -1008,13 +1059,6 @@ impl App for ChronosApp {
         } else {
             self.text_present_pending = false;
             self.text_instructions_since_present = 0;
-        }
-        if matches!(self.runtime.state(), GuestState::Exited { .. }) && !self.persisted {
-            self.persisted = true;
-            #[cfg(not(test))]
-            if let Some(storage) = &self.storage {
-                persist_drives(&self.runtime, storage);
-            }
         }
         let cursor_changed = self.record_cursor_damage(old_guest_cursor);
         runtime_changed || status_changed || cursor_changed
@@ -1617,8 +1661,23 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
         },
     };
     debug_log("[CHRONOS] window connected\n");
+    window.use_physical_keyboard_controls();
+    // Off in ordinary builds. Use the same opt-in for the host and guest
+    // sides of a diagnostic replay.
+    if option_env!("CHRONOS_KEY_TRACE") == Some("1") {
+        app.key_trace_remaining = 128;
+        app.runtime.trace_keyboard(256, |function, ax, flags, queued| {
+            debug_log(&format!(
+                "[CHRONOS-KEY] int16 ah={function:02x} ax={ax:04x} flags={flags:04x} queued={queued}\n"
+            ));
+        });
+    }
+    if app.exit_on_completion && !window.set_close_grace(2000) {
+        debug_log("[CHRONOS] window close grace unavailable\n");
+        ProcessExit::exit(1);
+    }
     window.run(&mut app);
-    ProcessExit::exit(0);
+    ProcessExit::exit(app.native_exit_code.unwrap_or(0).into());
 }
 
 #[cfg(not(test))]
@@ -1631,6 +1690,7 @@ struct ChronosLaunch {
     documents_root: Option<String>,
     direct: bool,
     cpu_profile: chronos_core::CpuProfile,
+    exit_on_completion: bool,
     command_tail: Vec<u8>,
 }
 
@@ -1688,7 +1748,9 @@ impl ChronosLaunch {
         while index < values.len() {
             if skip.iter().any(|key| values[index] == *key) {
                 index += 2;
-            } else if !values[index].starts_with(b"--sunlight-launch=") {
+            } else if values[index] != b"--chronos-exit-on-completion"
+                && !values[index].starts_with(b"--sunlight-launch=")
+            {
                 if !command_tail.is_empty() {
                     command_tail.push(b' ');
                 }
@@ -1707,6 +1769,8 @@ impl ChronosLaunch {
             documents_root: documents_root.and_then(|value| String::from_utf8(value.to_vec()).ok()),
             direct,
             cpu_profile,
+            exit_on_completion: bundled
+                && values.contains(&b"--chronos-exit-on-completion".as_slice()),
             command_tail,
         })
     }
@@ -2665,6 +2729,96 @@ mod tests {
         assert!(app.update_status_from_runtime());
         assert_eq!(app.runtime.state(), &GuestState::Exited { code: 0 });
         assert_eq!(app.status_text(), "Exited with code 0");
+    }
+
+    #[test]
+    fn final_exit_is_acknowledged_on_the_slice_that_consumes_input() {
+        for close in [false, true] {
+            for code in [0, 42] {
+                let mut app = ChronosApp::new();
+                app.exit_on_completion = close;
+                app.runtime = Runtime::from_com(&[
+                    0xb4, 0x10, 0xcd, 0x16, // enhanced INT 16h read
+                    0xb8, code, 0x4c, 0xcd, 0x21, // final DOS exit
+                ])
+                .unwrap();
+                app.on_ready();
+                assert_eq!(*app.runtime.state(), GuestState::WaitingForInput);
+                assert!(!app.persisted);
+                app.update(Event::Key('x'));
+                assert_eq!(*app.runtime.state(), GuestState::Exited { code });
+                assert!(app.persisted);
+                assert_eq!(app.native_exit_code, close.then_some(code));
+                assert!(app
+                    .run_scheduled_slice(1, 100, RuntimeWakeSource::BudgetContinuation)
+                    .is_none());
+                assert_eq!(app.native_exit_code, close.then_some(code));
+            }
+        }
+    }
+
+    #[test]
+    fn modifier_updates_follow_make_break_and_focus_without_queuing_edges() {
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(&[0xb4, 0x02, 0xcd, 0x16, 0xeb, 0xfa]).unwrap();
+        for (pressed, expected) in [(true, 4), (false, 0), (true, 4)] {
+            app.update(Event::KeyPress {
+                keycode: 0x1d,
+                extended: true,
+                pressed,
+                shift: false,
+                ctrl: pressed,
+                alt: false,
+                super_key: false,
+            });
+            assert_eq!(app.runtime.cpu.al(), expected);
+            assert_eq!(app.runtime.queued_key_count(), 0);
+        }
+        app.update(Event::FocusChanged { focused: false });
+        assert_eq!(app.runtime.cpu.al(), 0);
+    }
+
+    #[test]
+    fn physical_keypad_and_modifier_releases_reach_the_guest_once() {
+        let mut app = ChronosApp::new();
+        app.runtime = Runtime::from_com(&[
+            0xb4, 0x10, 0xcd, 0x16, // AH=10h, blocking enhanced read
+            0x89, 0xc3, // mov bx, ax
+            0xeb, 0xf8, // repeat
+        ])
+        .unwrap();
+        app.on_ready();
+        let event = |keycode, extended, pressed, shift, ctrl, alt| Event::KeyPress {
+            keycode,
+            extended,
+            pressed,
+            shift,
+            ctrl,
+            alt,
+            super_key: false,
+        };
+        for (code, extended, pressed, shift, ctrl, alt, expected) in [
+            (0x48, true, true, false, false, false, 0x48e0),
+            (0x48, false, true, false, false, false, 0x4800),
+            (0x45, false, true, false, false, false, 0x4800),
+            (0x45, false, false, false, false, false, 0x4800),
+            (0x48, false, true, false, false, false, 0x4838),
+            (0x2a, false, true, true, false, false, 0x4838),
+            (0x48, false, true, true, false, false, 0x4800),
+            (0x2a, false, false, false, false, false, 0x4800),
+            (0x1d, false, true, false, true, false, 0x4800),
+            (0x48, false, true, false, true, false, 0x8d00),
+            (0x1d, false, false, false, false, false, 0x8d00),
+            (0x38, false, true, false, false, true, 0x8d00),
+            (0x48, false, true, false, false, true, 0x8d00),
+            (0x38, false, false, false, false, false, 0x8d00),
+            (0x48, false, true, false, false, false, 0x4838),
+        ] {
+            app.update(event(code, extended, pressed, shift, ctrl, alt));
+            assert_eq!(app.runtime.cpu.bx, expected);
+            assert_eq!(app.runtime.queued_key_count(), 0);
+            assert_eq!(*app.runtime.state(), GuestState::WaitingForInput);
+        }
     }
 
     fn mode13_app() -> ChronosApp {

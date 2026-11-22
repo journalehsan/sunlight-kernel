@@ -13,7 +13,7 @@ use sunlight_ipc::{
     ProcessExit,
 };
 
-use sunlight_kbd::Keyboard;
+use sunlight_kbd::{Keyboard, Set1Decoder};
 
 /// Syscall wrappers for keyboard-specific operations.
 ///
@@ -116,19 +116,17 @@ pub extern "C" fn _start() -> ! {
     register_with_deviced(DriverState::Ready);
 
     let mut keyboard = Keyboard::default();
-    let mut extended_prefix = false;
+    let mut decoder = Set1Decoder::default();
     loop {
         while let Some(scancode) = kbd_pop_scancode() {
-            if scancode == 0xe0 {
-                extended_prefix = true;
+            let Some((scancode, extended)) = decoder.push(scancode) else {
                 continue;
-            }
-            let (raw, commit) = keyboard.process(scancode, extended_prefix);
+            };
+            let (raw, commit) = keyboard.process(scancode, extended);
             let _ = ipc_call(tty_token, IpcMsg::with_label(0x1).word(0, raw));
             if let Some(commit) = commit {
                 let _ = ipc_call(tty_token, IpcMsg::with_label(0x1).word(0, commit));
             }
-            extended_prefix = false;
         }
         let _ = ipc_recv(my_endpoint);
     }

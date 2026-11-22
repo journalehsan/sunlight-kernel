@@ -1,0 +1,13 @@
+no_std=0
+native_release=0
+phase3=1
+ui_doctest=101
+no_std=0
+native_release=0
+final_host=101
+focused=0
+final_host=0
+keyboard_driver_lib=0
+phase3=0
+host_with_adapter_regression=0
+verified_desktop=0
