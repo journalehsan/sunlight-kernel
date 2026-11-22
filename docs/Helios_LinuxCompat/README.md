@@ -1,4 +1,6 @@
 # Helios Linux compatibility
+See the [runtime linkage audit](runtime-linkage-audit.md) for how Helios uses
+Linux libc and how native C and C++ reach SunlightOS services.
 
 Helios is the bounded in-kernel Linux personality for static x86_64 Linux
 ELF executables. It is a compatibility tier, not a Linux userspace or POSIX

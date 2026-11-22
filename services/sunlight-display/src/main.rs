@@ -610,6 +610,8 @@ enum ResizeEdge {
 #[derive(Clone, Copy)]
 struct MoveDrag {
     window_id: u64,
+    origin: Rect,
+    prior_snap: Option<Rect>,
 }
 
 #[derive(Clone, Copy)]
@@ -681,6 +683,104 @@ impl ResizeEdge {
     }
 }
 
+fn client_geometry(win: &Window) -> Rect {
+    Rect::new(win.x as i32, win.y as i32, win.width, win.height)
+}
+
+fn set_client_geometry(win: &mut Window, geometry: Rect) {
+    win.x = geometry.x.max(0) as u32;
+    win.y = geometry.y.max(0) as u32;
+    win.width = geometry.w;
+    win.height = geometry.h;
+}
+
+/// Cursor zones use physical edges; the destination uses the reserved work area.
+fn snap_zone(width: u32, height: u32, x: u32, y: u32, top: u32, bottom: u32) -> Option<Rect> {
+    const EDGE: u32 = 16;
+    if x >= width || y >= height {
+        return None;
+    }
+    let left = x < EDGE;
+    let right = x >= width.saturating_sub(EDGE);
+    if !left && !right {
+        return None;
+    }
+    let usable = height.checked_sub(top.checked_add(bottom)?)?;
+    let split_x = width / 2;
+    let split_y = usable / 2;
+    let (x, w) = if left {
+        (0, split_x)
+    } else {
+        (split_x, width - split_x)
+    };
+    let (y, h) = if y < EDGE {
+        (top, split_y)
+    } else if y >= height.saturating_sub(EDGE) {
+        (top + split_y, usable - split_y)
+    } else {
+        (top, usable)
+    };
+    Some(Rect::new(x as i32, y as i32, w, h))
+}
+
+fn drag_snap_target(state: &CompositorState, x: u32, y: u32) -> Option<Rect> {
+    let ActiveDrag::Move(drag) = state.active_drag else {
+        return None;
+    };
+    let win = state.windows.iter().find(|w| w.id == drag.window_id)?;
+    if !floating_application_window(win) || win.rolled_up || !is_window_visible(state, win) {
+        return None;
+    }
+    let rect = snap_zone(
+        state.fb_width,
+        state.fb_height,
+        x,
+        y,
+        top_panel_strip_height(state),
+        SgpMsg::DESKTOP_DOCK_RESERVED_H,
+    )?;
+    let w = rect.w.checked_sub(BORDER_W * 2)?;
+    let h = rect.h.checked_sub(win.titlebar_height() + BORDER_W)?;
+    (w >= MIN_WIN_W && h >= MIN_WIN_H).then_some(rect)
+}
+
+fn finish_snap(state: &mut CompositorState, x: u32, y: u32) -> bool {
+    let Some(rect) = drag_snap_target(state, x, y) else {
+        return false;
+    };
+    let ActiveDrag::Move(drag) = state.active_drag else {
+        return false;
+    };
+    let Some(win) = state.windows.iter_mut().find(|w| w.id == drag.window_id) else {
+        return false;
+    };
+    win.snap_restore = Some(drag.prior_snap.unwrap_or(drag.origin));
+    set_client_geometry(
+        win,
+        Rect::new(
+            rect.x,
+            rect.y,
+            rect.w - BORDER_W * 2,
+            rect.h - win.titlebar_height() - BORDER_W,
+        ),
+    );
+    true
+}
+
+fn cancel_move_drag(state: &mut CompositorState) -> bool {
+    if let ActiveDrag::Move(drag) = state.active_drag {
+        if let Some(win) = state.windows.iter_mut().find(|w| w.id == drag.window_id) {
+            set_client_geometry(win, drag.origin);
+            win.snap_restore = drag.prior_snap;
+        }
+    } else if state.pending_move_drag.is_none() {
+        return false;
+    }
+    state.active_drag = ActiveDrag::None;
+    state.pending_move_drag = None;
+    true
+}
+
 fn resize_from_left(win: &mut Window, anchor_x: i32, anchor_w: i32, delta_x: i32) {
     let new_x = (anchor_x + delta_x)
         .max(0)
@@ -715,6 +815,8 @@ struct Window {
     /// one is the CREATE_WINDOW surface; zero is never published.
     surface_generation: u64,
     desktop_overlays: [Option<Rect>; MAX_DESKTOP_OVERLAYS],
+    desktop_overlay_keep_focus: bool,
+    preview: Option<CommittedPreview>,
     x: u32, // chrome top-left on screen
     y: u32,
     // Saved normal geometry for restore from maximized/fullscreen.
@@ -722,6 +824,7 @@ struct Window {
     saved_y: u32,
     saved_w: u32,
     saved_h: u32,
+    snap_restore: Option<Rect>,
     parent_focus_window_id: u64,
     owner_pid: u64,
     /// Workspace assignment. Workspace switching UI is a later layer.
@@ -1078,7 +1181,9 @@ struct NotificationAcceptance {
 #[derive(Clone, Copy)]
 struct KeyboardState {
     pressed: [bool; 256],
-    alt_tab_chord_active: bool,
+    switcher_owned: [bool; 256],
+    key_owner: [Option<u64>; 256],
+    suppress_text_commit: bool,
     alt_tab_next_repeat_ms: u64,
     /// A search K-down was consumed by the desktop shell; consume its repeat
     /// and release too so the focused app never observes an unmatched key-up.
@@ -1089,7 +1194,9 @@ impl KeyboardState {
     const fn new() -> Self {
         Self {
             pressed: [false; 256],
-            alt_tab_chord_active: false,
+            switcher_owned: [false; 256],
+            key_owner: [None; 256],
+            suppress_text_commit: false,
             alt_tab_next_repeat_ms: 0,
             desktop_search_k_active: false,
         }
@@ -1107,20 +1214,18 @@ impl KeyboardState {
     }
 
     fn ctrl_down(&self) -> bool {
-        self.is_down(KEY_CTRL)
+        self.is_down(KEY_CTRL) || self.is_down(KEY_CTRL | 0x80)
     }
 
     fn alt_down(&self) -> bool {
-        self.is_down(KEY_ALT)
+        self.is_down(KEY_ALT) || self.is_down(KEY_ALT | 0x80)
     }
 
     fn super_down(&self) -> bool {
-        self.is_down(KEY_LEFT_SUPER) || self.is_down(KEY_RIGHT_SUPER)
-    }
-
-    fn clear_alt_tab_repeat(&mut self) {
-        self.alt_tab_chord_active = false;
-        self.alt_tab_next_repeat_ms = 0;
+        self.is_down(KEY_LEFT_SUPER | 0x80)
+            || self.is_down(KEY_RIGHT_SUPER | 0x80)
+            || self.is_down(KEY_LEFT_SUPER)
+            || self.is_down(KEY_RIGHT_SUPER)
     }
 
     fn consume_active_desktop_search_k(&mut self, keycode: u8, pressed: bool) -> bool {
@@ -1147,6 +1252,7 @@ struct CompositorState {
     mouse_y: u16,
     pointer: PointerPolicy,
     keyboard: KeyboardState,
+    window_switch: Option<WindowSwitch>,
     active_drag: ActiveDrag,
     /// Pending window-move drag: (window_id, press_x, press_y).
     /// Set when a TitleBar click lands; promoted to ActiveDrag::Move once
@@ -1546,6 +1652,17 @@ fn route_desktop_overlay_key(state: &mut CompositorState, packed: u64) -> bool {
         return true;
     }
     if let Some(index) = desktop_overlay_idx(state) {
+        if state.windows[index].desktop_overlay_keep_focus && !pressed && modifier_key(keycode) {
+            let slot = key_slot(keycode, packed);
+            if let Some(id) = state.keyboard.key_owner[slot].take() {
+                if focused_window_id(state) == Some(id) {
+                    if let Some(window) = state.windows.iter_mut().find(|win| win.id == id) {
+                        window.pending_keys.push(packed);
+                    }
+                }
+                return true;
+            }
+        }
         state.windows[index].pending_keys.push(packed);
         return true;
     }
@@ -1597,7 +1714,9 @@ fn focused_window_idx(state: &CompositorState) -> Option<usize> {
             .iter()
             .position(|window| window.id == state.lock_presenter_window);
     }
-    if let Some(idx) = desktop_overlay_idx(state) {
+    if let Some(idx) =
+        desktop_overlay_idx(state).filter(|idx| !state.windows[*idx].desktop_overlay_keep_focus)
+    {
         return Some(idx);
     }
     state
@@ -2585,77 +2704,271 @@ fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
     }
 }
 
-fn cycle_focus(state: &mut CompositorState) -> bool {
-    let Some(focused_idx) = focused_window_idx(state) else {
-        return false;
+/// Freeze the existing top-to-bottom order (within the focused z group)
+/// for the duration of the chord. Stack changes are deferred until commit.
+struct WindowSwitch {
+    workspace: u32,
+    ids: Vec<u64>,
+    selected: usize,
+}
+
+impl WindowSwitch {
+    fn eligible(win: &Window, workspace: u32) -> bool {
+        is_focusable_window(win)
+            && win.has_presented_frame
+            && !win.hidden
+            && win.workspace_id == workspace
+    }
+
+    fn start(state: &CompositorState, reverse: bool) -> Option<Self> {
+        let focused = &state.windows[focused_window_idx(state)?];
+        let workspace = state.active_workspace_id;
+        let ids: Vec<_> = state
+            .windows
+            .iter()
+            .rev()
+            .filter(|w| {
+                Self::eligible(w, workspace) && w.config.z_index_type == focused.config.z_index_type
+            })
+            .map(|w| w.id)
+            .collect();
+        let initial = ids.iter().position(|id| *id == focused.id)?;
+        let mut switch = Self {
+            workspace,
+            ids,
+            selected: initial,
+        };
+        switch.advance(reverse);
+        Some(switch)
+    }
+
+    fn advance(&mut self, reverse: bool) {
+        if !self.ids.is_empty() {
+            let len = self.ids.len();
+            self.selected = (self.selected + if reverse { len - 1 } else { 1 }) % len;
+        }
+    }
+
+    fn retain_live(&mut self, windows: &[Window]) {
+        let mut index = 0;
+        self.ids.retain(|id| {
+            let keep = windows
+                .iter()
+                .any(|w| w.id == *id && Self::eligible(w, self.workspace));
+            if !keep && index < self.selected {
+                self.selected -= 1;
+            }
+            if keep {
+                index += 1;
+            }
+            keep
+        });
+        if self.selected >= self.ids.len() {
+            self.selected = 0;
+        }
+    }
+
+    fn target(&self) -> Option<u64> {
+        self.ids.get(self.selected).copied()
+    }
+}
+
+fn draw_switcher(canvas: &mut Canvas<'_>, state: &CompositorState) {
+    let Some(switch) = &state.window_switch else {
+        return;
     };
-    let z_group = state.windows[focused_idx].config.z_index_type;
-    let active_workspace_id = state.active_workspace_id;
-    let candidate_count = state
-        .windows
-        .iter()
-        .filter(|win| {
-            is_focusable_window(win)
-                && !win.hidden
-                && win.workspace_id == active_workspace_id
-                && win.config.z_index_type == z_group
-        })
-        .count();
-    if candidate_count < 2 {
+    let slots = ((state.fb_width.saturating_sub(32) / 68) as usize).max(1);
+    let count = slots.min(switch.ids.len());
+    if count == 0 {
+        return;
+    }
+    let start = switch
+        .selected
+        .saturating_sub(count / 2)
+        .min(switch.ids.len() - count);
+    let width = 24 + count as u32 * 68;
+    let panel = Rect::new(
+        (state.fb_width.saturating_sub(width) / 2) as i32,
+        (state.fb_height.saturating_sub(114) / 2) as i32,
+        width,
+        114,
+    );
+    let theme = &SUNLIGHT_THEME;
+    canvas.fill_rounded_rect(panel, 14, theme.panel);
+    canvas.stroke_rounded_rect(panel, 14, 1, theme.border);
+    let mut title = "";
+    for (i, id) in switch.ids.iter().enumerate().skip(start).take(count) {
+        let Some(win) = state.windows.iter().find(|w| w.id == *id) else {
+            continue;
+        };
+        let label = window_title_str(&win.config.title);
+        let tile = Rect::new(panel.x + 16 + (i - start) as i32 * 68, panel.y + 10, 60, 68);
+        if i == switch.selected {
+            title = label;
+            canvas.fill_rounded_rect(tile, 8, theme.panel_alt);
+            canvas.stroke_rounded_rect(tile, 8, 2, theme.accent);
+        }
+        let (icon, color) = switcher_icon(label);
+        let rect = Rect::new(tile.x + 8, tile.y + 12, 44, 44);
+        if let Ok(image) = TgaImage::parse(icon) {
+            canvas.draw_tga_icon_tinted(&image, rect, color);
+        }
+    }
+    let text = notification_fit(title, panel.w.saturating_sub(20) as usize / 8);
+    canvas.draw_text_centered(
+        Rect::new(panel.x, panel.y + 82, panel.w, 24),
+        &text,
+        theme.text,
+    );
+}
+
+fn switcher_icon(title: &str) -> (&'static [u8], Color) {
+    if title.starts_with("Sunlight Terminal")
+        || title.starts_with("Terminal")
+        || title.starts_with("DOS Navigator")
+        || title.starts_with("Chronos")
+    {
+        (
+            include_bytes!(concat!(env!("OUT_DIR"), "/icon_terminal.tga")),
+            Color(0xff9cd894),
+        )
+    } else if title.starts_with("Sunlight Files") || title.starts_with("Files") {
+        (
+            include_bytes!(concat!(env!("OUT_DIR"), "/icon_files.tga")),
+            Color(0xff90b9ed),
+        )
+    } else if title.starts_with("Sunlight Calculator") || title.starts_with("Calculator") {
+        (
+            include_bytes!(concat!(env!("OUT_DIR"), "/icon_calculator.tga")),
+            Color(0xffd7ac83),
+        )
+    } else if title.starts_with("System Preferences") {
+        (
+            include_bytes!(concat!(env!("OUT_DIR"), "/icon_settings.tga")),
+            Color(0xffa4a9b6),
+        )
+    } else {
+        (
+            include_bytes!(concat!(env!("OUT_DIR"), "/icon_app.tga")),
+            SUNLIGHT_THEME.text_dim,
+        )
+    }
+}
+
+fn key_slot(code: u8, packed: u64) -> usize {
+    (code
+        | if packed & sunlight_ipc::KEY_EXTENDED != 0 {
+            0x80
+        } else {
+            0
+        }) as usize
+}
+
+fn modifier_key(code: u8) -> bool {
+    matches!(
+        code,
+        KEY_ALT | KEY_CTRL | 0x2a | 0x36 | KEY_LEFT_SUPER | KEY_RIGHT_SUPER
+    )
+}
+
+fn queue_application_key(state: &mut CompositorState, packed: u64, was_down: bool) {
+    let (code, pressed, _, _, _, _, _) = sunlight_ipc::unpack_key_event(packed);
+    let slot = key_slot(code, packed);
+    if !pressed {
+        state.keyboard.key_owner[slot] = None;
+    }
+    if let Some(index) = focused_window_idx(state) {
+        let win = &mut state.windows[index];
+        if pressed && !was_down {
+            state.keyboard.key_owner[slot] = Some(win.id);
+        }
+        win.pending_keys.push(packed);
+    }
+}
+
+fn route_switcher_key(state: &mut CompositorState, packed: u64, was_down: bool, now: u64) -> bool {
+    let (code, pressed, shift, _, alt, _, _) = sunlight_ipc::unpack_key_event(packed);
+    let slot = key_slot(code, packed);
+    let swallowed = state.keyboard.switcher_owned[slot];
+    if !pressed {
+        state.keyboard.switcher_owned[slot] = false;
+    }
+    let active = state.window_switch.is_some();
+    let alt_held = state.keyboard.alt_down() || alt;
+    let starts = code == KEY_TAB && pressed && !was_down && alt_held;
+    if !active && !starts && !swallowed {
         return false;
     }
 
-    let win = state.windows.remove(focused_idx);
-    let insert_idx = state
-        .windows
-        .iter()
-        .position(|other| {
-            is_focusable_window(other)
-                && !other.hidden
-                && other.workspace_id == active_workspace_id
-                && other.config.z_index_type == z_group
-        })
-        .unwrap_or(state.windows.len());
-    state.windows.insert(insert_idx, win);
-    true
-}
-
-#[derive(Clone, Copy)]
-enum AltTabTriggerSource {
-    Keydown,
-    Repeat,
-}
-
-fn trigger_alt_tab(state: &mut CompositorState, source: AltTabTriggerSource) {
-    let old_damage = focused_window_idx(state)
-        .map(|idx| window_decoration_damage_bounds(state, &state.windows[idx]));
-    if cycle_focus(state) {
-        let new_damage = focused_window_idx(state)
-            .map(|idx| window_decoration_damage_bounds(state, &state.windows[idx]));
-        mark_decoration_transition_damage(state, old_damage, new_damage);
-        state.active_cursor = cursor_for_scene(state);
-        // Alt+Tab also changes stacking.  The existing conservative full
-        // present remains the correctness path; the explicit bounds above
-        // document/cover the decoration extent for a future region renderer.
+    // A make delivered before opening retains its matching physical break.
+    // This also handles a rapid return to the original focus before key-up.
+    // While unfocused, the existing focus-loss cleanup is authoritative.
+    if !pressed {
+        if let Some(id) = state.keyboard.key_owner[slot].take() {
+            if focused_window_id(state) == Some(id) {
+                if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
+                    win.pending_keys.push(packed);
+                }
+            }
+        }
+    }
+    if pressed {
+        state.keyboard.suppress_text_commit = true;
+        if !was_down || swallowed {
+            state.keyboard.switcher_owned[slot] = true;
+        }
+    }
+    if !active && swallowed {
+        return true;
+    }
+    let mut redraw = false;
+    if active && code == 1 && pressed {
+        state.window_switch = None;
+        redraw = true;
+    } else if active && code == KEY_ALT && !pressed && !alt_held {
+        if let Some(mut switch) = state.window_switch.take() {
+            switch.retain_live(&state.windows);
+            if switch.workspace == state.active_workspace_id {
+                if let Some(id) = switch
+                    .target()
+                    .filter(|id| Some(*id) != focused_window_id(state))
+                {
+                    let old_focus = focused_window_id(state);
+                    for (slot, owner) in state.keyboard.key_owner.iter().enumerate() {
+                        if owner.is_some() && *owner == old_focus {
+                            state.keyboard.switcher_owned[slot] = state.keyboard.pressed[slot];
+                        }
+                    }
+                    if activate_window(state, id) {
+                        return true;
+                    }
+                }
+            }
+        }
+        redraw = true;
+    } else if code == KEY_TAB
+        && pressed
+        && alt_held
+        && (!was_down || now >= state.keyboard.alt_tab_next_repeat_ms)
+    {
+        if let Some(switch) = &mut state.window_switch {
+            switch.retain_live(&state.windows);
+            switch.advance(shift);
+        } else {
+            state.window_switch = WindowSwitch::start(state, shift);
+        }
+        state.keyboard.alt_tab_next_repeat_ms = now.saturating_add(ALT_TAB_REPEAT_MS);
+        state.debug_counters.alt_tab_trigger_count += 1;
+        if was_down {
+            state.debug_counters.alt_tab_repeat_count += 1;
+        }
+        redraw = state.window_switch.is_some();
+    }
+    if redraw {
         mark_dirty_full(state);
         redraw_scene(state);
     }
-
-    state.debug_counters.alt_tab_trigger_count += 1;
-    if matches!(source, AltTabTriggerSource::Repeat) {
-        state.debug_counters.alt_tab_repeat_count += 1;
-    }
-
-    if INPUT_DEBUG {
-        debug_log("[DISPLAY] alt_tab source=");
-        debug_log(match source {
-            AltTabTriggerSource::Keydown => "keydown",
-            AltTabTriggerSource::Repeat => "repeat",
-        });
-        debug_log(" count=");
-        debug_dec_u64(state.debug_counters.alt_tab_trigger_count);
-        debug_log("\n");
-    }
+    true
 }
 
 fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<u64>) -> bool {
@@ -2671,6 +2984,9 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
 
     let old_damage = window_decoration_damage_bounds(state, &state.windows[pos]);
     let win = state.windows.remove(pos);
+    if let Some(switch) = &mut state.window_switch {
+        switch.retain_live(&state.windows);
+    }
     // Callers may choose a broad present for the z-order/lifecycle change, but
     // always record the entire old effect footprint first so no halo pixel can
     // survive under a region-based present.
@@ -2868,6 +3184,152 @@ fn list_window_at(state: &CompositorState, idx: usize) -> IpcMsg {
         .unwrap_or_else(|| IpcMsg::with_label(SgpMsg::REPLY))
 }
 
+fn pack_pair(lo: u32, hi: u32) -> u64 {
+    u64::from(lo) | (u64::from(hi) << 32)
+}
+
+struct CommittedPreview {
+    generation: u64,
+    w: u32,
+    h: u32,
+    pixels: Vec<u32>,
+}
+
+fn update_committed_preview(win: &mut Window, width: u32, height: u32) {
+    let (w, h) = win.desired_client_size(width, height);
+    let Ok(layout) = surface::SurfaceLayout::validate(
+        win.surface_width_pixels,
+        win.surface_height_rows,
+        win.surface_stride_bytes,
+        win.surface_len_bytes,
+    ) else {
+        return;
+    };
+    let Ok(source) = layout.readable_rect(0, 0, w, h) else {
+        return;
+    };
+    let (w, h) = (source.width, source.height);
+    if win.buffer.is_null() || w == 0 || h == 0 {
+        return;
+    }
+    let (max_w, max_h) = (
+        SgpMsg::WORKSPACE_PREVIEW_MAX_W,
+        SgpMsg::WORKSPACE_PREVIEW_MAX_H,
+    );
+    let (tw, th) = if u64::from(w) * u64::from(max_h) >= u64::from(h) * u64::from(max_w) {
+        let tw = w.min(max_w);
+        (
+            tw,
+            (u64::from(h) * u64::from(tw) / u64::from(w)).max(1) as u32,
+        )
+    } else {
+        let th = h.min(max_h);
+        (
+            (u64::from(w) * u64::from(th) / u64::from(h)).max(1) as u32,
+            th,
+        )
+    };
+    let preview = win.preview.get_or_insert_with(|| CommittedPreview {
+        generation: 0,
+        w: 0,
+        h: 0,
+        pixels: Vec::new(),
+    });
+    preview.generation = win.surface_generation;
+    preview.w = tw;
+    preview.h = th;
+    preview.pixels.resize((tw * th) as usize, 0);
+    for y in 0..th {
+        let sy = (u64::from(y) * u64::from(h) / u64::from(th)) as usize;
+        for x in 0..tw {
+            let sx = (u64::from(x) * u64::from(w) / u64::from(tw)) as usize;
+            let pixel = unsafe { win.buffer.add(sy * layout.stride_pixels + sx).read() };
+            preview.pixels[(y * tw + x) as usize] = composite_client_pixel(
+                pixel,
+                WINDOW_BODY_OPAQUE,
+                255,
+                win.config.surface_material.uses_straight_alpha(),
+            );
+        }
+    }
+}
+
+fn authorized_workspace_shell(state: &CompositorState, pid: u64) -> bool {
+    state.session_active
+        && state.lock_generation == 0
+        && state
+            .windows
+            .iter()
+            .any(|win| win.owner_pid == pid && win.config.window_type == WindowType::Desktop)
+        && sunlight_ipc::validate_session_caller(pid, sunlight_ipc::SESSION_CALLER_VORTEX_SHELL)
+}
+
+fn workspace_preview_reply(state: &CompositorState, msg: &IpcMsg) -> IpcMsg {
+    let reply = IpcMsg::with_label(SgpMsg::REPLY);
+    if !authorized_workspace_shell(state, msg.badge) {
+        return reply;
+    }
+    let Some(win) = state
+        .windows
+        .iter()
+        .find(|win| win.id == msg.words[0] && overview_window_eligible(win))
+    else {
+        return reply;
+    };
+    let preview = win
+        .preview
+        .as_ref()
+        .filter(|p| p.generation == win.surface_generation && !win.rolled_up);
+    let Ok((out, bytes)) = sunlight_ipc::shm_map_sized(msg.caps[0]) else {
+        return reply;
+    };
+    let (x, y, w, h) = win.chrome_rect(state.fb_width, state.fb_height);
+    let mut sample = 0;
+    let header = SgpMsg::WORKSPACE_PREVIEW_TITLE_BYTES;
+    if bytes >= header {
+        unsafe {
+            core::ptr::copy_nonoverlapping(win.config.title.as_ptr(), out, header);
+        }
+        if let Some(preview) = preview {
+            if bytes - header >= preview.pixels.len() * core::mem::size_of::<u32>() {
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        preview.pixels.as_ptr(),
+                        out.add(header).cast(),
+                        preview.pixels.len(),
+                    );
+                }
+                sample = pack_pair(preview.w, preview.h);
+            }
+        }
+    }
+    let _ = sunlight_ipc::shm_free(msg.caps[0]);
+    if bytes < header {
+        return reply;
+    }
+    reply
+        .word(0, win.id)
+        .word(1, pack_pair(x, y))
+        .word(2, pack_pair(w, h))
+        .word(3, sample)
+}
+
+fn overview_window_eligible(win: &Window) -> bool {
+    win.config.window_type == WindowType::Normal && !win.hidden
+}
+
+fn activate_overview_window(state: &mut CompositorState, id: u64) -> bool {
+    let Some(win) = state
+        .windows
+        .iter()
+        .find(|win| win.id == id && overview_window_eligible(win) && win.has_presented_frame)
+    else {
+        return false;
+    };
+    state.active_workspace_id = win.workspace_id;
+    activate_window(state, id)
+}
+
 fn activate_window(state: &mut CompositorState, win_id: u64) -> bool {
     let Some(pos) = state.windows.iter().position(|w| w.id == win_id) else {
         return false;
@@ -3007,16 +3469,6 @@ const MAX_DESKTOP_OVERLAYS: usize = 3;
 // Maximum time between two titlebar clicks to be treated as a double-click
 // (roll-up / shade gesture, like old FVWM/CDE desktops).
 const DOUBLE_CLICK_MS: u64 = 400;
-
-// TODO(snap): Super+Left / Super+Right window snapping is planned but currently
-// disabled because the app-side resize protocol is not yet robust — sending a
-// new window size without a handshake causes some apps to hang or break their
-// layout. Re-enable once resize is negotiated properly (e.g. a RESIZE_ACK IPC
-// round-trip or the client polls the new geometry on the next EVENT_POLL).
-//
-// Bottom panel: Vortex Shell's bottom dock panels are drawn as part of the
-// Desktop-layer window and therefore sit behind normal app windows in z-order.
-// This is acceptable for now; a future Widget-type overlay panel would fix it.
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -3913,6 +4365,7 @@ fn composite_window(
 
     let fullscreen = win.config.state == WindowState::Fullscreen;
     let maximized = win.config.state == WindowState::Maximized;
+    let show_restore = maximized || win.snap_restore.is_some();
     let no_chrome = fullscreen || win.config.border == BorderStyle::None;
     let titlebar_h = win.titlebar_height();
 
@@ -4097,13 +4550,13 @@ fn composite_window(
                         chrome_w,
                         titlebar_h,
                         HORIZON_METRICS,
-                        maximized,
+                        show_restore,
                         false,
                     );
                     let palette = horizon_palette();
                     let hover = match hover_zone {
                         HitZone::CloseBtn => Some(sunlight_ui::HorizonControl::Close),
-                        HitZone::MaximizeBtn => Some(if maximized {
+                        HitZone::MaximizeBtn => Some(if show_restore {
                             sunlight_ui::HorizonControl::Restore
                         } else {
                             sunlight_ui::HorizonControl::Maximize
@@ -4141,7 +4594,7 @@ fn composite_window(
                             WindowControlKind::Maximize | WindowControlKind::Restore => (
                                 HitZone::MaximizeBtn,
                                 maximized,
-                                if maximized {
+                                if show_restore {
                                     WindowControlKind::Restore
                                 } else {
                                     WindowControlKind::Maximize
@@ -4596,16 +5049,27 @@ fn release_session_keys(state: &mut CompositorState) {
     // compositor state; Ctrl-up may occur while TTY is active.
     if let Some(index) = focused_window_idx(state) {
         for key in 0..256 {
-            if state.keyboard.pressed[key] {
-                state.windows[index]
-                    .pending_keys
-                    .push(sunlight_ipc::pack_key_event(
-                        key as u8, false, false, false, false, false, None,
-                    ));
+            if state.keyboard.pressed[key] && !state.keyboard.switcher_owned[key] {
+                state.windows[index].pending_keys.push(
+                    sunlight_ipc::pack_key_event(
+                        (key & 0x7f) as u8,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        None,
+                    ) | if key >= 128 {
+                        sunlight_ipc::KEY_EXTENDED
+                    } else {
+                        0
+                    },
+                );
             }
         }
     }
     state.keyboard = KeyboardState::new();
+    state.window_switch = None;
 }
 
 fn redraw_scene(state: &mut CompositorState) {
@@ -4631,6 +5095,10 @@ fn redraw_scene(state: &mut CompositorState) {
         reblit_desktop_panel_strip(state, &mut back_buffer);
         let mut canvas = back_buffer_canvas(state, &mut back_buffer);
         draw_notifications(&mut canvas, state);
+        if let Some(rect) = drag_snap_target(state, state.mouse_x as u32, state.mouse_y as u32) {
+            canvas.stroke_rounded_rect(rect.inset(2), 9, 3, SUNLIGHT_THEME.accent);
+        }
+        draw_switcher(&mut canvas, state);
     } else {
         let mut canvas = back_buffer_canvas(state, &mut back_buffer);
         canvas.fill_rect(
@@ -5703,8 +6171,11 @@ mod tests {
             surface_len_bytes: w as usize * h as usize * surface::BYTES_PER_PIXEL as usize,
             surface_generation: 1,
             desktop_overlays: [None; MAX_DESKTOP_OVERLAYS],
+            desktop_overlay_keep_focus: false,
+            preview: None,
             x,
             y,
+            snap_restore: None,
             saved_x: x,
             saved_y: y,
             saved_w: w,
@@ -5874,6 +6345,7 @@ mod tests {
             mouse_y: 0,
             pointer: PointerPolicy::new(800, 600),
             keyboard: KeyboardState::new(),
+            window_switch: None,
             active_drag: ActiveDrag::None,
             pending_move_drag: None,
             client_pointer_capture: None,
@@ -5913,6 +6385,271 @@ mod tests {
             lock_presenter_window: 0,
             lock_presenter_ready: false,
         }
+    }
+
+    fn management_window(id: u64, workspace: u32) -> Window {
+        let mut win = test_window(
+            id,
+            32,
+            64,
+            480,
+            270,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        win.workspace_id = workspace;
+        win.config.title[..8].copy_from_slice(b"Terminal");
+        win
+    }
+
+    fn management_state(windows: Vec<Window>) -> CompositorState {
+        let mut state = test_state(windows);
+        // These tests exercise routing and geometry; the host fixture has no
+        // scanout mapping. Focus and key queues are independent of scanout.
+        state.session_active = false;
+        state
+    }
+
+    fn keyboard_edge(
+        state: &mut CompositorState,
+        code: u8,
+        pressed: bool,
+        shift: bool,
+        extended: bool,
+    ) {
+        let mut packed =
+            sunlight_ipc::pack_key_event(code, pressed, shift, false, false, false, None);
+        if extended {
+            packed |= sunlight_ipc::KEY_EXTENDED;
+        }
+        let was_down = state
+            .keyboard
+            .update_key(key_slot(code, packed) as u8, pressed);
+        if !route_switcher_key(state, packed, was_down, 500) {
+            queue_application_key(state, packed, was_down);
+        }
+    }
+
+    fn key_edges(win: &mut Window) -> Vec<(u8, bool)> {
+        let mut edges = Vec::new();
+        while let Some(event) = win.pending_keys.pop() {
+            let (key, pressed, ..) = sunlight_ipc::unpack_key_event(event);
+            edges.push((key, pressed));
+        }
+        edges
+    }
+
+    #[test]
+    fn alt_tab_order_scope_duplicates_reverse_and_commit() {
+        let mut pinned = management_window(5, 2);
+        pinned.config.z_index_type = ZIndexType::OnTop;
+        let mut state = management_state(alloc::vec![
+            management_window(1, 1),
+            management_window(2, 2),
+            management_window(3, 1),
+            management_window(4, 1),
+            pinned
+        ]);
+        keyboard_edge(&mut state, KEY_ALT, true, false, true);
+        keyboard_edge(&mut state, KEY_TAB, true, false, false);
+        let switch = state.window_switch.as_ref().unwrap();
+        assert_eq!(switch.ids, [4, 3, 1]);
+        assert_eq!(switch.target(), Some(3));
+        assert_eq!(state.windows[2].owner_pid, state.windows[3].owner_pid);
+        assert_eq!(focused_window_id(&state), Some(4));
+        keyboard_edge(&mut state, KEY_TAB, false, false, false);
+        keyboard_edge(&mut state, KEY_TAB, true, false, false);
+        assert_eq!(state.window_switch.as_ref().unwrap().target(), Some(1));
+        keyboard_edge(&mut state, KEY_TAB, false, false, false);
+        keyboard_edge(&mut state, 0x36, true, true, false);
+        keyboard_edge(&mut state, KEY_TAB, true, true, false);
+        assert_eq!(state.window_switch.as_ref().unwrap().target(), Some(3));
+        keyboard_edge(&mut state, KEY_ALT, false, true, true);
+        assert_eq!(focused_window_id(&state), Some(3));
+        assert_eq!(state.active_workspace_id, 1);
+        assert!(state.window_switch.is_none());
+        keyboard_edge(&mut state, KEY_TAB, false, true, false);
+        keyboard_edge(&mut state, 0x36, false, false, false);
+        assert_eq!(
+            key_edges(state.windows.iter_mut().find(|w| w.id == 4).unwrap()),
+            [(KEY_ALT, true), (KEY_ALT, false)]
+        );
+        let idx = focused_window_idx(&state).unwrap();
+        assert!(key_edges(&mut state.windows[idx]).is_empty());
+        keyboard_edge(&mut state, 0x36, true, true, false);
+        keyboard_edge(&mut state, 0x36, false, false, false);
+        assert_eq!(
+            key_edges(&mut state.windows[idx]),
+            [(0x36, true), (0x36, false)]
+        );
+    }
+
+    #[test]
+    fn alt_tab_cancel_preserves_existing_modifier_edges_and_initial_focus() {
+        let mut state = management_state(alloc::vec![
+            management_window(1, 1),
+            management_window(2, 1)
+        ]);
+        keyboard_edge(&mut state, 0x2a, true, true, false);
+        keyboard_edge(&mut state, KEY_ALT, true, true, false);
+        keyboard_edge(&mut state, KEY_TAB, true, true, false);
+        keyboard_edge(&mut state, 0x2a, false, false, false);
+        keyboard_edge(&mut state, 1, true, false, false);
+        keyboard_edge(&mut state, 1, false, false, false);
+        keyboard_edge(&mut state, KEY_ALT, false, false, false);
+        keyboard_edge(&mut state, KEY_TAB, false, false, false);
+        assert_eq!(focused_window_id(&state), Some(2));
+        assert_eq!(
+            state.windows.iter().map(|win| win.id).collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert_eq!(
+            key_edges(&mut state.windows[1]),
+            [
+                (0x2a, true),
+                (KEY_ALT, true),
+                (0x2a, false),
+                (KEY_ALT, false)
+            ]
+        );
+        assert!(state.keyboard.switcher_owned.iter().all(|owned| !owned));
+    }
+
+    #[test]
+    fn alt_tab_drops_destroyed_target_and_handles_empty_and_single_windows() {
+        let mut state = management_state(Vec::new());
+        keyboard_edge(&mut state, KEY_ALT, true, false, false);
+        keyboard_edge(&mut state, KEY_TAB, true, false, false);
+        assert!(state.window_switch.is_none());
+        keyboard_edge(&mut state, KEY_TAB, false, false, false);
+        state.windows.push(management_window(1, 1));
+        keyboard_edge(&mut state, KEY_TAB, true, false, false);
+        assert_eq!(state.window_switch.as_ref().unwrap().target(), Some(1));
+        keyboard_edge(&mut state, KEY_ALT, false, false, false);
+        assert_eq!(focused_window_id(&state), Some(1));
+
+        let mut state = management_state(alloc::vec![
+            management_window(1, 1),
+            management_window(2, 1),
+            management_window(3, 1)
+        ]);
+        keyboard_edge(&mut state, KEY_ALT, true, false, false);
+        keyboard_edge(&mut state, KEY_TAB, true, false, false);
+        assert_eq!(state.window_switch.as_ref().unwrap().target(), Some(2));
+        assert!(close_window(&mut state, 2, None));
+        keyboard_edge(&mut state, KEY_ALT, false, false, false);
+        assert_eq!(focused_window_id(&state), Some(1));
+    }
+
+    #[test]
+    fn workspace_preview_samples_each_committed_surface_and_is_bounded() {
+        let mut back = management_window(1, 1);
+        let mut front = management_window(2, 1);
+        let mut green = alloc::vec![0x0000ff00; (back.width * back.height) as usize];
+        let mut red = alloc::vec![0x00ff0000; (front.width * front.height) as usize];
+        back.buffer = green.as_mut_ptr();
+        front.buffer = red.as_mut_ptr();
+        update_committed_preview(&mut back, 800, 600);
+        update_committed_preview(&mut front, 800, 600);
+        // These two sources occupy the same desktop rectangle. The lower
+        // window keeps its own committed pixels, even after its buffer changes.
+        green.fill(0);
+        let preview = back.preview.as_ref().unwrap();
+        assert_eq!((preview.w, preview.h), (96, 54));
+        assert!(preview
+            .pixels
+            .iter()
+            .all(|px| px & 0x00ffffff == 0x0000ff00));
+        assert!(front
+            .preview
+            .unwrap()
+            .pixels
+            .iter()
+            .all(|px| px & 0x00ffffff == 0x00ff0000));
+        let mut missing = management_window(3, 2);
+        update_committed_preview(&mut missing, 800, 600);
+        assert!(missing.preview.is_none());
+    }
+
+    #[test]
+    fn workspace_overview_routes_input_without_focus_then_activates_other_workspace() {
+        let mut desktop = test_window(
+            9,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        desktop.desktop_overlays[0] = Some(Rect::new(8, 50, 780, 500));
+        desktop.desktop_overlay_keep_focus = true;
+        let mut state = management_state(alloc::vec![
+            desktop,
+            management_window(2, 2),
+            management_window(1, 1)
+        ]);
+        assert_eq!(focused_window_id(&state), Some(1));
+        let esc = sunlight_ipc::pack_key_event(1, true, false, false, false, false, None);
+        assert!(route_desktop_overlay_key(&mut state, esc));
+        assert_eq!(key_edges(&mut state.windows[0]), [(1, true)]);
+        assert!(!activate_overview_window(&mut state, 999));
+        assert_eq!(state.active_workspace_id, 1);
+        assert!(activate_overview_window(&mut state, 2));
+        assert_eq!(state.active_workspace_id, 2);
+        assert_eq!(focused_window_id(&state), Some(2));
+    }
+
+    #[test]
+    fn drag_snap_zones_use_work_area_and_prioritize_corners() {
+        let target = |x, y| snap_zone(801, 601, x, y, 50, 52);
+        assert_eq!(target(0, 300), Some(Rect::new(0, 50, 400, 499)));
+        assert_eq!(target(800, 300), Some(Rect::new(400, 50, 401, 499)));
+        assert_eq!(target(0, 0), Some(Rect::new(0, 50, 400, 249)));
+        assert_eq!(target(800, 0), Some(Rect::new(400, 50, 401, 249)));
+        assert_eq!(target(0, 600), Some(Rect::new(0, 299, 400, 250)));
+        assert_eq!(target(800, 600), Some(Rect::new(400, 299, 401, 250)));
+        assert!(target(400, 0).is_none());
+    }
+
+    #[test]
+    fn drag_snap_checks_constraints_and_preserves_restore_across_resnap_and_cancel() {
+        let mut state = test_state(alloc::vec![management_window(1, 1)]);
+        let original = client_geometry(&state.windows[0]);
+        state.active_drag = ActiveDrag::Move(MoveDrag {
+            window_id: 1,
+            origin: original,
+            prior_snap: None,
+        });
+        state.fb_width = 400;
+        assert!(!finish_snap(&mut state, 0, 0)); // Chrome takes the client below minimum width.
+        state.fb_width = 800;
+        assert!(drag_snap_target(&state, 1, 200).is_some());
+        assert_eq!(client_geometry(&state.windows[0]), original);
+        assert!(finish_snap(&mut state, 1, 200));
+        let first = client_geometry(&state.windows[0]);
+        assert_ne!(first, original);
+        assert_eq!(state.windows[0].snap_restore, Some(original));
+        state.active_drag = ActiveDrag::Move(MoveDrag {
+            window_id: 1,
+            origin: first,
+            prior_snap: Some(original),
+        });
+        assert!(finish_snap(&mut state, 799, 599));
+        let second = client_geometry(&state.windows[0]);
+        assert_eq!(state.windows[0].snap_restore, Some(original));
+        state.active_drag = ActiveDrag::Move(MoveDrag {
+            window_id: 1,
+            origin: second,
+            prior_snap: Some(original),
+        });
+        set_client_geometry(&mut state.windows[0], original);
+        assert!(cancel_move_drag(&mut state));
+        assert_eq!(client_geometry(&state.windows[0]), second);
+        assert_eq!(state.windows[0].snap_restore, Some(original));
+        assert!(drag_snap_target(&state, 799, 599).is_none());
     }
 
     #[test]
@@ -7721,6 +8458,7 @@ pub extern "C" fn _start() -> ! {
         mouse_y: (render_height / 2) as u16,
         pointer: PointerPolicy::new(render_width, render_height),
         keyboard: KeyboardState::new(),
+        window_switch: None,
         active_drag: ActiveDrag::None,
         pending_move_drag: None,
         client_pointer_capture: None,
@@ -7949,8 +8687,11 @@ pub extern "C" fn _start() -> ! {
                                 surface_len_bytes: layout.surface_len_bytes,
                                 surface_generation: 1,
                                 desktop_overlays: [None; MAX_DESKTOP_OVERLAYS],
+                                desktop_overlay_keep_focus: false,
+                                preview: None,
                                 x: win_x,
                                 y: win_y,
+                                snap_restore: None,
                                 saved_x: win_x,
                                 saved_y: win_y,
                                 saved_w: w,
@@ -8070,12 +8811,16 @@ pub extern "C" fn _start() -> ! {
                                     win.height = win.saved_unrolled_h;
                                     win.rolled_up = false;
                                 }
-                                win.saved_x = win.x;
-                                win.saved_y = win.y;
-                                win.saved_w = win.width;
-                                win.saved_h = win.height;
+                                let normal = win
+                                    .snap_restore
+                                    .take()
+                                    .unwrap_or_else(|| client_geometry(win));
+                                win.saved_x = normal.x as u32;
+                                win.saved_y = normal.y as u32;
+                                win.saved_w = normal.w;
+                                win.saved_h = normal.h;
                             }
-                        } else if new_state == WindowState::Normal {
+                        } else if new_state == WindowState::Normal && win.snap_restore.is_none() {
                             // Restore saved geometry.
                             win.x = win.saved_x;
                             win.y = win.saved_y;
@@ -8201,14 +8946,24 @@ pub extern "C" fn _start() -> ! {
             // ACTIVATE_WINDOW — raise a window and restore it if minimized.
             // words[0] = win_id
             // -------------------------------------------------------------------
+            SgpMsg::WORKSPACE_PREVIEW => {
+                let _ = ipc_reply(workspace_preview_reply(&state, &msg));
+            }
+
             SgpMsg::ACTIVATE_WINDOW => {
                 let win_id = msg.words[0];
-                if activate_window(&mut state, win_id) {
+                let activated = if msg.words[1] == SgpMsg::ACTIVATE_FROM_OVERVIEW {
+                    authorized_workspace_shell(&state, msg.badge)
+                        && activate_overview_window(&mut state, win_id)
+                } else {
+                    activate_window(&mut state, win_id)
+                };
+                if activated {
                     debug_log("[DISPLAY] activate_window id=");
                     debug_dec(win_id as u32);
                     debug_log("\n");
                 }
-                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, u64::from(activated)));
             }
 
             // -------------------------------------------------------------------
@@ -8539,16 +9294,35 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             // COMMIT_FRAME — client finished drawing, ask compositor to re-blit.
             // -------------------------------------------------------------------
-            SgpMsg::COMMIT_FRAME => {
+            SgpMsg::COMMIT_FRAME | SgpMsg::COMMIT_DESKTOP_OVERVIEW => {
                 let win_id = msg.words[0];
-                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
-                if let Some(win_idx) = state
+                let win_idx = state
                     .windows
                     .iter()
-                    .position(|w| w.id == win_id && w.owner_pid == msg.badge)
-                {
+                    .position(|w| w.id == win_id && w.owner_pid == msg.badge);
+                // Copy the bounded sample before acknowledging the commit
+                // and letting the UI draw again. Repaints reuse the sample.
+                if let Some(idx) = win_idx {
+                    if overview_window_eligible(&state.windows[idx])
+                        && (state.windows[idx].preview.is_some()
+                            || state.windows.iter().filter(|w| w.preview.is_some()).count()
+                                < SgpMsg::WORKSPACE_PREVIEW_LIMIT)
+                    {
+                        update_committed_preview(
+                            &mut state.windows[idx],
+                            state.fb_width,
+                            state.fb_height,
+                        );
+                    }
+                }
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                if let Some(win_idx) = win_idx {
                     let overlays =
                         desktop_overlays_from_commit(&state.windows[win_idx], msg.badge, &msg);
+                    state.windows[win_idx].desktop_overlay_keep_focus =
+                        overlays.iter().any(Option::is_some)
+                            && msg.label == SgpMsg::COMMIT_DESKTOP_OVERVIEW
+                            && authorized_workspace_shell(&state, msg.badge);
                     state.windows[win_idx].desktop_overlays = overlays;
                     let (chrome_rect, owner_pid, first_present, trace, subject) = {
                         let win = &state.windows[win_idx];
@@ -8777,8 +9551,14 @@ pub extern "C" fn _start() -> ! {
                 }
                 let packed = msg.words[0];
                 if sunlight_ipc::is_text_commit(packed) {
-                    if state.session_active && sunlight_ipc::unpack_text_commit(packed).is_some() {
-                        if let Some(index) = focused_window_idx(&state) {
+                    if state.session_active
+                        && !core::mem::take(&mut state.keyboard.suppress_text_commit)
+                        && state.window_switch.is_none()
+                        && sunlight_ipc::unpack_text_commit(packed).is_some()
+                    {
+                        if let Some(index) =
+                            desktop_overlay_idx(&state).or_else(|| focused_window_idx(&state))
+                        {
                             state.windows[index].pending_keys.push(packed);
                         }
                     }
@@ -8787,7 +9567,9 @@ pub extern "C" fn _start() -> ! {
                 }
                 let (keycode, pressed, shift, ctrl, alt, super_key, _) =
                     sunlight_ipc::unpack_key_event(packed);
-                let was_down = state.keyboard.update_key(keycode, pressed);
+                let slot = key_slot(keycode, packed);
+                state.keyboard.suppress_text_commit = false;
+                let was_down = state.keyboard.update_key(slot as u8, pressed);
                 let now = monotonic_millis();
                 let ctrl_down = state.keyboard.ctrl_down() || ctrl;
                 let alt_down = state.keyboard.alt_down() || alt;
@@ -8808,7 +9590,15 @@ pub extern "C" fn _start() -> ! {
                         state.windows[index].pending_keys.push(packed);
                     }
                     consumed = true;
+                } else if (state.window_switch.is_some() || state.keyboard.switcher_owned[slot])
+                    && route_switcher_key(&mut state, packed, was_down, now)
+                {
+                    consumed = true;
                 } else if route_desktop_overlay_key(&mut state, packed) {
+                    consumed = true;
+                } else if state.session_active
+                    && route_switcher_key(&mut state, packed, was_down, now)
+                {
                     consumed = true;
                 } else if desktop_search_shortcut_eligible(
                     keycode,
@@ -8822,25 +9612,10 @@ pub extern "C" fn _start() -> ! {
                 ) {
                     consumed = queue_desktop_search_shortcut(&mut state, ctrl_down, super_down);
                     state.keyboard.desktop_search_k_active = consumed;
-                } else if keycode == KEY_TAB {
-                    if pressed && alt_down {
-                        state.keyboard.alt_tab_chord_active = true;
-                        if !was_down {
-                            trigger_alt_tab(&mut state, AltTabTriggerSource::Keydown);
-                            state.keyboard.alt_tab_next_repeat_ms =
-                                now.saturating_add(ALT_TAB_REPEAT_MS);
-                        } else if now >= state.keyboard.alt_tab_next_repeat_ms {
-                            trigger_alt_tab(&mut state, AltTabTriggerSource::Repeat);
-                            state.keyboard.alt_tab_next_repeat_ms =
-                                now.saturating_add(ALT_TAB_REPEAT_MS);
-                        }
-                        consumed = true;
-                    } else if !pressed && state.keyboard.alt_tab_chord_active {
-                        state.keyboard.clear_alt_tab_repeat();
-                        consumed = true;
-                    }
-                } else if keycode == KEY_ALT && !pressed && state.keyboard.alt_tab_chord_active {
-                    state.keyboard.clear_alt_tab_repeat();
+                } else if keycode == 1 && pressed && cancel_move_drag(&mut state) {
+                    state.keyboard.switcher_owned[slot] = true;
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
                     consumed = true;
                 } else if pressed && !was_down && super_down && keycode == KEY_R {
                     launch_runner(&mut state);
@@ -8884,10 +9659,7 @@ pub extern "C" fn _start() -> ! {
                 }
 
                 if !consumed && state.session_active {
-                    if let Some(focused_idx) = focused_window_idx(&state) {
-                        let win = &mut state.windows[focused_idx];
-                        win.pending_keys.push(packed);
-                    }
+                    queue_application_key(&mut state, packed, was_down);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
@@ -8917,6 +9689,7 @@ pub extern "C" fn _start() -> ! {
                 let prev_cx = state.pointer.x() as u32;
                 let prev_cy = state.pointer.y() as u32;
                 let prev_buttons = state.prev_buttons;
+                let previous_snap = drag_snap_target(&state, prev_cx, prev_cy);
                 let captured_before = state.client_pointer_capture;
                 state.debug_counters.mouse_event_count += 1;
                 state.debug_counters.raw_mouse_packet_count += packet_count as u64;
@@ -9095,7 +9868,10 @@ pub extern "C" fn _start() -> ! {
                                     .map(|win| window_decoration_damage_bounds(&state, win));
                                 let mut state_changed = false;
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
-                                    if win.config.state == WindowState::Normal {
+                                    if let Some(restore) = win.snap_restore.take() {
+                                        set_client_geometry(win, restore);
+                                        state_changed = true;
+                                    } else if win.config.state == WindowState::Normal {
                                         // Unroll before maximizing so the client area is restored.
                                         if win.rolled_up {
                                             win.height = win.saved_unrolled_h;
@@ -9205,7 +9981,23 @@ pub extern "C" fn _start() -> ! {
                     if let Some((win_id, press_x, press_y)) = state.pending_move_drag {
                         let dist = (cx as i32 - press_x).abs() + (cy as i32 - press_y).abs();
                         if dist > DRAG_THRESHOLD_PX {
-                            state.active_drag = ActiveDrag::Move(MoveDrag { window_id: win_id });
+                            if let Some(win) = state.windows.iter_mut().find(|w| w.id == win_id) {
+                                let origin = client_geometry(win);
+                                let prior_snap = win.snap_restore.take();
+                                if let Some(mut restore) = prior_snap {
+                                    let grab_x = (press_x - origin.x).max(0) as u32;
+                                    let mapped = u64::from(grab_x) * u64::from(restore.w)
+                                        / u64::from(origin.w.max(1));
+                                    restore.x = press_x.saturating_sub(mapped as i32).max(0);
+                                    restore.y = origin.y;
+                                    set_client_geometry(win, restore);
+                                }
+                                state.active_drag = ActiveDrag::Move(MoveDrag {
+                                    window_id: win_id,
+                                    origin,
+                                    prior_snap,
+                                });
+                            }
                             state.pending_move_drag = None;
                             state.debug_counters.drag_started_count += 1;
                         }
@@ -9214,6 +10006,10 @@ pub extern "C" fn _start() -> ! {
 
                 // ── Left button released ─────────────────────────────────────
                 if !left_down {
+                    if was_left_down && finish_snap(&mut state, cx, cy) {
+                        scene_changed = true;
+                        full_geometry_dirty = true;
+                    }
                     state.active_drag = ActiveDrag::None;
                     state.pending_move_drag = None;
                 }
@@ -9277,6 +10073,7 @@ pub extern "C" fn _start() -> ! {
                             if let Some(win) = state.windows.iter_mut().find(|w| w.id == drag_id) {
                                 if win.config.state != WindowState::Normal { /* no resize when maximized */
                                 } else {
+                                    win.snap_restore = None;
                                     let total_dx = cx as i32 - amx;
                                     let total_dy = cy as i32 - amy;
                                     match edge {
@@ -9378,6 +10175,13 @@ pub extern "C" fn _start() -> ! {
                 }
                 state.last_chrome_hover = new_chrome_hover;
 
+                if previous_snap != drag_snap_target(&state, new_cx, new_cy) {
+                    scene_changed = true;
+                    full_geometry_dirty = true;
+                }
+                // Pointer input and drag geometry are accepted. Acknowledge
+                // before scanout so a slow render cannot time out a button edge.
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
                 let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
                 let window_changed =
                     mouse_requires_scene_redraw(scene_changed, had_active_drag, now_dragging);
@@ -9438,7 +10242,6 @@ pub extern "C" fn _start() -> ! {
                 {
                     log_debug_counters(&state, "mouse");
                 }
-                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
             MouseMsg::RAW_WHEEL => {
@@ -9529,6 +10332,7 @@ pub extern "C" fn _start() -> ! {
                 }
                 if state.session_active {
                     release_session_keys(&mut state);
+                    cancel_move_drag(&mut state);
                     debug_log("[DISPLAY] [SESSION] deactivated — TTY owns framebuffer\n");
                     state.session_active = false;
                 }
@@ -9561,6 +10365,8 @@ pub extern "C" fn _start() -> ! {
                 if let Some(old_endpoint) = state.lock_authority_endpoint.take() {
                     let _ = endpoint_destroy(old_endpoint);
                 }
+                state.window_switch = None;
+                cancel_move_drag(&mut state);
                 state.lock_generation = generation;
                 state.lock_authority_endpoint = Some(owner);
                 state.lock_authority = authority;

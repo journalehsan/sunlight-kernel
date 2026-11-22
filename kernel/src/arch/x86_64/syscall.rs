@@ -2018,6 +2018,16 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
     match kind {
         ::sunlight_ipc::SESSION_CALLER_TTY_SERVICE => u64::from(target.trusted_tty_session_service),
         ::sunlight_ipc::SESSION_CALLER_SESSION_SERVICE => u64::from(target.trusted_session_service),
+        ::sunlight_ipc::SESSION_CALLER_VORTEX_SHELL => u64::from(
+            caller.trusted_display_service
+                && target.service_identity == ::sunlight_ipc::service_identity::VORTEX_SHELL
+                && !target.is_exiting()
+                && target.account_membership.is_some_and(|reference| {
+                    crate::capability::CAP_BROKER
+                        .lock()
+                        .session_allocation_live(reference, crate::timekeeping::global_ticks())
+                }),
+        ),
         ::sunlight_ipc::SESSION_CALLER_KEYBOARD_SERVICE => u64::from(
             target.service_identity == ::sunlight_ipc::service_identity::KEYBOARD
                 && !target.is_exiting(),

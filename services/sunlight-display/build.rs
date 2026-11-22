@@ -70,13 +70,22 @@ fn main() {
     println!("cargo:rerun-if-changed={}", symbols_path.display());
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let out = out_dir.join("icon_close.tga");
     let font = fs::read(&symbols_path)
         .ok()
         .and_then(|bytes| Font::from_bytes(bytes, FontSettings::default()).ok());
-    if let Some(font) = font {
-        emit_icon_tga(&font, 0xe5cd, 18.0, 20, &out);
-    } else {
-        emit_placeholder_tga(20, &out);
+    for (name, codepoint, px, canvas) in [
+        ("close", 0xe5cd, 18.0, 20),
+        ("app", 0xe8a4, 36.0, 44), // wysiwyg
+        ("terminal", 0xeb8e, 36.0, 44),
+        ("files", 0xe2c7, 36.0, 44),
+        ("calculator", 0xea5f, 36.0, 44),
+        ("settings", 0xe8b8, 36.0, 44),
+    ] {
+        let out = out_dir.join(format!("icon_{name}.tga"));
+        if let Some(font) = &font {
+            emit_icon_tga(font, codepoint, px, canvas, &out);
+        } else {
+            emit_placeholder_tga(canvas, &out);
+        }
     }
 }

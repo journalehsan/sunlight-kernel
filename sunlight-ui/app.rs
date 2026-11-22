@@ -743,10 +743,14 @@ impl Window {
     /// compositor dequeues it, leaving a newly created window permanently
     /// non-visible. The display server always acknowledges accepted commits.
     pub fn commit(&mut self) {
-        self.commit_with_desktop_overlay([None; MAX_DESKTOP_OVERLAYS]);
+        self.commit_with_desktop_overlay([None; MAX_DESKTOP_OVERLAYS], false);
     }
 
-    fn commit_with_desktop_overlay(&mut self, overlays: [Option<Rect>; MAX_DESKTOP_OVERLAYS]) {
+    fn commit_with_desktop_overlay(
+        &mut self,
+        overlays: [Option<Rect>; MAX_DESKTOP_OVERLAYS],
+        keep_focus: bool,
+    ) {
         let frame_len = self.frame_len();
         let draw_offset = self.draw_buffer_offset();
         if draw_offset != 0 {
@@ -756,8 +760,18 @@ impl Window {
                 ptr::copy_nonoverlapping(self.buffer.add(draw_offset), self.buffer, frame_len);
             }
         }
-        let mut msg = IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id);
-        for (index, overlay) in overlays.iter().enumerate() {
+        let mut msg = IpcMsg::with_label(if keep_focus {
+            SgpMsg::COMMIT_DESKTOP_OVERVIEW
+        } else {
+            SgpMsg::COMMIT_FRAME
+        })
+        .word(0, self.win_id);
+        for (index, overlay) in
+            overlays
+                .iter()
+                .enumerate()
+                .take(if keep_focus { 1 } else { MAX_DESKTOP_OVERLAYS })
+        {
             let rect = overlay.unwrap_or_default();
             msg = msg
                 .word(
@@ -897,7 +911,10 @@ impl Window {
         {
             let mut c = self.canvas();
             app.view(&mut c, theme);
-            self.commit_with_desktop_overlay(app.desktop_overlay_rects());
+            self.commit_with_desktop_overlay(
+                app.desktop_overlay_rects(),
+                app.desktop_overlay_keeps_focus(),
+            );
         }
 
         // First frame is committed and visible. Fire on_ready() so the app
@@ -913,7 +930,10 @@ impl Window {
         if app.on_ready() {
             let mut c = self.canvas();
             app.view(&mut c, theme);
-            self.commit_with_desktop_overlay(app.desktop_overlay_rects());
+            self.commit_with_desktop_overlay(
+                app.desktop_overlay_rects(),
+                app.desktop_overlay_keeps_focus(),
+            );
         }
         launch_trace::log_phase_now(
             self.launch_trace,
@@ -983,7 +1003,10 @@ impl Window {
             if needs_redraw {
                 let mut c = self.canvas();
                 app.view(&mut c, theme);
-                self.commit_with_desktop_overlay(app.desktop_overlay_rects());
+                self.commit_with_desktop_overlay(
+                    app.desktop_overlay_rects(),
+                    app.desktop_overlay_keeps_focus(),
+                );
             }
         }
     }
@@ -1212,6 +1235,11 @@ pub trait App {
         let mut overlays = [None; MAX_DESKTOP_OVERLAYS];
         overlays[0] = self.desktop_overlay_rect();
         overlays
+    }
+
+    /// Keep the currently focused app while routing input to a desktop overlay.
+    fn desktop_overlay_keeps_focus(&self) -> bool {
+        false
     }
 
     /// Compatibility for applications publishing a single desktop overlay.

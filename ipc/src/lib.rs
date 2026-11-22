@@ -264,6 +264,7 @@ pub enum SunlightSyscall {
 pub mod service_identity {
     /// Kernel-provenance identity of the embedded hardware keyboard driver.
     pub const KEYBOARD: u64 = super::name_to_u64("keyboard");
+    pub const VORTEX_SHELL: u64 = super::name_to_u64("vortex-shell");
     /// Key for the TLS/network service (`sunlight-tls`).
     pub const TLS: u64 = super::name_to_u64("sunlight-tls");
     /// Key for the authentication broker (`sunlight-uac`).
@@ -1652,6 +1653,8 @@ pub mod sgp {
         /// Bring the window to the front and restore it if minimized.
         /// words[0] = win_id
         pub const ACTIVATE_WINDOW: u64 = 0xA10B;
+        /// Optional words[1] flag: trusted shell can activate across workspaces.
+        pub const ACTIVATE_FROM_OVERVIEW: u64 = 1;
         /// Register launch-trace metadata for a child pid.
         /// words[0] = launch_id, words[1] = source, words[2] = pid, words[3] = requested_at_ms
         pub const LAUNCH_TRACE: u64 = 0xA10C;
@@ -1674,6 +1677,18 @@ pub mod sgp {
         /// Owner-only bounded shutdown grace after its last window is removed.
         /// words[0]=window id, words[1]=milliseconds (clamped to 6000).
         pub const SET_CLOSE_GRACE: u64 = 0xA11D;
+        /// Trusted Vortex shell only: words[0]=window id, caps[0]=scratch region.
+        /// Reply: words[0]=id, words[1..=2]=outer xy/wh, words[3]=sample wh.
+        /// Scratch contains a 64-byte title followed by tightly packed XRGB pixels.
+        pub const WORKSPACE_PREVIEW: u64 = 0xA11E;
+        pub const WORKSPACE_PREVIEW_MAX_W: u32 = 96;
+        pub const WORKSPACE_PREVIEW_MAX_H: u32 = 64;
+        pub const WORKSPACE_PREVIEW_LIMIT: usize = 64;
+        /// Bottom dock height including its gap to the display edge.
+        pub const DESKTOP_DOCK_RESERVED_H: u32 = 52;
+        /// Like COMMIT_FRAME with one desktop overlay rectangle, keeping app focus.
+        pub const COMMIT_DESKTOP_OVERVIEW: u64 = 0xA11F;
+        pub const WORKSPACE_PREVIEW_TITLE_BYTES: usize = 64;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)
@@ -2340,6 +2355,7 @@ pub const SESSION_CALLER_TTY_SERVICE: u64 = 1;
 pub const SESSION_CALLER_SESSION_SERVICE: u64 = 2;
 /// Kernel-attested embedded PS/2 input driver.
 pub const SESSION_CALLER_KEYBOARD_SERVICE: u64 = 3;
+pub const SESSION_CALLER_VORTEX_SHELL: u64 = 4;
 pub const SESSION_PROTOCOL_VERSION: u16 = 1;
 pub const SESSION_ENDPOINT: &str = "sunlight.session.v1";
 pub const SESSION_COMPONENT_APP_ID_MAX: usize = 32;

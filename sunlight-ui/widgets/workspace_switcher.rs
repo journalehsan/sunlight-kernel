@@ -1,8 +1,8 @@
 //! Compact Workspace Switcher panel and card primitives.
 //!
 //! Pure view/layout widgets: shells supply bounded view models. No compositor
-//! or process queries live here. Live workspace thumbnails are intentionally
-//! out of scope; cards leave a stable content band for a future preview slot.
+//! or process queries live here. The shell paints static workspace previews
+//! into the card's content band.
 
 use crate::{
     geom::{Point, Rect},
@@ -131,6 +131,10 @@ impl WorkspaceSwitcherLayout {
         }
 
         Self { panel, cards }
+    }
+
+    pub fn preview_rect(card: Rect) -> Rect {
+        Rect::new(card.x + 10, card.y + 28, card.w.saturating_sub(20), 28)
     }
 
     pub fn card_index_at(&self, point: Point) -> Option<usize> {
@@ -329,13 +333,7 @@ impl<'a> WorkspaceCard<'a> {
             canvas.draw_text_centered(badge, "Active", theme.accent);
         }
 
-        // Reserved preview band (empty for MVP — no live thumbnails).
-        let preview = Rect::new(
-            self.rect.x + pad,
-            self.rect.y + 28,
-            self.rect.w.saturating_sub((pad * 2) as u32),
-            28,
-        );
+        let preview = WorkspaceSwitcherLayout::preview_rect(self.rect);
         canvas.fill_rounded_rect(preview, 6, theme.panel.darken(8));
         canvas.stroke_rounded_rect(preview, 6, 1, theme.border.darken(10));
 

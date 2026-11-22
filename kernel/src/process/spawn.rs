@@ -893,8 +893,6 @@ pub(crate) fn spawn_with_session_attachment(
     // granted only to a root-launched embedded sunlight-kv image.
     process.trusted_kv_service = uid == 0 && is_trusted_kv_service_path(path);
     process.trusted_session_service = is_trusted_session_service_path(path);
-    // A service identity is only meaningful for a root-launched embedded
-    // daemon; user processes never carry one.
     process.service_identity = if uid == 0 {
         trusted_service_identity_for_path(path)
     } else {
@@ -952,6 +950,13 @@ pub(crate) fn spawn_with_session_attachment(
             Ok(reference) => {
                 process.account_membership = Some(reference);
                 process.restrict_account_member_roles();
+                // Only SessionD's embedded Vortex child gets this identity.
+                // Inherited session launches do not authorize preview reads.
+                if path == "/bin/sunlight-vortex-shell"
+                    && sched.current_process().trusted_session_service
+                {
+                    process.service_identity = sunlight_ipc::service_identity::VORTEX_SHELL;
+                }
             }
             Err(_) => {
                 unsafe {

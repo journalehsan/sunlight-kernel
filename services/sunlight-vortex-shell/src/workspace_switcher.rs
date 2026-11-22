@@ -1,19 +1,21 @@
 //! Compact Workspace Switcher — shell-owned overlay state.
 //!
 //! Exposes the four existing display-server workspaces (IDs 1..=4). This module
-//! does **not** create a second workspace model. Activation always goes through
-//! the shell's existing `switch_workspace` path (`SgpMsg::SET_WORKSPACE`).
+//! browses a static snapshot. Activation goes through the compositor's
+//! existing window activation path.
 //!
 //! Visual widgets live in `sunlight_ui::widgets::workspace_switcher` and only
 //! consume plain view models built here.
 
+use alloc::vec::Vec;
+use sunlight_ipc::{ipc_call_timeout, sgp::SgpMsg, shm_create, shm_free, CapabilityToken};
 use sunlight_ui::{
     image::TgaImage,
     widgets::{
         WorkspaceCardState, WorkspaceCardView, WorkspaceSwitcherLayout, WorkspaceSwitcherPanel,
         WORKSPACE_CARD_COUNT, WORKSPACE_ICON_SLOTS,
     },
-    Canvas, Event, Point, Rect, Theme,
+    Canvas, Color, Event, Point, Rect, Theme,
 };
 
 use crate::{AppId, AppLaunchState, DockAppState, ShellWindowType, WindowSnapshot};
@@ -72,8 +74,142 @@ impl WorkspaceCardSummary {
 pub(crate) enum WorkspaceSwitcherAction {
     None,
     Close,
-    /// Request activation of workspace id `1..=4` via the shell path.
-    Activate(u8),
+    ActivateWindow(u64),
+}
+
+struct PreviewPixels {
+    w: u32,
+    h: u32,
+    pixels: Vec<u32>,
+}
+
+struct PreviewWindow {
+    id: u64,
+    workspace: u8,
+    geometry: Rect,
+    title: [u8; SgpMsg::WORKSPACE_PREVIEW_TITLE_BYTES],
+    icon: Option<TgaImage>,
+    image: Option<PreviewPixels>,
+}
+
+fn fit_rect(area: Rect, w: u32, h: u32) -> Rect {
+    if w == 0 || h == 0 || area.w == 0 || area.h == 0 {
+        return Rect::default();
+    }
+    let (w, h) = if u64::from(w) * u64::from(area.h) >= u64::from(h) * u64::from(area.w) {
+        (
+            area.w,
+            (u64::from(h) * u64::from(area.w) / u64::from(w)).max(1) as u32,
+        )
+    } else {
+        (
+            (u64::from(w) * u64::from(area.h) / u64::from(h)).max(1) as u32,
+            area.h,
+        )
+    };
+    Rect::new(
+        area.x + ((area.w - w) / 2) as i32,
+        area.y + ((area.h - h) / 2) as i32,
+        w,
+        h,
+    )
+}
+
+fn miniature_geometry(outer: Rect, desktop: Rect, miniature: Rect) -> Option<Rect> {
+    let clipped = outer.intersect(desktop)?;
+    let x = |v: i32| (i64::from(v) * i64::from(miniature.w) / i64::from(desktop.w)) as i32;
+    let y = |v: i32| (i64::from(v) * i64::from(miniature.h) / i64::from(desktop.h)) as i32;
+    let (left, top) = (x(clipped.x), y(clipped.y));
+    Some(Rect::new(
+        miniature.x + left,
+        miniature.y + top,
+        (x(clipped.right()) - left).max(1) as u32,
+        (y(clipped.bottom()) - top).max(1) as u32,
+    ))
+}
+
+fn read_preview(
+    ep: CapabilityToken,
+    window: &mut PreviewWindow,
+    buf: *mut u8,
+    cap: CapabilityToken,
+) -> Result<(), ()> {
+    let reply = ipc_call_timeout(
+        ep,
+        sunlight_ipc::IpcMsg::with_label(SgpMsg::WORKSPACE_PREVIEW)
+            .word(0, window.id)
+            .with_cap(0, cap),
+        crate::DISPLAY_IPC_TIMEOUT_MS,
+    )
+    .map_err(|_| ())?;
+    if reply.label != SgpMsg::REPLY || reply.words[0] != window.id {
+        return Ok(());
+    }
+    let xy = reply.words[1];
+    let wh = reply.words[2];
+    window.geometry = Rect::new(xy as i32, (xy >> 32) as i32, wh as u32, (wh >> 32) as u32);
+    let (w, h) = (reply.words[3] as u32, (reply.words[3] >> 32) as u32);
+    unsafe {
+        core::ptr::copy_nonoverlapping(buf, window.title.as_mut_ptr(), window.title.len());
+    }
+    if (1..=SgpMsg::WORKSPACE_PREVIEW_MAX_W).contains(&w)
+        && (1..=SgpMsg::WORKSPACE_PREVIEW_MAX_H).contains(&h)
+    {
+        let pixels = unsafe {
+            core::slice::from_raw_parts(
+                buf.add(SgpMsg::WORKSPACE_PREVIEW_TITLE_BYTES).cast::<u32>(),
+                (w * h) as usize,
+            )
+        };
+        window.image = Some(PreviewPixels {
+            w,
+            h,
+            pixels: pixels.to_vec(),
+        });
+    }
+    Ok(())
+}
+
+impl PreviewWindow {
+    fn draw(
+        &self,
+        canvas: &mut Canvas,
+        theme: &Theme,
+        rect: Rect,
+        generic: Option<&TgaImage>,
+        miniature: bool,
+    ) {
+        if rect.w == 0 || rect.h == 0 {
+            return;
+        }
+        canvas.fill_rect(rect, theme.panel_alt);
+        if let Some(image) = &self.image {
+            let image_rect = fit_rect(rect.inset(if miniature { 0 } else { 2 }), image.w, image.h);
+            for y in 0..image_rect.h {
+                let sy = y * image.h / image_rect.h;
+                for x in 0..image_rect.w {
+                    let sx = x * image.w / image_rect.w;
+                    canvas.put_pixel(
+                        image_rect.x + x as i32,
+                        image_rect.y + y as i32,
+                        Color(image.pixels[(sy * image.w + sx) as usize]),
+                    );
+                }
+            }
+        } else if let Some(icon) = self.icon.as_ref().or(generic) {
+            let size = rect.w.min(rect.h).min(if miniature { 8 } else { 44 });
+            canvas.draw_tga_icon(
+                icon,
+                Rect::new(
+                    rect.x + ((rect.w - size) / 2) as i32,
+                    rect.y + ((rect.h - size) / 2) as i32,
+                    size,
+                    size,
+                ),
+            );
+        }
+        canvas.draw_rect(rect, theme.border);
+    }
 }
 
 /// Session-local Workspace Switcher state. Bounded; no timers or heap growth.
@@ -83,6 +219,7 @@ pub(crate) struct WorkspaceSwitcherState {
     focus_index: usize,
     hover: Option<usize>,
     cards: [WorkspaceCardSummary; WORKSPACE_CARD_COUNT],
+    windows: Vec<PreviewWindow>,
     /// Short failure status (`"Switch failed"`) or empty.
     status: [u8; 24],
     status_len: u8,
@@ -93,6 +230,7 @@ impl WorkspaceSwitcherState {
         Self {
             open: false,
             focus_index: 0,
+            windows: Vec::new(),
             hover: None,
             cards: [
                 WorkspaceCardSummary::empty(1),
@@ -127,6 +265,7 @@ impl WorkspaceSwitcherState {
     pub(crate) fn close(&mut self) -> bool {
         let was = self.open;
         self.open = false;
+        self.windows.clear();
         self.hover = None;
         self.clear_status();
         was
@@ -164,6 +303,109 @@ impl WorkspaceSwitcherState {
         true
     }
 
+    pub(crate) fn capture(
+        &mut self,
+        ep: CapabilityToken,
+        windows: &[WindowSnapshot],
+        apps: &[DockAppState],
+    ) {
+        self.windows.clear();
+        let max_bytes = SgpMsg::WORKSPACE_PREVIEW_TITLE_BYTES
+            + (SgpMsg::WORKSPACE_PREVIEW_MAX_W * SgpMsg::WORKSPACE_PREVIEW_MAX_H * 4) as usize;
+        let mut scratch = shm_create(max_bytes, 0).ok();
+        for window in windows.iter().filter(|w| is_switcher_window(w)) {
+            let icon = match app_icon_for_window(window, apps) {
+                WorkspaceAppIcon::App(app) => crate::VortexShell::static_icon_for_app(app),
+                WorkspaceAppIcon::Generic => None,
+            };
+            let mut title = [0; SgpMsg::WORKSPACE_PREVIEW_TITLE_BYTES];
+            title[..window.title.len()].copy_from_slice(&window.title);
+            let mut preview = PreviewWindow {
+                id: window.id,
+                workspace: window.workspace_id as u8,
+                geometry: Rect::new(0, 0, 4, 3),
+                title,
+                icon,
+                image: None,
+            };
+            if let Some((buf, cap)) = scratch {
+                if read_preview(ep, &mut preview, buf, cap).is_err() {
+                    let _ = shm_free(cap);
+                    scratch = None;
+                }
+            }
+            self.windows.push(preview);
+        }
+        if let Some((_, cap)) = scratch {
+            let _ = shm_free(cap);
+        }
+    }
+
+    pub(crate) fn remove_closed(&mut self, windows: &[WindowSnapshot]) -> bool {
+        let count = self.windows.len();
+        self.windows.retain(|preview| {
+            windows.iter().any(|win| {
+                win.id == preview.id
+                    && win.workspace_id == u64::from(preview.workspace)
+                    && is_switcher_window(win)
+            })
+        });
+        self.windows.len() != count
+    }
+
+    pub(crate) fn picker_rect(&self, w: u32, h: u32, top: i32, dock: i32) -> Option<Rect> {
+        if !self.open {
+            return None;
+        }
+        let strip = self.layout(w, h, top, dock).panel;
+        let bottom = strip.y - 12;
+        let top = top + 8;
+        (bottom > top + 52).then(|| Rect::new(strip.x, top, strip.w, (bottom - top) as u32))
+    }
+
+    /// Grid cells never intersect. Fit each window into its cell using its
+    /// actual outer aspect ratio and reserve a separate line for the title.
+    fn tiles(&self, area: Rect) -> impl Iterator<Item = (&PreviewWindow, Rect)> {
+        let workspace = index_to_workspace_id(self.focus_index);
+        let windows = self
+            .windows
+            .iter()
+            .filter(move |win| win.workspace == workspace);
+        let count = windows.clone().count() as u32;
+        let cols = (1..=count).find(|cols| cols * cols >= count).unwrap_or(1);
+        let rows = count.div_ceil(cols).max(1);
+        let cell_w = area.w / cols;
+        let cell_h = area.h / rows;
+        windows.enumerate().map(move |(index, win)| {
+            let index = index as u32;
+            let cell = Rect::new(
+                area.x + ((index % cols) * cell_w) as i32,
+                area.y + ((index / cols) * cell_h) as i32,
+                cell_w,
+                cell_h,
+            );
+            (win, cell)
+        })
+    }
+
+    fn tile_image(tile: Rect, window: &PreviewWindow) -> Rect {
+        let padded = tile.inset(4);
+        fit_rect(
+            Rect::new(padded.x, padded.y, padded.w, padded.h.saturating_sub(14)),
+            window.geometry.w.max(1),
+            window.geometry.h.max(1),
+        )
+    }
+
+    fn tile_area(picker: Rect) -> Rect {
+        Rect::new(
+            picker.x + 10,
+            picker.y + 26,
+            picker.w.saturating_sub(20),
+            picker.h.saturating_sub(34),
+        )
+    }
+
     pub(crate) fn layout(
         &self,
         screen_w: u32,
@@ -183,8 +425,21 @@ impl WorkspaceSwitcherState {
         top_inset: i32,
         dock_top_y: i32,
     ) -> Option<Rect> {
-        self.open
-            .then(|| self.layout(screen_w, screen_h, top_inset, dock_top_y).panel)
+        if !self.open {
+            return None;
+        }
+        let panel = self.layout(screen_w, screen_h, top_inset, dock_top_y).panel;
+        Some(
+            self.picker_rect(screen_w, screen_h, top_inset, dock_top_y)
+                .map_or(panel, |picker| {
+                    Rect::new(
+                        panel.x,
+                        picker.y,
+                        panel.w,
+                        (panel.bottom() - picker.y) as u32,
+                    )
+                }),
+        )
     }
 
     pub(crate) fn contains(
@@ -196,9 +451,12 @@ impl WorkspaceSwitcherState {
         dock_top_y: i32,
     ) -> bool {
         self.open
-            && self
+            && (self
                 .layout(screen_w, screen_h, top_inset, dock_top_y)
                 .contains(point)
+                || self
+                    .picker_rect(screen_w, screen_h, top_inset, dock_top_y)
+                    .is_some_and(|rect| rect.contains(point)))
     }
 
     pub(crate) fn handle_event(
@@ -216,13 +474,19 @@ impl WorkspaceSwitcherState {
         match event {
             Event::Click { x, y } => {
                 let p = Point::new(x, y);
-                if !layout.contains(p) {
+                if !self.contains(p, screen_w, screen_h, top_inset, dock_top_y) {
                     return (true, WorkspaceSwitcherAction::Close);
                 }
                 if let Some(idx) = layout.card_index_at(p) {
                     self.focus_index = idx;
-                    let ws = index_to_workspace_id(idx);
-                    return (true, WorkspaceSwitcherAction::Activate(ws));
+                }
+                if let Some(picker) = self.picker_rect(screen_w, screen_h, top_inset, dock_top_y) {
+                    if let Some((win, _)) = self
+                        .tiles(Self::tile_area(picker))
+                        .find(|(win, cell)| Self::tile_image(*cell, win).contains(p))
+                    {
+                        return (true, WorkspaceSwitcherAction::ActivateWindow(win.id));
+                    }
                 }
                 (true, WorkspaceSwitcherAction::None)
             }
@@ -237,7 +501,7 @@ impl WorkspaceSwitcherState {
             }
             Event::MouseDown { x, y, .. } => {
                 let p = Point::new(x, y);
-                if !layout.contains(p) {
+                if !self.contains(p, screen_w, screen_h, top_inset, dock_top_y) {
                     // Outside press: close without activating underlying target
                     // from this press (shell sets suppress_next_click).
                     return (true, WorkspaceSwitcherAction::Close);
@@ -283,12 +547,20 @@ impl WorkspaceSwitcherState {
             }
             KEY_ENTER | KEY_SPACE => {
                 let ws = index_to_workspace_id(self.focus_index);
-                (true, WorkspaceSwitcherAction::Activate(ws))
+                let action = self
+                    .windows
+                    .iter()
+                    .rev()
+                    .find(|win| win.workspace == ws)
+                    .map_or(WorkspaceSwitcherAction::None, |win| {
+                        WorkspaceSwitcherAction::ActivateWindow(win.id)
+                    });
+                (true, action)
             }
-            KEY_1 => (true, WorkspaceSwitcherAction::Activate(1)),
-            KEY_2 => (true, WorkspaceSwitcherAction::Activate(2)),
-            KEY_3 => (true, WorkspaceSwitcherAction::Activate(3)),
-            KEY_4 => (true, WorkspaceSwitcherAction::Activate(4)),
+            KEY_1 | KEY_2 | KEY_3 | KEY_4 => {
+                self.focus_index = usize::from(keycode - KEY_1);
+                (true, WorkspaceSwitcherAction::None)
+            }
             _ => (false, WorkspaceSwitcherAction::None),
         }
     }
@@ -355,6 +627,62 @@ impl WorkspaceSwitcherState {
             status: self.status_str(),
         }
         .draw(canvas, theme);
+        let desktop = Rect::new(0, 0, screen_w, screen_h);
+        for (i, card) in layout.cards.into_iter().enumerate() {
+            let miniature = fit_rect(
+                WorkspaceSwitcherLayout::preview_rect(card).inset(2),
+                screen_w,
+                screen_h,
+            );
+            for window in self
+                .windows
+                .iter()
+                .filter(|w| usize::from(w.workspace) == i + 1)
+            {
+                if let Some(rect) = miniature_geometry(window.geometry, desktop, miniature) {
+                    window.draw(canvas, theme, rect, generic_icon.as_ref(), true);
+                }
+            }
+        }
+        if let Some(picker) = self.picker_rect(screen_w, screen_h, top_inset, dock_top_y) {
+            canvas.fill_rounded_rect(picker, 12, theme.panel);
+            canvas.stroke_rounded_rect(picker, 12, 1, theme.border);
+            canvas.draw_text(
+                picker.x + 12,
+                picker.y + 10,
+                WORKSPACE_TITLES[self.focus_index],
+                theme.accent,
+            );
+            let area = Self::tile_area(picker);
+            let mut empty = true;
+            for (window, cell) in self.tiles(area) {
+                empty = false;
+                window.draw(
+                    canvas,
+                    theme,
+                    Self::tile_image(cell, window),
+                    generic_icon.as_ref(),
+                    false,
+                );
+                let end = window
+                    .title
+                    .iter()
+                    .position(|b| *b == 0)
+                    .unwrap_or(window.title.len());
+                let title = core::str::from_utf8(&window.title[..end]).unwrap_or("");
+                let title = if title.is_empty() { "Window" } else { title };
+                let text: alloc::string::String =
+                    title.chars().take((cell.w / 8) as usize).collect();
+                canvas.draw_text_centered(
+                    Rect::new(cell.x, cell.bottom() - 14, cell.w, 14),
+                    &text,
+                    theme.text,
+                );
+            }
+            if empty {
+                canvas.draw_text_centered(area, "No windows", theme.text_muted);
+            }
+        }
     }
 }
 
@@ -618,10 +946,13 @@ mod tests {
         let mut sw = WorkspaceSwitcherState::new();
         assert!(sw.overlay_rect(1366, 768, 48, 716).is_none());
         sw.open(1);
+        let overlay = sw.overlay_rect(1366, 768, 48, 716).unwrap();
         assert_eq!(
-            sw.overlay_rect(1366, 768, 48, 716),
+            overlay.intersect(sw.layout(1366, 768, 48, 716).panel),
             Some(sw.layout(1366, 768, 48, 716).panel)
         );
+        let picker = sw.picker_rect(1366, 768, 48, 716).unwrap();
+        assert_eq!(overlay.intersect(picker), Some(picker));
         sw.close();
         assert!(sw.overlay_rect(1366, 768, 48, 716).is_none());
     }
@@ -676,7 +1007,8 @@ mod tests {
             48,
             716,
         );
-        assert_eq!(a, WorkspaceSwitcherAction::Activate(1));
+        assert_eq!(a, WorkspaceSwitcherAction::None);
+        assert_eq!(sw.focus_index(), 0);
 
         let (_, a) = sw.handle_event(
             Event::key_press(KEY_ENTER, true, false, false, false, false),
@@ -685,20 +1017,60 @@ mod tests {
             48,
             716,
         );
-        assert_eq!(
-            a,
-            WorkspaceSwitcherAction::Activate(index_to_workspace_id(sw.focus_index()))
-        );
+        assert_eq!(a, WorkspaceSwitcherAction::None);
     }
 
     #[test]
-    fn selecting_card_activates_existing_id() {
+    fn selecting_card_browses_without_activation() {
         let mut sw = WorkspaceSwitcherState::new();
         sw.open(1);
         let layout = sw.layout(1366, 768, 48, 716);
         let c = layout.cards[3];
         let (_, action) = sw.handle_event(Event::click(c.x + 2, c.y + 2), 1366, 768, 48, 716);
-        assert_eq!(action, WorkspaceSwitcherAction::Activate(4));
+        assert_eq!(action, WorkspaceSwitcherAction::None);
+        assert_eq!(sw.focus_index(), 3);
+    }
+
+    #[test]
+    fn picker_layout_and_click_use_browsed_window_identity() {
+        let mut sw = WorkspaceSwitcherState::new();
+        sw.open(1);
+        for (id, w, h) in [(11, 600, 300), (12, 300, 600), (13, 600, 600)] {
+            sw.windows.push(PreviewWindow {
+                id,
+                workspace: 3,
+                geometry: Rect::new(20, 30, w, h),
+                title: [0; SgpMsg::WORKSPACE_PREVIEW_TITLE_BYTES],
+                icon: None,
+                image: None,
+            });
+        }
+        let picker = sw.picker_rect(1366, 768, 48, 716).unwrap();
+        assert_eq!(
+            sw.tiles(WorkspaceSwitcherState::tile_area(picker)).count(),
+            0
+        );
+        let c = sw.layout(1366, 768, 48, 716).cards[2];
+        let (_, action) = sw.handle_event(Event::click(c.x + 2, c.y + 2), 1366, 768, 48, 716);
+        assert_eq!(action, WorkspaceSwitcherAction::None);
+        let tiles: Vec<_> = sw
+            .tiles(WorkspaceSwitcherState::tile_area(picker))
+            .map(|(win, cell)| (win.id, WorkspaceSwitcherState::tile_image(cell, win)))
+            .collect();
+        assert_eq!(tiles.len(), 3);
+        assert!((tiles[0].1.w as i32 - 2 * tiles[0].1.h as i32).abs() <= 1);
+        assert!((tiles[1].1.h as i32 - 2 * tiles[1].1.w as i32).abs() <= 1);
+        for (index, (_, tile)) in tiles.iter().enumerate() {
+            for (_, other) in &tiles[index + 1..] {
+                assert!(tile.intersect(*other).is_none());
+            }
+        }
+        let (id, first) = tiles[0];
+        let (_, action) =
+            sw.handle_event(Event::click(first.x + 2, first.y + 2), 1366, 768, 48, 716);
+        assert_eq!(action, WorkspaceSwitcherAction::ActivateWindow(id));
+        assert!(sw.close());
+        assert!(sw.windows.is_empty());
     }
 
     #[test]

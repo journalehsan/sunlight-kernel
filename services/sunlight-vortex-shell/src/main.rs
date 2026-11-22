@@ -3367,6 +3367,12 @@ impl VortexShell {
         // filter must redraw to reflect the new active workspace.
         let mut dirty = self.current_workspace != prev_ws
             || self.top_panel_presentation != prev_top_panel_presentation;
+        if self.workspace_switcher.is_open() {
+            dirty |= self.workspace_switcher.remove_closed(&windows);
+            dirty |= self.workspace_switcher.observe_summaries(
+                workspace_switcher::build_workspace_summaries(&windows, &self.apps),
+            );
+        }
 
         // The single source of truth for dock-pin / Start-Menu running
         // indicators is `RunningAppRegistry` (see `sunlight-shell-appstate`).
@@ -3930,6 +3936,8 @@ impl VortexShell {
         self.context_menu = None;
         self.refresh_workspace_switcher_cards();
         self.workspace_switcher.open(self.current_workspace);
+        self.workspace_switcher
+            .capture(self.display_ep, &self.window_snapshots, &self.apps);
         true
     }
 
@@ -4000,25 +4008,21 @@ impl VortexShell {
         match action {
             WorkspaceSwitcherAction::None => false,
             WorkspaceSwitcherAction::Close => self.workspace_switcher.close(),
-            WorkspaceSwitcherAction::Activate(ws) => {
-                if !(1..=WS_INDICATOR_COUNT as u8).contains(&ws) {
-                    self.workspace_switcher.set_status("Invalid workspace");
-                    return true;
-                }
-                // Selecting the already-active workspace still closes safely.
-                if ws == self.current_workspace {
+            WorkspaceSwitcherAction::ActivateWindow(id) => {
+                let reply = ipc_call_timeout(
+                    self.display_ep,
+                    IpcMsg::with_label(SgpMsg::ACTIVATE_WINDOW)
+                        .word(0, id)
+                        .word(1, SgpMsg::ACTIVATE_FROM_OVERVIEW),
+                    DISPLAY_IPC_TIMEOUT_MS,
+                );
+                if reply.is_ok_and(|reply| reply.label == SgpMsg::REPLY && reply.words[0] == 1) {
                     let _ = self.workspace_switcher.close();
-                    return true;
-                }
-                if self.switch_workspace(ws) {
-                    let _ = self.workspace_switcher.close();
-                    true
+                    let _ = self.sync_app_registry(monotonic_millis(), true);
                 } else {
-                    // Keep the overlay usable; do not leave the shell without
-                    // an active workspace.
-                    self.workspace_switcher.set_status("Switch failed");
-                    true
+                    self.workspace_switcher.set_status("Window unavailable");
                 }
+                true
             }
         }
     }
@@ -4047,6 +4051,10 @@ impl VortexShell {
         if let Some(img) = self.dock_theme.icon_for_app(app_id) {
             return Some(img);
         }
+        Self::static_icon_for_app(app_id)
+    }
+
+    fn static_icon_for_app(app_id: AppId) -> Option<IconImage> {
         let bytes: Option<&[u8]> = match app_id {
             AppId::Terminal | AppId::Chronos => Some(ICON_TERMINAL_SVG),
             AppId::Calculator => Some(ICON_CALC_SVG),
@@ -6673,7 +6681,7 @@ fn resolve_running_icon(
 
 /// Compute y coordinate of the top of the bottom clusters.
 pub(crate) fn bot_y(screen_h: u32) -> i32 {
-    screen_h as i32 - BOT_Y_OFF - BOT_H as i32
+    screen_h as i32 - SgpMsg::DESKTOP_DOCK_RESERVED_H as i32
 }
 
 fn dock_cluster_width(count: usize) -> u32 {
@@ -8193,6 +8201,10 @@ mod shelf_control_tests {
 // ---------------------------------------------------------------------------
 
 impl App for VortexShell {
+    fn desktop_overlay_keeps_focus(&self) -> bool {
+        self.workspace_switcher.is_open()
+    }
+
     fn desktop_overlay_rects(&self) -> [Option<Rect>; MAX_DESKTOP_OVERLAYS] {
         let top_inset = top_bar_rect(self.screen_w, self.top_panel_presentation).bottom() + 8;
         let sidebar = self
