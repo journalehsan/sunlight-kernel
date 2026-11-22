@@ -1,0 +1,40 @@
+HOST PROBE ONLY: DosNavigator.sunapp/Program/DN.COM (1778 bytes)
+initial PSP=1041 end=2041
+initial CPU=CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0000, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 0000, bp: 0000, sp: fffe, cs: 1041, ds: 1041, es: 1041, ss: 1041, ip: 0100, flags: 0002 }
+MCB=0fff type=4d owner=1041 paragraphs=0040
+MCB=1040 type=4d owner=1041 paragraphs=1000
+MCB=2041 type=5a owner=0000 paragraphs=7fbe
+SNAP retired=0 PSP=1041 parent=0000 env=1000 env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=0,0 shape=0607 cells=4915b93824ccc865 queue=0 state=Ready CPU=CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0000, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 0000, bp: 0000, sp: fffe, cs: 1041, ds: 1041, es: 1041, ss: 1041, ip: 0100, flags: 0002 }
+SNAP retired=3500000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=0,1 shape=2000 cells=632515eddcc26847 queue=0 state=Running CPU=CpuState { gpr_upper: [0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0011, bx: 0001, cx: 0000, dx: 0011, si: 028a, di: 4a7a, bp: 4a6c, sp: 4a68, cs: 3cd4, ds: 4195, es: 4c91, ss: 4c91, ip: 04e1, flags: f016 }
+SNAP retired=4000000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=06fd32357f94d37e queue=0 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 0000, bx: 40cc, cx: 0000, dx: 0013, si: 420f, di: 4496, bp: 4372, sp: 4228, cs: 3cd4, ds: 4195, es: 4c91, ss: 4c91, ip: 2b97, flags: f246 }
+SNAP retired=4500000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=c2bc9372f4d425c8 queue=0 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 0000, bx: 0000, cx: 033c, dx: 0000, si: 0040, di: 4d88, bp: 4da2, sp: 4d96, cs: 394e, ds: 4195, es: 0040, ss: 4c91, ip: 088e, flags: f246 }
+SNAP retired=5000000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=c2bc9372f4d425c8 queue=0 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 033c, bx: 0000, cx: 005c, dx: 0000, si: 0040, di: 4d88, bp: 4d8c, sp: 4d84, cs: 3cd4, ds: 4195, es: 0040, ss: 4c91, ip: 3fd3, flags: f206 }
+KEY at=5000000 scheduled=5000000 word=4400 PSP=10bf state=Running queue=0
+SNAP retired=5000000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=c2bc9372f4d425c8 queue=1 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 033c, bx: 0000, cx: 005c, dx: 0000, si: 0040, di: 4d88, bp: 4d8c, sp: 4d84, cs: 3cd4, ds: 4195, es: 0040, ss: 4c91, ip: 3fd3, flags: f206 }
+KEY at=5200000 scheduled=5200000 word=011b PSP=10bf state=Running queue=0
+SNAP retired=5200000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=8dc92cd3e5329b78 queue=1 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 0009, bx: 4195, cx: 005c, dx: 0000, si: 0040, di: 4c82, bp: 4c86, sp: 4c82, cs: 394e, ds: 4195, es: 0040, ss: 4c91, ip: 083d, flags: f246 }
+KEY at=5400000 scheduled=5400000 word=2d00 PSP=10bf state=Running queue=0
+SNAP retired=5400000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=c2bc9372f4d425c8 queue=1 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 0000, bx: 0000, cx: 0000, dx: 0000, si: 0000, di: 4de0, bp: 4dbc, sp: 4daa, cs: 3094, ds: 4195, es: 4c91, ss: 4c91, ip: 0e93, flags: f246 }
+SNAP retired=5500000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=66af4782ed19a03f queue=0 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 0000, bx: 4195, cx: 0006, dx: 0000, si: a8b2, di: 43f4, bp: 43fe, sp: 43f2, cs: 394e, ds: 4195, es: 4c91, ss: 4c91, ip: 0872, flags: f213 }
+KEY at=5600000 scheduled=5600000 word=1579 PSP=10bf state=Running queue=0
+SNAP retired=5600000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=0607 cells=66af4782ed19a03f queue=1 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 033c, 0000, 0000, 0000, 0000, 0000], ax: 0000, bx: 0000, cx: 0000, dx: 0000, si: 0040, di: 4458, bp: 4418, sp: 4408, cs: 3094, ds: 4195, es: 4c91, ss: 4c91, ip: 0f9b, flags: f246 }
+KEY at=5700000 scheduled=5700000 word=1c0d PSP=10bf state=Running queue=0
+SNAP retired=5700000 PSP=10bf parent=1041 env=107e env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=4,23 shape=2000 cells=ea9af26ca31e769f queue=1 state=Running CPU=CpuState { gpr_upper: [0000, 0000, 0039, 0000, 0000, 0000, 0000, 0000], ax: 58e9, bx: 0000, cx: 2e3e, dx: 57bc, si: 5c7a, di: 5c7a, bp: 4db0, sp: 4d86, cs: 3c5f, ds: 57bc, es: 58e9, ss: 4c91, ip: 04c7, flags: f606 }
+state=Exited { code: 0 } retired=5980616 CS:IP=1041:0276
+INT 15 vector=f000:e000
+INT 2f vector=0800:0400
+INT 34 vector=0000:0000
+INT 35 vector=0000:0000
+INT 36 vector=0000:0000
+INT 37 vector=0000:0000
+INT 38 vector=0000:0000
+INT 39 vector=0000:0000
+INT 3a vector=0000:0000
+INT 3b vector=0000:0000
+INT 3c vector=0000:0000
+INT 3d vector=0000:0000
+INT 3e vector=0000:0000
+INT 3f vector=0000:0000
+Dos Navigator  Version 1.51  Copyright (C) 1991-99 RIT Research Labs
+SNAP retired=5980616 PSP=1041 parent=0000 env=1000 env_vars="PATH=C:\\;C:\\TESTS\0TEMP=T:\\\0TMP=T:\\\0COMSPEC=C:\\DN.COM\0SHELL=C:\\DN.COM\0APPID=org.sunlight.chronos\0\0" tail_len=0 tail=[0d] cursor=0,1 shape=0607 cells=632515eddcc26847 queue=1 state=Exited { code: 0 } CPU=CpuState { gpr_upper: [0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000], ax: 4c00, bx: 0392, cx: 0004, dx: 0400, si: 03ab, di: 03b6, bp: 0000, sp: 0140, cs: 1041, ds: 0800, es: 1041, ss: 1041, ip: 0276, flags: 0096 }
+final PSP=1041

@@ -1,0 +1,18 @@
+1623:launch[1] source=shell app=dos-navigator phase=spawn_returned timestamp_ms=10570 delta=60ms pid=39
+1682:launch[1] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=10620 delta=110ms pid=39
+2007:[SCHED] process_mark_finished pid=39 name='sunlight-chronos' reason=exit code=143
+2009:[SCHED] process_reaped pid=39 name='sunlight-chronos' user_frames=2817 page_tables=13 swap_blocks=0 ipc_cleared=0
+2010:[SCHED] process_resource_cleanup_summary pid=39 frames=2817 pts=13 swap=0 ipc_entries_cleared=0
+2020:[APP_LIFECYCLE] app_instance_removed pid=39 name=DOS Navigator 1.51
+2196:launch[2] source=shell app=dos-navigator phase=spawn_returned timestamp_ms=91100 delta=40ms pid=40
+2255:launch[2] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=91150 delta=90ms pid=40
+2632:[SCHED] process_mark_finished pid=40 name='sunlight-chronos' reason=exit code=143
+2634:[SCHED] process_reaped pid=40 name='sunlight-chronos' user_frames=2817 page_tables=13 swap_blocks=0 ipc_cleared=0
+2635:[SCHED] process_resource_cleanup_summary pid=40 frames=2817 pts=13 swap=0 ipc_entries_cleared=0
+2645:[APP_LIFECYCLE] app_instance_removed pid=40 name=DOS Navigator 1.51
+2686:launch[3] source=shell app=sunlight-mines phase=spawn_returned timestamp_ms=108590 delta=40ms pid=41
+2745:launch[3] source=unknown Sunlight Mines phase=window_visible_on_screen timestamp_ms=108670 delta=120ms pid=41
+3035:[SCHED] process_mark_finished pid=41 name='sunlight-chronos' reason=exit code=143
+3037:[SCHED] process_reaped pid=41 name='sunlight-chronos' user_frames=2817 page_tables=13 swap_blocks=0 ipc_cleared=0
+3038:[SCHED] process_resource_cleanup_summary pid=41 frames=2817 pts=13 swap=0 ipc_entries_cleared=0
+3048:[APP_LIFECYCLE] app_instance_removed pid=41 name=Sunlight Mines

@@ -1795,3 +1795,66 @@ panels. The keyboard change leaves that launcher contract intact.
 See the [DN-21 audit](../audit/chronos-dn/dn-21/) for hashes, before/after
 traces and captures, regression logs, and the Phase 3.0 platform gate,
 which passed independently of DN.
+
+## DN-22: Create panels from a direct launch
+
+Direct DN.PRG starts without automatic panels on a fresh desktop. The
+unchanged program can create both itself: press **F10**, choose
+**Manager → New**, then accept C: in the drive picker. **Ctrl+F3** also
+opens the picker. The host run enumerated C: and displayed actual entries
+in both panels. Tab switched focus and Down moved the selection in the
+newly focused panel. Both launcher and direct paths exited cleanly.
+
+The launcher provides the first-run byte that enables automatic creation.
+New Manager uses the same window constructor after drive selection, with
+no dependency on the launcher. Saved desktop restoration is a separate
+startup path. FreeDOS reproduced direct startup without panels, then
+populated both panels through the menu and returned exit code 0. Chronos
+implementation remained unchanged. See the [DN-22 audit](../audit/chronos-dn/dn-22/)
+for source references, captures, and traces.
+
+Native QEMU DN is **NOT_RUN**. The native adapter still needs to import
+files above 65,536 bytes and select the 386 profile.
+
+## DN-23: Desktop SunApp
+
+[DosNavigator.sunapp](../../DosNavigator.sunapp) includes the original 1.51
+distribution, based on Dos Navigator by RIT Research Labs. Its original
+redistribution notice is in `Program/README.TXT`.
+
+Build a normal SunlightOS image with the repository build workflow
+(`bash tools/build.sh`, or the Phase 3.0 gate for a test ISO). The boot image
+installs the package at `/Applications/DosNavigator.sunapp` alongside Mines.
+Log into the graphical desktop and choose **DOS Navigator 1.51** in Start
+Menu → All apps, or search for **DOS Navigator** in the desktop search palette.
+From a Sunlight terminal the equivalent command is
+`sun-exec /Applications/DosNavigator.sunapp`.
+
+Chronos starts the original `C:\DN.COM` from `C:\` with the existing 386
+real-mode profile and no arguments. The complete `Program` directory is the C:
+base. Writes use the app's private persistent overlay; no Documents, clipboard,
+printing, serial, or network grant is requested.
+
+For a manual pass, start from a fresh guest. Check for two file panels and real
+entries such as `DN.COM` and `DN.OVR`. Press **F10**, **M**, **N** to open
+**Manager → New**, then **C** to choose C:. Use **Tab** to change panels, arrow
+keys to select a directory, and **keypad Enter** to open it. **Escape** dismisses
+menus. Main Enter, Ctrl+F3 and Alt+X did not perform their DN actions in the
+native desktop test; the menu mnemonics and keypad Enter are working alternatives.
+
+Use **F10**, **F**, **X**, then **Y** to select **File → Exit** and confirm.
+After Chronos displays **Exited with code 0**, press **Ctrl+W** to close
+the window. The desktop reaps Chronos through its standard window-close
+path. Launch a second time from the desktop to repeat the check.
+
+Verify the checked-in bundle or reproduce a fresh copy from the same pinned
+archive used for the compatibility tests:
+
+```sh
+python3 tools/dos_navigator_package.py --archive target/dos-navigator/dn151.zip
+python3 tools/dos_navigator_package.py --archive target/dos-navigator/dn151.zip \
+  --output target/dos-navigator/rebuilt/DosNavigator.sunapp
+```
+
+See the [DN-23 audit](../audit/chronos-dn/dn-23/README.md) for the integrity
+inventory and separate host, platform, and desktop results.

@@ -489,6 +489,7 @@ impl DockTheme {
             | AppId::Devices
             | AppId::ApiLab
             | AppId::Mines
+            | AppId::DosNavigator
             | AppId::SiliconEchoes
             | AppId::Welcome
             | AppId::WiseOwl
@@ -620,6 +621,7 @@ pub(crate) enum AppId {
     VoiceRecorder,
     DocumentViewer,
     Empires,
+    DosNavigator,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -2016,6 +2018,11 @@ impl VortexShell {
                     AppId::DocumentViewer,
                 ),
                 DockAppState::new(AppId::Empires, "Sunlight Empires", AppId::Empires),
+                DockAppState::new(
+                    AppId::DosNavigator,
+                    "DOS Navigator 1.51",
+                    AppId::DosNavigator,
+                ),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2324,6 +2331,7 @@ impl VortexShell {
             AppId::RappidRabbit => AppStateAppId::RappidRabbit,
             AppId::ApiLab => AppStateAppId::ApiLab,
             AppId::Mines => AppStateAppId::Mines,
+            AppId::DosNavigator => AppStateAppId::DosNavigator,
             AppId::SiliconEchoes => AppStateAppId::SiliconEchoes,
             AppId::Empires => AppStateAppId::Empires,
             AppId::Welcome => AppStateAppId::Welcome,
@@ -2365,6 +2373,7 @@ impl VortexShell {
             AppId::RappidRabbit => "/bin/rappid-rabbit",
             AppId::ApiLab => "/bin/sunlight-api-lab",
             AppId::Mines => "/Applications/SunlightMines.sunapp",
+            AppId::DosNavigator => "/Applications/DosNavigator.sunapp",
             AppId::SiliconEchoes => "/bin/silicon-echoes",
             AppId::Empires => "/bin/sunlight-empires",
             AppId::Welcome => "/bin/welcome",
@@ -2391,6 +2400,7 @@ impl VortexShell {
             AppId::RappidRabbit => b"rappid-rabbit",
             AppId::ApiLab => b"sunlight-api-lab",
             AppId::Mines => b"sunlight-mines",
+            AppId::DosNavigator => b"dos-navigator",
             AppId::SiliconEchoes => b"silicon-echoes",
             AppId::Empires => b"/bin/sunlight-empires",
             AppId::Welcome => b"welcome",
@@ -2421,6 +2431,7 @@ impl VortexShell {
             AppId::RappidRabbit => "app=rappid-rabbit",
             AppId::ApiLab => "app=sunlight-api-lab",
             AppId::Mines => "app=sunlight-mines",
+            AppId::DosNavigator => "app=dos-navigator",
             AppId::SiliconEchoes => "app=silicon-echoes",
             AppId::Empires => "app=sunlight-empires",
             AppId::Welcome => "app=welcome",
@@ -4036,7 +4047,7 @@ impl VortexShell {
         if let Some(img) = self.dock_theme.icon_for_app(app_id) {
             return Some(img);
         }
-        let bytes = match app_id {
+        let bytes: Option<&[u8]> = match app_id {
             AppId::Terminal | AppId::Chronos => Some(ICON_TERMINAL_SVG),
             AppId::Calculator => Some(ICON_CALC_SVG),
             AppId::Files => Some(ICON_FILES_SVG),
@@ -4050,6 +4061,9 @@ impl VortexShell {
             AppId::RappidRabbit => Some(ICON_RABBIT_SVG),
             AppId::ApiLab => Some(ICON_API_LAB_SVG),
             AppId::Mines => Some(ICON_GENERIC_APP_SVG),
+            AppId::DosNavigator => Some(include_bytes!(
+                "../../../DosNavigator.sunapp/Resources/icon.svg"
+            )),
             AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_SVG),
             AppId::Empires => Some(ICON_EMPIRES_SVG),
             AppId::Welcome => Some(ICON_GENERIC_APP_SVG),

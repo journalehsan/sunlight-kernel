@@ -1,0 +1,14 @@
+{"keys": ["f10"], "capture": "04-f10"}
+{"keys": ["m"], "capture": "05-manager"}
+{"keys": ["ret"], "capture": "06-picker"}
+{"keys": ["ret"], "capture": "07-new-panels"}
+{"keys": ["tab"], "capture": "08-tab"}
+{"keys": ["down"], "capture": "09-down"}
+{"keys": ["ret"], "capture": "10-enter"}
+{"keys": ["ctrl", "f3"], "capture": "11-ctrl-f3"}
+{"keys": ["esc"], "capture": "12-escape"}
+{"keys": ["alt", "x"], "capture": "13-alt-x"}
+{"action": "key", "value": "f10"}
+{"action": "key", "value": "m"}
+{"action": "key", "value": "n"}
+{"action": "shot", "value": "14-new-mnemonic"}

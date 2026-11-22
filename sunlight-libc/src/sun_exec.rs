@@ -18,7 +18,7 @@ const MAX_ARG_LEN: usize = 96;
 const MAX_MANIFEST_BYTES: usize = 8192;
 const MAX_BUNDLE_PATH: usize = MAX_PATH - 14;
 const CHRONOS_RUNTIME_PATH: &[u8] = b"/bin/sunlight-chronos";
-const CHRONOS_BUNDLE_ARG_COUNT: usize = 8;
+const CHRONOS_BUNDLE_ARG_COUNT: usize = 10;
 pub const ACTION_ALIAS_MODEL_VERSION: u16 = 1;
 
 /// Runtime selected by a validated external application bundle.  Native
@@ -280,6 +280,12 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         display_name: "Sun Open",
         aliases: aliases![],
         executable: b"/bin/sun-open",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "dos-navigator",
+        display_name: "DOS Navigator 1.51",
+        aliases: aliases![],
+        executable: b"/Applications/DosNavigator.sunapp",
     },
     ApplicationRegistryEntry {
         canonical_id: "mines",
@@ -669,6 +675,8 @@ fn launch_chronos_bundle(
         descriptor.app_id,
         b"--chronos-title",
         descriptor.display_name,
+        b"--chronos-cpu",
+        descriptor.cpu,
     ];
     // terminal=false indicates a pure graphical app (no generic shell banner expected)
     // The document scope policy is sent as one extra bounded argument when
@@ -769,6 +777,7 @@ struct ChronosManifest<'a> {
     app_id: &'a [u8],
     display_name: &'a [u8],
     entry: &'a [u8],
+    cpu: &'a [u8],
     documents_read_write: bool,
     terminal: bool,
 }
@@ -813,12 +822,20 @@ fn parse_chronos_manifest<'a>(
         b"read-write" => true,
         _ => return Err(LaunchError::InvalidBundle),
     };
+    let cpu = toml_value(source, b"chronos", b"cpu").unwrap_or(b"8086");
+    if !matches!(
+        cpu,
+        b"8086" | b"80186" | b"80286" | b"80386" | b"186" | b"286" | b"386"
+    ) {
+        return Err(LaunchError::InvalidBundle);
+    }
     let term_raw = toml_value(source, b"chronos", b"terminal").unwrap_or(b"true");
     let terminal = term_raw != b"false" && term_raw != b"0";
     Ok(ChronosManifest {
         app_id,
         display_name,
         entry,
+        cpu,
         documents_read_write,
         terminal,
     })

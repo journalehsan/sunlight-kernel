@@ -1,0 +1,7 @@
+units-lib-only=0
+units-lib-bins=0
+doctest=101 (known horizon.rs diagram failure)
+no-std=0
+native-initial-invocation=101 (wrong linker script argument; superseded)
+native-documented-flags=0
+platform=0

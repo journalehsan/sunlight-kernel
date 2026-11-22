@@ -1,0 +1,2142 @@
+[2J[001;001H[=3h[2J[001;001H[2J[001;001H[8;056;240t[2J[001;001H[2J[001;001H[=3h[2J[001;001H[2J[001;001H[8;042;160t[2J[001;001HBdsDxe: loading Boot0002 "UEFI QEMU DVD-ROM QM00003 " from PciRoot(0x0)/Pci(0x1,0x1)/Ata(Secondary,Master,0x0)
+BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00003 " from PciRoot(0x0)/Pci(0x1,0x1)/Ata(Secondary,Master,0x0)
+[2J[001;001H[001;001H[2J[001;001H[001;001H[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: UEFI
+[BOOT] memory map entries: 38
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000bfe63014
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xc0000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-22T09:07:51Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0x11b57140 (72536 frames, 283 MiB)
+[PMM] 3211/3493 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=147869 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000bfe63014
+[ACPI] Checksum verified completely. ACPI Revision: 2.0 (XSDT active)
+[ACPI] Found table: XSDT (Extended System Description Table) at 0xbfe620e8
+[ACPI] Found table: FACP at 0xbfe5e000
+[ACPI] Found table: APIC at 0xbfe5d000
+[ACPI] Found table: HPET at 0xbfe5c000
+[ACPI] Found table: WAET at 0xbfe5b000
+[ACPI] Found table: BGRT at 0xbfe5a000
+[ACPI] PM1a_CNT_BLK port assigned: 0xb004
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 2
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xbfc67000 len=410
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: EDK II 
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11929 end_count=7928 elapsed_counts=4001 tsc_delta=8368933 tsc_hz=2495791105
+[TIME] TSC calibrated ~2495791105 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff91118238 ist_df=0xffffffff91810999 ist_nmi=0xffffffff91a5a030
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62553500 lapic_initial_count=625535 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2495791105
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x22 hour=0x09 minute=0x23 second=0x08 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-22T09:23:08Z assumed_basis=UTC
+wall: utc=2026-11-22T09:23:08Z unix=1795339388 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff91c00000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x77
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x74
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x65
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x65
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff80075aec
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff9139fcb0..0xffffffff913afcb0
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff80075aec
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff90ff32a8 ist_df=0xffffffff913afcb0 ist_nmi=0xffffffff91a5e030
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=true family=6 model=0x9a dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[MM-0] unsafe fork rejection is atomic: OK
+[MM-1] user address/range arithmetic: OK
+[MM-1] page-aware copy, strings, permissions, atomic output, and swap policy: OK
+[MM-0] NXE and NX mapping flags: OK
+[MM-0] user-frame reuse sanitization: OK
+[MM-0] anonymous mmap W^X, NX, and zero-fill: OK
+[MM-0] temporary SHM views preserve persistent mappings: OK
+[MM-0] SHM NX, zero-fill, and peer preservation: OK
+[CAP] Created endpoint 0 for pid=53594
+[CAP] Created endpoint 1 for pid=53596
+[MM-0] framebuffer authority lifecycle: OK
+[MM-2A] anonymous mmap contract rejects unsupported semantics: OK
+[MM-2A] collision, cursor, SHM commit, live-content, and NX replacement: OK
+[SCHED] process_reaped pid=41216 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41216 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41216 cleared_msgs=0
+[SCHED] process_reaped pid=41217 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41217 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41217 cleared_msgs=0
+[SCHED] process_reaped pid=41218 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41218 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41218 cleared_msgs=0
+[SCHED] process_reaped pid=41219 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41219 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41219 cleared_msgs=0
+[SCHED] process_reaped pid=41220 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41220 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41220 cleared_msgs=0
+[SCHED] process_reaped pid=41221 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41221 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41221 cleared_msgs=0
+[SCHED] process_reaped pid=41222 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41222 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41222 cleared_msgs=0
+[SCHED] process_reaped pid=41223 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41223 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41223 cleared_msgs=0
+[SCHED] process_reaped pid=41224 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41224 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41224 cleared_msgs=0
+[SCHED] process_reaped pid=41225 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41225 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41225 cleared_msgs=0
+[SCHED] process_reaped pid=41226 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41226 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41226 cleared_msgs=0
+[SCHED] process_reaped pid=41227 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41227 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41227 cleared_msgs=0
+[SCHED] process_slot_reused idx=1 pid=45312 (reused reaped slot)
+[SCHED] CREATED process #1 'mm0-thread' idx=1 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=2 pid=45313 (reused reaped slot)
+[SCHED] CREATED process #2 'mm0-thread' idx=2 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=3 pid=45314 (reused reaped slot)
+[SCHED] CREATED process #3 'mm0-thread' idx=3 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=4 pid=45315 (reused reaped slot)
+[SCHED] CREATED process #4 'mm0-thread' idx=4 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=5 pid=45316 (reused reaped slot)
+[SCHED] CREATED process #5 'mm0-thread' idx=5 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=6 pid=45317 (reused reaped slot)
+[SCHED] CREATED process #6 'mm0-thread' idx=6 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=7 pid=45318 (reused reaped slot)
+[SCHED] CREATED process #7 'mm0-thread' idx=7 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=8 pid=45319 (reused reaped slot)
+[SCHED] CREATED process #8 'mm0-thread' idx=8 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=9 pid=45320 (reused reaped slot)
+[SCHED] CREATED process #9 'mm0-thread' idx=9 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=10 pid=45321 (reused reaped slot)
+[SCHED] CREATED process #10 'mm0-thread' idx=10 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=11 pid=45322 (reused reaped slot)
+[SCHED] CREATED process #11 'mm0-thread' idx=11 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=12 pid=45323 (reused reaped slot)
+[SCHED] CREATED process #12 'mm0-thread' idx=12 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_reaped pid=45312 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45312 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45312 cleared_msgs=0
+[SCHED] process_reaped pid=45313 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45313 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45313 cleared_msgs=0
+[SCHED] process_reaped pid=45314 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45314 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45314 cleared_msgs=0
+[SCHED] process_reaped pid=45315 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45315 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45315 cleared_msgs=0
+[SCHED] process_reaped pid=45316 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45316 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45316 cleared_msgs=0
+[SCHED] process_reaped pid=45317 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45317 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45317 cleared_msgs=0
+[SCHED] process_reaped pid=45318 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45318 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45318 cleared_msgs=0
+[SCHED] process_reaped pid=45319 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45319 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45319 cleared_msgs=0
+[SCHED] process_reaped pid=45320 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45320 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45320 cleared_msgs=0
+[SCHED] process_reaped pid=45321 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45321 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45321 cleared_msgs=0
+[SCHED] process_reaped pid=45322 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45322 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45322 cleared_msgs=0
+[SCHED] process_reaped pid=45323 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45323 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45323 cleared_msgs=0
+[SCHED] process_slot_reused idx=1 pid=49408 (reused reaped slot)
+[SCHED] CREATED process #13 'mm0-thread' idx=1 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_reaped pid=49408 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=49408 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=49408 cleared_msgs=0
+[SCHED] process_reaped pid=40961 name='mm0-owner' user_frames=1 page_tables=4 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=40961 frames=1 pts=4 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=40961 cleared_msgs=0
+[MM-0] native borrower lifecycle: 12 finished/reaped + 12 recreated/reaped: OK
+[MM-0] thread address-space lifecycle: OK
+[SCHED] process_exit_begin external pid=48879 reason=self-test(SIGKILL-live)
+[SCHED] FINISHED process pid=48879 name='kill-test'
+[NATIVE-GROUP] terminal pid=48879 incarnation=38 vm=13 code=137 reason=self-test(SIGKILL-live)
+[SCHED] process_mark_finished pid=48879 name='kill-test' reason=self-test(SIGKILL-live) code=137 (external)
+[SCHED] terminating pid=48879 name='kill-test' reason=self-test(SIGKILL-live)
+[CAP] Created endpoint 0 for pid=51966
+[SCHED] process_reaped pid=48879 name='kill-test' user_frames=0 page_tables=1 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=48879 frames=0 pts=1 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=48879 cleared_msgs=0
+[SIG]  termination-path self-test: OK
+[SEC]  Token forge attempt: REJECTED (CapError::NotFound)
+[SEC]  word_count=9 attempt: REJECTED (IpcError::InvalidWordCount)
+[SEC]  kernel ptr attempt: REJECTED (PtrError::KernelAddress)
+[SEC]  badge forge attempt: REJECTED (overwritten by kernel)
+[SEC]  IPC multi-caller queue: OK
+[SEC]  IPC timeout cancellation target: OK
+[SEC]  IPC bounded queue/backpressure/reuse: OK
+[SEC]  IPC notification coalescing/elapsed time: OK
+[SEC]  IPC terminal arbitration/generation: OK
+[CAP] Created endpoint 0 for pid=28929
+[CAP] Created endpoint 1 for pid=28929
+[SEC]  IPC capability isolation/lifecycle: OK
+[SEC]  nameserver REGISTER ownership/identity: OK
+[SEC]  IPC deferred reply lifecycle: OK
+[IPC-R2] event=identity pid=2147422209 inc=40 vm=15 call_inc=40 server=2147422210 server_inc=41 server_vm=16 session=none channel=none mappings=0 authority=kernel-fixture scope=boot-method
+[IPC-R2] event=assertions recv_woke=1 recv_timeout=1 call_woke=1 call_timeout=1 reply_commit=1 cancel_after_reply=1 reply_survived=1 deadline_won=1 late_dropped=1 stale_ignored=1 stress=1 deferred=1
+[SEC]  IPC deadline wake/race/late reply: OK
+[SEC]  IPC SMP terminal-state stress: 64 iterations OK
+[SEC]  dead process cap: REJECTED (CapError::Revoked)
+[SEC]  Security hardening: PASSED
+[ELF]  Static ELF loader initialized
+[KERN] spawn endpoint registered
+[IPC]  IPC bus initialized
+[IPC]  IpcMsg format: fixed 80-byte struct
+[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
+[IPC]  Fastpath check: enabled (stub)
+[KBD]  IRQ1 router initialized (driver: sunlight-kbd)
+[PROC] Spawning init (pid=1)...
+[PROC] Loading init ELF (53760 bytes)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9b6d memsz=9b6d prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=d000 vaddr=40c000 filesz=10 memsz=10 prot=ReadWrite
+[SCHED] CREATED process #14 'init' idx=0 burst_score=256 tier=High
+[PROC] Spawning vfs_server (pid=3)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=344e1 memsz=344e1 prot=ReadExec
+[ELF] PT_LOAD off=36000 vaddr=435000 filesz=51daf10 memsz=51daf10 prot=Read
+[ELF] PT_LOAD off=5210f10 vaddr=560ff10 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=5211000 vaddr=5610000 filesz=0 memsz=41070 prot=ReadWrite
+[SCHED] CREATED process #15 'vfs_server' idx=1 burst_score=256 tier=High
+[PROC] Spawning tty_server (pid=4)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2a62e memsz=2a62e prot=ReadExec
+[ELF] PT_LOAD off=2c000 vaddr=42b000 filesz=2fabf8 memsz=2fabf8 prot=Read
+[ELF] PT_LOAD off=326bf8 vaddr=725bf8 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=327000 vaddr=726000 filesz=198 memsz=3229 prot=ReadWrite
+[BOOT-DISPLAY] tty mapping cache=wc pages=1000 p1_tables=2 required_len=4096000 mapped_len=4096000
+[SCHED] CREATED process #16 'tty_server' idx=2 burst_score=256 tier=High
+[VMXNET3-AUDIT] initialize_network_backend entered
+[VMXNET3] stage=NotProbed
+[PCI] bdf=00:02.0 class=020000 vendor=8086 device=100e
+[PCI]  BAR0=0xc0840000 BAR1=0x0000c001 BAR2=0x00000000 BAR3=0x00000000 BAR4=0x00000000 BAR5=0x00000000
+[PCI]  interrupt line=10 MSI=false MSI-X=false matched driver=none
+[VMXNET3-AUDIT] 15ad:07b0 absent from PCI enumeration
+[VMXNET3-AUDIT] probe call site reached, invoking probe_vmxnet3
+[VMXNET3] pci device 15ad:07b0 not present
+[VMXNET3] verify ethernet0.virtualDev = "vmxnet3"
+[VMXNET3-AUDIT] 15ad:07b0 absent — probe returned None, falling back to VirtIO scan
+[NET] failed stage=no supported PCI Ethernet backend
+[NET]  no supported Ethernet backend found
+[MMIO] map virt=0xffff807000001000 phys=0x7000001000 len=0x800 pages=1 free_frames=794637
+[MMIO] complete pages=1 new=1 existing=0 huge_mapping=0 page_table_frames=2 free_frames=794635
+[MMIO] map virt=0xffff807000003000 phys=0x7000003000 len=0x1000 pages=1 free_frames=794635
+[MMIO] complete pages=1 new=1 existing=0 huge_mapping=0 page_table_frames=0 free_frames=794635
+[MMIO] map virt=0xffff807000001000 phys=0x7000001000 len=0x800 pages=1 free_frames=794635
+[MMIO] complete pages=1 new=0 existing=1 huge_mapping=0 page_table_frames=0 free_frames=794635
+[display] available virtio scanout 0: 1280x800 x=0 y=0 enabled=1 flags=0 pitch=unavailable format=virtio-gpu
+[display] current virtio scanout: 1280x800
+[GPU]  VirtIO GPU ready 1280x800
+[SVGA] VMware SVGA II (15ad:0405) not present
+[SunlightOS] Foundation Complete
+[HELIOS] Linux ELF compatibility layer loaded
+[HELIOS-ABI] write=43 dup=45 wait4=-29 enosys=-38 enoent=-2 eagain=-11 stat=144 timespec=16 ok
+[SCHED] CFS-style scheduler (round-robin baseline)
+[SCHED]  ✓ weighted CFS weight field
+[SCHED]  ✓ SCHED_FIFO real-time type field
+[SCHED]  ✓ cpu_mask CPU affinity field
+✓ Stabilization and Hardening scheduler verification PASSED
+[PROC] Entering scheduler — dropping to Ring 3
+══════════════════════════════════════
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff91c091b0
+[ init] SunlightOS init process started
+[VFS]  VFS server started
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 0 for pid=3
+[CAP] Created endpoint 1 for pid=1
+[init] Name server: listening
+[init] nameserver long-name keys OK
+[init] nameserver registry integrity tests: OK
+[init] Registered kernel spawn endpoint
+[TTY]  TTY server started
+[VFS]  Registered as 'vfs'
+[LOGIN-TUI] service started
+[SYSCALL] mmap(0x0, 0x3e8000) -> 0x1000000000
+[GPU] attach_backing: va=0x1000000000 pages=1000 sg_entries=3 resource=1280x800
+[GPU] SET_SCANOUT 1280x800 OK (scanout 0, resource 3)
+[SYSCALL] mmap(0x0, 0x1000000) -> 0x10003e8000
+[TTY-GPU] ready 1280x800 pitch=5120 resource=3 backing_bytes=4096000
+
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[VFS-RPC] userspace dispatch injection rejected
+[VFS-RPC] negotiation handler OK dispatch=disabled
+[VFS-RPC] isolated directory pins and abandoned release OK transport=fixture
+[VFS-RPC] scope policy withdrawal and retained pins OK transport=fixture
+[VFS-RPC] registration policy lifecycle OK transport=fixture
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000001000
+[VFS-RPC] service open objects shared offset/unlink/teardown OK transport=fixture
+[VFS-RPC] live mounted namespace pins shared with legacy handlers OK transport=fixture
+[VFS]  Test open /etc/motd
+[VFS]  Test read /etc/motd
+[VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  Fstat OK
+[VFS]  ENOENT test OK
+[VFS]  Bad handle test OK
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000002000
+[SUNLIGHT-FS] request actor=unknown op=write path=<ipc-handle>
+[SUNLIGHT-FS] decision actor=unknown op=write path=<ipc-handle> result=deny reason=DeniedUnknownActor err=OperationNotPermitted
+[VFS]  IPC write policy OK
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/tmp/.native-stat-mkdir-test
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/tmp/.native-stat-mkdir-test result=allow reason=AllowedTmp err=None
+[VFS]  Native stat/mkdir RAMFS OK
+[VFS]  Stat OK
+[SunlightOS] Phase 3.0 OK
+[VFS]  Permission model: Unix uid/gid/mode
+[VFS]  /etc/passwd: 2 users loaded
+[VFS]  /etc/group: 7 groups loaded
+[LOGIN-TUI] background decoded (simg-v2)
+
+[VFS]  Permission check: root bypasses OK
+[LOGIN-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+
+[VFS]  Permission check: user read /etc/passwd OK
+[LOGIN-SURFACE] dimensions=1280x800 frontbuffer_bytes=4096000 backbuffer_bytes=0 presentation=direct draw_rows=800 draw_row_bytes=5120
+
+[VFS]  Permission check: user read /etc/shadow EACCES OK
+[TTY] Framebuffer acquired
+[SHM]  alloc_shared_page: OK
+[LOGIN-TUI] metrics acquired
+[SHM]  map_shared_page: OK
+[LOGIN-TUI] background begin
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  VFS read 2048 bytes via shared memory: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  Shared memory grant: PASSED
+[VFS-RPC] boot root policy installed caller=1 epoch=1 transport=copy
+[VFS-RPC] authenticated kernel registration snapshot OK transport=copy
+[VFS-RPC] authenticated registration status OK transport=copy
+[TTY] Login rendered
+[LOGIN-TUI] first frame complete
+[CAP] Created endpoint 2 for pid=4
+[TTY]  endpoint created
+[VFS-RPC] root stat parked caller=1 request=1 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[init] VFS namespace ready before service spawn
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=6de0 memsz=6de0 prot=ReadExec
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=0 auxv=2 rsp=0x7fffffffef90
+[EXEC] Loaded ELF entry=0x403f40, stack=0x7fffffffef90
+[SCHED] CREATED process #17 'storagectl' idx=3 burst_score=256 tier=High
+[SYSCALL] spawn: /bin/storagectl pid=5 ppid=1
+[FSTAB] apply PASS
+[FSTAB] apply PASS
+
+
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=5 name='storagectl'
+[NATIVE-GROUP] terminal pid=5 incarnation=45 vm=21 code=0 reason=exit
+[SCHED] process_mark_finished pid=5 name='storagectl' reason=exit code=0
+[SCHED] terminating pid=5 name='storagectl' reason=exit
+[FSTAB] boot apply complete
+[SPAWN] Request from pid=1 for path=/sbin/timer_server uid=0 gid=0 caps=0xffffffffffffffff
+[SCHED] process_reaped pid=5 name='storagectl' user_frames=521 page_tables=8 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=5 frames=521 pts=8 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=5 cleared_msgs=0
+[SPAWN] Loading /sbin/timer_server (12712 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=318 memsz=318 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=1000 memsz=1000 prot=Read
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=3 pid=6 (reused reaped slot)
+[SCHED] CREATED process #18 'timer_server' idx=3 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/timer_server spawned pid=6
+[SUNLIGHTD-SCHED] First time scheduled, rip=0x400000 idx=3
+[timer] Timer server started
+[init] launched base service
+[CAP] Created endpoint 3 for pid=6
+[timer] Registered as 'time' with init name server
+[TTY]  Registered as 'tty'
+[timer] Serving via ipc_reply_and_wait loop
+[TTY]  Login screen ready
+[timer] Listening for tick events...
+[LOGIN-TUI] input ready
+[VFS-RPC] boot root policy installed caller=6 epoch=1 transport=copy
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-kbd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-kbd (12712 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=dc5 memsz=dc5 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=1000 memsz=1000 prot=Read
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400250, stack=0x7fffffffef20
+[SCHED] CREATED process #19 'sunlight-kbd' idx=4 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-kbd spawned pid=7
+[init] launched base service
+[KBD] sunlight-kbd starting
+[CAP] Created endpoint 4 for pid=7
+[KBD] found tty, ready to process keys
+[KBD] Registered user-space driver at endpoint 4
+[KBD] registered with kernel IRQ1 router
+[KBD] deviced unavailable; continuing without registration
+[VFS-RPC] boot root policy installed caller=7 epoch=1 transport=copy
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-mouse uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-mouse (20904 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2558 memsz=2558 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=1000 memsz=1000 prot=Read
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400400, stack=0x7fffffffef20
+[SCHED] CREATED process #20 'sunlight-mouse' idx=5 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-mouse spawned pid=8
+[init] launched base service
+[MOUSE] sunlight-mouse starting
+
+[MOUSE] Initializing PS/2 mouse hardware
+[MOUSE] PS/2 pointing device ready in relative mode (id=0x0)
+[CAP] Created endpoint 5 for pid=8
+[MOUSE] Registered user-space driver at endpoint 5
+[MOUSE] registered with kernel IRQ12 router
+
+[MOUSE] deviced unavailable; continuing without registration
+
+[MOUSE] found tty, ready to process mouse events
+
+[MOUSE] pointer profile=
+QemuPs2
+ invert_y=
+no
+ base_sens=
+98304
+/65536 precise_zone<=
+2
+ normal_zone<=
+8
+ low_gain=
+65536
+/65536 mid_gain=
+98304
+/65536 max_gain=
+131072
+/65536
+
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-usb-mouse uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-usb-mouse (21040 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=25b5 memsz=25b5 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=240 memsz=240 prot=Read
+[ELF] PT_LOAD off=4240 vaddr=403240 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=0 memsz=98 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401150, stack=0x7fffffffef20
+[SCHED] CREATED process #21 'sunlight-usb-mouse' idx=6 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-usb-mouse spawned pid=9
+[init] launched base service
+[VFS-RPC] boot root policy installed caller=8 epoch=1 transport=copy
+[VFS-RPC] boot root policy installed caller=9 epoch=1 transport=copy
+[USB-MOUSE] ring-3 xHCI HID driver starting
+
+[USB-MOUSE] no usable xHCI boot mouse
+
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-swapd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-swapd (12792 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4d5 memsz=4d5 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #22 'sunlight-swapd' idx=7 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-swapd spawned pid=10
+[init] launched base service
+[SWAP-1] sunlight-swapd calculating fixed boot policy
+[VFS-RPC] boot root policy installed caller=10 epoch=1 transport=copy
+[SWAP-1] enabled pools=1 logical_mib=1746 physical_budget_kib=894436 admin_pid=10
+[SWAP-1] policy configured; fault path is kernel-resident
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=10 name='sunlight-swapd'
+[NATIVE-GROUP] terminal pid=10 incarnation=50 vm=31 code=0 reason=exit
+[SCHED] process_mark_finished pid=10 name='sunlight-swapd' reason=exit code=0
+[SCHED] terminating pid=10 name='sunlight-swapd' reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=9 name='sunlight-usb-mouse'
+[NATIVE-GROUP] terminal pid=9 incarnation=49 vm=29 code=1 reason=exit
+[SCHED] process_mark_finished pid=9 name='sunlight-usb-mouse' reason=exit code=1
+[SCHED] terminating pid=9 name='sunlight-usb-mouse' reason=exit
+[SCHED] process_reaped pid=9 name='sunlight-usb-mouse' user_frames=517 page_tables=8 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=9 frames=517 pts=8 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=9 cleared_msgs=0
+[SCHED] process_reaped pid=10 name='sunlight-swapd' user_frames=515 page_tables=8 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=10 frames=515 pts=8 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=10 cleared_msgs=0
+[SPAWN] Request from pid=1 for path=/sbin/deviced uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/deviced (500496 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=65a5 memsz=65a5 prot=ReadExec
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=2f4 memsz=2f4 prot=Read
+[ELF] PT_LOAD off=82f8 vaddr=4072f8 filesz=8 memsz=8 prot=ReadWrite
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=710d8 memsz=710d8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401750, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=6 pid=11 (reused reaped slot)
+[SCHED] CREATED process #23 'deviced' idx=6 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/deviced spawned pid=11
+[init] launched base service
+[VFS-RPC] boot root policy installed caller=11 epoch=1 transport=copy
+[DEVICED] starting
+[CAP] Created endpoint 6 for pid=11
+[DEVICED] registered as 'deviced'
+[SPAWN] Request from pid=1 for path=/sbin/sunlightd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlightd (147968 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1d314 memsz=1d314 prot=ReadExec
+[ELF] PT_LOAD off=1f000 vaddr=41e000 filesz=5000 memsz=5000 prot=Read
+[ELF] PT_LOAD off=24000 vaddr=423000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x409360, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=7 pid=12 (reused reaped slot)
+[SCHED] CREATED process #24 'sunlightd' idx=7 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/sunlightd spawned pid=12
+[DEVICED] inventory ready records=9
+[init] launched base service
+[SUNLIGHTD] main() reached
+
+[SUNLIGHTD] Starting sunlightd v0.2
+[CAP] Created endpoint 7 for pid=12
+[SUNLIGHTD] Registered as 'sunlightd'
+[SUNLIGHTD] enabled-state open failed: NoEntry
+[SUNLIGHTD] Loaded 21 service units
+[SUNLIGHTD] Autostart: parallel where possible, gated by service readiness
+[SUNLIGHTD] TLS waits for rand_service, sunlight-kv, and the network stack
+[SunlightOS] sunlightd OK
+[VFS-RPC] boot root policy installed caller=12 epoch=1 transport=copy
+[SUNLIGHTD] capability profile timezone_service uid=0 gid=0 caps=service-lifecycle,logging,vfs,time-sync
+[SPAWN] Request from pid=1 for path=/sbin/networkd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/networkd (49712 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9725 memsz=9725 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=8f0 memsz=8f0 prot=Read
+[ELF] PT_LOAD off=b8f0 vaddr=40a8f0 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=0 memsz=1 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x402d40, stack=0x7fffffffef20
+[SCHED] CREATED process #25 'networkd' idx=8 burst_score=256 tier=High
+[SPAWN] /sbin/networkd spawned pid=13
+[init] launched base service
+[SPAWN] Request from pid=12 for path=/sbin/timezone_service uid=0 gid=0 caps=0x104c0
+[SPAWN] Loading /sbin/timezone_service (98864 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=8085 memsz=8085 prot=ReadExec
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=dfe8 memsz=dfe8 prot=Read
+[ELF] PT_LOAD off=17fe8 vaddr=416fe8 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=18000 vaddr=417000 filesz=0 memsz=400e8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x4000a0, stack=0x7fffffffef20
+[SCHED] CREATED process #26 'timezone_service' idx=9 burst_score=256 tier=High
+[SPAWN] /sbin/timezone_service spawned pid=14
+[SUNLIGHTD] spawned timezone_service pid=14
+[TZ] Starting timezone_service
+[SUNLIGHTD] timezone.service: running (pid=14)
+[VFS-RPC] boot root policy installed caller=13 epoch=1 transport=copy
+[SunlightOS] timezone OK
+[VFS-RPC] boot root policy installed caller=14 epoch=1 transport=copy
+[NETD] networkd v0 starting
+[CAP] Created endpoint 8 for pid=13
+[SUNLIGHTD] capability profile niced uid=0 gid=0 caps=service-lifecycle,logging,scheduler-control
+[NETD] registered as 'networkd'
+[SPAWN] Request from pid=12 for path=/sbin/niced uid=0 gid=0 caps=0x80c0
+[SPAWN] Loading /sbin/niced (49672 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9fa5 memsz=9fa5 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=18 memsz=18 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400ec0, stack=0x7fffffffef20
+[SCHED] CREATED process #27 'niced' idx=10 burst_score=256 tier=High
+[SPAWN] /sbin/niced spawned pid=15
+[SUNLIGHTD] spawned niced pid=15
+[NICED] Starting sunlight-niced v0.1
+[VFS-RPC] boot root policy installed caller=15 epoch=1 transport=copy
+[NICED] Loaded 12 configs, 2 rules
+[NICED] TelemetryPage mapped (read-only)
+[CAP] Created endpoint 9 for pid=15
+[NICED] Registered as 'niced'
+[NICED] Monitor loop started (1Hz)
+[SUNLIGHTD] capability profile gcd uid=0 gid=0 caps=logging,scheduler-control
+[SunlightOS] niced OK
+[SPAWN] Request from pid=12 for path=/sbin/gcd uid=0 gid=0 caps=0x8080
+[SPAWN] Loading /sbin/gcd (45568 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=8e4d memsz=8e4d prot=ReadExec
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400450, stack=0x7fffffffef20
+[SCHED] CREATED process #28 'gcd' idx=11 burst_score=256 tier=High
+[SPAWN] /sbin/gcd spawned pid=16
+[SUNLIGHTD] spawned gcd pid=16
+[SPAWN] Request from pid=1 for path=/sbin/resolved uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/resolved (29184 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4195 memsz=4195 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400f50, stack=0x7fffffffef20
+[SCHED] CREATED process #29 'resolved' idx=12 burst_score=256 tier=High
+[SPAWN] /sbin/resolved spawned pid=17
+[init] launched base service
+[GCD] Starting sunlight-gcd v0.1
+[RESOLVED] resolved v0 starting
+[CAP] Created endpoint 10 for pid=16
+[CAP] Created endpoint 11 for pid=17
+[VFS-RPC] boot root policy installed caller=16 epoch=1 transport=copy
+[RESOLVED] registered as 'resolved'
+[VFS-RPC] boot root policy installed caller=17 epoch=1 transport=copy
+[RESOLVED] seeded system default OpenDNS
+[SUNLIGHTD] capability profile uac_service uid=0 gid=0 caps=authentication,logging,vfs,session-identity
+timezone: zone=UTC offset_seconds=0 dst=false application_point=timezone_service
+[SPAWN] Request from pid=12 for path=/sbin/uac_service uid=0 gid=0 caps=0x2000482
+[SPAWN] Loading /sbin/uac_service (127536 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=196a3 memsz=196a3 prot=ReadExec
+[ELF] PT_LOAD off=1b000 vaddr=41a000 filesz=3238 memsz=3238 prot=Read
+[ELF] PT_LOAD off=1e238 vaddr=41d238 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=1f000 vaddr=41e000 filesz=0 memsz=200038 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401280, stack=0x7fffffffef20
+[SCHED] CREATED process #30 'uac_service' idx=13 burst_score=256 tier=High
+[SPAWN] /sbin/uac_service spawned pid=18
+[SUNLIGHTD] spawned uac_service pid=18
+local: 2026-11-22T09:23:08 weekday=Sunday utc_epoch=1795339388
+[GCD] Registered as 'gcd'
+[TZ] Zone database loaded
+[GCD] Registered as 'proc'
+[CAP] Created endpoint 12 for pid=14
+[GCD] Subscribed to PROC_EXIT
+[UAC] uac_service main() reached
+
+[SunlightOS] gcd OK
+[UAC] Starting uac_service v0.1
+[SPAWN] Request from pid=1 for path=/sbin/powerd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/powerd (20984 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2995 memsz=2995 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400890, stack=0x7fffffffef20
+[SCHED] CREATED process #31 'powerd' idx=14 burst_score=256 tier=High
+[SPAWN] /sbin/powerd spawned pid=19
+[CAP] Created endpoint 13 for pid=18
+[init] launched base service
+[VFS-RPC] boot root policy installed caller=18 epoch=1 transport=copy
+[VFS-RPC] boot root policy installed caller=19 epoch=1 transport=copy
+[POWERD] powerd v0 starting (thermal constraints enabled)
+[UAC] Registered as 'uac'
+[CAP] Created endpoint 14 for pid=19
+[TZ] Registered as 'tz'
+[SunlightOS] uac OK
+[POWERD] registered as 'powerd'
+[SUNLIGHTD] capability profile sunlight-sm uid=0 gid=0 caps=logging
+[SPAWN] Request from pid=12 for path=/sbin/sunlight-sm uid=0 gid=0 caps=0x80
+[SPAWN] Loading /sbin/sunlight-sm (41472 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=78bd memsz=78bd prot=ReadExec
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400bb0, stack=0x7fffffffef20
+[SCHED] CREATED process #32 'sunlight-sm' idx=15 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-sm spawned pid=20
+[SUNLIGHTD] spawned sunlight-sm pid=20
+[SM] Starting sunlight-sm
+[CAP] Created endpoint 15 for pid=20
+[SPAWN] Request from pid=1 for path=/sbin/thermald uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/thermald (29184 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4715 memsz=4715 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401000, stack=0x7fffffffef20
+[SCHED] CREATED process #33 'thermald' idx=16 burst_score=256 tier=High
+[SPAWN] /sbin/thermald spawned pid=21
+[init] launched base service
+[VFS-RPC] boot root policy installed caller=20 epoch=1 transport=copy
+[THERMALD] sunlight-thermald starting (monitoring-first)
+[VFS-RPC] boot root policy installed caller=21 epoch=1 transport=copy
+[CAP] Created endpoint 16 for pid=21
+[SM] Registered as 'sm'
+[THERMALD] registered as 'thermald'
+[THERMALD] identity ready smbios=2.8 conf=2
+[THERMALD] device: QEMU Standard PC (i440FX + PIIX, 1996)
+[THERMALD] no thermal sensors (FirmwareAuto / Unavailable)
+[SPAWN] Request from pid=1 for path=/sbin/audiod uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/audiod (696832 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=ff8d memsz=ff8d prot=ReadExec
+[ELF] PT_LOAD off=11000 vaddr=410000 filesz=99000 memsz=99000 prot=Read
+[ELF] PT_LOAD off=aa000 vaddr=4a9000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401a20, stack=0x7fffffffef20
+[SCHED] CREATED process #34 'audiod' idx=17 burst_score=256 tier=High
+[SPAWN] /sbin/audiod spawned pid=22
+[init] launched base service
+[VFS-RPC] boot root policy installed caller=22 epoch=1 transport=copy
+[AUDIOD] sunlight-audiod starting
+[CAP] Created endpoint 17 for pid=22
+[CAP] Created endpoint 18 for pid=22
+[AUDIOD] registered as 'audiod.capture'
+[AUDIOD] registered as 'audiod'
+[AUDIOD] ready volume=65 muted=0 device=No audio output device available
+[AUDIOD] system-sounds theme=Sunlight Default enabled=1 volume=60 queue_cap=4
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-display uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-display (950832 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=252d9 memsz=252d9 prot=ReadExec
+[ELF] PT_LOAD off=27000 vaddr=426000 filesz=c01be memsz=c01be prot=Read
+[ELF] PT_LOAD off=e71c0 vaddr=4e61c0 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=e8000 vaddr=4e7000 filesz=0 memsz=4061 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x4132d0, stack=0x7fffffffef20
+[SCHED] CREATED process #35 'sunlight-display' idx=18 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-display spawned pid=23
+[init] launched base service
+[DISPLAY] sunlight-display v2 (window manager) starting
+
+[VFS-RPC] boot root policy installed caller=23 epoch=1 transport=copy
+[CAP] Created endpoint 19 for pid=23
+[DISPLAY] registered as display_server
+
+[SUNLIGHTD] capability profile rand_service uid=0 gid=0 caps=logging
+[SPAWN] Request from pid=1 for path=/sbin/mezzo uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/mezzo (25088 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3545 memsz=3545 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400470, stack=0x7fffffffef20
+[SCHED] CREATED process #36 'mezzo' idx=19 burst_score=256 tier=High
+[SPAWN] /sbin/mezzo spawned pid=24
+[init] launched base service
+[SPAWN] Request from pid=12 for path=/sbin/rand_service uid=0 gid=0 caps=0x80
+[SPAWN] Loading /sbin/rand_service (16888 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1c1f memsz=1c1f prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400420, stack=0x7fffffffef20
+[SCHED] CREATED process #37 'rand_service' idx=20 burst_score=256 tier=High
+[SPAWN] /sbin/rand_service spawned pid=25
+[SUNLIGHTD] spawned rand_service pid=25
+[CAP] Created endpoint 20 for pid=24
+[RAND] Starting rand_service
+[CAP] Created endpoint 21 for pid=25
+[BOOT-DISPLAY] mapped width=
+[RAND] Registered as 'rand'
+1280
+x
+800
+ pitch=
+0x00001400
+ bpp=
+32
+ mapped_len=
+4096000
+
+
+[DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4
+
+[VFS-RPC] boot root policy installed caller=24 epoch=1 transport=copy
+[DISPLAY-GEOMETRY] framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+
+[VFS-RPC] boot root policy installed caller=25 epoch=1 transport=copy
+[DISPLAY-LIMINE] immutable=true runtime_modes=false required_len=
+[SPAWN] Request from pid=1 for path=/sbin/pty_server uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/pty_server (33280 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=5665 memsz=5665 prot=ReadExec
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400010, stack=0x7fffffffef20
+[SCHED] CREATED process #38 'pty_server' idx=21 burst_score=256 tier=High
+[SPAWN] /sbin/pty_server spawned pid=26
+4096000
+[init] launched base service
+ mapped_len=
+[PTY] pty_server started
+
+4096000
+[CAP] Created endpoint 22 for pid=26
+ layout=valid
+
+[PTY] registered
+
+[display] available mode 0: 
+1280
+x
+800
+ pitch=
+5120
+ bpp=
+32
+ format=limine-framebuffer current=yes
+
+[display] current mode: 
+1280
+x
+800
+
+
+[DISPLAY] VirtIO GPU reported 
+1280
+x
+800
+
+
+[SYSCALL] mmap(0x0, 0x3e8000) -> 0x1000000000
+[VFS-RPC] boot root policy installed caller=26 epoch=1 transport=copy
+[GPU] attach_backing: va=0x1000000000 pages=1000 sg_entries=3 resource=1280x800
+[SPAWN] Request from pid=1 for path=/sbin/net_server uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/net_server (240232 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=26415 memsz=26415 prot=ReadExec
+[ELF] PT_LOAD off=28000 vaddr=427000 filesz=4c30 memsz=4c30 prot=Read
+[ELF] PT_LOAD off=2cc30 vaddr=42bc30 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=2d000 vaddr=42c000 filesz=d7ec memsz=10eca8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x409540, stack=0x7fffffffef20
+[SCHED] CREATED process #39 'net_server' idx=22 burst_score=256 tier=High
+[SPAWN] /sbin/net_server spawned pid=27
+[DISPLAY] gpu_attach_backing OK
+
+[init] launched base service
+[DISPLAY] VirtIO scanout deferred until session activation (login stays on VGA output)
+
+[CAP] Created endpoint 23 for pid=27
+[DISPLAY] display_backend=VirtIO requested=1280x800 virtio_scanout=1280x800 svga=none final=1280x800 reason=virtio-attach-ok-scanout-deferred
+
+[NET]  Registered as 'net' with init
+[DISPLAY] compositor size 1280x800 pitch=5120
+
+[NET] backend unavailable state=5 error=PCI device 15ad:07b0 not present stage=NotProbed detail=0x0
+[DISPLAY] back_buffer expected_len=
+[NET] DHCP disabled until a hardware frame backend is registered
+1024000
+ actual_len=
+[VFS-RPC] boot root policy installed caller=27 epoch=1 transport=copy
+1024000
+
+
+[DISPLAY-BUFFERS] compositor_target=1280x800 frontbuffer_bytes=4096000 backbuffer_allocation_bytes=4096000
+
+[DISPLAY] counters 
+startup
+: batches=
+0
+ cursor_x=
+640
+ cursor_y=
+400
+ clamped=
+0
+ delta_capped=
+0
+ hw_move=
+0
+ sw_move=
+0
+ sw_redraw=
+0
+ desktop_redraw=
+0
+ dirty=
+0
+ full_present=
+0
+ rect_present=
+0
+ fb_copy=
+0
+ hw_cursor=
+0
+ drag_started=
+0
+ alt_tab=
+0
+ alt_tab_repeat=
+0
+ event_polls=
+0
+ events_available=
+0
+ wrong_window=
+0
+ pointer_other_window=
+0
+ button_queued=
+0
+ button_dequeued=
+0
+ button_queue_drops=
+0
+
+
+[DISPLAY] buffers ready
+
+[DISPLAY] metrics published generation=1
+
+[SUNLIGHTD] capability profile timed uid=0 gid=0 caps=network,service-lifecycle,logging,secure-random,vfs,time-sync
+[SPAWN] Request from pid=12 for path=/sbin/timed uid=0 gid=0 caps=0x105c1
+[SPAWN] Loading /sbin/timed (45584 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=883e memsz=883e prot=ReadExec
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=20 memsz=20 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x4039e0, stack=0x7fffffffef20
+[SCHED] CREATED process #40 'timed' idx=23 burst_score=256 tier=High
+[SPAWN] /sbin/timed spawned pid=28
+[timed] Time daemon started (UTC + NTP)
+[SUNLIGHTD] spawned timed pid=28
+[VFS-RPC] boot root policy installed caller=28 epoch=1 transport=copy
+[init] base service spawn pass complete
+[VFS-RPC] root stat parked caller=1 request=2 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] native root stat caller resume/result copy OK transport=copy
+[VFS-RPC] root stat parked caller=1 request=3 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=4 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=5 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=6 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=7 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=8 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=9 epoch=1
+[VFS-RPC] root stat reply validated=true errno=2 bytes=0
+[VFS-RPC] root stat result caller=1 status=0xfffffffffffffffe
+[VFS-RPC] root stat parked caller=1 request=10 epoch=1
+[VFS-RPC] root stat reply validated=true errno=20 bytes=0
+[VFS-RPC] root stat result caller=1 status=0xffffffffffffffec
+[VFS-RPC] root stat parked caller=1 request=11 epoch=1
+[VFS-RPC] root stat reply validated=true errno=20 bytes=0
+[VFS-RPC] root stat result caller=1 status=0xffffffffffffffec
+[VFS-RPC] native path stat traversal/provenance/errors OK transport=copy
+[VFS-RPC] root stat parked caller=1 request=12 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[CAP] Created endpoint 24 for pid=28
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=13 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=14 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=15 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=16 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=17 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=18 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=19 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=20 epoch=1
+[VFS-RPC] root stat reply validated=true errno=2 bytes=0
+[VFS-RPC] root stat parked caller=1 request=21 epoch=1
+[VFS-RPC] root stat reply validated=true errno=20 bytes=0
+[VFS-RPC] root stat parked caller=1 request=22 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=23 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=24 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=25 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=26 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat result caller=1 status=0x0
+[VFS-RPC] root stat parked caller=1 request=27 epoch=1
+[VFS-RPC] root stat reply validated=true errno=2 bytes=0
+[VFS-RPC] root stat parked caller=1 request=28 epoch=1
+[VFS-RPC] root stat reply validated=true errno=20 bytes=0
+[VFS-RPC] root stat parked caller=1 request=29 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=1 request=30 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] Linux stat service routing/ABI/errors/copy recovery OK
+[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK
+[timed] Registered as 'timed'
+[SUNLIGHTD] capability profile sunlight-sessiond uid=0 gid=0 caps=spawn-user,logging,session-lock
+[SPAWN] Request from pid=12 for path=/sbin/sunlight-sessiond uid=0 gid=0 caps=0x800088
+[SPAWN] Loading /sbin/sunlight-sessiond (131592 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1c5b2 memsz=1c5b2 prot=ReadExec
+[ELF] PT_LOAD off=1e000 vaddr=41d000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=20000 vaddr=41f000 filesz=18 memsz=18 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x409af0, stack=0x7fffffffef20
+[SCHED] CREATED process #41 'sunlight-sessiond' idx=24 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-sessiond spawned pid=29
+[SUNLIGHTD] spawned sunlight-sessiond pid=29
+[CAP] Created endpoint 25 for pid=29
+[SESSION-FOUNDATION] SERVICE_READY PASS
+
+[VFS-RPC] boot root policy installed caller=29 epoch=1 transport=copy
+[SESSION-CONFIG] SERVICE_READY PASS
+
+[SUNLIGHTD] capability profile sunlight-kv uid=0 gid=0 caps=logging,storage-admin
+[VFS-RPC] root stat parked caller=29 request=31 epoch=1
+[SPAWN] Request from pid=12 for path=/sbin/sunlight-kv uid=0 gid=0 caps=0x1080
+[SPAWN] Loading /sbin/sunlight-kv (78488 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=f5ed memsz=f5ed prot=ReadExec
+[ELF] PT_LOAD off=11000 vaddr=410000 filesz=169e memsz=169e prot=Read
+[ELF] PT_LOAD off=126a0 vaddr=4116a0 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=13000 vaddr=412000 filesz=21 memsz=12a1 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x408230, stack=0x7fffffffef20
+[SCHED] CREATED process #42 'sunlight-kv' idx=25 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-kv spawned pid=30
+[SUNLIGHTD] spawned sunlight-kv pid=30
+[SUNLIGHT-KV] main() reached (no_std)
+
+[VFS-RPC] boot root policy installed caller=30 epoch=1 transport=copy
+[SUNLIGHT-KV] Starting sunlight-kv (SunlightOS mode)
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[CAP] Created endpoint 26 for pid=30
+[VFS-RPC] root stat parked caller=29 request=32 epoch=1
+[SUNLIGHT-KV] Registered as 'sunlight-kv'
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[KV][SM] lookup ok
+[VFS-RPC] root stat parked caller=29 request=33 epoch=1
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var result=deny reason=DeniedImmutableRoot err=Some(ReadOnlyFilesystem)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[VFS-RPC] root stat parked caller=20 request=34 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat reply validated=true errno=2 bytes=0
+[SESSION-CONFIG] WELCOME_BUNDLE_DISCOVERED PASS
+
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight-kv
+[SESSION-CONFIG] ELIGIBLE_BUNDLES PASS
+
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight-kv result=allow reason=AllowedServiceState err=None
+[SUNLIGHTD] capability profile wiseowl-memorydb uid=0 gid=0 caps=logging,secure-random
+[SM][MKDIR] path=/var/lib/sunlight-kv ok=true
+[SPAWN] Request from pid=12 for path=/sbin/wiseowl-memorydb uid=0 gid=0 caps=0x180
+[SPAWN] Loading /sbin/wiseowl-memorydb (410160 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=5fb64 memsz=5fb64 prot=ReadExec
+[ELF] PT_LOAD off=61000 vaddr=460000 filesz=2422 memsz=2422 prot=Read
+[ELF] PT_LOAD off=63428 vaddr=462428 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=64000 vaddr=463000 filesz=0 memsz=61 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x429ca0, stack=0x7fffffffef20
+[SCHED] CREATED process #43 'wiseowl-memorydb' idx=26 burst_score=256 tier=High
+[SPAWN] /sbin/wiseowl-memorydb spawned pid=31
+[SM][ALLOW] op=mkdir path=/var/lib/sunlight-kv len=0
+[SUNLIGHTD] spawned wiseowl-memorydb pid=31
+[SHM]  shm_free: page unmapped OK
+[KV][SM] mkdir path=/var/lib/sunlight-kv result=ok
+[WISEOWL-DB] starting wiseowl-memorydb
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SUNLIGHT-FS] request actor=Service { name: "wiseowl-memorydb" } op=Mkdir path=/state/wiseowl-memorydb
+[VFS-RPC] boot root policy installed caller=31 epoch=1 transport=copy
+[SUNLIGHT-FS] decision actor=Service { name: "wiseowl-memorydb" } op=Mkdir path=/state/wiseowl-memorydb result=allow reason=AllowedServiceState err=None
+[SHM]  map_shared_page: OK
+[WISEOWL-DB] identity storage unavailable: Io
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var result=deny reason=DeniedImmutableRoot err=Some(ReadOnlyFilesystem)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[VFS-RPC] root stat parked caller=20 request=35 epoch=1
+[VFS-RPC] root stat reply validated=true errno=2 bytes=0
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight
+[SUNLIGHTD] capability profile sunlight-dialogd uid=0 gid=0 caps=logging,user-session
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight result=allow reason=AllowedServiceState err=None
+[SPAWN] Request from pid=12 for path=/sbin/sunlight-dialogd uid=0 gid=0 caps=0x40080
+[SPAWN] Loading /sbin/sunlight-dialogd (1885000 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=f2000 memsz=f2000 prot=ReadExec
+[ELF] PT_LOAD off=f3000 vaddr=4f2000 filesz=d9000 memsz=d9000 prot=Read
+[ELF] PT_LOAD off=1cc000 vaddr=5cb000 filesz=78 memsz=18f6 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #44 'sunlight-dialogd' idx=27 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-dialogd spawned pid=32
+[SUNLIGHTD] spawned sunlight-dialogd pid=32
+[SM][MKDIR] path=/var/lib/sunlight ok=true
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SM][ALLOW] op=mkdir path=/var/lib/sunlight len=0
+[DIALOGD] starting
+
+[VFS-RPC] boot root policy installed caller=32 epoch=1 transport=copy
+[CAP] Created endpoint 27 for pid=32
+[KV][SM] mkdir path=/var/lib/sunlight result=ok
+[SUNLIGHT-KV] new live-session log; append persistence enabled
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-kv" } op=Mkdir path=/var/lib/sunlight-kv
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-kv" } op=Mkdir path=/var/lib/sunlight-kv result=allow reason=AllowedServiceState err=None
+[SUNLIGHTD] capability profile sunlight-tls uid=0 gid=0 caps=network,logging,secure-random,kv-store,time-sync
+[SUNLIGHT-KV] Entering IPC loop
+[SPAWN] Request from pid=12 for path=/sbin/sunlight-tls uid=0 gid=0 caps=0x10981
+[SPAWN] Loading /sbin/sunlight-tls (1221424 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=100a77 memsz=100a77 prot=ReadExec
+[ELF] PT_LOAD off=102000 vaddr=501000 filesz=261b8 memsz=261b8 prot=Read
+[ELF] PT_LOAD off=1281b8 vaddr=5271b8 filesz=48 memsz=48 prot=ReadWrite
+[ELF] PT_LOAD off=129000 vaddr=528000 filesz=10b8 memsz=802048 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x414a20, stack=0x7fffffffef20
+[SCHED] CREATED process #45 'sunlight-tls' idx=28 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-tls spawned pid=33
+[SUNLIGHTD] spawned sunlight-tls pid=33
+[DIALOGD] registered
+
+[SUNLIGHT-TLS] main() reached (no_std)
+
+[SUNLIGHT-TLS] Starting sunlight-tls (real rustls)
+[CAP] Created endpoint 28 for pid=33
+[SUNLIGHT-TLS] Registered as 'sunlight-tls'
+[SUNLIGHT-TLS] dbg: build_root_store start
+[SUNLIGHT-TLS] dbg: seed get index...
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000000000
+[SUNLIGHT-TLS] dbg: seeding gtsr4 (525 bytes)...
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[VFS-RPC] boot root policy installed caller=33 epoch=1 transport=copy
+[SHM]  alloc_shared_page: OK
+[SUNLIGHT-TLS] seeded kv trust store with 'gtsr4'
+[SUNLIGHT-TLS] dbg: seeding isrgx1 (1391 bytes)...
+[SHM]  map_shared_page: OK
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var result=deny reason=DeniedImmutableRoot err=Some(ReadOnlyFilesystem)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight result=allow reason=AllowedServiceState err=None
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Create path=/var/lib/sunlight/kv.store
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Create path=/var/lib/sunlight/kv.store result=allow reason=AllowedServiceState err=None
+[SM][ALLOW] op=write path=/var/lib/sunlight/kv.store len=626
+[SM][WRITE] path=/var/lib/sunlight/kv.store len=626 ok=true atomic=false reason=best-effort
+[SHM]  alloc_shared_page: OK
+[KV][SM] write path=/var/lib/sunlight/kv.store len=626 ok=true
+[SUNLIGHT-TLS] seeded kv trust store with 'isrgx1'
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var result=deny reason=DeniedImmutableRoot err=Some(ReadOnlyFilesystem)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight result=allow reason=AllowedServiceState err=None
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Create path=/var/lib/sunlight/kv.store
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Create path=/var/lib/sunlight/kv.store result=allow reason=AllowedServiceState err=None
+[SM][ALLOW] op=write path=/var/lib/sunlight/kv.store len=1493
+[SM][WRITE] path=/var/lib/sunlight/kv.store len=1493 ok=true atomic=false reason=best-effort
+[KV][SM] write path=/var/lib/sunlight/kv.store len=1493 ok=true
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var
+[SUNLIGHT-TLS] dbg: seed done, loading index
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var result=deny reason=DeniedImmutableRoot err=Some(ReadOnlyFilesystem)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Mkdir path=/var/lib/sunlight result=allow reason=AllowedServiceState err=None
+[SUNLIGHT-FS] request actor=Service { name: "sunlight-sm" } op=Create path=/var/lib/sunlight/kv.store
+[SUNLIGHT-FS] decision actor=Service { name: "sunlight-sm" } op=Create path=/var/lib/sunlight/kv.store result=allow reason=AllowedServiceState err=None
+[SM][ALLOW] op=write path=/var/lib/sunlight/kv.store len=111
+[SM][WRITE] path=/var/lib/sunlight/kv.store len=111 ok=true atomic=false reason=best-effort
+[KV][SM] write path=/var/lib/sunlight/kv.store len=111 ok=true
+[SUNLIGHT-TLS] trust += gtsr4
+[SUNLIGHT-TLS] trust += isrgx1
+[SUNLIGHT-TLS] dbg: roots loaded n=2, building config
+[SUNLIGHT-TLS] dbg: provider ready
+[SUNLIGHT-TLS] client config ready (2 roots)
+[SUNLIGHT-TLS] Entering IPC loop
+[SUNLIGHTD] capability profile sunlight-clipd uid=0 gid=0 caps=logging,kv-store
+[SPAWN] Request from pid=12 for path=/sbin/sunlight-clipd uid=0 gid=0 caps=0x880
+[SPAWN] Loading /sbin/sunlight-clipd (49712 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9735 memsz=9735 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=4e8 memsz=4e8 prot=Read
+[ELF] PT_LOAD off=b4e8 vaddr=40a4e8 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=0 memsz=30008 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400dd0, stack=0x7fffffffef20
+[SCHED] CREATED process #46 'sunlight-clipd' idx=29 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-clipd spawned pid=34
+[SUNLIGHTD] spawned sunlight-clipd pid=34
+[CLIPD] starting
+[CAP] Created endpoint 29 for pid=34
+[CLIPD] registered
+[CLIPD] history=0 current=0
+[VFS-RPC] boot root policy installed caller=34 epoch=1 transport=copy
+[SUNLIGHTD] capability profile sunlight-account-broker uid=0 gid=0 caps=network,logging,secure-random,user-session
+[SPAWN] Request from pid=12 for path=/sbin/sunlight-account-broker uid=0 gid=0 caps=0x40181
+[SPAWN] Loading /sbin/sunlight-account-broker (111240 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=12ef7 memsz=12ef7 prot=ReadExec
+[ELF] PT_LOAD off=14000 vaddr=413000 filesz=64a8 memsz=64a8 prot=Read
+[ELF] PT_LOAD off=1a4a8 vaddr=4194a8 filesz=48 memsz=48 prot=ReadWrite
+[ELF] PT_LOAD off=1b000 vaddr=41a000 filesz=10 memsz=101038 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x408ae0, stack=0x7fffffffef20
+[SCHED] CREATED process #47 'sunlight-account-broker' idx=30 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-account-broker spawned pid=35
+[SUNLIGHTD] spawned sunlight-account-broker pid=35
+[CAP] Created endpoint 30 for pid=35
+[ACCOUNT-BROKER] native service ready; production provider unconfigured; live-session KV storage ready
+[VFS-RPC] boot root policy installed caller=35 epoch=1 transport=copy
+[timer] 100 ticks elapsed
+[IPC]  round-trip test: 1000 calls OK
+[SunlightOS] Phase 2.6 OK
+[SYSCALL] setnice: pid=8 uid=0 0→-10
+[SYSCALL] setnice: pid=3 uid=0 0→-10
+[SYSCALL] setnice: pid=4 uid=0 0→-5
+[SYSCALL] setnice: pid=6 uid=0 -5→-5
+[SYSCALL] setnice: pid=7 uid=0 0→-10
+[SYSCALL] setnice: pid=8 uid=0 -10→-10
+[SYSCALL] setnice: pid=22 uid=0 0→-10
+[SYSCALL] setnice: pid=26 uid=0 0→-10
+[SYSCALL] setnice: pid=27 uid=0 0→-5
+[MOUSE] boosted to critical scheduler priority via niced
+
+[KBD] first hardware IRQ1 received
+[TTY]  Login success: root (uid=0, gid=0)
+[SunlightOS] Phase 3.7 OK
+[SESSION-CONFIG] PROFILE_DEFAULT PASS
+
+[VFS-RPC] root stat parked caller=29 request=36 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=29 request=37 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=29 request=38 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[SESSION-CONFIG] WELCOME_BUNDLE_DISCOVERED PASS
+
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/session-profile.v1.0.tmp
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/session-profile.v1.0.tmp result=allow reason=AllowedCurrentUserHome err=None
+[SESSION-CONFIG] DEFAULT_ENABLED_SEEDED PASS
+
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/session-profile.v1.0.tmp
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/session-profile.v1.0.tmp result=allow reason=AllowedCurrentUserHome err=None
+[SESSION-CONFIG] WELCOME_ID_MIGRATED PASS
+
+[SESSION-CONFIG] plan c=2 opt_plan=1 opt_rt=1 cat=3 prof=1 gen=1
+
+[SESSION-CONFIG] prof[0] id=org.sunlight.welcome pol=first-login-after-system-upgrade en=1
+
+[SESSION-CONFIG] opt[0] id=org.sunlight.welcome path=/bin/welcome
+
+[SESSION-CONFIG] welcome cat path=/bin/welcome def_en=1
+
+[SESSION-CONFIG] CURRENT_PLAN_IMMUTABLE PASS
+
+[SPAWN] Request from pid=29 for path=/bin/sunlight-vortex-shell uid=1 gid=1 caps=0x0
+[SPAWN] Loading /bin/sunlight-vortex-shell (5792592 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1779e0 memsz=1779e0 prot=ReadExec
+[ELF] PT_LOAD off=179000 vaddr=578000 filesz=40d000 memsz=40d000 prot=Read
+[ELF] PT_LOAD off=586000 vaddr=985000 filesz=80 memsz=1938 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #48 'sunlight-vortex-shell' idx=31 burst_score=256 tier=High
+[SPAWN] /bin/sunlight-vortex-shell spawned pid=36
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SESSION-FOUNDATION] SHELL_STARTED PASS
+
+[VFS-RPC] boot root policy installed caller=36 epoch=1 transport=copy
+[SESSION-FOUNDATION] SESSION_CREATED PASS
+
+[VORTEX] starting
+
+[SYSCALL] mmap(0x0, 0x1000000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001002000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001202000
+[SYSCALL] thread_spawn: parent=36 tid=37 trampoline=0x40001c
+[VFS-RPC] root stat parked caller=36 request=39 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[CAP] Created endpoint 31 for pid=37
+[VORTEX] wallpaper preparation scheduled
+
+[VFS-RPC] root stat parked caller=36 request=40 epoch=1
+[VFS-RPC] root stat reply validated=true errno=2 bytes=0
+[VORTEX] screen 
+1280
+x
+800
+
+
+[VORTEX-SURFACE] dimensions=
+1280
+x
+800
+ stride_bytes=
+5120
+ surface_bytes=
+4096000
+ compositor_target=
+1280
+x
+800
+
+
+launch[0] source=unknown Vortex Shell phase=display_connect_start timestamp_ms=4230 pid=36
+
+launch[0] source=unknown Vortex Shell phase=display_connect_done timestamp_ms=4230 pid=36
+
+launch[0] source=unknown Vortex Shell phase=window_create_request_sent timestamp_ms=4230 pid=36
+
+[DISPLAY-SURFACE] role=desktop dimensions=1280x800 stride_bytes=5120 surface_bytes=4096000 compositor_target=1280x800
+
+[SYSCALL] mmap(0x0, 0x800000) -> 0x10003e8000
+launch[0] source=unknown Vortex S phase=display_server_received_window_create timestamp_ms=4230 pid=36
+
+[DISPLAY] create_window id=
+1
+ pos=
+0
+x
+0
+ size=
+1280
+x
+800
+
+
+[APP_LIFECYCLE] app_instance_created pid=36 name=Vortex S policy=System
+
+[APP_LIFECYCLE] app_window_attached pid=36 win_id=1
+
+[APP_LIFECYCLE] app_lifecycle_policy pid=36 policy=System
+
+launch[0] source=unknown Vortex S phase=window_registered timestamp_ms=4230 pid=36
+
+launch[0] source=unknown Vortex Shell phase=window_registered timestamp_ms=4240 pid=36
+
+[CAP] Created endpoint 32 for pid=36
+[SESSION-FOUNDATION] SHELL_READY PASS
+
+[SESSION-CONFIG] SHELL_FIRST PASS
+
+[SESSION-CONFIG] optionals deferred until desktop settle
+
+[VORTEX] session component ready
+
+[VORTEX] desktop layer registered, entering event loop
+
+launch[0] source=unknown Vortex Shell phase=first_frame_or_first_draw timestamp_ms=4240 pid=36
+
+[GPU] SET_SCANOUT 1280x800 OK (scanout 0, resource 1)
+[DISPLAY] gpu_set_scanout OK — VirtIO output active
+
+[VORTEX][time] source=timezone_service local=2026-11-22T09:23:12 weekday_iso=7 formatted="Sun, Nov 22   9:23 AM"
+
+[DISPLAY] cursor_mode=software (composited sprite)
+
+[DISPLAY] [SESSION] activated — Desktop owns framebuffer
+
+[DISPLAY] framebuffer ownership acquired
+
+[SESSION] switched to F2 GraphicalDesktop
+[DISPLAY] first clear complete
+
+[ICON-SVG] pid=36 runtime raster ready
+
+launch[0] source=unknown Vortex Shell phase=on_ready_start timestamp_ms=4260 pid=36
+
+[VORTEX] on_ready: force shell chrome repaint
+
+launch[0] source=unknown Vortex Shell phase=window_visible_on_screen timestamp_ms=4260 pid=36
+
+launch[0] source=unknown Vortex Shell phase=on_ready_done timestamp_ms=4260 pid=36
+
+[VORTEX][diag] iter=
+3
+ last_ms=
+4460
+ event(in/tick/other/drop)=
+1
+/
+1
+/
+1
+/
+0
+ ipc_timeout=
+0
+ route(poll/available/dequeued/local/interleaved)=
+3
+/
+2
+/
+2
+/
+0
+/
+0
+ heap(cap/backing/request/free/largest)=
+16777216
+/
+493216
+/
+382999
+/
+16284000
+/
+16267248
+ heap(a/f/r/fail/live/high/blocks)=
+8049
+/
+6111
+/
+1735
+/
+0
+/
+1938
+/
+499680
+/
+308
+ state(win/bg/timer/watch/fd/shm)=
+0
+/
+0
+/0/0/0/
+1
+
+
+[VORTEX] wallpaper decode ok
+
+[SYSCALL] mmap(0x0, 0x3e8000) -> 0x1001204000
+[VFS-RPC] root stat parked caller=36 request=41 epoch=1
+[VFS-RPC] root stat reply validated=true errno=2 bytes=0
+[SPAWN] Request from pid=29 for path=/bin/welcome uid=1 gid=1 caps=0x0
+[SPAWN] Loading /bin/welcome (893560 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=11c50 memsz=11c50 prot=ReadExec
+[ELF] PT_LOAD off=13000 vaddr=412000 filesz=c6ab0 memsz=c6ab0 prot=Read
+[ELF] PT_LOAD off=d9ab0 vaddr=4d8ab0 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=da000 vaddr=4d9000 filesz=1 memsz=1019 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x404fd0, stack=0x7fffffffef20
+[SCHED] CREATED process #50 'welcome' idx=33 burst_score=256 tier=High
+[SPAWN] /bin/welcome spawned pid=38
+[WELCOME-WIZARD] start mode=
+[SESSION-CONFIG] NEXT_LOGIN_LAUNCH PASS
+
+automatic
+[SESSION-CONFIG] WELCOME_SESSION_ELIGIBLE PASS
+
+
+
+[WELCOME-WIZARD] BUNDLE_DISCOVERED PASS
+
+[WELCOME-WIZARD] SESSION_ELIGIBLE PASS
+
+[WELCOME-WIZARD] SHELL_READY_FIRST PASS
+
+launch[0] source=unknown Welcome to SunlightOS phase=display_connect_start timestamp_ms=6740 pid=38
+
+launch[0] source=unknown Welcome to SunlightOS phase=display_connect_done timestamp_ms=6740 pid=38
+
+launch[0] source=unknown Welcome to SunlightOS phase=window_create_request_sent timestamp_ms=6740 pid=38
+
+launch[0] source=unknown Welcome  phase=display_server_received_window_create timestamp_ms=6740 pid=38
+
+[VFS-RPC] boot root policy installed caller=38 epoch=1 transport=copy
+[DISPLAY] create_window id=
+2
+ pos=
+348
+x
+50
+ size=
+640
+x
+480
+
+
+[APP_LIFECYCLE] app_instance_created pid=38 name=Welcome  policy=ExitOnLastWindowClosed
+
+[APP_LIFECYCLE] app_window_attached pid=38 win_id=2
+
+[APP_LIFECYCLE] app_lifecycle_policy pid=38 policy=ExitOnLastWindowClosed
+
+launch[0] source=unknown Welcome  phase=window_registered timestamp_ms=6750 pid=38
+
+launch[0] source=unknown Welcome to SunlightOS phase=window_registered timestamp_ms=6750 pid=38
+
+[CAP] Created endpoint 33 for pid=38
+launch[0] source=unknown Welcome to SunlightOS phase=first_frame_or_first_draw timestamp_ms=6750 pid=38
+
+[WELCOME-WIZARD] AUTO_LAUNCH PASS
+
+launch[0] source=unknown Welcome to SunlightOS phase=on_ready_start timestamp_ms=6750 pid=38
+
+launch[0] source=unknown Welcome to SunlightOS phase=on_ready_done timestamp_ms=6750 pid=38
+
+launch[0] source=unknown Welcome to SunlightOS phase=window_visible_on_screen timestamp_ms=6750 pid=38
+
+[SESSION-CONFIG] ORDERING PASS
+
+[VORTEX] dock_app_click(
+DOS Navigator 1.51
+, 
+NotRunning
+, attempts=
+0
+, blocked=
+0
+)
+
+launch[1] source=shell app=dos-navigator phase=launch_request_received timestamp_ms=11070 delta=0ms
+
+launch[1] source=shell app=dos-navigator phase=duplicate_launch_check_done timestamp_ms=11070 delta=0ms
+
+launch[1] source=shell app=dos-navigator phase=dock_state_launching timestamp_ms=11070 delta=0ms
+
+launch[1] source=shell app=dos-navigator phase=spawn_start timestamp_ms=11070 delta=0ms
+
+launch[1] source=shell app=dos-navigator phase=request_received timestamp_ms=11080 delta=10ms
+
+[VFS-RPC] root stat parked caller=36 request=42 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=36 request=43 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=36 request=44 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[VFS-RPC] root stat parked caller=36 request=45 epoch=1
+[VFS-RPC] root stat reply validated=true errno=0 bytes=56
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3d999 memsz=3d999 prot=ReadExec
+[ELF] PT_LOAD off=3f000 vaddr=43e000 filesz=c0bf0 memsz=c0bf0 prot=Read
+[ELF] PT_LOAD off=ffbf0 vaddr=4febf0 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=100000 vaddr=4ff000 filesz=1 memsz=106a prot=ReadWrite
+[EXEC] Stack: argc=12 envc=7 auxv=2 rsp=0x7fffffffeda0
+[EXEC] Loaded ELF entry=0x40bad0, stack=0x7fffffffeda0
+[SCHED] CREATED process #51 'sunlight-chronos' idx=34 burst_score=256 tier=High
+[SYSCALL] spawn: /bin/sunlight-chronos pid=39 ppid=36
+[SYSCALL] mmap(0x0, 0x800000) -> 0x1000000000
+launch[1] source=shell app=dos-navigator phase=spawn_returned timestamp_ms=11130 delta=60ms pid=39
+
+[VFS-RPC] boot root policy installed caller=39 epoch=1 transport=copy
+launch[1] source=unknown trace phase=launch_trace_registered timestamp_ms=11140 delta=70ms pid=39
+
+[CHRONOS] guest runtime initialized
+
+[CHRONOS] DOS drives seeded
+
+[CHRONOS] connecting display window
+
+launch[0] source=unknown DOS Navigator 1.51 phase=display_connect_start timestamp_ms=11190 pid=39
+
+launch[1] source=shell app=dos-navigator phase=process_created timestamp_ms=11190 delta=120ms pid=39
+
+[VORTEX] app_launch_started(
+DOS Navigator 1.51
+, pid=
+39
+)
+
+launch[0] source=unknown DOS Navigator 1.51 phase=display_connect_done timestamp_ms=11200 pid=39
+
+launch[0] source=unknown DOS Navigator 1.51 phase=window_create_request_sent timestamp_ms=11200 pid=39
+
+launch[1] source=unknown DOS Navi phase=display_server_received_window_create timestamp_ms=11200 delta=130ms pid=39
+
+[DISPLAY] create_window id=
+3
+ pos=
+276
+x
+56
+ size=
+840
+x
+592
+
+
+[APP_LIFECYCLE] app_instance_created pid=39 name=DOS Navi policy=ExitOnLastWindowClosed
+
+[APP_LIFECYCLE] app_window_attached pid=39 win_id=3
+
+[APP_LIFECYCLE] app_lifecycle_policy pid=39 policy=ExitOnLastWindowClosed
+
+launch[1] source=unknown DOS Navi phase=window_registered timestamp_ms=11210 delta=140ms pid=39
+
+launch[0] source=unknown DOS Navigator 1.51 phase=window_registered timestamp_ms=11210 pid=39
+
+[CAP] Created endpoint 34 for pid=39
+[CHRONOS] window connected
+
+launch[0] source=unknown DOS Navigator 1.51 phase=first_frame_or_first_draw timestamp_ms=11210 pid=39
+
+launch[0] source=unknown DOS Navigator 1.51 phase=on_ready_start timestamp_ms=11210 pid=39
+
+[CHRONOS-SCHED] seq=1 wake=startup state=Running wait=none cs:ip=10CF:001A retired=32768 deadline=11220 fb=0 palette=0 mouse=1
+
+launch[1] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=11230 delta=160ms pid=39
+
+launch[0] source=unknown DOS Navigator 1.51 phase=on_ready_done timestamp_ms=11230 pid=39
+
+[CHRONOS-SCHED] seq=2 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=34816 deadline=11230 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=3 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=36864 deadline=11240 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=4 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=38912 deadline=11240 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=5 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=40960 deadline=11240 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=6 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=43008 deadline=11240 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=7 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=45056 deadline=11250 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=8 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=47104 deadline=11250 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=9 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=49152 deadline=11250 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=1 available=1 dequeued=1 wrong_window=0 local_ticks=8 interleaved_polls=1 moves=0 buttons=0 outside=0 mapped=0 guest=0,0 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_0001
+[CHRONOS-SCHED] seq=10 wake=focus state=Running wait=none cs:ip=10CF:001A retired=51200 deadline=11260 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=11 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=53248 deadline=11260 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=12 wake=budget-continuation state=Running wait=none cs:ip=10CF:001A retired=55296 deadline=11260 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=13 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0017 retired=57344 deadline=11260 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=14 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0030 retired=59392 deadline=11270 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=15 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004C retired=61440 deadline=11270 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=16 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0009 retired=63488 deadline=11270 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=17 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005F retired=65536 deadline=11270 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=18 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0021 retired=67584 deadline=11270 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=2 available=2 dequeued=2 wrong_window=0 local_ticks=16 interleaved_polls=2 moves=0 buttons=0 outside=0 mapped=0 guest=0,0 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_000
+[CHRONOS-SCHED] seq=19 wake=pointer-ownership state=Running wait=none cs:ip=4CFA:0014 retired=69632 deadline=11280 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=20 wake=budget-continuation state=Running wait=none cs:ip=4CFA:000C retired=71680 deadline=11280 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=21 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005F retired=73728 deadline=11280 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=22 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004C retired=75776 deadline=11280 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=23 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=77824 deadline=11280 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=24 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0028 retired=79872 deadline=11290 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=25 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=81920 deadline=11290 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=26 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=83968 deadline=11290 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=27 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0021 retired=86016 deadline=11290 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=3 available=3 dequeued=3 wrong_window=0 local_ticks=24 interleaved_polls=3 moves=0 buttons=0 outside=0 mapped=0 guest=0,0 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_000
+[CHRONOS-MOUSE] win=3 polls=3 available=3 dequeued=3 wrong_window=0 local_ticks=24 interleaved_polls=3 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_
+[CHRONOS-SCHED] seq=28 wake=mouse-motion state=Running wait=none cs:ip=4CFA:0012 retired=88064 deadline=11300 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=29 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=90112 deadline=11300 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=30 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0009 retired=92160 deadline=11300 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=31 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=94208 deadline=11300 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=32 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=96256 deadline=11310 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=33 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0077 retired=98304 deadline=11310 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=34 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=100352 deadline=11310 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=35 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=102400 deadline=11310 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=36 wake=budget-continuation state=Running wait=none cs:ip=4CFA:000F retired=104448 deadline=11310 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=4 available=3 dequeued=3 wrong_window=0 local_ticks=32 interleaved_polls=4 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_
+[CHRONOS-SCHED] seq=37 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=106496 deadline=11330 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=38 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0057 retired=108544 deadline=11330 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=39 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005F retired=110592 deadline=11330 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=40 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0017 retired=112640 deadline=11330 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=41 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=114688 deadline=11330 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=42 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0030 retired=116736 deadline=11340 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=43 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0063 retired=118784 deadline=11340 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=44 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0009 retired=120832 deadline=11340 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=45 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=122880 deadline=11340 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=5 available=3 dequeued=3 wrong_window=0 local_ticks=40 interleaved_polls=5 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_
+[CHRONOS-SCHED] seq=46 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0055 retired=124928 deadline=11360 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=47 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0038 retired=126976 deadline=11360 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=48 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0049 retired=129024 deadline=11360 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=49 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=131072 deadline=11360 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=50 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0079 retired=133120 deadline=11370 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=51 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004C retired=135168 deadline=11370 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=52 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0028 retired=137216 deadline=11370 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=53 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=139264 deadline=11370 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=54 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=141312 deadline=11370 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=6 available=3 dequeued=3 wrong_window=0 local_ticks=48 interleaved_polls=6 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_
+[CHRONOS-SCHED] seq=55 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0061 retired=143360 deadline=11390 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=56 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0008 retired=145408 deadline=11390 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=57 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=147456 deadline=11390 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=58 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0012 retired=149504 deadline=11390 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=59 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0014 retired=151552 deadline=11390 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=60 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004B retired=153600 deadline=11400 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=61 wake=budget-continuation state=Running wait=none cs:ip=4CFA:002F retired=155648 deadline=11400 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=62 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004F retired=157696 deadline=11400 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=63 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0079 retired=159744 deadline=11400 fb=0 palette=0 mouse=1
+
+[VORTEX] app_launch_window_attached(
+DOS Navigator 1.51
+, 
+3
+)
+
+launch[1] source=shell app=dos-navigator phase=dock_state_running timestamp_ms=11410 delta=340ms pid=39
+
+[CHRONOS-MOUSE] win=3 polls=7 available=3 dequeued=3 wrong_window=0 local_ticks=56 interleaved_polls=7 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_
+[CHRONOS-SCHED] seq=64 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0050 retired=161792 deadline=11420 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=65 wake=budget-continuation state=Running wait=none cs:ip=4CFA:001C retired=163840 deadline=11420 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=66 wake=budget-continuation state=Running wait=none cs:ip=4CFA:000C retired=165888 deadline=11420 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=67 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0077 retired=167936 deadline=11420 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=68 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0021 retired=169984 deadline=11420 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=69 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=172032 deadline=11430 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=70 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0079 retired=174080 deadline=11430 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=71 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0079 retired=176128 deadline=11430 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=72 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0030 retired=178176 deadline=11430 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=8 available=3 dequeued=3 wrong_window=0 local_ticks=64 interleaved_polls=8 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int33_
+[CHRONOS-SCHED] seq=73 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=180224 deadline=11450 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=74 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=182272 deadline=11450 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=75 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0077 retired=184320 deadline=11450 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=76 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=186368 deadline=11450 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=77 wake=budget-continuation state=Running wait=none cs:ip=4CFA:001E retired=188416 deadline=11450 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=78 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0052 retired=190464 deadline=11460 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=79 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0077 retired=192512 deadline=11460 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=80 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0009 retired=194560 deadline=11460 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=81 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=196608 deadline=11460 fb=0 palette=0 mouse=1
+
+[THERMALD] idle-cost 10s: wakes=11 samples=10 idle_timeouts=11 wait_ms=1000
+[CHRONOS-SCHED] seq=82 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0057 retired=198656 deadline=11480 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=83 wake=budget-continuation state=Running wait=none cs:ip=4CFA:000C retired=200704 deadline=11480 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=84 wake=budget-continuation state=Running wait=none cs:ip=4CFA:003C retired=202752 deadline=11480 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=85 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=204800 deadline=11480 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=86 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0079 retired=206848 deadline=11480 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=87 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0057 retired=208896 deadline=11480 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=88 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004B retired=210944 deadline=11480 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=89 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=212992 deadline=11490 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=90 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=215040 deadline=11490 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=91 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005F retired=217088 deadline=11510 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=92 wake=budget-continuation state=Running wait=none cs:ip=4CFA:002C retired=219136 deadline=11520 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=93 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0014 retired=221184 deadline=11530 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=94 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=223232 deadline=11530 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=95 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=225280 deadline=11530 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=96 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0049 retired=227328 deadline=11530 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=97 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005F retired=229376 deadline=11530 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=98 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0057 retired=231424 deadline=11530 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=99 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=233472 deadline=11540 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=100 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0079 retired=235520 deadline=11560 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=101 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=237568 deadline=11560 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=102 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004C retired=239616 deadline=11560 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=103 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=241664 deadline=11560 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=104 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=243712 deadline=11560 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=105 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0052 retired=245760 deadline=11560 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=106 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0079 retired=247808 deadline=11560 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=107 wake=budget-continuation state=Running wait=none cs:ip=4CFA:000E retired=249856 deadline=11570 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=108 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0057 retired=251904 deadline=11570 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=109 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=253952 deadline=11590 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=110 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0057 retired=256000 deadline=11590 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=111 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=258048 deadline=11590 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=112 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=260096 deadline=11590 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=113 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=262144 deadline=11590 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=114 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0063 retired=264192 deadline=11590 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=115 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005D retired=266240 deadline=11600 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=116 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004C retired=268288 deadline=11600 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=117 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004C retired=270336 deadline=11600 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=118 wake=budget-continuation state=Running wait=none cs:ip=4CFA:004C retired=272384 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=119 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=274432 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=120 wake=budget-continuation state=Running wait=none cs:ip=4CFA:001B retired=276480 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=121 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0017 retired=278528 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=122 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005F retired=280576 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=123 wake=budget-continuation state=Running wait=none cs:ip=4CFA:001E retired=282624 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=124 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0009 retired=284672 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=125 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0057 retired=286720 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=126 wake=budget-continuation state=Running wait=none cs:ip=4CFA:0059 retired=288768 deadline=11680 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=127 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005F retired=290816 deadline=11710 fb=0 palette=0 mouse=1
+
+[CHRONOS-SCHED] seq=128 wake=budget-continuation state=Running wait=none cs:ip=4CFA:005B retired=292864 deadline=11710 fb=0 palette=0 mouse=1
+
+[CHRONOS-MOUSE] win=3 polls=64 available=3 dequeued=3 wrong_window=0 local_ticks=512 interleaved_polls=64 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 int
+[CHRONOS-MOUSE] win=3 polls=128 available=3 dequeued=3 wrong_window=0 local_ticks=1024 interleaved_polls=128 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 
+[CHRONOS-MOUSE] win=3 polls=192 available=3 dequeued=3 wrong_window=0 local_ticks=1536 interleaved_polls=192 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 
+[CHRONOS-MOUSE] win=3 polls=256 available=3 dequeued=3 wrong_window=0 local_ticks=2048 interleaved_polls=256 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 
+[CHRONOS-MOUSE] win=3 polls=320 available=3 dequeued=3 wrong_window=0 local_ticks=2560 interleaved_polls=320 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 
+[CHRONOS-MOUSE] win=3 polls=384 available=3 dequeued=3 wrong_window=0 local_ticks=3072 interleaved_polls=384 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 
+[CHRONOS-MOUSE] win=3 polls=448 available=5 dequeued=5 wrong_window=0 local_ticks=3584 interleaved_polls=448 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=0 
+[CHRONOS-MOUSE] win=3 polls=512 available=11 dequeued=11 wrong_window=0 local_ticks=4096 interleaved_polls=512 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[CHRONOS-MOUSE] win=3 polls=576 available=11 dequeued=11 wrong_window=0 local_ticks=4608 interleaved_polls=576 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[CHRONOS-MOUSE] win=3 polls=640 available=14 dequeued=14 wrong_window=0 local_ticks=5120 interleaved_polls=640 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[CHRONOS-MOUSE] win=3 polls=704 available=14 dequeued=14 wrong_window=0 local_ticks=5632 interleaved_polls=704 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[CHRONOS-MOUSE] win=3 polls=768 available=16 dequeued=16 wrong_window=0 local_ticks=6144 interleaved_polls=768 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[CHRONOS-MOUSE] win=3 polls=832 available=16 dequeued=16 wrong_window=0 local_ticks=6656 interleaved_polls=832 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[CHRONOS-MOUSE] win=3 polls=896 available=18 dequeued=18 wrong_window=0 local_ticks=7168 interleaved_polls=896 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[CHRONOS-MOUSE] win=3 polls=960 available=18 dequeued=18 wrong_window=0 local_ticks=7680 interleaved_polls=960 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0000=
+[VORTEX][diag] iter=
+217
+ last_ms=
+34530
+ event(in/tick/other/drop)=
+70
+/
+145
+/
+2
+/
+0
+ ipc_timeout=
+0
+ route(poll/available/dequeued/local/interleaved)=
+216
+/
+72
+/
+72
+/
+0
+/
+0
+ heap(cap/backing/request/free/largest)=
+16777216
+/
+543456
+/
+425433
+/
+16233760
+/
+16210240
+ heap(a/f/r/fail/live/high/blocks)=
+10339
+/
+8264
+/
+2153
+/
+0
+/
+2075
+/
+10744200
+/
+325
+ state(win/bg/timer/watch/fd/shm)=
+0
+/
+1
+/0/0/0/
+1
+
+
+[CHRONOS-MOUSE] win=3 polls=1024 available=18 dequeued=18 wrong_window=0 local_ticks=8192 interleaved_polls=1024 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_000
+[CHRONOS-MOUSE] win=3 polls=1088 available=20 dequeued=20 wrong_window=0 local_ticks=8704 interleaved_polls=1088 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_000
+[CHRONOS-MOUSE] win=3 polls=1152 available=20 dequeued=20 wrong_window=0 local_ticks=9216 interleaved_polls=1152 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_000
+[CHRONOS-MOUSE] win=3 polls=1216 available=22 dequeued=22 wrong_window=0 local_ticks=9728 interleaved_polls=1216 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_000
+[CHRONOS-MOUSE] win=3 polls=1280 available=22 dequeued=22 wrong_window=0 local_ticks=10240 interleaved_polls=1280 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1344 available=26 dequeued=26 wrong_window=0 local_ticks=10752 interleaved_polls=1344 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1408 available=26 dequeued=26 wrong_window=0 local_ticks=11264 interleaved_polls=1408 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1472 available=32 dequeued=32 wrong_window=0 local_ticks=11776 interleaved_polls=1472 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1536 available=32 dequeued=32 wrong_window=0 local_ticks=12288 interleaved_polls=1536 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1600 available=39 dequeued=39 wrong_window=0 local_ticks=12800 interleaved_polls=1600 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1664 available=39 dequeued=39 wrong_window=0 local_ticks=13312 interleaved_polls=1664 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1728 available=42 dequeued=42 wrong_window=0 local_ticks=13824 interleaved_polls=1728 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1792 available=42 dequeued=42 wrong_window=0 local_ticks=14336 interleaved_polls=1792 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.FLG
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.FLG result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay result=allow reason=AllowedCurrentUserHome err=None
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.HIS
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/root/.config/sunlight/chronos/org.sunlight.chronos.dos-navigator/overlay/DN.HIS result=allow reason=AllowedCurrentUserHome err=None
+[CHRONOS-MOUSE] win=3 polls=1856 available=45 dequeued=45 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[TIME-CHECKPOINT] elapsed_target_secs=60 cpu=0 monotonic_ns=60000000000 global_ticks=6000 realtime_utc_unix=1795339448 realtime_base_unix=1795339388 realtime_base_ticks=0 last_update_owner=boot-rtc
+[TIME-CHECKPOINT] layer=timezone_service elapsed_target_secs=60 monotonic_ms=60440 realtime_utc_unix=1795339448 zone=UTC offset_seconds=0 local=2026-11-22T09:24:08 weekday=Sunday
+[VORTEX][diag] iter=
+364
+ last_ms=
+64640
+ event(in/tick/other/drop)=
+70
+/
+292
+/
+2
+/
+0
+ ipc_timeout=
+0
+ route(poll/available/dequeued/local/interleaved)=
+363
+/
+72
+/
+72
+/
+0
+/
+0
+ heap(cap/backing/request/free/largest)=
+16777216
+/
+543456
+/
+425433
+/
+16233760
+/
+16210240
+ heap(a/f/r/fail/live/high/blocks)=
+11536
+/
+9461
+/
+2525
+/
+0
+/
+2075
+/
+10744200
+/
+325
+ state(win/bg/timer/watch/fd/shm)=
+0
+/
+1
+/0/0/0/
+1
+
+
+[CHRONOS-MOUSE] win=3 polls=1920 available=45 dequeued=45 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=1 buttons=0 outside=0 mapped=1 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1927 available=46 dequeued=46 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=2 buttons=0 outside=0 mapped=2 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1928 available=47 dequeued=47 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=3 buttons=0 outside=0 mapped=3 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1930 available=48 dequeued=48 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=4 buttons=0 outside=0 mapped=4 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1932 available=49 dequeued=49 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=5 buttons=0 outside=0 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1934 available=50 dequeued=50 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=6 buttons=0 outside=1 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1936 available=51 dequeued=51 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=7 buttons=0 outside=2 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1938 available=52 dequeued=52 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=8 buttons=0 outside=3 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1940 available=53 dequeued=53 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=9 buttons=0 outside=4 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_00
+[CHRONOS-MOUSE] win=3 polls=1948 available=56 dequeued=56 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=10 buttons=0 outside=5 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0
+[CHRONOS-MOUSE] win=3 polls=1950 available=57 dequeued=57 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=11 buttons=0 outside=6 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0
+[CHRONOS-MOUSE] win=3 polls=1951 available=58 dequeued=58 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=12 buttons=0 outside=7 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0
+[CHRONOS-MOUSE] win=3 polls=1953 available=59 dequeued=59 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=13 buttons=0 outside=8 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0
+[CHRONOS-MOUSE] win=3 polls=1955 available=60 dequeued=60 wrong_window=0 local_ticks=14613 interleaved_polls=1826 moves=14 buttons=0 outside=9 mapped=5 guest=319,99 updates=0 gen_changes=0 mouse_gen=1 edges=0 duplicate_edges=0 int33_state_queries=0 int33_0

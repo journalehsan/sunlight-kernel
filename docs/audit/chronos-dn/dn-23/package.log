@@ -1,0 +1,19 @@
+PASS: 63 byte-identical DOS files; manifest, icon and static install paths verified
+PASS: 63 byte-identical DOS files; manifest, icon and static install paths verified
+Archive digest:
+f6dee3904945a2f390f8576a5d18d83446f4554e43d6f0a3c75f8aa5b570d7d9  target/dos-navigator/dn151.zip
+Bundle structure:
+DosNavigator.sunapp
+DosNavigator.sunapp/Program
+DosNavigator.sunapp/Program/CD
+DosNavigator.sunapp/Program/COLORS
+DosNavigator.sunapp/Program/ENG
+DosNavigator.sunapp/Program/RUS
+DosNavigator.sunapp/Program/SSAVERS
+DosNavigator.sunapp/Program/XLT
+DosNavigator.sunapp/Resources
+MZ signatures:
+DosNavigator.sunapp/Program/DN.COM: DOS executable (COM), start instruction 0xe9e90473 73737373
+DosNavigator.sunapp/Program/DN.PRG: MS-DOS executable, MZ for MS-DOS
+DosNavigator.sunapp/Program/DN.OVR: data
+Repository diff whitespace check:

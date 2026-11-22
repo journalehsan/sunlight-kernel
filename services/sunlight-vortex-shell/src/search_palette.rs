@@ -186,6 +186,14 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         category: "Network",
     },
     SearchEntry {
+        app_id: AppId::DosNavigator,
+        title: "DOS Navigator 1.51",
+        aliases: &["dos navigator", "dn", "dos-navigator"],
+        keywords: &["file manager", "dos"],
+        action: SearchAction::LaunchApp(AppId::DosNavigator),
+        category: "Productivity",
+    },
+    SearchEntry {
         app_id: AppId::Mines,
         title: "Sunlight Mines",
         aliases: &["mines", "minesweeper"],
@@ -385,6 +393,7 @@ fn app_id_token(id: AppId) -> &'static str {
         AppId::RappidRabbit => "rappidrabbit",
         AppId::ApiLab => "apilab",
         AppId::Mines => "mines",
+        AppId::DosNavigator => "dosnavigator",
         AppId::SiliconEchoes => "siliconechoes",
         AppId::Empires => "sunlightempires",
         AppId::Welcome => "welcome",

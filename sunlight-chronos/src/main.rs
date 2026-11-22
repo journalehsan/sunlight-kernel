@@ -7,9 +7,6 @@ extern crate alloc;
 use alloc::format;
 use alloc::{collections::VecDeque, string::String, vec, vec::Vec};
 
-#[cfg(not(test))]
-use core::alloc::{GlobalAlloc, Layout};
-
 use chronos_core::{
     display_char, translate_key_press, BiosKey, GuestState, GuestStateKind, GuestVideoMode,
     GuestWaitReason, HostKeyEvent, MouseViewport, Rgb8, Runtime, SliceStopReason,
@@ -51,35 +48,9 @@ const DOS_CURSOR: Color = Color::rgb(255, 181, 71);
 #[cfg(not(test))]
 const MAX_HOST_FILE: usize = 64 * 1024;
 #[cfg(not(test))]
+const MAX_BUNDLE_PROGRAM_FILE: usize = 1024 * 1024;
+#[cfg(not(test))]
 const MAX_IMPORT_DEPTH: usize = 8;
-#[cfg(not(test))]
-const HEAP_SIZE: usize = 4 * 1024 * 1024;
-
-#[cfg(not(test))]
-struct BumpAllocator;
-
-#[cfg(not(test))]
-unsafe impl GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
-        static mut NEXT: usize = 0;
-
-        let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
-        let end = aligned.saturating_add(layout.size());
-        if end > HEAP_SIZE {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        core::ptr::addr_of_mut!(HEAP).cast::<u8>().add(aligned)
-    }
-
-    unsafe fn dealloc(&self, _pointer: *mut u8, _layout: Layout) {}
-}
-
-#[cfg(not(test))]
-#[global_allocator]
-static ALLOC: BumpAllocator = BumpAllocator;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RuntimeWakeSource {
     Startup,
@@ -217,9 +188,14 @@ impl ChronosApp {
 
     #[cfg(not(test))]
     fn launch(config: ChronosLaunch) -> Self {
-        let image = read_file(&config.entry).unwrap_or_else(|| CHRONOS_INTERACTIVE_COM.to_vec());
-        debug_log("[CHRONOS] guest image loaded\n");
-        let (mut runtime, load_error) = match Runtime::from_program(&image, &config.command_tail) {
+        let bundled = config.bundle_root.is_some();
+        let image = read_file(&config.entry, bundled);
+        let loaded = match image.as_deref() {
+            Some(image) => Runtime::from_program(image, &config.command_tail),
+            None if bundled => Err(LoaderError::UnsupportedExecutableFormat),
+            None => Runtime::from_program(CHRONOS_INTERACTIVE_COM, &config.command_tail),
+        };
+        let (mut runtime, load_error) = match loaded {
             Ok(runtime) => (runtime, None),
             Err(error) => {
                 log_loader_error(&error);
@@ -230,6 +206,7 @@ impl ChronosApp {
             }
         };
         debug_log("[CHRONOS] guest runtime initialized\n");
+        runtime.set_cpu_profile(config.cpu_profile);
         runtime.set_application_id(config.app_id.as_bytes());
         runtime.set_executable_path(config.entry_name().as_bytes());
         runtime.set_guest_unix_time(get_time_utc());
@@ -1653,6 +1630,7 @@ struct ChronosLaunch {
     bundle_root: Option<String>,
     documents_root: Option<String>,
     direct: bool,
+    cpu_profile: chronos_core::CpuProfile,
     command_tail: Vec<u8>,
 }
 
@@ -1660,6 +1638,7 @@ struct ChronosLaunch {
 #[derive(Clone)]
 struct ChronosStorage {
     c_base: String,
+    bundled: bool,
     c_dependencies: Option<String>,
     c_overlay: String,
     documents_root: Option<String>,
@@ -1686,6 +1665,12 @@ impl ChronosLaunch {
         let title = argument(&values, b"--chronos-title")?;
         let bundle_root = argument(&values, b"--chronos-bundle");
         let documents_root = argument(&values, b"--chronos-documents");
+        let cpu_profile = match argument(&values, b"--chronos-cpu") {
+            Some(b"186" | b"80186") if bundled => chronos_core::CpuProfile::I80186,
+            Some(b"286" | b"80286") if bundled => chronos_core::CpuProfile::I80286,
+            Some(b"386" | b"80386") if bundled => chronos_core::CpuProfile::I80386RealMode,
+            _ => chronos_core::CpuProfile::I8086,
+        };
         if entry.len() >= 255 || app_id.len() > 80 || title.len() > 100 {
             return None;
         }
@@ -1697,6 +1682,7 @@ impl ChronosLaunch {
             b"--chronos-app-id".as_slice(),
             b"--chronos-title".as_slice(),
             b"--chronos-documents".as_slice(),
+            b"--chronos-cpu".as_slice(),
         ];
         let mut index = 1usize;
         while index < values.len() {
@@ -1720,6 +1706,7 @@ impl ChronosLaunch {
             bundle_root: bundle_root.and_then(|value| String::from_utf8(value.to_vec()).ok()),
             documents_root: documents_root.and_then(|value| String::from_utf8(value.to_vec()).ok()),
             direct,
+            cpu_profile,
             command_tail,
         })
     }
@@ -1738,6 +1725,7 @@ impl ChronosLaunch {
         };
         ChronosStorage {
             c_base,
+            bundled: self.bundle_root.is_some(),
             c_dependencies: self
                 .bundle_root
                 .as_ref()
@@ -1768,13 +1756,21 @@ fn argument<'a>(values: &[&'a [u8]], key: &[u8]) -> Option<&'a [u8]> {
 
 #[cfg(not(test))]
 fn seed_drives(runtime: &mut Runtime, storage: &ChronosStorage) {
-    import_directory(runtime, DosDrive::C, &storage.c_base, "", false, 0);
+    import_directory(
+        runtime,
+        DosDrive::C,
+        &storage.c_base,
+        "",
+        false,
+        storage.bundled,
+        0,
+    );
     if let Some(dependencies) = &storage.c_dependencies {
-        import_directory(runtime, DosDrive::C, dependencies, "", false, 0);
+        import_directory(runtime, DosDrive::C, dependencies, "", false, false, 0);
     }
-    import_directory(runtime, DosDrive::C, &storage.c_overlay, "", true, 0);
+    import_directory(runtime, DosDrive::C, &storage.c_overlay, "", true, false, 0);
     if let Some(documents) = &storage.documents_root {
-        import_directory(runtime, DosDrive::D, documents, "", false, 0);
+        import_directory(runtime, DosDrive::D, documents, "", false, false, 0);
     } else {
         runtime
             .drives_mut()
@@ -1789,6 +1785,7 @@ fn import_directory(
     host_root: &str,
     guest_prefix: &str,
     overlay: bool,
+    bundled_program: bool,
     depth: usize,
 ) {
     if depth >= MAX_IMPORT_DEPTH {
@@ -1820,9 +1817,17 @@ fn import_directory(
             } else {
                 let _ = runtime.drives_mut().add_base_directory(drive, &guest);
             }
-            import_directory(runtime, drive, &host, &guest, overlay, depth + 1);
+            import_directory(
+                runtime,
+                drive,
+                &host,
+                &guest,
+                overlay,
+                bundled_program,
+                depth + 1,
+            );
         } else if entry.file_type == sunlight_libc::FT_FILE {
-            let Some(data) = read_file(&host) else {
+            let Some(data) = read_file(&host, bundled_program) else {
                 continue;
             };
             if overlay {
@@ -1872,20 +1877,32 @@ fn persist_drive(runtime: &Runtime, drive: DosDrive, root: &str) {
 }
 
 #[cfg(not(test))]
-fn read_file(path: &str) -> Option<Vec<u8>> {
+fn read_file(path: &str, bundled_program: bool) -> Option<Vec<u8>> {
+    let limit = if bundled_program {
+        MAX_BUNDLE_PROGRAM_FILE
+    } else {
+        MAX_HOST_FILE
+    };
     let fd = sunlight_libc::open(path.as_bytes()).ok()?;
-    let mut data = Vec::new();
-    let mut buffer = [0u8; 1024];
-    while data.len() < MAX_HOST_FILE {
-        let read = sunlight_libc::read(fd, &mut buffer).ok()?;
-        if read == 0 {
-            break;
+    let result = (|| {
+        let mut data = Vec::new();
+        let mut buffer = [0u8; 1024];
+        while data.len() < limit {
+            let remaining = (limit - data.len()).min(buffer.len());
+            let read = sunlight_libc::read(fd, &mut buffer[..remaining]).ok()?;
+            if read == 0 {
+                return Some(data);
+            }
+            data.extend_from_slice(&buffer[..read]);
         }
-        let remaining = MAX_HOST_FILE - data.len();
-        data.extend_from_slice(&buffer[..read.min(remaining)]);
-    }
+        // Never hand the guest a partially imported bundled executable or overlay.
+        if bundled_program && sunlight_libc::read(fd, &mut buffer[..1]).ok()? != 0 {
+            return None;
+        }
+        Some(data)
+    })();
     let _ = sunlight_libc::close(fd);
-    Some(data)
+    result
 }
 
 #[cfg(not(test))]

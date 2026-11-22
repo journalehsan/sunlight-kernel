@@ -1,0 +1,44 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/chronos_core-878f314fe6be0f29)
+
+running 5 tests
+test runtime::tests::installed_multiplex_handler_runs_in_guest_and_iret_restores_the_frame ... ok
+test dos::tests::unsupported_lfn_multiplex_returns_a_dos_error_without_trapping ... ok
+test runtime::tests::multiplex_predecessor_accepts_far_call_and_tail_jump ... ok
+test runtime::tests::guest_installs_queries_invokes_and_restores_multiplex_vector ... ok
+test dos::tests::absent_multiplex_executes_guest_iret_for_arbitrary_functions ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 193 filtered out; finished in 0.00s
+
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/chronos_core-878f314fe6be0f29)
+
+running 2 tests
+test dos::tests::enhanced_keyboard_status_reports_and_preserves_the_next_event ... ok
+test dos::tests::enhanced_keyboard_read_consumes_in_order_and_waits_when_empty ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 196 filtered out; finished in 0.00s
+
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/chronos_core-878f314fe6be0f29)
+
+running 1 test
+test dos::tests::drive_selection_and_find_first_write_a_dta_result ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.00s
+
