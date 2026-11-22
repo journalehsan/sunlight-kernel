@@ -1914,3 +1914,40 @@ upgrade a desktop result.
 Num Lock in these tests is local to the Chronos session and starts off.
 With the lock on, Shift temporarily restores keypad navigation. The
 guest input setting does not follow the host keyboard LED.
+
+## DN-26 keyboard contract and dialog compatibility
+
+See the [DN-26 audit](../audit/chronos-dn/dn-26/README.md) for the baseline,
+implementation, and limits. Guest service tests here execute real-mode INT
+instructions in the host Chronos runtime; they are separate from the authentic
+SunApp desktop run.
+
+| Capability | Test method | Result | Evidence | Remaining limitation |
+| --- | --- | --- | --- | --- |
+| BIOS modifier status | Execute INT 16h/AH=02h and 12h after physical modifier events; assert FLAGS and returned side bits | PASS | [Guest INT probe](../audit/chronos-dn/dn-26/focused-dos-bios.log) | Host guest probe; other BIOS locks, BDA mirroring and firmware actions remain untested |
+| Left/right make and break | Overlap Shift/Ctrl/Alt sides, repeat a make, release one side, inject Print Screen edges and clear focus state; run the driver Pause test | PASS | [Guest INT probe](../audit/chronos-dn/dn-26/focused-dos-bios.log), [driver suite](../audit/chronos-dn/dn-26/host-tests.log) | Physical keyboard hardware and modifier flags for makes missed before focus were not measured |
+| DOS byte-oriented reads | Execute INT 21h/AH=01h, 06h/DL=FFh, 07h, 08h, 0Bh and 0Ch with ASCII and extended events; check byte order, wait/poll, echo, flush and FLAGS | PASS | [Guest INT probe](../audit/chronos-dn/dn-26/focused-dos-bios.log) | Guest console, not redirected handle input; no assertion that DN uses these calls |
+| DOS break handling and redirection | Check raw byte 03h through 06h/07h; inspect dispatch and handle lookup | PARTIAL | [Guest INT probe](../audit/chronos-dn/dn-26/focused-dos-bios.log), [scope](../audit/chronos-dn/dn-26/README.md) | No INT 23h delivery, Ctrl-Break or redirected character service coverage |
+| DOS buffered input | Execute AH=0Ah with live input and prequeued input; verify BS, capacity, CR, and the following FIFO entry | PARTIAL | [Guest INT probe](../audit/chronos-dn/dn-26/focused-dos-bios.log), [live input test](../audit/chronos-dn/dn-26/host-tests.log) | Simple console line editing only; DOS template and extended editing, overflow bell and redirection remain unsupported |
+| Select dialog text editing | From the COLORS panel send keypad +, edit `*.*` through empty, `abbc`, `abc`, `bc` and `zc`; Escape, reopen, then Enter | PASS | [Dialog trace and scanouts](../audit/chronos-dn/dn-26/README.md#authentic-dn-dialog-and-desktop-replay) | Enter selected 13 files; no file editor or saved edits tested |
+| Select dialog Ctrl/Alt navigation | Send right Ctrl+Left and right Alt+Right; compare BIOS reads and scanout | PARTIAL | [Trace](../audit/chronos-dn/dn-26/native/keyboard.log), [scanout](../audit/chronos-dn/dn-26/native/dn-1-mask-chords.png) | Both chords reached DN; no separate visible Alt effect established |
+| DN-25 keyboard and authentic desktop | Launch packaged DN twice in QEMU via desktop search, replay keypad/navigation and exit | PASS | [Desktop replay](../audit/chronos-dn/dn-26/desktop.log), [keyboard trace](../audit/chronos-dn/dn-26/native/keyboard.log) | 4 GiB, two vCPUs, QMP to PS/2; native traces establish enhanced BIOS reads, not DOS byte services |
+| Natural DN and Chronos exit | Confirm guest code 0, native code 0, window cleanup and reaping twice | PASS | [Lifecycle](../audit/chronos-dn/dn-26/native/lifecycle.log) | Two launches with the existing opt-in completion policy |
+
+## DN-27: Shift selection in the file mask
+
+The packaged DOS Navigator reads the Shift bits directly from guest BIOS
+Data Area byte `0040:0017` while handling the arrow keys in **Select → File
+mask**. It uses enhanced INT 16h to obtain the arrow events. The
+[DN-27 audit](../audit/chronos-dn/dn-27/README.md) records the executing
+instruction, the stale baseline byte and the visible dialog checks.
+
+Chronos mirrors its modeled right/left Shift, combined Ctrl/Alt and Num Lock
+bits into that guest byte when processing keyboard and focus state. No DOS
+Navigator package files changed. The other BDA bits and the BIOS keyboard
+service interface retain their behavior.
+
+In the 4 GiB QEMU desktop, either Shift key with Left/Right extends or
+contracts the visible selection around its original anchor. Releasing
+Shift ends extension; the next plain arrow clears the highlight. See the
+[audit screenshots and scanout checks](../audit/chronos-dn/dn-27/README.md#authentic-sunapp-result).

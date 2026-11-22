@@ -1,0 +1,491 @@
+1955:[CHRONOS-KEY] host=KeyPress { keycode: 68, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 68 }) queued_before=0
+1957:[CHRONOS-KEY] int16 ah=11 ax=4400 flags=f206 queued=1
+1959:[CHRONOS-KEY] int16 ah=10 ax=4400 flags=f206 queued=0
+1961:[CHRONOS-KEY] host=KeyPress { keycode: 68, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+1965:[CHRONOS-KEY] host=KeyPress { keycode: 50, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+1967:[CHRONOS-KEY] host=Key('m') key=Some(BiosKey { ascii: 109, scan_code: 0 }) queued_before=0
+1969:[CHRONOS-KEY] int16 ah=11 ax=006d flags=f206 queued=1
+1971:[CHRONOS-KEY] int16 ah=10 ax=006d flags=f206 queued=0
+1973:[CHRONOS-KEY] host=KeyPress { keycode: 50, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+1975:[CHRONOS-KEY] host=KeyPress { keycode: 49, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+1977:[CHRONOS-KEY] host=Key('n') key=Some(BiosKey { ascii: 110, scan_code: 0 }) queued_before=0
+1979:[CHRONOS-KEY] int16 ah=11 ax=006e flags=f206 queued=1
+1981:[CHRONOS-KEY] int16 ah=10 ax=006e flags=f206 queued=0
+1983:[CHRONOS-KEY] host=KeyPress { keycode: 49, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2044:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2046:[CHRONOS-KEY] host=Key('c') key=Some(BiosKey { ascii: 99, scan_code: 0 }) queued_before=0
+2048:[CHRONOS-KEY] int16 ah=11 ax=0063 flags=f206 queued=1
+2050:[CHRONOS-KEY] int16 ah=10 ax=0063 flags=f206 queued=0
+2052:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2058:[CHRONOS-KEY] host=KeyPress { keycode: 15, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 9, scan_code: 15 }) queued_before=0
+2060:[CHRONOS-KEY] int16 ah=11 ax=0f09 flags=f206 queued=1
+2062:[CHRONOS-KEY] int16 ah=10 ax=0f09 flags=f206 queued=0
+2064:[CHRONOS-KEY] host=KeyPress { keycode: 15, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2066:[CHRONOS-KEY] host=KeyPress { keycode: 80, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 80 }) queued_before=0
+2068:[CHRONOS-KEY] int16 ah=11 ax=50e0 flags=f206 queued=1
+2070:[CHRONOS-KEY] int16 ah=10 ax=50e0 flags=f206 queued=0
+2072:[CHRONOS-KEY] host=KeyPress { keycode: 80, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2077:[CHRONOS-KEY] host=KeyPress { keycode: 28, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 13, scan_code: 28 }) queued_before=0
+2079:[CHRONOS-KEY] int16 ah=11 ax=1c0d flags=f206 queued=1
+2081:[CHRONOS-KEY] int16 ah=10 ax=1c0d flags=f206 queued=0
+2083:[CHRONOS-KEY] host=KeyPress { keycode: 28, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2087:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: false, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0
+2089:[CHRONOS-KEY] host=KeyPress { keycode: 61, extended: false, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 96 }) queued_before=0
+2091:[CHRONOS-KEY] int16 ah=11 ax=6000 flags=f206 queued=1
+2093:[CHRONOS-KEY] int16 ah=10 ax=6000 flags=f206 queued=0
+2095:[CHRONOS-KEY] host=KeyPress { keycode: 61, extended: false, pressed: false, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0
+2098:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2102:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 27, scan_code: 1 }) queued_before=0
+2104:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+2106:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+2108:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2113:[CHRONOS-KEY] host=KeyPress { keycode: 78, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 43, scan_code: 78 }) queued_before=0
+2115:[CHRONOS-KEY] int16 ah=11 ax=4e2b flags=f206 queued=1
+2117:[CHRONOS-KEY] int16 ah=10 ax=4e2b flags=f206 queued=0
+2119:[CHRONOS-KEY] host=KeyPress { keycode: 78, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2125:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+2127:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+2129:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+2131:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2133:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2135:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2137:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2140:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2142:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2144:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2146:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2148:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2150:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2152:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2154:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2156:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2158:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2160:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2162:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2164:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2166:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2168:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2170:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2172:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2174:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2176:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2178:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2180:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2182:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2184:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2186:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2188:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2190:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+2192:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2194:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2196:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2198:[CHRONOS-KEY] host=KeyPress { keycode: 30, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2200:[CHRONOS-KEY] host=Key('a') key=Some(BiosKey { ascii: 97, scan_code: 0 }) queued_before=0
+2202:[CHRONOS-KEY] int16 ah=11 ax=0061 flags=f206 queued=1
+2204:[CHRONOS-KEY] int16 ah=10 ax=0061 flags=f206 queued=0
+2206:[CHRONOS-KEY] host=KeyPress { keycode: 30, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2209:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2211:[CHRONOS-KEY] host=Key('b') key=Some(BiosKey { ascii: 98, scan_code: 0 }) queued_before=0
+2213:[CHRONOS-KEY] int16 ah=11 ax=0062 flags=f206 queued=1
+2215:[CHRONOS-KEY] int16 ah=10 ax=0062 flags=f206 queued=0
+2217:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2219:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2221:[CHRONOS-KEY] host=Key('c') key=Some(BiosKey { ascii: 99, scan_code: 0 }) queued_before=0
+2223:[CHRONOS-KEY] int16 ah=11 ax=0063 flags=f206 queued=1
+2225:[CHRONOS-KEY] int16 ah=10 ax=0063 flags=f206 queued=0
+2227:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2229:[CHRONOS-KEY] host=KeyPress { keycode: 32, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2231:[CHRONOS-KEY] host=Key('d') key=Some(BiosKey { ascii: 100, scan_code: 0 }) queued_before=0
+2233:[CHRONOS-KEY] int16 ah=11 ax=0064 flags=f206 queued=1
+2235:[CHRONOS-KEY] int16 ah=10 ax=0064 flags=f206 queued=0
+2237:[CHRONOS-KEY] host=KeyPress { keycode: 32, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2239:[CHRONOS-KEY] host=KeyPress { keycode: 18, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2241:[CHRONOS-KEY] host=Key('e') key=Some(BiosKey { ascii: 101, scan_code: 0 }) queued_before=0
+2243:[CHRONOS-KEY] int16 ah=11 ax=0065 flags=f206 queued=1
+2245:[CHRONOS-KEY] int16 ah=10 ax=0065 flags=f206 queued=0
+2247:[CHRONOS-KEY] host=KeyPress { keycode: 18, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2249:[CHRONOS-KEY] host=KeyPress { keycode: 33, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2251:[CHRONOS-KEY] host=Key('f') key=Some(BiosKey { ascii: 102, scan_code: 0 }) queued_before=0
+2253:[CHRONOS-KEY] int16 ah=11 ax=0066 flags=f206 queued=1
+2255:[CHRONOS-KEY] int16 ah=10 ax=0066 flags=f206 queued=0
+2257:[CHRONOS-KEY] host=KeyPress { keycode: 33, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2259:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+2261:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+2263:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+2265:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2267:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2269:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2271:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2273:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2275:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2277:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2279:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2281:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2342:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2344:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2346:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2348:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2352:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+2354:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+2356:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+2358:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2360:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2362:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2364:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2366:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2368:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2370:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2372:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2374:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2377:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2379:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2381:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2383:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2385:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2387:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2389:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2391:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2393:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2397:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2399:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2401:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2403:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2408:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2410:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2412:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2414:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2418:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2420:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2422:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2424:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2429:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2431:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2433:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2435:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2439:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2441:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2443:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2445:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2506:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2508:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2510:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2512:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2516:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2518:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2520:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2523:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2525:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2529:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2531:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2533:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2535:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2540:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+2542:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+2544:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+2546:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2548:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2550:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2552:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2554:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2556:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2558:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2560:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2562:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2564:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2566:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2568:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2570:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2572:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2574:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2576:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2578:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2580:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2584:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2586:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2588:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2590:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2595:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2597:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2599:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2601:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2605:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2607:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2609:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2611:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2672:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2674:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2676:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2678:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2683:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2685:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2687:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2689:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2693:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2695:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2697:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2699:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2704:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2706:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2708:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2710:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2712:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2716:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2718:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2720:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2723:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2727:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 27, scan_code: 1 }) queued_before=0
+2729:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+2731:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+2733:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2738:[CHRONOS-KEY] host=KeyPress { keycode: 78, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 43, scan_code: 78 }) queued_before=0
+2740:[CHRONOS-KEY] int16 ah=11 ax=4e2b flags=f206 queued=1
+2742:[CHRONOS-KEY] int16 ah=10 ax=4e2b flags=f206 queued=0
+2802:[CHRONOS-KEY] int16 ah=11 ax=1c0d flags=f206 queued=1
+2804:[CHRONOS-KEY] int16 ah=10 ax=1c0d flags=f206 queued=0
+2809:[CHRONOS-KEY] int16 ah=11 ax=48e0 flags=f206 queued=1
+2811:[CHRONOS-KEY] int16 ah=10 ax=48e0 flags=f206 queued=0
+2817:[CHRONOS-KEY] int16 ah=11 ax=50e0 flags=f206 queued=1
+2819:[CHRONOS-KEY] int16 ah=10 ax=50e0 flags=f206 queued=0
+2824:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+2826:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+2831:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+2833:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+2838:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+2840:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+2845:[CHRONOS-KEY] int16 ah=11 ax=4fe0 flags=f206 queued=1
+2847:[CHRONOS-KEY] int16 ah=10 ax=4fe0 flags=f206 queued=0
+2908:[CHRONOS-KEY] int16 ah=11 ax=49e0 flags=f206 queued=1
+2910:[CHRONOS-KEY] int16 ah=10 ax=49e0 flags=f206 queued=0
+2915:[CHRONOS-KEY] int16 ah=11 ax=51e0 flags=f206 queued=1
+2917:[CHRONOS-KEY] int16 ah=10 ax=51e0 flags=f206 queued=0
+2922:[CHRONOS-KEY] int16 ah=11 ax=52e0 flags=f206 queued=1
+2924:[CHRONOS-KEY] int16 ah=10 ax=52e0 flags=f206 queued=0
+2933:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+2935:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+2940:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+2942:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+2944:[CHRONOS-KEY] int16 ah=11 ax=4800 flags=f206 queued=1
+2946:[CHRONOS-KEY] int16 ah=10 ax=4800 flags=f206 queued=0
+2951:[CHRONOS-KEY] int16 ah=11 ax=5000 flags=f206 queued=1
+2953:[CHRONOS-KEY] int16 ah=10 ax=5000 flags=f206 queued=0
+3014:[CHRONOS-KEY] int16 ah=11 ax=4f31 flags=f206 queued=1
+3016:[CHRONOS-KEY] int16 ah=10 ax=4f31 flags=f206 queued=0
+3019:[CHRONOS-KEY] int16 ah=11 ax=5032 flags=f206 queued=1
+3021:[CHRONOS-KEY] int16 ah=10 ax=5032 flags=f206 queued=0
+3023:[CHRONOS-KEY] int16 ah=11 ax=5133 flags=f206 queued=1
+3025:[CHRONOS-KEY] int16 ah=10 ax=5133 flags=f206 queued=0
+3027:[CHRONOS-KEY] int16 ah=11 ax=4b34 flags=f206 queued=1
+3029:[CHRONOS-KEY] int16 ah=10 ax=4b34 flags=f206 queued=0
+3031:[CHRONOS-KEY] int16 ah=11 ax=4c35 flags=f206 queued=1
+3033:[CHRONOS-KEY] int16 ah=10 ax=4c35 flags=f206 queued=0
+3035:[CHRONOS-KEY] int16 ah=11 ax=4d36 flags=f206 queued=1
+3037:[CHRONOS-KEY] int16 ah=10 ax=4d36 flags=f206 queued=0
+3039:[CHRONOS-KEY] int16 ah=11 ax=4737 flags=f206 queued=1
+3041:[CHRONOS-KEY] int16 ah=10 ax=4737 flags=f206 queued=0
+3043:[CHRONOS-KEY] int16 ah=11 ax=4838 flags=f206 queued=1
+3045:[CHRONOS-KEY] int16 ah=10 ax=4838 flags=f206 queued=0
+3047:[CHRONOS-KEY] int16 ah=11 ax=4939 flags=f206 queued=1
+3049:[CHRONOS-KEY] int16 ah=10 ax=4939 flags=f206 queued=0
+3051:[CHRONOS-KEY] int16 ah=11 ax=5230 flags=f206 queued=1
+3053:[CHRONOS-KEY] int16 ah=10 ax=5230 flags=f206 queued=0
+3056:[CHRONOS-KEY] int16 ah=11 ax=532e flags=f206 queued=1
+3058:[CHRONOS-KEY] int16 ah=10 ax=532e flags=f206 queued=0
+3063:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+3065:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+3067:[CHRONOS-KEY] int16 ah=11 ax=4e2b flags=f206 queued=1
+3069:[CHRONOS-KEY] int16 ah=10 ax=4e2b flags=f206 queued=0
+3071:[CHRONOS-KEY] int16 ah=11 ax=4a2d flags=f206 queued=1
+3073:[CHRONOS-KEY] int16 ah=10 ax=4a2d flags=f206 queued=0
+3075:[CHRONOS-KEY] int16 ah=11 ax=372a flags=f206 queued=1
+3077:[CHRONOS-KEY] int16 ah=10 ax=372a flags=f206 queued=0
+3079:[CHRONOS-KEY] int16 ah=11 ax=e02f flags=f206 queued=1
+3081:[CHRONOS-KEY] int16 ah=10 ax=e02f flags=f206 queued=0
+3086:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+3088:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+3090:[CHRONOS-KEY] int16 ah=11 ax=4800 flags=f206 queued=1
+3092:[CHRONOS-KEY] int16 ah=10 ax=4800 flags=f206 queued=0
+3097:[CHRONOS-KEY] int16 ah=11 ax=8de0 flags=f206 queued=1
+3099:[CHRONOS-KEY] int16 ah=10 ax=8de0 flags=f206 queued=0
+3101:[CHRONOS-KEY] int16 ah=11 ax=48e0 flags=f206 queued=1
+3103:[CHRONOS-KEY] int16 ah=10 ax=48e0 flags=f206 queued=0
+3109:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+3111:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+3113:[CHRONOS-KEY] int16 ah=11 ax=2d00 flags=f206 queued=1
+3115:[CHRONOS-KEY] int16 ah=10 ax=2d00 flags=f206 queued=0
+3176:[CHRONOS-KEY] int16 ah=11 ax=0079 flags=f206 queued=1
+3178:[CHRONOS-KEY] int16 ah=10 ax=0079 flags=f206 queued=0
+3615:[CHRONOS-KEY] host=KeyPress { keycode: 68, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 68 }) queued_before=0
+3617:[CHRONOS-KEY] int16 ah=11 ax=4400 flags=f206 queued=1
+3619:[CHRONOS-KEY] int16 ah=10 ax=4400 flags=f206 queued=0
+3621:[CHRONOS-KEY] host=KeyPress { keycode: 68, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3626:[CHRONOS-KEY] host=KeyPress { keycode: 50, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3628:[CHRONOS-KEY] host=Key('m') key=Some(BiosKey { ascii: 109, scan_code: 0 }) queued_before=0
+3630:[CHRONOS-KEY] int16 ah=11 ax=006d flags=f206 queued=1
+3632:[CHRONOS-KEY] int16 ah=10 ax=006d flags=f206 queued=0
+3634:[CHRONOS-KEY] host=KeyPress { keycode: 50, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3636:[CHRONOS-KEY] host=KeyPress { keycode: 49, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3638:[CHRONOS-KEY] host=Key('n') key=Some(BiosKey { ascii: 110, scan_code: 0 }) queued_before=0
+3640:[CHRONOS-KEY] int16 ah=11 ax=006e flags=f206 queued=1
+3642:[CHRONOS-KEY] int16 ah=10 ax=006e flags=f206 queued=0
+3644:[CHRONOS-KEY] host=KeyPress { keycode: 49, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3705:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3707:[CHRONOS-KEY] host=Key('c') key=Some(BiosKey { ascii: 99, scan_code: 0 }) queued_before=0
+3709:[CHRONOS-KEY] int16 ah=11 ax=0063 flags=f206 queued=1
+3711:[CHRONOS-KEY] int16 ah=10 ax=0063 flags=f206 queued=0
+3713:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3719:[CHRONOS-KEY] host=KeyPress { keycode: 15, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 9, scan_code: 15 }) queued_before=0
+3721:[CHRONOS-KEY] int16 ah=11 ax=0f09 flags=f206 queued=1
+3723:[CHRONOS-KEY] int16 ah=10 ax=0f09 flags=f206 queued=0
+3725:[CHRONOS-KEY] host=KeyPress { keycode: 15, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3727:[CHRONOS-KEY] host=KeyPress { keycode: 80, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 80 }) queued_before=0
+3729:[CHRONOS-KEY] int16 ah=11 ax=50e0 flags=f206 queued=1
+3731:[CHRONOS-KEY] int16 ah=10 ax=50e0 flags=f206 queued=0
+3733:[CHRONOS-KEY] host=KeyPress { keycode: 80, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3738:[CHRONOS-KEY] host=KeyPress { keycode: 28, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 13, scan_code: 224 }) queued_before=0
+3740:[CHRONOS-KEY] int16 ah=11 ax=e00d flags=f206 queued=1
+3742:[CHRONOS-KEY] int16 ah=10 ax=e00d flags=f206 queued=0
+3744:[CHRONOS-KEY] host=KeyPress { keycode: 28, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3749:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: false, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0
+3751:[CHRONOS-KEY] host=KeyPress { keycode: 61, extended: false, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 96 }) queued_before=0
+3753:[CHRONOS-KEY] int16 ah=11 ax=6000 flags=f206 queued=1
+3755:[CHRONOS-KEY] int16 ah=10 ax=6000 flags=f206 queued=0
+3757:[CHRONOS-KEY] host=KeyPress { keycode: 61, extended: false, pressed: false, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0
+3759:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3764:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 27, scan_code: 1 }) queued_before=0
+3766:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+3768:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+3770:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3775:[CHRONOS-KEY] host=KeyPress { keycode: 78, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 43, scan_code: 78 }) queued_before=0
+3777:[CHRONOS-KEY] int16 ah=11 ax=4e2b flags=f206 queued=1
+3779:[CHRONOS-KEY] int16 ah=10 ax=4e2b flags=f206 queued=0
+3781:[CHRONOS-KEY] host=KeyPress { keycode: 78, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3783:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+3785:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+3787:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+3790:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3792:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3794:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3796:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3798:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3800:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3802:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3804:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3806:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3808:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3810:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3812:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3814:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3816:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3818:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3820:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3822:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3824:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3826:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3828:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3830:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3832:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3834:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3836:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3838:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3840:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3842:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3844:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3846:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3848:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3850:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3852:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3854:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3856:[CHRONOS-KEY] host=KeyPress { keycode: 30, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3858:[CHRONOS-KEY] host=Key('a') key=Some(BiosKey { ascii: 97, scan_code: 0 }) queued_before=0
+3860:[CHRONOS-KEY] int16 ah=11 ax=0061 flags=f206 queued=1
+3862:[CHRONOS-KEY] int16 ah=10 ax=0061 flags=f206 queued=0
+3864:[CHRONOS-KEY] host=KeyPress { keycode: 30, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3923:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3925:[CHRONOS-KEY] host=Key('b') key=Some(BiosKey { ascii: 98, scan_code: 0 }) queued_before=0
+3927:[CHRONOS-KEY] int16 ah=11 ax=0062 flags=f206 queued=1
+3929:[CHRONOS-KEY] int16 ah=10 ax=0062 flags=f206 queued=0
+3931:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3933:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3935:[CHRONOS-KEY] host=Key('b') key=Some(BiosKey { ascii: 98, scan_code: 0 }) queued_before=0
+3937:[CHRONOS-KEY] int16 ah=11 ax=0062 flags=f206 queued=1
+3939:[CHRONOS-KEY] int16 ah=10 ax=0062 flags=f206 queued=0
+3941:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3943:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3945:[CHRONOS-KEY] host=Key('c') key=Some(BiosKey { ascii: 99, scan_code: 0 }) queued_before=0
+3947:[CHRONOS-KEY] int16 ah=11 ax=0063 flags=f206 queued=1
+3949:[CHRONOS-KEY] int16 ah=10 ax=0063 flags=f206 queued=0
+3951:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3953:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+3955:[CHRONOS-KEY] int16 ah=11 ax=4be0 flags=f206 queued=1
+3957:[CHRONOS-KEY] int16 ah=10 ax=4be0 flags=f206 queued=0
+3959:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3961:[CHRONOS-KEY] host=KeyPress { keycode: 14, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 8, scan_code: 14 }) queued_before=0
+3963:[CHRONOS-KEY] int16 ah=11 ax=0e08 flags=f206 queued=1
+3965:[CHRONOS-KEY] int16 ah=10 ax=0e08 flags=f206 queued=0
+3967:[CHRONOS-KEY] host=KeyPress { keycode: 14, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3972:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+3974:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+3976:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+3978:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3980:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=0
+3982:[CHRONOS-KEY] int16 ah=11 ax=53e0 flags=f206 queued=1
+3984:[CHRONOS-KEY] int16 ah=10 ax=53e0 flags=f206 queued=0
+3986:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3988:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+3990:[CHRONOS-KEY] int16 ah=11 ax=4de0 flags=f206 queued=1
+3992:[CHRONOS-KEY] int16 ah=10 ax=4de0 flags=f206 queued=0
+3994:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+3996:[CHRONOS-KEY] host=KeyPress { keycode: 79, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 79 }) queued_before=0
+3998:[CHRONOS-KEY] int16 ah=11 ax=4fe0 flags=f206 queued=1
+4000:[CHRONOS-KEY] int16 ah=10 ax=4fe0 flags=f206 queued=0
+4002:[CHRONOS-KEY] host=KeyPress { keycode: 79, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4007:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+4009:[CHRONOS-KEY] int16 ah=11 ax=47e0 flags=f206 queued=1
+4011:[CHRONOS-KEY] int16 ah=10 ax=47e0 flags=f206 queued=0
+4013:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4015:[CHRONOS-KEY] host=KeyPress { keycode: 82, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 82 }) queued_before=0
+4017:[CHRONOS-KEY] int16 ah=11 ax=52e0 flags=f206 queued=1
+4019:[CHRONOS-KEY] int16 ah=10 ax=52e0 flags=f206 queued=0
+4021:[CHRONOS-KEY] host=KeyPress { keycode: 82, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4023:[CHRONOS-KEY] host=KeyPress { keycode: 44, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4025:[CHRONOS-KEY] host=Key('z') key=Some(BiosKey { ascii: 122, scan_code: 0 }) queued_before=0
+4027:[CHRONOS-KEY] int16 ah=11 ax=007a flags=f206 queued=1
+4029:[CHRONOS-KEY] int16 ah=10 ax=007a flags=f206 queued=0
+4031:[CHRONOS-KEY] host=KeyPress { keycode: 44, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4036:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: true, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0
+4038:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 115 }) queued_before=0
+4040:[CHRONOS-KEY] int16 ah=11 ax=73e0 flags=f206 queued=1
+4042:[CHRONOS-KEY] int16 ah=10 ax=73e0 flags=f206 queued=0
+4044:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0
+4046:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4048:[CHRONOS-KEY] host=KeyPress { keycode: 56, extended: true, pressed: true, shift: false, ctrl: false, alt: true, super_key: false } key=None queued_before=0
+4050:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: true, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 157 }) queued_before=0
+4052:[CHRONOS-KEY] int16 ah=11 ax=9d00 flags=f206 queued=1
+4054:[CHRONOS-KEY] int16 ah=10 ax=9d00 flags=f206 queued=0
+4056:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: true, super_key: false } key=None queued_before=0
+4058:[CHRONOS-KEY] host=KeyPress { keycode: 56, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4062:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 27, scan_code: 1 }) queued_before=0
+4064:[CHRONOS-KEY] int16 ah=11 ax=011b flags=f206 queued=1
+4066:[CHRONOS-KEY] int16 ah=10 ax=011b flags=f206 queued=0
+4068:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4071:[CHRONOS-KEY] host=KeyPress { keycode: 56, extended: false, pressed: true, shift: false, ctrl: false, alt: true, super_key: false } key=None queued_before=0
+4073:[CHRONOS-KEY] host=KeyPress { keycode: 45, extended: false, pressed: true, shift: false, ctrl: false, alt: true, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 45 }) queued_before=0
+4075:[CHRONOS-KEY] int16 ah=11 ax=2d00 flags=f206 queued=1
+4077:[CHRONOS-KEY] int16 ah=10 ax=2d00 flags=f206 queued=0
+4079:[CHRONOS-KEY] host=KeyPress { keycode: 45, extended: false, pressed: false, shift: false, ctrl: false, alt: true, super_key: false } key=None queued_before=0
+4081:[CHRONOS-KEY] host=KeyPress { keycode: 56, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4086:[CHRONOS-KEY] host=KeyPress { keycode: 21, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4088:[CHRONOS-KEY] host=Key('y') key=Some(BiosKey { ascii: 121, scan_code: 0 }) queued_before=0
+4090:[CHRONOS-KEY] int16 ah=11 ax=0079 flags=f206 queued=1
+4092:[CHRONOS-KEY] int16 ah=10 ax=0079 flags=f206 queued=0
+4094:[CHRONOS-KEY] host=KeyPress { keycode: 21, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4581:[CHRONOS-KEY] host=KeyPress { keycode: 57, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4583:[CHRONOS-KEY] host=Key(' ') key=Some(BiosKey { ascii: 32, scan_code: 0 }) queued_before=0
+4585:[CHRONOS-KEY] int16 ah=01 ax=0020 flags=0006 queued=1
+4587:[CHRONOS-KEY] int16 ah=00 ax=0020 flags=0006 queued=0
+4589:[CHRONOS-KEY] host=KeyPress { keycode: 57, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4593:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 27, scan_code: 1 }) queued_before=0
+4595:[CHRONOS-KEY] int16 ah=01 ax=011b flags=0006 queued=1
+4597:[CHRONOS-KEY] int16 ah=00 ax=011b flags=0006 queued=0
+4603:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+4605:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: false, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=0

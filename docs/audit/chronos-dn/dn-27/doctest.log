@@ -1,0 +1,56 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2512:28
+     |
+2512 | #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                            ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2029:48
+     |
+2029 |                     #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `sunlight-ui` (lib) generated 2 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.14s
+   Doc-tests sunlight_ui
+
+running 7 tests
+test sunlight-ui/geom.rs - geom::GridRow (line 125) ... ignored
+test sunlight-ui/lib.rs - (line 7) ... ignored
+test sunlight-ui/widgets/drive_card.rs - widgets::drive_card (line 32) ... ignored
+test sunlight-ui/widgets/sidebar_item.rs - widgets::sidebar_item (line 33) ... ignored
+test sunlight-ui/widgets/sidebar_item.rs - widgets::sidebar_item (line 72) ... ignored
+test sunlight-ui/widgets/sidebar_item.rs - widgets::sidebar_item::SidebarGroupHeader (line 367) ... ignored
+test sunlight-ui/horizon.rs - horizon (line 5) ... FAILED
+
+failures:
+
+---- sunlight-ui/horizon.rs - horizon (line 5) stdout ----
+error: expected one of `!` or `::`, found `|`
+ --> sunlight-ui/horizon.rs:6:6
+  |
+6 | Pin  |  Minimize   Maximize/Restore   Close
+  |      ^ expected one of `!` or `::`
+
+error: aborting due to 1 previous error
+
+Couldn't compile the test.
+
+failures:
+    sunlight-ui/horizon.rs - horizon (line 5)
+
+test result: FAILED. 0 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+error: doctest failed, to rerun pass `-p sunlight-ui --doc`

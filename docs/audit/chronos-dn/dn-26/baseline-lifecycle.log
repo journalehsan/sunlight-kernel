@@ -1,0 +1,15 @@
+launch[1] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=12560 delta=130ms pid=40
+[CHRONOS] DOS session completed code=
+0
+[SCHED] process_mark_finished pid=40 name='sunlight-chronos' reason=exit code=0
+[SCHED] process_reaped pid=40 name='sunlight-chronos' user_frames=2818 page_tables=13 swap_blocks=0 ipc_cleared=0
+launch[2] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=98480 delta=180ms pid=41
+[CHRONOS] DOS session completed code=
+0
+[SCHED] process_mark_finished pid=41 name='sunlight-chronos' reason=exit code=0
+[SCHED] process_reaped pid=41 name='sunlight-chronos' user_frames=2818 page_tables=13 swap_blocks=0 ipc_cleared=0
+launch[3] source=unknown Sunlight Mines phase=window_visible_on_screen timestamp_ms=138520 delta=80ms pid=42
+[CHRONOS] DOS session completed code=
+0
+[SCHED] process_mark_finished pid=42 name='sunlight-chronos' reason=exit code=143
+[SCHED] process_reaped pid=42 name='sunlight-chronos' user_frames=2818 page_tables=13 swap_blocks=0 ipc_cleared=0

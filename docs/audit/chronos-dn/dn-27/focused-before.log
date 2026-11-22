@@ -1,0 +1,29 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling chronos-core v0.2.8759-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/chronos-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.99s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/chronos_core-de74b54906008db4)
+
+running 1 test
+test dos::tests::guest_bda_and_bios_agree_on_modeled_keyboard_flags ... FAILED
+
+failures:
+
+---- dos::tests::guest_bda_and_bios_agree_on_modeled_keyboard_flags stdout ----
+
+thread 'dos::tests::guest_bda_and_bios_agree_on_modeled_keyboard_flags' (132) panicked at chronos-core/src/dos.rs:1553:13:
+assertion `left == right` failed
+  left: 720
+ right: 722
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    dos::tests::guest_bda_and_bios_agree_on_modeled_keyboard_flags
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 205 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p chronos-core --lib`

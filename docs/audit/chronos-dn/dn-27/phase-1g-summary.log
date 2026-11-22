@@ -1,0 +1,43 @@
+Phase 3.0 required markers found: 32
+26:[PMM] 145/427 MiB free
+697:timezone: zone=UTC offset_seconds=0 dst=false application_point=timezone_service
+810:[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK
+636:[SPAWN] Loading /sbin/powerd (20984 bytes)
+640:[SPAWN] Failed: NoMemory
+641:[init] FAILED to launch base service
+644:[SPAWN] Loading /sbin/niced (49672 bytes)
+648:[SPAWN] Failed: NoMemory
+650:[SPAWN] Loading /sbin/thermald (29184 bytes)
+654:[SPAWN] Failed: NoMemory
+655:[SUNLIGHTD] failed to spawn niced detail=12
+656:[init] FAILED to launch base service
+659:[SPAWN] Loading /sbin/gcd (45568 bytes)
+663:[SPAWN] Failed: NoMemory
+664:[SUNLIGHTD] failed to spawn gcd detail=12
+666:[SPAWN] Loading /sbin/audiod (696832 bytes)
+670:[SPAWN] Failed: NoMemory
+671:[init] FAILED to launch base service
+674:[SPAWN] Loading /sbin/uac_service (127536 bytes)
+679:[ELF] segment mapping failed (out of frames?)
+680:[SPAWN] Failed: ElfLoadFailed
+681:[SUNLIGHTD] failed to spawn uac_service detail=11
+683:[SPAWN] Loading /sbin/sunlight-display (950832 bytes)
+688:[SPAWN] Failed: NoMemory
+689:[init] FAILED to launch base service
+691:[SPAWN] Loading /sbin/mezzo (25088 bytes)
+695:[SPAWN] Failed: NoMemory
+696:[init] FAILED to launch base service
+700:[SPAWN] Loading /sbin/rand_service (16888 bytes)
+704:[SPAWN] Failed: NoMemory
+708:[SUNLIGHTD] failed to spawn rand_service detail=12
+710:[SPAWN] Loading /sbin/pty_server (33280 bytes)
+714:[SPAWN] Failed: NoMemory
+715:[init] FAILED to launch base service
+718:[SPAWN] Loading /sbin/net_server (240232 bytes)
+723:[SPAWN] Failed: NoMemory
+724:[init] FAILED to launch base service
+727:[SPAWN] Loading /sbin/timed (45584 bytes)
+731:[SPAWN] Failed: NoMemory
+732:[SUNLIGHTD] failed to spawn timed detail=12
+324:[NET] failed stage=no supported PCI Ethernet backend
+584:[SUNLIGHTD] enabled-state open failed: NoEntry

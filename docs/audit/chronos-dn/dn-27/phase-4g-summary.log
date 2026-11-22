@@ -1,0 +1,6 @@
+Phase 3.0 required markers found: 32
+26:[PMM] 3217/3499 MiB free
+874:timezone: zone=UTC offset_seconds=0 dst=false application_point=timezone_service
+967:[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK
+324:[NET] failed stage=no supported PCI Ethernet backend
+612:[SUNLIGHTD] enabled-state open failed: NoEntry

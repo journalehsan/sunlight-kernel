@@ -199,15 +199,26 @@ toggle. The guest toggle does not follow the host LED or another window.
 - Enhanced navigation reports AL=E0h where applicable. Legacy status/read
   clear that marker and present keypad Enter and divide as 1C0Dh and 352Fh
   in their unmodified forms.
-- `INT 16h/AH=02h`: available Shift, Ctrl, Alt and Num Lock flags. Physical
-  side-specific flags and a hardware BIOS Data Area ring are outside this
-  interface.
-- `INT 21h/AH=01h`, `06h`, `07h`, `08h`, `0Ah`, `0Bh`, and `0Ch`: basic DOS
-  console reads, nonblocking status, queue flushing, and line editing.
+- `INT 16h/AH=02h`: AL reports right and left Shift in bits 0 and 1,
+  aggregate Ctrl and Alt in bits 2 and 3, and Num Lock in bit 5.
+  `AH=12h` returns the same AL, plus left Ctrl, left Alt, right Ctrl and
+  right Alt in AH bits 0–3. Side flags come from received physical edges.
+  Focus loss clears held sides; a snapshot cannot recover a missing make
+  from before focus. Other locks, SysRq and the hardware BIOS Data Area
+  keyboard ring are outside this interface.
+- `INT 21h/AH=01h`, `07h` and `08h` wait for a byte. `AH=06h/DL=FFh`
+  polls without waiting (ZF set when empty). For extended keys these calls
+  share a zero prefix and scan byte across two reads. The scan byte is not
+  a BIOS FIFO entry. Only actual characters echo on `AH=01h`.
+  `AH=0Bh` reports a pending scan byte as available; `AH=0Ch` flushes it
+  along with the FIFO. EXEC and return to the parent discard a partial pair.
+- `INT 21h/AH=0Ah` consumes queued input until CR or an empty FIFO, handling
+  printable input and Backspace. Its capacity includes the terminating CR;
+  zero capacity returns immediately. Advanced DOS line editing and overflow
+  beeps are outside this implementation. These services currently read the
+  guest console queue, without standard-input redirection or DOS Ctrl-C /
+  Ctrl-Break dispatch.
 
-The DOS buffered-line service checks all guest-provided bounds, supports
-printable insertion, Backspace, and CR termination, and never blocks the host
-thread.
 
 Native pointer snapshots travel from `sunlight-mouse` through the compositor's
 exact content-window ID and the `sunlight-ui` event dequeue into Chronos. Only

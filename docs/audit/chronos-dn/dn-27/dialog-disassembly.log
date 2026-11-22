@@ -1,0 +1,10 @@
+
+/tmp/dn27-dialog-insn.bin:     file format binary
+
+
+Disassembly of section .data:
+
+00000cba <.data>:
+ cba:	26 a0 17 00          	mov    al,es:0x17
+ cbe:	24 03                	and    al,0x3
+ cc0:	08 c0                	or     al,al

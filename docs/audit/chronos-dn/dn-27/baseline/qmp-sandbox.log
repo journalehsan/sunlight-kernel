@@ -1,0 +1,1 @@
+qemu-system-x86_64: -qmp unix:/tmp/sunlight-session-ux-11.sock,server=on,wait=off: Failed to bind socket to /tmp/sunlight-session-ux-11.sock: Operation not permitted

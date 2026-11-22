@@ -1,0 +1,89 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+warning: constant `LEFT_CTRL` is never used
+  --> services/sunlight-kbd/src/lib.rs:56:15
+   |
+56 |     pub const LEFT_CTRL: u8 = 0x1D;
+   |               ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `LEFT_SHIFT` is never used
+  --> services/sunlight-kbd/src/lib.rs:57:15
+   |
+57 |     pub const LEFT_SHIFT: u8 = 0x2A;
+   |               ^^^^^^^^^^
+
+warning: constant `LEFT_ALT` is never used
+  --> services/sunlight-kbd/src/lib.rs:58:15
+   |
+58 |     pub const LEFT_ALT: u8 = 0x38;
+   |               ^^^^^^^^
+
+warning: constant `RIGHT_SHIFT` is never used
+  --> services/sunlight-kbd/src/lib.rs:59:15
+   |
+59 |     pub const RIGHT_SHIFT: u8 = 0x36;
+   |               ^^^^^^^^^^^
+
+warning: constant `LEFT_SUPER` is never used
+  --> services/sunlight-kbd/src/lib.rs:60:15
+   |
+60 |     pub const LEFT_SUPER: u8 = 0x5B;
+   |               ^^^^^^^^^^
+
+warning: constant `RIGHT_SUPER` is never used
+  --> services/sunlight-kbd/src/lib.rs:61:15
+   |
+61 |     pub const RIGHT_SUPER: u8 = 0x5C;
+   |               ^^^^^^^^^^^
+
+warning: `sunlight-kbd` (lib test) generated 6 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_kbd-ab1273b73f645f7d)
+
+running 5 tests
+test tests::both_control_sides_decode_session_function_keys_and_release ... ok
+test tests::native_unicode_composition_and_invalid_scalars ... ok
+test tests::composition_cancel_and_backspace_are_private ... ok
+test tests::overlapping_modifier_releases_and_shift_tab ... ok
+test tests::pause_does_not_emit_phantom_ctrl_or_num_lock ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

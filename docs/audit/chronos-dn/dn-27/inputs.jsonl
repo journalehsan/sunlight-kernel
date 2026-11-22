@@ -1,0 +1,116 @@
+{"keys": ["ret"]}
+{"type": "root"}
+{"keys": ["ret"]}
+{"capture": "desktop"}
+{"keys": ["meta_l", "k"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"keys": ["backspace"]}
+{"type": "dos navigator"}
+{"capture": "dn-1-search"}
+{"keys": ["ret"]}
+{"capture": "dn-1-first"}
+{"keys": ["f10"]}
+{"capture": "dn-1-f10"}
+{"keys": ["m"]}
+{"keys": ["n"]}
+{"capture": "dn-1-manager-new"}
+{"keys": ["c"]}
+{"capture": "dn-1-new-panels"}
+{"keys": ["tab"]}
+{"keys": ["down"]}
+{"capture": "dn-1-directory-selected"}
+{"keys": ["ret"]}
+{"capture": "dn-1-directory-opened"}
+{"keys": ["ctrl", "f3"]}
+{"capture": "dn-1-ctrl-f3"}
+{"keys": ["esc"]}
+{"capture": "dn-1-escape"}
+{"keys": ["kp_add"]}
+{"capture": "mask-initial"}
+{"keys": ["home"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["delete"]}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"capture": "plain-right"}
+{"keys": ["left"]}
+{"capture": "plain-left"}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"edge": "shift", "down": true}
+{"keys": ["left"]}
+{"capture": "shift-0-left"}
+{"keys": ["left"]}
+{"capture": "shift-1-left"}
+{"keys": ["right"]}
+{"capture": "shift-2-right"}
+{"keys": ["right"]}
+{"capture": "shift-3-right"}
+{"keys": ["right"]}
+{"capture": "shift-4-right"}
+{"keys": ["right"]}
+{"capture": "shift-5-right"}
+{"keys": ["left"]}
+{"capture": "shift-6-left"}
+{"edge": "right", "down": true}
+{"edge": "shift", "down": false}
+{"edge": "right", "down": false}
+{"capture": "shift-released-before-arrow"}
+{"keys": ["left"]}
+{"capture": "shift-plain-after-release"}
+{"keys": ["home"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"keys": ["right"]}
+{"edge": "shift_r", "down": true}
+{"keys": ["left"]}
+{"capture": "shift_r-0-left"}
+{"keys": ["left"]}
+{"capture": "shift_r-1-left"}
+{"keys": ["right"]}
+{"capture": "shift_r-2-right"}
+{"keys": ["right"]}
+{"capture": "shift_r-3-right"}
+{"keys": ["right"]}
+{"capture": "shift_r-4-right"}
+{"keys": ["right"]}
+{"capture": "shift_r-5-right"}
+{"keys": ["left"]}
+{"capture": "shift_r-6-left"}
+{"edge": "right", "down": true}
+{"edge": "shift_r", "down": false}
+{"edge": "right", "down": false}
+{"capture": "shift_r-released-before-arrow"}
+{"keys": ["left"]}
+{"capture": "shift_r-plain-after-release"}

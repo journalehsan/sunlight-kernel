@@ -1,0 +1,197 @@
+% suniightos
+
+Sun, Nov 22 3:54 PM
+
+[SIE)
+
+DOS Navigator 1.51
+
+°
+
+- 0Ox
+
+-
+
+DOS Navigator 1.51
+
+6-bit real
+
+sunight
+
+guest
+
+* Home.
+
+00|[61)0600000
+
+C:\COLORS -
+
+000
+
+o
+
+o
+
+cen e
+
+5
+
+Name
+
+Name.
+
+Name
+
+Name
+
+Name
+
+Name.
+
+i
+
+(<)
+
+2dnrus
+
+5
+
+hlp?
+
+COLORS
+
+20
+
+-descript ion?
+
+ENG
+
+2dn
+
+1ng?
+
+blue
+
+pal?
+
+RUS
+
+2dnrus
+
+1ng?
+
+et
+
+bw
+
+SSAVERS
+
+2dn
+
+mnu?
+
+pal?
+
+e
+
+spring
+
+pal?
+
+J2dn
+
+ovr?
+
+-bw
+
+pal?
+
+~dark
+
+pal?
+
+[ abbe
+
+prg?
+
+~default
+
+vwr?
+
+pal?
+
++dosshell
+
+pal?
+
+mask
+
+xrn?
+
+mono
+
+pal?
+
++norton
+
+pal?
+
+“pctools
+
+pal?
+
+ke et
+
+-vax
+
+pal?
+
+7
+
+Bean
+
+ntp?
+
+2722
+
+.
+
+No files selected
+
+No files selected
+
+0 free bytes on drive C:
+
+0 free bytes on drive C:
+
+LCDT* ]
+
+00006000
+
+000000
+
+[copTx]--
+
+85000000
+
+0000000
+
+COLORS>
+
+Help
+
+com
+
+Running
+
+INT 16
+
+S
+
+8000
+
+W
+
+Q
+
+EmreseheoEE

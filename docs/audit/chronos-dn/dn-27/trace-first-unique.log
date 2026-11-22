@@ -1,0 +1,52 @@
+1966:[DN27-MEM] 2d93:045e bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+1984:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2002:[DN27-MEM] 32e3:25b9 bytes=[26, a0, 17, 00, a2, 16, 87, 8b] phys=00417 value=00 computed-status=00
+2012:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4400 flags-out=f206
+2016:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4400 flags-out=f206
+2018:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2042:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=006d flags-out=f206
+2046:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=006d flags-out=f206
+2058:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=006e flags-out=f206
+2062:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=006e flags-out=f206
+2098:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=04
+2112:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0063 flags-out=f206
+2116:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0063 flags-out=f206
+2191:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2203:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0f09 flags-out=f206
+2207:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0f09 flags-out=f206
+2231:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=50e0 flags-out=f206
+2235:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=50e0 flags-out=f206
+2241:[DN27-MEM] 2244:37da bytes=[26, a0, 17, 00, 24, 04, 08, c0] phys=00417 value=00 computed-status=00
+2243:[DN27-MEM] 2244:0063 bytes=[26, 8a, 05, 24, 03, 08, c0, b0] phys=00417 value=00 computed-status=00
+2253:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=1c0d flags-out=f206
+2257:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=1c0d flags-out=f206
+2265:[DN27-MEM] 1c87:3f02 bytes=[26, a0, 17, 00, 30, e4, a3, 60] phys=00417 value=00 computed-status=00
+2269:[DN27-MEM] 1c87:4038 bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2296:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=6000 flags-out=f206
+2300:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=6000 flags-out=f206
+2302:[DN27-MEM] 10cf:0e24 bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2326:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=011b flags-out=f206
+2330:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=011b flags-out=f206
+2354:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4e2b flags-out=f206
+2358:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4e2b flags-out=f206
+2366:[DN27-MEM] 2244:3322 bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2368:[DN27-MEM] 1c87:43ed bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2388:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=47e0 flags-out=f206
+2392:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=47e0 flags-out=f206
+2396:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2400:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2404:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2484:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0061 flags-out=f206
+2488:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0061 flags-out=f206
+2494:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0062 flags-out=f206
+2498:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0062 flags-out=f206
+2516:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0064 flags-out=f206
+2520:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0064 flags-out=f206
+2526:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0065 flags-out=f206
+2530:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0065 flags-out=f206
+2538:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0066 flags-out=f206
+2542:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0066 flags-out=f206
+2666:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2670:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+3024:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+3028:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206

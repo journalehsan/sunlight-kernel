@@ -9,6 +9,8 @@ use crate::{
 };
 
 const BDA_SEGMENT: u16 = 0x0040;
+const BDA_KEYBOARD_FLAGS: u16 = 0x0017;
+const BDA_MODELED_KEYBOARD_FLAGS: u8 = 0x2f;
 const BDA_VIDEO_MODE: u16 = 0x0049;
 const BDA_COLUMNS: u16 = 0x004a;
 const BDA_PAGE_SIZE: u16 = 0x004c;
@@ -383,6 +385,7 @@ pub struct Runtime {
     keyboard_trace: Option<fn(u8, u16, u16, usize)>,
     keyboard_trace_remaining: u16,
     pending_input: Option<InputMode>,
+    dos_scan_tail: Option<u8>,
     pub(crate) cursor_column: usize,
     pub(crate) cursor_row: usize,
     pub(crate) cursor_shape: u16,
@@ -401,7 +404,7 @@ pub struct Runtime {
     wake_generation: u64,
     num_lock: bool,
     num_lock_down: bool,
-    shift: bool,
+    modifier_sides: u8,
     ctrl: bool,
     alt: bool,
     pub(crate) drives: DriveTable,
@@ -459,6 +462,7 @@ impl Runtime {
             keyboard_trace: None,
             keyboard_trace_remaining: 0,
             pending_input: None,
+            dos_scan_tail: None,
             cursor_column: 0,
             cursor_row: 0,
             cursor_shape: 0x0607,
@@ -477,7 +481,7 @@ impl Runtime {
             wake_generation: 0,
             num_lock: false,
             num_lock_down: false,
-            shift: false,
+            modifier_sides: 0,
             ctrl: false,
             alt: false,
             drives: DriveTable::new(),
@@ -869,6 +873,7 @@ impl Runtime {
         self.handles = self.active_process.handles.clone();
         self.drives.current_drive = self.active_process.current_drive;
         self.pending_input = None;
+        self.dos_scan_tail = None;
         Ok(())
     }
 
@@ -978,6 +983,7 @@ impl Runtime {
         self.handles = self.active_process.handles.clone();
         self.drives.current_drive = self.active_process.current_drive;
         self.pending_input = None;
+        self.dos_scan_tail = None;
         self.state = GuestState::Running;
     }
 
@@ -1287,9 +1293,20 @@ impl Runtime {
     }
 
     pub fn update_modifiers(&mut self, shift: bool, ctrl: bool, alt: bool) {
-        self.shift = shift;
+        // Snapshots can clear stale edges but cannot identify an unknown side.
+        self.modifier_sides &= (if shift { 0x03 } else { 0 })
+            | (if ctrl { 0x14 } else { 0 })
+            | (if alt { 0x28 } else { 0 });
         self.ctrl = ctrl;
         self.alt = alt;
+        // Publish the same modeled bits that INT 16h reports. Leave flags
+        // outside the current keyboard model in guest memory untouched.
+        let old = self.memory.read_u8(BDA_SEGMENT, BDA_KEYBOARD_FLAGS);
+        self.memory.write_u8(
+            BDA_SEGMENT,
+            BDA_KEYBOARD_FLAGS,
+            (old & !BDA_MODELED_KEYBOARD_FLAGS) | self.shift_flags(),
+        );
     }
 
     pub fn release_host_keys(&mut self) {
@@ -1299,12 +1316,31 @@ impl Runtime {
 
     /// The guest owns its lock state; transient modifiers come from each host snapshot.
     pub fn translate_host_key(&mut self, event: HostKeyEvent) -> Option<BiosKey> {
-        self.update_modifiers(event.shift, event.ctrl, event.alt);
-        if !event.extended && event.keycode == 0x45 {
+        // Low two bits use the BIOS Shift ordering; the next four use the
+        // enhanced BIOS Ctrl/Alt ordering shifted left by two.
+        let side = match (event.extended, event.keycode) {
+            (false, 0x36) => 0x01,
+            (false, 0x2a) => 0x02,
+            (false, 0x1d) => 0x04,
+            (false, 0x38) => 0x08,
+            (true, 0x1d) => 0x10,
+            (true, 0x38) => 0x20,
+            _ => 0,
+        };
+        if event.pressed {
+            self.modifier_sides |= side;
+        } else {
+            self.modifier_sides &= !side;
+        }
+        let num_lock_key = !event.extended && event.keycode == 0x45;
+        if num_lock_key {
             if event.pressed && !self.num_lock_down {
                 self.num_lock = !self.num_lock;
             }
             self.num_lock_down = event.pressed;
+        }
+        self.update_modifiers(event.shift, event.ctrl, event.alt);
+        if num_lock_key {
             return None;
         }
         translate_key(event, self.num_lock)
@@ -2970,8 +3006,23 @@ impl Runtime {
         }
         Ok(())
     }
-    pub(crate) fn has_key(&self) -> bool {
-        !self.keyboard.is_empty()
+    pub(crate) fn has_dos_byte(&self) -> bool {
+        self.dos_scan_tail.is_some() || !self.keyboard.is_empty()
+    }
+
+    /// Read the DOS character stream without placing scan tails in the BIOS
+    /// event queue. Only original characters are eligible for console echo.
+    pub(crate) fn pop_dos_byte(&mut self) -> Option<(u8, bool)> {
+        if let Some(scan) = self.dos_scan_tail.take() {
+            return Some((scan, false));
+        }
+        let key = self.pop_key()?;
+        let [ascii, scan] = key.bios_word(false).to_le_bytes();
+        if ascii == 0 && scan != 0 {
+            self.dos_scan_tail = Some(scan);
+            return Some((0, false));
+        }
+        Some((ascii, true))
     }
     pub(crate) fn peek_key(&self) -> Option<BiosKey> {
         self.keyboard.front().copied()
@@ -2981,12 +3032,16 @@ impl Runtime {
     }
     pub(crate) fn clear_keys(&mut self) {
         self.keyboard.clear();
+        self.dos_scan_tail = None;
     }
     pub(crate) fn shift_flags(&self) -> u8 {
-        (self.shift as u8)
+        (self.modifier_sides & 0x03)
             | ((self.ctrl as u8) << 2)
             | ((self.alt as u8) << 3)
             | ((self.num_lock as u8) << 5)
+    }
+    pub(crate) fn enhanced_shift_flags(&self) -> u16 {
+        u16::from_le_bytes([self.shift_flags(), self.modifier_sides >> 2])
     }
     pub(crate) fn wait_for_key(&mut self, mode: InputMode) -> Result<(), Trap> {
         self.pending_input = Some(mode);
@@ -2999,9 +3054,28 @@ impl Runtime {
         Ok(())
     }
     fn complete_pending_input(&mut self) {
-        let Some(mode) = self.pending_input else {
+        while let Some(mode) = self.pending_input {
+            self.complete_input_step(mode);
+            if !matches!(self.state, GuestState::WaitingForInput) || self.keyboard.is_empty() {
+                break;
+            }
+        }
+    }
+
+    fn complete_input_step(&mut self, mode: InputMode) {
+        if let InputMode::Dos { echo } = mode {
+            let Some((byte, character)) = self.pop_dos_byte() else {
+                self.state = GuestState::WaitingForInput;
+                return;
+            };
+            self.cpu.set_al(byte);
+            if echo && character {
+                self.teletype(byte, DEFAULT_ATTRIBUTE);
+            }
+            self.pending_input = None;
+            self.state = GuestState::Running;
             return;
-        };
+        }
         let Some(key) = self.pop_key() else {
             self.state = GuestState::WaitingForInput;
             return;
@@ -3014,14 +3088,7 @@ impl Runtime {
                 self.pending_input = None;
                 self.state = GuestState::Running;
             }
-            InputMode::Dos { echo } => {
-                self.cpu.set_al(ascii);
-                if echo {
-                    self.teletype(ascii, DEFAULT_ATTRIBUTE);
-                }
-                self.pending_input = None;
-                self.state = GuestState::Running;
-            }
+            InputMode::Dos { .. } => unreachable!(),
             InputMode::ConsoleRead { segment, offset } => {
                 self.memory.write_u8(segment, offset, ascii);
                 if ascii == b'\r' {

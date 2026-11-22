@@ -1,0 +1,383 @@
+1963:[DN27-MEM] 2d93:045e bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+1965:[CHRONOS-KEY] host=KeyPress { keycode: 68, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 68 }) queued_before=0
+1967:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+1969:[CHRONOS-KEY] host=KeyPress { keycode: 68, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=1
+1971:[CHRONOS-KEY] host=KeyPress { keycode: 50, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=1
+1973:[CHRONOS-KEY] host=Key('m') key=Some(BiosKey { ascii: 109, scan_code: 0 }) queued_before=1
+1975:[CHRONOS-KEY] host=KeyPress { keycode: 50, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=2
+1977:[DN27-MEM] 32e3:25b9 bytes=[26, a0, 17, 00, a2, 16, 87, 8b] phys=00417 value=00 computed-status=00
+1979:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+1983:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4400 flags-out=f206
+1987:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4400 flags-out=f206
+1989:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+1991:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+1993:[CHRONOS-KEY] host=KeyPress { keycode: 49, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=1
+1997:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=006d flags-out=f206
+2001:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=006d flags-out=f206
+2003:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2005:[CHRONOS-KEY] host=Key('n') key=Some(BiosKey { ascii: 110, scan_code: 0 }) queued_before=0
+2007:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2011:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=006e flags-out=f206
+2015:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=006e flags-out=f206
+2017:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2019:[CHRONOS-KEY] host=KeyPress { keycode: 49, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2021:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2023:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2025:[CHRONOS-KEY] host=Key('c') key=Some(BiosKey { ascii: 99, scan_code: 0 }) queued_before=0
+2027:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=1
+2031:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0063 flags-out=f206
+2035:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0063 flags-out=f206
+2037:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2039:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2041:[CHRONOS-KEY] host=KeyPress { keycode: 15, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 9, scan_code: 15 }) queued_before=0
+2044:[CHRONOS-KEY] host=KeyPress { keycode: 15, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=1
+2046:[CHRONOS-KEY] host=KeyPress { keycode: 80, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 80 }) queued_before=1
+2048:[CHRONOS-KEY] host=KeyPress { keycode: 80, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=2
+2050:[CHRONOS-KEY] host=KeyPress { keycode: 28, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 13, scan_code: 28 }) queued_before=2
+2052:[CHRONOS-KEY] host=KeyPress { keycode: 28, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=3
+2054:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: false, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=3
+2056:[CHRONOS-KEY] host=KeyPress { keycode: 61, extended: false, pressed: true, shift: false, ctrl: true, alt: false, super_key: false } key=Some(BiosKey { ascii: 0, scan_code: 96 }) queued_before=3
+2058:[CHRONOS-KEY] host=KeyPress { keycode: 61, extended: false, pressed: false, shift: false, ctrl: true, alt: false, super_key: false } key=None queued_before=4
+2060:[CHRONOS-KEY] host=KeyPress { keycode: 29, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=4
+2062:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 27, scan_code: 1 }) queued_before=4
+2064:[CHRONOS-KEY] host=KeyPress { keycode: 1, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=5
+2066:[CHRONOS-KEY] host=KeyPress { keycode: 78, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 43, scan_code: 78 }) queued_before=5
+2068:[CHRONOS-KEY] host=KeyPress { keycode: 78, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=6
+2070:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=6
+2072:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2074:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2076:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=7
+2080:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0f09 flags-out=f206
+2084:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0f09 flags-out=f206
+2086:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2088:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2090:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=6
+2092:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=7
+2094:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=7
+2098:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=50e0 flags-out=f206
+2102:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=50e0 flags-out=f206
+2104:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2106:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2108:[DN27-MEM] 2244:37da bytes=[26, a0, 17, 00, 24, 04, 08, c0] phys=00417 value=00 computed-status=00
+2110:[DN27-MEM] 2244:0063 bytes=[26, 8a, 05, 24, 03, 08, c0, b0] phys=00417 value=00 computed-status=00
+2112:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2114:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=7
+2118:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=1c0d flags-out=f206
+2122:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=1c0d flags-out=f206
+2124:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2126:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=6
+2128:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2130:[DN27-MEM] 1c87:3f02 bytes=[26, a0, 17, 00, 30, e4, a3, 60] phys=00417 value=00 computed-status=00
+2132:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2134:[DN27-MEM] 1c87:4038 bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2136:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=7
+2138:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2140:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=7
+2142:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=8
+2145:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=8
+2147:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=9
+2151:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=6000 flags-out=f206
+2155:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=6000 flags-out=f206
+2157:[DN27-MEM] 10cf:0e24 bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2159:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2161:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2163:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=8
+2167:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=011b flags-out=f206
+2171:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=011b flags-out=f206
+2173:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2175:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2177:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=8
+2181:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4e2b flags-out=f206
+2185:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4e2b flags-out=f206
+2187:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2189:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2191:[DN27-MEM] 2244:3322 bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2193:[DN27-MEM] 1c87:43ed bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2195:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=7
+2197:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=8
+2199:[DN27-MEM] 2244:3047 bytes=[26, a0, 17, 00, 30, e4, 89, 46] phys=00417 value=00 computed-status=00
+2203:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=47e0 flags-out=f206
+2207:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=47e0 flags-out=f206
+2209:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2211:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2215:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2219:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2221:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2225:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2229:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2233:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2237:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2239:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 83 }) queued_before=4
+2243:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2247:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2251:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2255:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2259:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2263:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2265:[CHRONOS-KEY] host=KeyPress { keycode: 83, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=2
+2269:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2273:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2277:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=53e0 flags-out=f206
+2281:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=53e0 flags-out=f206
+2283:[CHRONOS-KEY] host=KeyPress { keycode: 30, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2285:[DN27-MEM] 32e3:25b9 bytes=[26, a0, 17, 00, a2, 16, 87, 8b] phys=00417 value=00 computed-status=00
+2287:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2289:[CHRONOS-KEY] host=Key('a') key=Some(BiosKey { ascii: 97, scan_code: 0 }) queued_before=0
+2293:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0061 flags-out=f206
+2297:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0061 flags-out=f206
+2299:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2301:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2303:[CHRONOS-KEY] host=KeyPress { keycode: 30, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2305:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2307:[CHRONOS-KEY] host=Key('b') key=Some(BiosKey { ascii: 98, scan_code: 0 }) queued_before=0
+2311:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0062 flags-out=f206
+2315:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0062 flags-out=f206
+2317:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2319:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2321:[CHRONOS-KEY] host=KeyPress { keycode: 48, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2323:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2325:[CHRONOS-KEY] host=Key('c') key=Some(BiosKey { ascii: 99, scan_code: 0 }) queued_before=0
+2329:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0063 flags-out=f206
+2333:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0063 flags-out=f206
+2335:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2337:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2339:[CHRONOS-KEY] host=KeyPress { keycode: 46, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2341:[CHRONOS-KEY] host=KeyPress { keycode: 32, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2343:[CHRONOS-KEY] host=Key('d') key=Some(BiosKey { ascii: 100, scan_code: 0 }) queued_before=0
+2347:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0064 flags-out=f206
+2351:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0064 flags-out=f206
+2353:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2355:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2357:[CHRONOS-KEY] host=KeyPress { keycode: 32, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2359:[CHRONOS-KEY] host=KeyPress { keycode: 18, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2361:[CHRONOS-KEY] host=Key('e') key=Some(BiosKey { ascii: 101, scan_code: 0 }) queued_before=0
+2365:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0065 flags-out=f206
+2369:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0065 flags-out=f206
+2371:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2373:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2375:[CHRONOS-KEY] host=KeyPress { keycode: 18, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2377:[CHRONOS-KEY] host=KeyPress { keycode: 33, extended: false, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2379:[CHRONOS-KEY] host=Key('f') key=Some(BiosKey { ascii: 102, scan_code: 0 }) queued_before=0
+2383:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=0066 flags-out=f206
+2387:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=0066 flags-out=f206
+2389:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2391:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2393:[CHRONOS-KEY] host=KeyPress { keycode: 33, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2395:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+2399:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=47e0 flags-out=f206
+2403:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=47e0 flags-out=f206
+2405:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2407:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2409:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2411:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2414:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2418:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2422:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2424:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2426:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2428:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2430:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2432:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2436:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2440:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2442:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2444:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2446:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2448:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2450:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2454:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2458:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2460:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2462:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2464:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2466:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2468:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+2472:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=47e0 flags-out=f206
+2476:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=47e0 flags-out=f206
+2478:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2480:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2482:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2484:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2486:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2490:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2494:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2496:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2498:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2500:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2502:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2504:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2508:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2512:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2514:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2516:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2518:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2520:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2522:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2526:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2530:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2532:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2534:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2536:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2538:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2540:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2542:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2544:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2548:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2552:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2554:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2556:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2558:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2561:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2563:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2567:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2571:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2573:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2575:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2577:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2579:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2581:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2585:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2589:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2591:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2593:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2595:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2597:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2599:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2603:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2607:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2609:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2611:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2613:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2615:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2617:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2621:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2625:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2627:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2629:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2631:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2633:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2635:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2639:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2643:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2645:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2647:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2649:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2651:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2653:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2657:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2661:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2663:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2665:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2667:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2669:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2671:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2675:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2679:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2681:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=02
+2683:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=02
+2685:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=02
+2687:[CHRONOS-KEY] host=KeyPress { keycode: 42, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2689:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2691:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2694:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2698:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2702:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2704:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2706:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2708:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2710:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2712:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 71 }) queued_before=0
+2716:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=47e0 flags-out=f206
+2720:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=47e0 flags-out=f206
+2722:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2724:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2726:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2728:[CHRONOS-KEY] host=KeyPress { keycode: 71, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2730:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2734:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2738:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2740:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2742:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2744:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2746:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2748:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2752:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2756:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2758:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2760:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2762:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2764:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2766:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2770:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2774:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2776:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2778:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2780:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2782:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2784:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2786:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2788:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2792:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2796:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2798:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2800:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2802:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2804:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2806:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2810:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2814:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2816:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2818:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2820:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2822:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2824:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2828:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2832:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2834:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2836:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2838:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2840:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2843:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2847:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2851:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2853:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2855:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2857:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2859:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2861:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2865:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2869:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2871:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2873:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2875:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2877:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2879:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2883:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2887:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2889:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2891:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2893:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2895:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2897:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2901:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2905:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2907:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2909:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2911:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2913:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: true, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2915:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: true, shift: true, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 77 }) queued_before=0
+2919:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4de0 flags-out=f206
+2923:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4de0 flags-out=f206
+2925:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=01
+2927:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=01
+2929:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=01
+2931:[CHRONOS-KEY] host=KeyPress { keycode: 54, extended: false, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2933:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2935:[CHRONOS-KEY] host=KeyPress { keycode: 77, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0
+2937:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: true, shift: false, ctrl: false, alt: false, super_key: false } key=Some(BiosKey { ascii: 224, scan_code: 75 }) queued_before=0
+2941:[DN27-IO] 1249:01ca opcode=cd operand=0016 ax-in=1100 ax-out=4be0 flags-out=f206
+2945:[DN27-IO] 1249:01d5 opcode=cd operand=0016 ax-in=1000 ax-out=4be0 flags-out=f206
+2947:[DN27-MEM] 10cf:0e87 bytes=[26, a0, 17, 00, 24, 07, 08, c0] phys=00417 value=00 computed-status=00
+2949:[DN27-MEM] 5191:0cba bytes=[26, a0, 17, 00, 24, 03, 08, c0] phys=00417 value=00 computed-status=00
+2951:[DN27-MEM] 32e3:25ad bytes=[26, 3a, 06, 17, 00, 74, 26, be] phys=00417 value=00 computed-status=00
+2953:[CHRONOS-KEY] host=KeyPress { keycode: 75, extended: true, pressed: false, shift: false, ctrl: false, alt: false, super_key: false } key=None queued_before=0

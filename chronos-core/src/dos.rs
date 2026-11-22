@@ -332,6 +332,10 @@ fn dispatch_keyboard(runtime: &mut Runtime) -> Result<(), Trap> {
             runtime.cpu.set_al(runtime.shift_flags());
             Ok(())
         }
+        0x12 => {
+            runtime.cpu.ax = runtime.enhanced_shift_flags();
+            Ok(())
+        }
         function => Err(Trap::UnsupportedInterrupt {
             interrupt: 0x16,
             function,
@@ -351,10 +355,11 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
             Ok(())
         }
         0x06 => {
-            if let Some(key) = runtime.pop_key() {
-                runtime.cpu.set_al(key.console_byte());
+            if let Some((byte, _)) = runtime.pop_dos_byte() {
+                runtime.cpu.set_al(byte);
                 runtime.cpu.flags &= !CpuState::FLAG_ZF;
             } else {
+                runtime.cpu.set_al(0);
                 runtime.cpu.flags |= CpuState::FLAG_ZF;
             }
             Ok(())
@@ -376,19 +381,24 @@ fn dispatch_dos(runtime: &mut Runtime) -> Result<(), Trap> {
             })
         }
         0x0a => {
-            let maximum = runtime.memory.read_u8(runtime.cpu.ds, runtime.cpu.dx);
+            let capacity = runtime.memory.read_u8(runtime.cpu.ds, runtime.cpu.dx);
+            if capacity == 0 {
+                return Ok(());
+            }
             runtime
                 .memory
                 .write_u8(runtime.cpu.ds, runtime.cpu.dx.wrapping_add(1), 0);
             runtime.wait_for_key(crate::runtime::InputMode::Line {
                 segment: runtime.cpu.ds,
                 offset: runtime.cpu.dx,
-                maximum,
+                maximum: capacity - 1,
                 length: 0,
             })
         }
         0x0b => {
-            runtime.cpu.set_al(if runtime.has_key() { 0xff } else { 0 });
+            runtime
+                .cpu
+                .set_al(if runtime.has_dos_byte() { 0xff } else { 0 });
             Ok(())
         }
         0x0c => {
@@ -1364,6 +1374,230 @@ mod tests {
         assert!(runtime.inject_key(translate_key_press(keypad).unwrap()));
         assert_eq!(runtime.cpu.ax, 0x1c0d);
         assert_eq!(runtime.queued_key_count(), 0);
+    }
+
+    #[test]
+    fn dos_byte_reads_share_extended_tail_without_exposing_it_to_bios() {
+        let mut runtime =
+            Runtime::from_com(&[0xcd, 0x21, 0xcd, 0x16, 0xcd, 0x21, 0xcd, 0x21, 0xcd, 0x21])
+                .unwrap();
+        runtime.cpu.ax = 0x07aa;
+        runtime.cpu.bx = 0xabcd;
+        runtime.cpu.cx = 0x1234;
+        runtime.cpu.dx = 0x98ff;
+        runtime.cpu.flags = 0x0247;
+        let expected = runtime.cpu;
+        runtime.step();
+        assert_eq!(*runtime.state(), crate::GuestState::WaitingForInput);
+        runtime.inject_key(crate::BiosKey {
+            ascii: 0xe0,
+            scan_code: 0x50,
+        });
+        runtime.inject_ascii(b'Q');
+        assert_eq!((runtime.cpu.ax, runtime.cpu.flags), (0x0700, 0x0247));
+        runtime.cpu.ax = 0x1100;
+        runtime.step();
+        assert_eq!(runtime.cpu.ax, u16::from(b'Q'));
+        for (ax, result, flags) in [
+            (0x06aa, 0x0650, 0x0207),
+            (0x08aa, 0x0851, 0x0207),
+            (0x06aa, 0x0600, 0x0247),
+        ] {
+            runtime.cpu.ax = ax;
+            runtime.step();
+            assert_eq!((runtime.cpu.ax, runtime.cpu.flags), (result, flags));
+            assert_eq!(
+                (runtime.cpu.bx, runtime.cpu.cx, runtime.cpu.dx),
+                (expected.bx, expected.cx, expected.dx)
+            );
+            std::println!(
+                "AX={:04x} FLAGS={:04x} BX={:04x} CX={:04x} DX={:04x}",
+                runtime.cpu.ax,
+                runtime.cpu.flags,
+                runtime.cpu.bx,
+                runtime.cpu.cx,
+                runtime.cpu.dx
+            );
+        }
+    }
+
+    #[test]
+    fn dos_byte_echo_status_and_flush() {
+        let mut r = Runtime::from_com(&[0xcd, 0x21]).unwrap();
+        let call = |r: &mut Runtime, ax| {
+            r.cpu.ip = 0x100;
+            r.cpu.ax = ax;
+            r.step();
+            r.cpu.ax
+        };
+        r.inject_key(crate::BiosKey {
+            ascii: 0,
+            scan_code: b'P',
+        });
+        assert_eq!(call(&mut r, 0x0100), 0x0100);
+        assert_eq!(call(&mut r, 0x0b00), 0x0bff);
+        assert_eq!(call(&mut r, 0x0100), 0x0150);
+        assert_eq!(r.memory.read_u8(0xb800, 0), b' ');
+        r.inject_ascii(b'A');
+        assert_eq!(call(&mut r, 0x0100), 0x0141);
+        assert_eq!(r.memory.read_u8(0xb800, 0), b'A');
+        r.inject_ascii(3);
+        assert_eq!(call(&mut r, 0x0700), 0x0703);
+        r.inject_ascii(3);
+        r.cpu.set_dl(0xff);
+        assert_eq!(call(&mut r, 0x0600), 0x0603);
+        assert_eq!(r.memory.read_u8(0xb800, 2), b' ');
+        r.inject_key(crate::BiosKey {
+            ascii: 0xe0,
+            scan_code: 0x53,
+        });
+        assert_eq!(call(&mut r, 0x0800), 0x0800);
+        r.inject_ascii(b'B');
+        call(&mut r, 0x0c08);
+        assert_eq!(*r.state(), crate::GuestState::WaitingForInput);
+        r.inject_ascii(b'C');
+        assert_eq!(r.cpu.ax, 0x0843);
+    }
+
+    #[test]
+    fn dos_buffered_input_drains_typeahead_and_reserves_carriage_return() {
+        let mut r = Runtime::from_com(&[0xcd, 0x21, 0xcd, 0x21]).unwrap();
+        r.cpu.ax = 0x0a00;
+        r.cpu.dx = 0x200;
+        r.cpu.flags = 0x0247;
+        let ds = r.cpu.ds;
+        r.memory.write_u8(ds, 0x201, 0xff);
+        r.step(); // Zero capacity: no wait or buffer write.
+        assert_ne!(*r.state(), crate::GuestState::WaitingForInput);
+        assert_eq!(r.memory.read_u8(ds, 0x201), 0xff);
+        r.memory.write_u8(ds, 0x200, 3);
+        r.memory.write_u8(ds, 0x205, 0x9c);
+        r.inject_key(crate::BiosKey {
+            ascii: 0xe0,
+            scan_code: 0x4b,
+        });
+        for byte in *b"abx\x08C!\rQ" {
+            r.inject_ascii(byte);
+        }
+        r.step();
+        assert_ne!(*r.state(), crate::GuestState::WaitingForInput);
+        let buffer = core::array::from_fn::<_, 6, _>(|i| r.memory.read_u8(ds, 0x200 + i as u16));
+        assert_eq!(buffer, [3, 2, b'a', b'C', b'\r', 0x9c]);
+        assert_eq!((r.cpu.ax, r.cpu.dx, r.cpu.flags), (0x0a00, 0x200, 0x0247));
+        assert_eq!(r.queued_key_count(), 1);
+        std::println!(
+            "AH=0A AX={:04x} DX={:04x} FLAGS={:04x} buffer={buffer:02x?}",
+            r.cpu.ax,
+            r.cpu.dx,
+            r.cpu.flags
+        );
+    }
+
+    #[test]
+    fn bios_reports_shift_sides_and_merged_ctrl_alt() {
+        let mut runtime = Runtime::from_com(&[0xcd, 0x16, 0xeb, 0xfc]).unwrap();
+        let mut edge = |scan, extended, pressed, shift, ctrl, alt, legacy: u16, enhanced| {
+            assert_eq!(
+                runtime.translate_host_key(crate::HostKeyEvent {
+                    keycode: scan,
+                    extended,
+                    pressed,
+                    shift,
+                    ctrl,
+                    alt,
+                }),
+                None
+            );
+            for (request, expected) in [(0x02ff, 0x0200 | legacy), (0x12ff, enhanced)] {
+                runtime.cpu.ip = 0x100;
+                runtime.cpu.ax = request;
+                runtime.cpu.flags = 0x0247;
+                runtime.step();
+                assert_eq!((runtime.cpu.ax, runtime.cpu.flags), (expected, 0x0247));
+                std::println!("INT16 request={request:04x} AX={expected:04x} FLAGS=0247");
+            }
+        };
+        edge(0x2a, false, true, true, false, false, 2, 2);
+        edge(0x36, false, true, true, false, false, 3, 3);
+        edge(0x2a, false, false, true, false, false, 1, 1);
+        edge(0x2a, true, true, true, false, false, 1, 1);
+        edge(0x37, true, true, true, false, false, 1, 1);
+        edge(0x37, true, false, true, false, false, 1, 1);
+        edge(0x2a, true, false, true, false, false, 1, 1);
+        edge(0x1d, true, true, true, true, false, 5, 0x0405);
+        edge(0x1d, false, true, true, true, false, 5, 0x0505);
+        edge(0x1d, true, false, true, true, false, 5, 0x0105);
+        edge(0x38, false, true, true, true, true, 13, 0x030d);
+        edge(0x38, true, true, true, true, true, 13, 0x0b0d);
+        edge(0x38, true, true, true, true, true, 13, 0x0b0d);
+        edge(0x38, false, false, true, true, true, 13, 0x090d);
+        runtime.release_host_keys();
+        runtime.cpu.ip = 0x100;
+        runtime.cpu.ax = 0x12ff;
+        runtime.step();
+        assert_eq!(runtime.cpu.ax, 0);
+    }
+
+    #[test]
+    fn guest_bda_and_bios_agree_on_modeled_keyboard_flags() {
+        use crate::HostKeyEvent;
+
+        // MOV AL,[0017h]; INT 16h. Use the actual guest data path and BIOS dispatch.
+        let mut runtime = Runtime::from_com(&[0xa0, 0x17, 0x00, 0xcd, 0x16]).unwrap();
+        runtime.cpu.ds = 0x0040;
+        let check = |runtime: &mut Runtime, expected: u8, guest_bits: u8| {
+            runtime.cpu.ip = 0x0100;
+            runtime.cpu.ax = 0x02ff;
+            runtime.cpu.flags = 0x0247;
+            runtime.step();
+            assert_eq!(runtime.cpu.ax, 0x0200 | u16::from(expected | guest_bits));
+            runtime.step();
+            assert_eq!(
+                (runtime.cpu.ax, runtime.cpu.flags),
+                (0x0200 | u16::from(expected), 0x0247)
+            );
+        };
+        check(&mut runtime, 0, 0);
+        runtime.memory.write_u8(0x0040, 0x0017, 0xd0);
+        for (keycode, extended, pressed, shift, ctrl, alt, expected) in [
+            (0x2a, false, true, true, false, false, 0x02),
+            (0x36, false, true, true, false, false, 0x03),
+            (0x2a, false, false, true, false, false, 0x01),
+            (0x2a, true, true, true, false, false, 0x01),
+            (0x2a, true, false, true, false, false, 0x01),
+            (0x45, false, true, true, false, false, 0x21),
+            (0x45, false, true, true, false, false, 0x21),
+            (0x1d, true, true, true, true, false, 0x25),
+            (0x38, true, true, true, true, true, 0x2d),
+            (0x36, false, false, false, true, true, 0x2c),
+        ] {
+            assert_eq!(
+                runtime.translate_host_key(HostKeyEvent {
+                    keycode,
+                    extended,
+                    pressed,
+                    shift,
+                    ctrl,
+                    alt,
+                }),
+                None
+            );
+            check(&mut runtime, expected, 0xd0);
+        }
+        runtime.release_host_keys();
+        check(&mut runtime, 0x20, 0xd0);
+        assert_eq!(
+            runtime.translate_host_key(HostKeyEvent {
+                keycode: 0x45,
+                extended: false,
+                pressed: true,
+                shift: false,
+                ctrl: false,
+                alt: false,
+            }),
+            None
+        );
+        check(&mut runtime, 0, 0xd0);
     }
 
     #[test]

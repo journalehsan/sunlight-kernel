@@ -1,0 +1,309 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2512:28
+     |
+2512 | #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                            ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `sunlightos`
+    --> sunlight-ui/widgets/document_canvas.rs:2029:48
+     |
+2029 |                     #[cfg(all(feature = "app", target_os = "sunlightos"))]
+     |                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `sunlight-ui` (lib test) generated 2 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.28s
+     Running unittests lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_ui-2b34dbcafb89bf0f)
+
+running 277 tests
+test draw::rounded::tests::rounded_stroke_leaves_center_unfilled ... ok
+test font::label::tests::ellipsis_and_unseparated_names ... ok
+test draw::rounded::tests::rounded_fill_clips_to_canvas ... ok
+test font::label::tests::extended_graphemes_are_never_split ... ok
+test font::label::tests::full_tooltip_wrap_retains_every_grapheme ... ok
+test font::label::tests::ink_is_clipped_with_stride_and_partial_scrolling ... ok
+test font::label::tests::short_names_and_proportional_metrics ... ok
+test font::label::tests::two_lines_wrap_at_filename_boundaries ... ok
+test horizon::tests::control_ordering_matches_horizon_spec ... ok
+test horizon::tests::hit_rects_cover_full_buttons_not_glyph_pixels ... ok
+test horizon::tests::horizon_palette_uses_chrome_roles ... ok
+test horizon::tests::glyph_stays_inside_button_bounds ... ok
+test horizon::tests::hover_backplates_fit_inside_titlebar_strip ... ok
+test horizon::tests::maximize_vs_restore_glyph_selection ... ok
+test horizon::tests::physical_order_stable_under_rtl ... ok
+test image::blit::tests::alpha_0_leaves_destination_unchanged ... ok
+test image::blit::tests::alpha_255_produces_source_color ... ok
+test image::blit::tests::bilinear_does_not_import_transparent_rgb_fringe ... ok
+test image::blit::tests::channel_order_argb_preserved_in_blend ... ok
+test image::blit::tests::coverage_scales_alpha_only ... ok
+test font::label::tests::unicode_mixed_names_and_narrow_widths ... ok
+test image::blit::tests::excessive_radius_is_clamped ... ok
+test image::blit::tests::fifty_percent_source_over_matches_known_rounding ... ok
+test image::blit::tests::matches_color_blend_over ... ok
+test image::blit::tests::radius_zero_is_full_rect ... ok
+test image::blit::tests::rounded_coverage_inside_outside_and_boundary ... ok
+test image::blit::tests::scale_1_wide_and_1_high_are_safe ... ok
+test image::blit::tests::scale_1x1_preserves_color ... ok
+test image::mono_icon::tests::bit_lookup_is_row_major_msb_first ... ok
+test image::mono_icon::tests::draw_skips_off_pixels_and_tints_on_pixels ... ok
+test image::mono_icon::tests::same_icon_draws_in_multiple_colors ... ok
+test image::mono_icon::tests::validates_dimensions ... ok
+test image::simg::tests::decode_tiny_tga ... ok
+test image::simg::tests::encode_roundtrip ... ok
+test image::simg::tests::malformed_rejects_safely ... ok
+test image::simg::tests::origin_bit_flips_rows ... ok
+test image::simg::tests::malformed_v2_does_not_become_tga ... ok
+test image::simg::tests::simg_v2_roundtrip_matches_legacy_pixels ... ok
+test layout::tests::axis_policies_are_independent ... ok
+test image::simg::tests::png_and_jpeg_use_renderer_argb_layout ... ok
+test layout::tests::column_fill_consumes_vertical_remainder ... ok
+test layout::tests::distribution_redistributes_space_after_maximum ... ok
+test layout::tests::fill_on_both_axes_tracks_parent ... ok
+test image::simg::tests::scale_preserves_aspect_ratio ... ok
+test layout::tests::fill_grows_and_shrinks_with_available_space ... ok
+test layout::tests::fixed_sizing_remains_fixed_across_parent_resize ... ok
+test layout::tests::linear_layout_keeps_tiny_rectangles_valid_and_spacers_are_intent_only ... ok
+test layout::tests::flex_weights_divide_remaining_space_deterministically ... ok
+test layout::tests::legacy_default_retains_previous_geometry ... ok
+test layout::tests::min_and_max_constraints_are_respected ... ok
+test layout::tests::repeated_layout_is_stable ... ok
+test layout::tests::row_fill_consumes_horizontal_remainder_with_exact_padding_and_gap ... ok
+test layout::tests::row_flex_weights_and_constraints_are_deterministic ... ok
+test layout::tests::invalidation_only_relayouts_on_change_or_explicit_request ... ok
+test layout::tests::zero_and_tiny_dimensions_are_valid ... ok
+test material::tests::canonical_start_values_are_preserved_and_shared ... ok
+test material::tests::glass_sample_applies_opacity ... ok
+test material::tests::noise_is_deterministic_and_spatially_stable ... ok
+test material::tests::opacity_and_noise_are_clamped ... ok
+test material::tests::opaque_accessibility_fallback_disables_alpha_and_noise ... ok
+test material::tests::outer_effect_geometry_expands_the_window_corner ... ok
+test material::tests::role_presets_keep_application_content_opaque ... ok
+test material::tests::solid_sample_is_opaque_and_ignores_noise ... ok
+test material::tests::straight_alpha_blend_matches_color_blend_over ... ok
+test material::tests::straight_alpha_layers_preserve_alpha_and_normalized_color ... ok
+test material::tests::straight_alpha_over_transparent_keeps_unpremultiplied_rgb ... ok
+test material::tests::text_ambient_shadow_only_for_low_contrast_glass ... ok
+test material::tests::titlebar_and_root_share_hue_family ... ok
+test material::tests::window_hierarchy_keeps_cards_denser_and_content_opaque ... ok
+test paint::material_tests::channel_order_tga_bgra_to_argb ... ok
+test paint::material_tests::cover_image_is_explicitly_opaque ... ok
+test paint::material_tests::opaque_and_tinted_tga_paths_never_drop_alpha ... ok
+test paint::material_tests::native_size_radius_zero_matches_direct_sample ... ok
+test paint::material_tests::paint_material_replaces_previous_frame_alpha ... ok
+test paint::material_tests::rounded_glass_noise_never_forces_pixels_opaque ... ok
+test paint::material_tests::rounded_icon_clips_corners_and_keeps_centre ... ok
+test paint::material_tests::tga_icon_keeps_straight_alpha_on_transparent_canvas ... ok
+test paint::material_tests::scaled_icon_bilinear_avoids_red_fringe_from_transparent_texels ... ok
+test paint::material_tests::tga_icon_over_opaque_content_remains_opaque ... ok
+test scroll::tests::clamp_after_content_shrinks ... ok
+test scroll::tests::clamp_after_viewport_grows ... ok
+test scroll::tests::content_equal_to_viewport_has_zero_offset ... ok
+test scroll::tests::content_larger_than_viewport_has_positive_max ... ok
+test scroll::tests::content_smaller_than_viewport_has_zero_offset ... ok
+test scroll::tests::drag_thumb_to_middle ... ok
+test scroll::tests::drag_thumb_to_top_and_bottom ... ok
+test scroll::tests::ensure_visible_above_viewport ... ok
+test scroll::tests::ensure_visible_already_visible_does_nothing ... ok
+test scroll::tests::ensure_visible_below_viewport ... ok
+test scroll::tests::hit_test_scrollbar_distinguishes_thumb_from_track ... ok
+test scroll::tests::independent_states_do_not_interfere ... ok
+test scroll::tests::max_offset_does_not_underflow ... ok
+test scroll::tests::page_scroll_does_not_underflow ... ok
+test scroll::tests::reset_offset_when_setting_geometry ... ok
+test scroll::tests::scroll_by_clamps_at_limits ... ok
+test scroll::tests::scroll_by_positive_and_negative ... ok
+test scroll::tests::thumb_at_bottom_when_scrolled_to_bottom ... ok
+test scroll::tests::thumb_at_top_when_scrolled_to_top ... ok
+test scroll::tests::thumb_size_proportional ... ok
+test scroll::tests::track_click_above_thumb_pages_up ... ok
+test scroll::tests::track_click_below_thumb_pages_down ... ok
+test scroll::tests::very_small_geometry_is_stable ... ok
+test scroll::tests::wheel_delta_supports_hid_and_fixed_point_steps ... ok
+test scroll::tests::wheel_retains_hid_magnitude_and_partial_fixed_point_detents ... ok
+test scroll::tests::zero_height_viewport_is_stable ... ok
+test theme::tests::dark_chrome_shares_panel_hue_family ... ok
+test theme::tests::inactive_title_remains_readable ... ok
+test theme::tests::selection_is_restrained_not_saturated_accent ... ok
+test widgets::digital_number::tests::leading_zeros_format ... ok
+test widgets::digital_number::tests::draw_does_not_panic ... ok
+test widgets::digital_number::tests::segment_masks_for_digits ... ok
+test widgets::conversation_bubble::tests::bubbles_draw_with_and_without_detail ... ok
+test widgets::digital_number::tests::signed_and_decimal_strings ... ok
+test widgets::digital_number::tests::unsupported_chars_become_blank_not_corrupt ... ok
+test widgets::digital_number::tests::measurement_independent_of_value ... ok
+test widgets::digital_number::tests::validates_supported_and_rejects_letters ... ok
+test widgets::disclosure::tests::disclosure_toggles_from_keyboard_and_only_focused_clicks ... ok
+test widgets::disclosure::tests::property_grid_measurement_and_hitboxes_are_bounded ... ok
+test widgets::document_canvas::tests::browser_hit_testing_starts_at_viewport_origin_and_scrolls_in_document_space ... ok
+test widgets::document_canvas::tests::browser_scene_draws_decoded_raster_image ... ok
+test widgets::document_canvas::tests::browser_presentation_uses_the_entire_canvas_as_document_viewport ... ok
+test widgets::document_canvas::tests::byte_at_x_on_line_snaps_to_boundaries ... ok
+test widgets::document_canvas::tests::byte_offset_at_x_always_returns_code_point_boundary ... ok
+test widgets::document_canvas::tests::byte_offset_at_x_ascii_fixed_width ... ok
+test widgets::document_canvas::tests::byte_offset_at_x_empty_text ... ok
+test widgets::document_canvas::tests::caret_roundtrip_ascii ... ok
+test widgets::document_canvas::tests::caret_x_at_byte_ascii ... ok
+test widgets::document_canvas::tests::caret_x_at_byte_empty_text ... ok
+test widgets::document_canvas::tests::caret_x_on_line_correct ... ok
+test widgets::document_canvas::tests::click_to_line_and_byte_multiline ... ok
+test widgets::document_canvas::tests::content_rect_stays_within_page ... ok
+test widgets::document_canvas::tests::css_generic_font_lists_resolve_without_html_knowledge ... ok
+test widgets::document_canvas::tests::find_line_for_byte ... ok
+test widgets::document_canvas::tests::hit_target_is_deterministic ... ok
+test widgets::document_canvas::tests::hit_target_returns_link_for_link_text_item ... ok
+test widgets::document_canvas::tests::hit_target_returns_none_for_empty_canvas ... ok
+test widgets::document_canvas::tests::hit_target_returns_none_for_non_interactive_rect ... ok
+test widgets::document_canvas::tests::hit_target_returns_none_outside_content_rect ... ok
+test widgets::document_canvas::tests::draw_multiline_active_text_renders_lines_and_caret ... ok
+test widgets::document_canvas::tests::draw_with_edit_state_renders_caret_for_active_text_item ... ok
+test widgets::document_canvas::tests::hit_target_returns_text_for_text_item ... ok
+test widgets::document_canvas::tests::draw_without_edit_state_does_not_render_caret ... ok
+test widgets::document_canvas::tests::hit_target_scene_link_takes_priority_over_text ... ok
+test widgets::document_canvas::tests::hit_target_scene_text_returns_text ... ok
+test widgets::document_canvas::tests::hit_target_unicode_text_is_safe ... ok
+test widgets::document_canvas::tests::layout_empty_text_is_single_empty_line ... ok
+test widgets::document_canvas::tests::layout_explicit_newlines ... ok
+test widgets::document_canvas::tests::layout_newline_at_end_creates_trailing_line ... ok
+test widgets::document_canvas::tests::layout_no_space_fallback_wrap ... ok
+test widgets::document_canvas::tests::empty_document_draw_does_not_panic ... ok
+test widgets::document_canvas::tests::layout_soft_wrap_at_space ... ok
+test widgets::document_canvas::tests::layout_wrap_preserves_emoji_unicode_boundaries ... ok
+test widgets::document_canvas::tests::line_home_and_end_bytes ... ok
+test widgets::document_canvas::tests::mode_defaults_to_editable ... ok
+test widgets::document_canvas::tests::replacement_patch_requires_the_producer_to_swap_the_scene ... ok
+test widgets::document_canvas::tests::resizing_rich_layout_reflows_without_changing_styles ... ok
+test widgets::document_canvas::tests::retained_scene_applies_insert_remove_update_and_reorder ... ok
+test widgets::document_canvas::tests::retained_scene_indexes_and_diff_are_stable ... ok
+test widgets::document_canvas::tests::linear_and_radial_gradients_paint_without_panic ... ok
+test widgets::document_canvas::tests::retained_scene_selects_read_only_mode_and_hit_tests_in_document_coordinates ... ok
+test widgets::document_canvas::tests::rich_layout_wraps_and_hit_tests_with_actual_style_metrics ... ok
+test widgets::document_canvas::tests::sample_items_can_be_constructed ... ok
+test widgets::document_canvas::tests::text_edit_state_clear_resets_all_fields ... ok
+test widgets::document_canvas::tests::text_edit_state_defaults_to_inactive ... ok
+test widgets::document_canvas::tests::writer_presentation_keeps_only_page_workspace_and_document_margin ... ok
+test widgets::document_editor::tests::active_typing_style_creates_and_combines_normalized_runs ... ok
+test widgets::document_editor::tests::alignment_applies_to_all_touched_paragraphs ... ok
+test widgets::document_editor::tests::blank_lines_trailing_newline_and_empty_document_have_caret_rows ... ok
+test widgets::document_editor::tests::delete_forward_at_line_end_merges_logical_lines ... ok
+test widgets::document_editor::tests::enter_and_boundary_affinity_inherit_left_style ... ok
+test widgets::document_editor::tests::enter_at_start_middle_and_end_preserves_trailing_lines ... ok
+test widgets::document_editor::tests::font_size_selection_and_typing_state_are_distinct ... ok
+test widgets::document_editor::tests::heading_enter_resets_at_end_and_preserves_in_middle ... ok
+test widgets::document_editor::tests::horizontal_navigation_crosses_newlines_and_empty_document_is_stable ... ok
+test widgets::document_editor::tests::insert_delete_replace_and_paragraph_merge_preserve_styles ... ok
+test widgets::document_editor::tests::insertion_newlines_and_cross_line_deletion_are_utf8_safe ... ok
+test widgets::document_editor::tests::navigation_crosses_lines_and_preserves_preferred_x ... ok
+test widgets::document_editor::tests::ordinary_navigation_collapses_selection_to_nearest_edge ... ok
+test widgets::document_editor::tests::page_navigation_uses_viewport_geometry_and_keeps_caret_visible ... ok
+test widgets::document_editor::tests::selection_delete_replace_and_multiline_paste ... ok
+test widgets::document_editor::tests::selection_toggle_uses_uniform_and_mixed_semantics ... ok
+test widgets::document_editor::tests::shift_selection_spans_wrapped_and_logical_lines ... ok
+test widgets::document_editor::tests::unicode_selection_formats_only_valid_byte_range ... ok
+test widgets::document_editor::tests::wrapping_resize_and_hit_testing_use_visual_lines ... ok
+test widgets::drive_card::tests::builders_set_fields ... ok
+test widgets::drive_card::tests::hit_test_bounds_and_disabled ... ok
+test widgets::drive_card::tests::state_interactive ... ok
+test widgets::drive_card::tests::usage_clamped ... ok
+test widgets::icon_button::tests::disabled_icon_button_does_not_hit ... ok
+test widgets::icon_button::tests::enabled_icon_button_uses_full_hit_area ... ok
+test widgets::document_editor::tests::scrolling_follows_caret_and_clamps_after_delete_and_resize ... ok
+test widgets::rich_document::tests::creates_empty_regular_and_combined_documents ... ok
+test widgets::rich_document::tests::formats_across_paragraphs_and_composes_styles ... ok
+test widgets::rich_document::tests::formats_partial_full_and_multiple_runs_with_normalization ... ok
+test widgets::rich_document::tests::paragraph_styles_and_font_sizes_are_structural_and_normalized ... ok
+test widgets::rich_document::tests::replacement_preserves_surrounding_styles_and_removes_empty_runs ... ok
+test widgets::rich_document::tests::uniform_query_reports_mixed_selection ... ok
+test widgets::search_palette::tests::field_bounds_query_length ... ok
+test widgets::search_palette::tests::layout_is_centered_and_in_bounds ... ok
+test widgets::search_palette::tests::page_count_math ... ok
+test widgets::search_palette::tests::row_and_dot_hit_tests ... ok
+test widgets::secret_input::tests::secret_input_is_bounded_and_ignores_control_characters ... ok
+test widgets::secret_input::tests::unicode_backspace_clears_removed_bytes ... ok
+test widgets::drive_card::tests::draw_card_minimal_no_panic ... ok
+test widgets::section::tests::state_selects_distinct_fills ... ok
+test widgets::sidebar::tests::segmented_tabs_hit_test_uses_physical_left_to_right_geometry ... ok
+test widgets::sidebar_item::tests::builders_set_fields ... ok
+test widgets::owl_avatar::tests::avatar_draws_every_state ... ok
+test widgets::section::tests::section_reports_containment ... ok
+test widgets::sidebar_item::tests::card_rect_is_inset ... ok
+test widgets::sidebar_item::tests::hit_test_respects_disabled_and_bounds ... ok
+test widgets::slider::tests::clamps_value_to_range ... ok
+test widgets::slider::tests::horizontal_click_updates_value ... ok
+test widgets::sidebar_item::tests::state_interactive ... ok
+test widgets::slider::tests::horizontal_pointer_geometry_maps_start_half_and_end ... ok
+test widgets::slider::tests::vertical_click_updates_value ... ok
+test widgets::solar_clock::tests::format_hhmm_zero_padded ... ok
+test widgets::solar_clock::tests::layout_is_square_centered ... ok
+test widgets::solar_clock::tests::major_rays_at_cardinals ... ok
+test widgets::solar_clock::tests::midnight_and_noon_boundaries ... ok
+test widgets::solar_clock::tests::minute_hour_progress_normalization ... ok
+test widgets::solar_clock::tests::ray_table_has_unit_length ... ok
+test widgets::solar_clock::tests::second_ray_activation_counts ... ok
+test widgets::solar_clock::tests::snapshot_dirty_layers ... ok
+test widgets::table::sorting_tests::controlled_sort_toggles_and_switches ... ok
+test widgets::table::sorting_tests::optional_headers_never_select_rows_and_offsets_clamp ... ok
+test widgets::table::sorting_tests::small_scrollview_track_and_disabled_column_are_safe ... ok
+test widgets::table::sorting_tests::typed_keys_and_identity_ties ... ok
+test widgets::text_buffer::tests::arrow_and_home_end ... ok
+test widgets::sidebar_item::tests::draw_all_states_does_not_panic ... ok
+test widgets::text_buffer::tests::backspace_joins_lines ... ok
+test widgets::text_buffer::tests::counts_words_and_chars ... ok
+test widgets::text_buffer::tests::delete_forward_joins_lines ... ok
+test widgets::text_buffer::tests::empty_buffer_has_one_blank_line ... ok
+test widgets::text_buffer::tests::empty_content_detection ... ok
+test widgets::text_buffer::tests::utf8_persian_round_trip ... ok
+test widgets::text_context_menu::tests::editable_menu_exposes_local_shortcuts_and_state ... ok
+test widgets::solar_clock::tests::draw_representative_times_no_panic ... ok
+test widgets::text_context_menu::tests::read_only_menu_omits_mutating_commands ... ok
+test widgets::text_buffer::tests::insert_and_split_lines ... ok
+test widgets::text_editor::tests::editable_surface_handles_selection_and_deletion ... ok
+test widgets::text_editor::tests::read_only_surface_selects_but_does_not_delete ... ok
+test widgets::text_editor::tests::context_menu_keeps_mouse_press_until_click ... ok
+test widgets::text_input::tests::select_all_and_delete_use_local_shortcuts ... ok
+test widgets::text_input::tests::shift_navigation_creates_selection ... ok
+test widgets::text_input::tests::utf8_editing_keeps_boundaries_valid ... ok
+test widgets::tree_view::tests::collapse_branch_hides_descendants_only ... ok
+test widgets::tree_view::tests::expand_branch_adds_descendants_in_order ... ok
+test widgets::tree_view::tests::indentation_depth_matches_visible_hierarchy ... ok
+test widgets::tree_view::tests::initially_expanded_root_shows_first_level_children ... ok
+test widgets::drive_card::tests::draw_row_all_states_no_panic ... ok
+test widgets::tree_view::tests::invalid_selected_id_is_cleaned_on_rebuild ... ok
+test widgets::tree_view::tests::repeated_rebuilds_are_stable ... ok
+test widgets::tree_view::tests::root_row_generation_is_stable ... ok
+test widgets::tree_view::tests::selection_changes_and_marks_visible_row ... ok
+test widgets::tree_view::tests::selection_does_not_change_expansion_state ... ok
+test widgets::drive_card::tests::draw_card_all_states_no_panic ... ok
+test widgets::text_editor::tests::mouse_wheel_scrolls_and_clamps_inside_editor ... ok
+test widgets::text_input::tests::context_menu_keeps_mouse_press_until_click ... ok
+test widgets::workspace_switcher::tests::card_hit_test_maps_indices ... ok
+test widgets::workspace_switcher::tests::layout_fits_four_cards_on_thinkpad_and_vmware ... ok
+test widgets::workspace_switcher::tests::layout_stays_above_dock_and_below_top ... ok
+test widgets::tree_view::tests::invalid_expanded_id_is_cleaned_on_rebuild ... ok
+test widgets::workspace_switcher::tests::overflow_label_is_bounded ... ok
+test widgets::world_map::tests::equator_prime_meridian_center ... ok
+test widgets::world_map::tests::letterbox_preserves_aspect ... ok
+test widgets::world_map::tests::longitude_wrapping ... ok
+test widgets::world_map::tests::marker_hit_testing ... ok
+test widgets::world_map::tests::outside_click_emits_outside ... ok
+test widgets::world_map::tests::point_outside_map_is_none ... ok
+test widgets::world_map::tests::poles_and_dateline ... ok
+test widgets::world_map::tests::projection_round_trip_tolerance ... ok
+test widgets::world_map::tests::silhouette_has_land_and_ocean ... ok
+test widgets::world_map::tests::write_combined_widget_preview ... ok
+test widgets::world_map::tests::draw_no_panic ... ok
+test widgets::certificate_panel::tests::renders_backend_fields_and_security_states ... ok
+test widgets::tree_view::tests::deep_tree_rebuild_avoids_recursive_walks ... ok
+
+test result: ok. 277 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

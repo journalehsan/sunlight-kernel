@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/chronos-dn/dn-25/desktop.py", line 18, in <module>
+    guest = Guest(options.iso, options.output)
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/desktop_tty_ux_gate.py", line 50, in __init__
+    raise RuntimeError("QEMU failed to start; inspect qemu.log")
+RuntimeError: QEMU failed to start; inspect qemu.log
+qemu-system-x86_64: -qmp unix:/tmp/sunlight-session-ux-5.sock,server=on,wait=off: Failed to bind socket to /tmp/sunlight-session-ux-5.sock: Operation not permitted

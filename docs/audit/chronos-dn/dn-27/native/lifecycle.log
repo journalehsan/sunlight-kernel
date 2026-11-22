@@ -1,0 +1,53 @@
+1664:launch[0] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=15320 pid=39
+1665-
+--
+3208:[CHRONOS] DOS session completed code=
+3209-0
+--
+3212:[APP_LIFECYCLE] app_window_detached pid=39 win_id=3 remaining=0
+3213-
+--
+3219:[SCHED] process_mark_finished pid=39 name='sunlight-chronos' reason=exit code=0
+3220-[SCHED] terminating pid=39 name='sunlight-chronos' reason=exit
+3221:[SCHED] process_reaped pid=39 name='sunlight-chronos' user_frames=2820 page_tables=13 swap_blocks=0 ipc_cleared=0
+3222-[SCHED] process_resource_cleanup_summary pid=39 frames=2820 pts=13 swap=0 ipc_entries_cleared=0
+--
+3230:[APP_LIFECYCLE] app_instance_removed pid=39 name=DOS Navigator 1.51
+3231-
+--
+3334:launch[0] source=unknown DOS Navigator 1.51 phase=window_visible_on_screen timestamp_ms=258880 pid=40
+3335-
+--
+4124:[CHRONOS] DOS session completed code=
+4125-0
+--
+4128:[APP_LIFECYCLE] app_window_detached pid=40 win_id=4 remaining=0
+4129-
+--
+4135:[SCHED] process_mark_finished pid=40 name='sunlight-chronos' reason=exit code=0
+4136-[SCHED] terminating pid=40 name='sunlight-chronos' reason=exit
+4137:[SCHED] process_reaped pid=40 name='sunlight-chronos' user_frames=2820 page_tables=13 swap_blocks=0 ipc_cleared=0
+4138-[SCHED] process_resource_cleanup_summary pid=40 frames=2820 pts=13 swap=0 ipc_entries_cleared=0
+--
+4146:[APP_LIFECYCLE] app_instance_removed pid=40 name=DOS Navigator 1.51
+4147-
+--
+4302:launch[3] source=unknown Sunlight Mines phase=window_visible_on_screen timestamp_ms=341450 delta=140ms pid=41
+4303-
+--
+4599:[CHRONOS] DOS session completed code=
+4600-0
+--
+4607:[APP_LIFECYCLE] app_window_detached pid=41 win_id=5 remaining=0
+4608-
+--
+4611:[APP_LIFECYCLE] app_terminate_requested pid=41 name=Sunlight Mines signal=SIGTERM
+4612-
+--
+4617:[SCHED] process_mark_finished pid=41 name='sunlight-chronos' reason=exit code=143
+4618-[SCHED] terminating pid=41 name='sunlight-chronos' reason=exit
+4619:[SCHED] process_reaped pid=41 name='sunlight-chronos' user_frames=2820 page_tables=13 swap_blocks=0 ipc_cleared=0
+4620-[SCHED] process_resource_cleanup_summary pid=41 frames=2820 pts=13 swap=0 ipc_entries_cleared=0
+--
+4630:[APP_LIFECYCLE] app_instance_removed pid=41 name=Sunlight Mines
+4631-

@@ -1,0 +1,12 @@
+target/dn26-kernel.elf: sha256=f833d4d2489f16f5b610e63985f1c5745dc3422f35fc75e290cc21d879b01904 bytes=323544376
+  sunlight-kbd: sha256=b6e8176276d480ef13eb038be519a6a980a585d857d0a91ba79d8bbad4ad23c1 bytes=12712 embedded_offset=0xca73b78
+  DN.COM: sha256=ae0863550ec07f21c5cf8d208373a5022b868133e6f644757b1623cd8f7e9905 bytes=1778 embedded_offset=0x53bc1a2
+  DN.PRG: sha256=ac0024e269ecf0feb4a8db15f96181092604567a62cf00fb8453d9052c2862c3 bytes=109613 embedded_offset=0x54a1fb2
+  sunlight-chronos (embedded ELF): sha256=28defbc23d62814655da9dcf5d41cd8809048b296219d71b253e5afad05aefe4 bytes=1057400 embedded_offset=0xeb08a91
+  current native release equals embedded ELF: False
+target/iso_root/boot/sunlight-kernel.elf: sha256=ece86c4049b91ffa3d06f9c448dbbb9118d56e2233c1a91c7555e40d1187cfcb bytes=323544232
+  sunlight-kbd: sha256=b6e8176276d480ef13eb038be519a6a980a585d857d0a91ba79d8bbad4ad23c1 bytes=12712 embedded_offset=0xca73b78
+  DN.COM: sha256=ae0863550ec07f21c5cf8d208373a5022b868133e6f644757b1623cd8f7e9905 bytes=1778 embedded_offset=0x53bc1a2
+  DN.PRG: sha256=ac0024e269ecf0feb4a8db15f96181092604567a62cf00fb8453d9052c2862c3 bytes=109613 embedded_offset=0x54a1fb2
+  sunlight-chronos (embedded ELF): sha256=042c8b1a346370cd57f5f6497e74459ac7d3d3007194e99a9811b970c1166639 bytes=1057400 embedded_offset=0xeb08a91
+  current native release equals embedded ELF: True
