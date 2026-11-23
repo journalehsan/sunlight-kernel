@@ -2,6 +2,10 @@
 use sunlight_block::registry::{DeviceRegistry, FAT32, WRITE};
 use sunlight_fs::{FsError, Vfs};
 
+// Bound extra synchronous reads before the mount is visible. Larger
+// filesystems and removable USB media do not publish capacity in this tier.
+pub const MAX_CAPACITY_FAT_SECTORS: u32 = 1024;
+
 pub static DEVICES: spin::Mutex<DeviceRegistry> = spin::Mutex::new(DeviceRegistry::new());
 
 pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Result<(), FsError> {
@@ -25,8 +29,11 @@ pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Res
     };
     let view = sunlight_block::PartitionBlockDevice::new(transport, info.start, info.blocks)
         .map_err(|_| FsError::Io)?;
-    let fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))
+    let mut fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))
         .ok_or(FsError::Unsupported)?;
+    if !usb {
+        let _ = fat.sample_capacity(MAX_CAPACITY_FAT_SECTORS);
+    }
     vfs.mount_runtime_fat(target, device, fat)
 }
 

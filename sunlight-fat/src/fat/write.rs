@@ -45,6 +45,9 @@ impl<D: BlockDevice> Fat32<D> {
         let byte = cluster as u64 * 4;
         let sector_in_fat = byte / BLOCK_SIZE as u64;
         let offset = (byte % BLOCK_SIZE as u64) as usize;
+        // A failed mirrored write can leave the two copies inconsistent.
+        // Withdraw the sample before mutation and republish only on success.
+        let mut free = self.free_clusters.take();
         for copy in 0..self.num_fats as u64 {
             let lba = self.fat_start as u64 + copy * self.fat_size as u64 + sector_in_fat;
             let mut sector = [0u8; BLOCK_SIZE];
@@ -57,12 +60,20 @@ impl<D: BlockDevice> Fat32<D> {
                 sector[offset + 2],
                 sector[offset + 3],
             ]);
+            if copy == 0 && cluster >= 2 {
+                free = free.and_then(|count| match (old & FAT_ENTRY_MASK == 0, value & FAT_ENTRY_MASK == 0) {
+                    (true, false) => count.checked_sub(1),
+                    (false, true) => count.checked_add(1).filter(|&n| n <= self.cluster_count),
+                    _ => Some(count),
+                });
+            }
             let encoded = (old & !FAT_ENTRY_MASK) | (value & FAT_ENTRY_MASK);
             sector[offset..offset + 4].copy_from_slice(&encoded.to_le_bytes());
             self.dev
                 .write_block(lba, &sector)
                 .map_err(|_| FatError::Io)?;
         }
+        self.free_clusters = free;
         Ok(())
     }
 

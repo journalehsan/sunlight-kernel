@@ -1004,6 +1004,7 @@ pub(crate) fn spawn_with_session_attachment(
     let source = parent_idx.and_then(|idx| crate::ipc::capture_vfs_inheritance(idx, sched, _caps));
     if let Some(idx) = parent_idx {
         process.vfs_stat_routed = sched.processes[idx].vfs_stat_routed;
+        process.vfs_root_rebased = sched.processes[idx].vfs_root_rebased;
         if process.vfs_stat_routed {
             process.cwd = sched.processes[idx].cwd.clone();
         }

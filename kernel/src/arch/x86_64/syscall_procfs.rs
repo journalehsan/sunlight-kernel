@@ -11,15 +11,26 @@ pub(super) fn open(path: &str, flags: u64) -> u64 {
     if path == "/proc/self" && flags & sunlight_compat_linux::abi::O_NOFOLLOW != 0 {
         return linux_errno(40);
     }
-    crate::sched::with_scheduler(|s| {
-        let node = match Node::lookup(s, path) {
-            Ok(node) => node,
+    let node = match crate::sched::with_scheduler(|s| Node::lookup(s, path)) {
+        Ok(node) => node,
+        Err(error) => return linux_errno(error),
+    };
+    if (parsed.directory || path.ends_with('/')) && !node.directory() {
+        return linux_errno(20);
+    }
+    let mountinfo = if matches!(node, Node::MountInfo(_)) {
+        match linux_procfs::mountinfo_snapshot() {
+            Ok(bytes) => Some(bytes),
             Err(error) => return linux_errno(error),
-        };
-        if (parsed.directory || path.ends_with('/')) && !node.directory() {
-            return linux_errno(20);
         }
-        let file = match OpenFile::new(s, node) {
+    } else {
+        None
+    };
+    crate::sched::with_scheduler(|s| {
+        if !node.live(s) {
+            return linux_errno(2);
+        }
+        let file = match OpenFile::new(s, node, mountinfo) {
             Ok(file) => file,
             Err(error) => return linux_errno(error),
         };

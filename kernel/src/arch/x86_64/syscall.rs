@@ -1006,6 +1006,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
                     }
                 }
                 sunlight_compat_linux::abi::SHIM_RT_SIGRETURN => num = 1060,
+                sunlight_compat_linux::abi::SHIM_STATFS => num = 1061,
                 -38 => {
                     crate::serial_println!(
                         "[HELIOS] Unsupported Linux syscall {} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
@@ -1329,6 +1330,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
                 Err(()) => process_exit(139),
             }
         }
+        1061 if linux_compat => sys_linux_statfs(frame.rdi, frame.rsi),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -4540,6 +4542,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         &crate::capability::CAP_BROKER.lock(),
     );
     child.vfs_stat_routed |= sched.processes[parent_idx].vfs_stat_routed;
+    child.vfs_root_rebased = sched.processes[parent_idx].vfs_root_rebased;
     // Sticky regular-file routing is inherited exactly like StatPath routing:
     // a selected caller never recovers kernel file traversal for its children.
     child.vfs_file_routed |= sched.processes[parent_idx].vfs_file_routed;
@@ -6103,6 +6106,49 @@ fn resolve_native_existing(
         }
     }
     Ok(resolved)
+}
+
+/// Linux x86-64 statfs, for mounts with a live FAT allocation count.
+fn sys_linux_statfs(path_ptr: u64, out: u64) -> u64 {
+    use sunlight_compat_linux::abi::from_native_result;
+    use sunlight_fs::FsError;
+
+    let bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
+    };
+    let Ok(path) = core::str::from_utf8(&bytes) else {
+        return linux_errno(22);
+    };
+    let resolved = match resolve_native_existing(path, false) {
+        Ok(path) => path,
+        Err(error) => return from_native_result(error),
+    };
+    let capacity = crate::KERNEL_VFS
+        .lock()
+        .as_ref()
+        .ok_or(FsError::Io)
+        .and_then(|vfs| vfs.fat_capacity(resolved.metadata.mount_id));
+    let (unit, blocks, free) = match capacity {
+        Ok(capacity) => capacity,
+        Err(error) => return crate::storage::error(error),
+    };
+    let mut record = [0u8; 120];
+    for (offset, value) in [
+        (0, 0x4d44u64), // MSDOS_SUPER_MAGIC
+        (8, u64::from(unit)),
+        (16, u64::from(blocks)),
+        (24, u64::from(free)),
+        (32, u64::from(free)), // FAT has no privileged allocation reserve.
+        (64, 255),
+        (72, u64::from(unit)),
+    ] {
+        record[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+    }
+    match copy_to_user(out, &record) {
+        Ok(()) => 0,
+        Err(error) => error,
+    }
 }
 
 /// Read-only canonical observation. Capacity includes the terminating NUL;

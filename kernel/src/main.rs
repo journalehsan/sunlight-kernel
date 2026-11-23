@@ -2406,7 +2406,8 @@ fn init_kernel_vfs() {
         .expect("validated partition");
         let disk = KernelDisk::new(view, false);
         match sunlight_fat::Fat32::mount(disk) {
-            Some(fat) => {
+            Some(mut fat) => {
+                let _ = fat.sample_capacity(storage::MAX_CAPACITY_FAT_SECTORS);
                 let kind = BLOCK_VOLUME_KIND.load(core::sync::atomic::Ordering::Acquire);
                 let mountpoint = if kind == BLOCK_VOLUME_STATE {
                     "/state"

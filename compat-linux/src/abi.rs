@@ -152,6 +152,7 @@ pub const SYS_GETTID: u64 = 186;
 pub const SHIM_GETTID: i64 = -43;
 pub const SHIM_FUTEX: i64 = -44;
 pub const SHIM_EXIT_GROUP: i64 = -45;
+pub const SYS_STATFS: u64 = 137;
 pub const SYS_SCHED_GETAFFINITY: u64 = 204;
 pub const SYS_GETDENTS64: u64 = 217;
 pub const SYS_TKILL: u64 = 200;
@@ -266,6 +267,7 @@ pub const SHIM_GETSOCKNAME: i64 = -55;
 pub const SHIM_GETPEERNAME: i64 = -56;
 pub const SHIM_SHUTDOWN: i64 = -57;
 pub const SHIM_RT_SIGRETURN: i64 = -58;
+pub const SHIM_STATFS: i64 = -59;
 
 pub const MAP_PRIVATE: u64 = 0x02;
 pub const MAP_FIXED: u64 = 0x10;

@@ -264,6 +264,9 @@ pub struct Process {
     /// Boot provenance for initial `/` provisioning. Derived profiles never
     /// acquire this role, so service replacement cannot widen their roots.
     pub vfs_boot_root: bool,
+    /// An opaque service root replaced the boot root; the kernel cannot
+    /// project its mount table into that view.
+    pub vfs_root_rebased: bool,
     /// Sticky native StatPath routing choice. Withdrawal and exec must not
     /// restore kernel traversal. Selected parents pass this choice to children.
     pub vfs_stat_routed: bool,
@@ -636,6 +639,7 @@ impl Process {
             trusted_vfs_service: false,
             vfs_root_metadata: false,
             vfs_boot_root: false,
+            vfs_root_rebased: false,
             vfs_stat_routed: false,
             vfs_file_routed: false,
             service_identity: 0,
@@ -887,6 +891,7 @@ impl Process {
             trusted_vfs_service: false,
             vfs_root_metadata: false,
             vfs_boot_root: false,
+            vfs_root_rebased: false,
             vfs_stat_routed: false,
             vfs_file_routed: false,
             service_identity: 0,

@@ -444,6 +444,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_OPENAT => SHIM_OPENAT,
         SYS_GETCWD => SUN_GETCWD,
         SYS_CHDIR => SUN_CHDIR,
+        SYS_STATFS => SHIM_STATFS,
         SYS_GETRANDOM => SHIM_GETRANDOM,
         SYS_CLOCK_GETTIME => SHIM_CLOCK_GETTIME,
         SYS_GETTIMEOFDAY => SHIM_GETTIMEOFDAY,

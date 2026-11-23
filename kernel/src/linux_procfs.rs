@@ -57,6 +57,7 @@ pub(crate) enum Node {
     Status(Identity),
     Stat(Identity),
     WaitCheckpoint(Identity),
+    MountInfo(Identity),
 }
 
 const ETHERNET_RX: &str = "/sys/class/net/eth0/statistics/rx_bytes";
@@ -107,6 +108,31 @@ fn same_linux_group(s: &Scheduler, idx: usize) -> bool {
     caller.is_linux_compat() && target.is_linux_compat() && !target.is_exiting()
         && caller.linux_tgid.unwrap_or(caller.pid) == target.linux_tgid.unwrap_or(target.pid)
         && caller.address_space.identity() == target.address_space.identity()
+}
+
+fn has_kernel_mount_view(s: &Scheduler) -> bool {
+    let caller = s.current_process();
+    caller.is_linux_compat()
+        && !caller.vfs_file_routed
+        && !s.current_shared_process().vfs_file_routed
+        && !s.current_shared_process().vfs_root_rebased
+}
+
+pub(crate) fn mountinfo_snapshot() -> Result<Vec<u8>, u64> {
+    let vfs = crate::KERNEL_VFS.lock();
+    let devices = crate::storage::DEVICES.lock();
+    vfs.as_ref()
+        .ok_or(5u64)?
+        .linux_mountinfo(MAX_BYTES, |id| {
+            devices.get(id).is_some_and(|device| {
+                device.operations & sunlight_block::registry::FAT32 != 0
+            })
+        })
+        .map(String::into_bytes)
+        .map_err(|error| match error {
+            sunlight_fs::FsError::NoMemory => 75,
+            _ => 95,
+        })
 }
 
 impl Node {
@@ -173,6 +199,9 @@ impl Node {
             Some("cmdline") => Ok(Self::Args(id)),
             Some("status") => Ok(Self::Status(id)),
             Some("stat") => Ok(Self::Stat(id)),
+            Some("mountinfo") if name == "self" && has_kernel_mount_view(s) => {
+                Ok(Self::MountInfo(id))
+            }
             _ => Err(2),
         }
     }
@@ -180,7 +209,7 @@ impl Node {
     fn identity(self) -> Option<Identity> {
         match self {
             Self::Pid(id) | Self::Comm(id) | Self::Args(id) | Self::Status(id) | Self::Stat(id)
-            | Self::WaitCheckpoint(id) => {
+            | Self::WaitCheckpoint(id) | Self::MountInfo(id) => {
                 Some(id)
             }
             _ => None,
@@ -188,6 +217,12 @@ impl Node {
     }
 
     pub(crate) fn live(self, s: &Scheduler) -> bool {
+        if let Self::MountInfo(id) = self {
+            let caller = s.current_process();
+            return has_kernel_mount_view(s)
+                && caller.linux_tgid.unwrap_or(caller.pid) == id.pid
+                && find(s, id.pid).is_some_and(|idx| Identity::of(&s.processes[idx]) == id);
+        }
         if let Self::WaitCheckpoint(id) = self {
             return s.process_index_by_pid(id.pid).is_some_and(|idx| {
                 same_linux_group(s, idx) && Identity::of(&s.processes[idx]) == id
@@ -219,6 +254,7 @@ impl Node {
             Self::Status(id) => format!("/proc/{}/status", id.pid),
             Self::WaitCheckpoint(id) => format!("/proc/self/task/{}/syscall", id.pid),
             Self::Stat(id) => format!("/proc/{}/stat", id.pid),
+            Self::MountInfo(_) => String::from("/proc/self/mountinfo"),
         }
     }
 
@@ -262,6 +298,7 @@ impl Node {
             Self::EthernetRxBytes => 13,
             Self::EthernetTxBytes => 14,
             Self::WaitCheckpoint(_) => 15,
+            Self::MountInfo(_) => 16,
         };
         self.identity()
             .map_or(kind, |id| {
@@ -284,7 +321,7 @@ impl Drop for OpenFile {
 }
 
 impl OpenFile {
-    pub(crate) fn new(s: &Scheduler, node: Node) -> Result<Self, u64> {
+    pub(crate) fn new(s: &Scheduler, node: Node, mountinfo: Option<Vec<u8>>) -> Result<Self, u64> {
         OPEN.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
             (n < MAX_OPEN).then_some(n + 1)
         })
@@ -307,6 +344,8 @@ impl OpenFile {
                 }
             }
             sample.pids.sort_unstable_by_key(|p| p.pid);
+        } else if matches!(node, Node::MountInfo(_)) {
+            sample.bytes = mountinfo.ok_or(5u64)?;
         } else if !node.directory() && !matches!(node, Node::WaitCheckpoint(_)) {
             sample.bytes = render(s, node)?;
             if sample.bytes.len() > MAX_BYTES {

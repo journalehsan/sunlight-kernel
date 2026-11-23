@@ -28,6 +28,7 @@ pub struct Fat32<D: BlockDevice> {
     pub(super) fds: u32, // first data sector (LBA)
     pub(super) rc: u32,  // root cluster number
     pub(super) cluster_count: u32,
+    pub(super) free_clusters: Option<u32>,
 }
 
 /// Result of a path lookup: enough to read the object later.
@@ -119,7 +120,45 @@ impl<D: BlockDevice> Fat32<D> {
             fds,
             rc: root_cluster,
             cluster_count,
+            free_clusters: None,
         })
+    }
+
+    /// Establish an allocation baseline from the same FAT copy used by
+    /// allocation. Never trust the optional on-disk FSInfo count. The
+    /// caller selects the maximum scan cost at mount, before publication.
+    pub fn sample_capacity(&mut self, max_sectors: u32) -> Result<(), FatError> {
+        self.free_clusters = None;
+        const ENTRIES: u32 = (BLOCK_SIZE / 4) as u32;
+        let limit = self.cluster_count + 2;
+        let sectors = limit.div_ceil(ENTRIES);
+        if sectors > max_sectors {
+            return Ok(());
+        }
+        let mut free = 0;
+        let mut bytes = [0; BLOCK_SIZE];
+        for sector in 0..sectors {
+            self.dev
+                .read_block(u64::from(self.fat_start) + u64::from(sector), &mut bytes)
+                .map_err(|_| FatError::Io)?;
+            for (slot, entry) in bytes.chunks_exact(4).enumerate() {
+                let cluster = sector * ENTRIES + slot as u32;
+                if (2..limit).contains(&cluster)
+                    && u32::from_le_bytes(entry.try_into().unwrap()) & FAT_ENTRY_MASK == 0
+                {
+                    free += 1;
+                }
+            }
+        }
+        self.free_clusters = Some(free);
+        Ok(())
+    }
+
+    /// Allocation units are FAT data clusters, excluding reserved sectors
+    /// and the FAT itself. There is no reserved pool for privileged users.
+    pub fn capacity(&self) -> Option<(u32, u32, u32)> {
+        self.free_clusters
+            .map(|free| (self.cluster_bytes() as u32, self.cluster_count, free))
     }
 
     pub(super) fn cluster_lba(&self, cluster: u32) -> u64 {

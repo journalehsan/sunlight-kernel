@@ -7,6 +7,7 @@ use sunlight_fat::{Fat32, FatError, MAX_NAME_83};
 mod storage_tests;
 
 mod lookup;
+mod mountinfo;
 pub use lookup::{BackendCapabilities, Metadata, MetadataSource, ResolvedPath, RESOLVE_PATH_MAX};
 
 pub const MAX_MOUNTS: usize = 8;
@@ -976,6 +977,19 @@ impl<D: BlockDevice> Vfs<D> {
             protected: mount.protected,
             path: &mount.path,
         })
+    }
+
+    /// Resolve a previously authorized mount incarnation without another
+    /// pathname lookup. An unpublished or poisoned count is unavailable.
+    pub fn fat_capacity(&self, mount_id: u64) -> Result<(u32, u32, u32), FsError> {
+        let mount = self.mounts.iter().flatten()
+            .find(|m| u64::from(m.tag) + 1 == mount_id)
+            .ok_or(FsError::NotFound)?;
+        match &mount.fs {
+            FsNode::Fat(fs) if !fs.poisoned => fs.fat.capacity().ok_or(FsError::Unsupported),
+            FsNode::Fat(_) => Err(FsError::Io),
+            FsNode::Ram(_) => Err(FsError::Unsupported),
+        }
     }
 
     /// Number of backend opens still owned by VFS clients, across all mounts.

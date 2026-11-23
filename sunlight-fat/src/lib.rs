@@ -40,6 +40,27 @@ mod tests {
     }
 
     #[test]
+    fn capacity_counts_allocations_and_reclaims_clusters() {
+        let mut image = FatImageBuilder::new(1).build();
+        let mut fat = Fat32::mount(MemDisk::new(&mut image)).unwrap();
+        fat.sample_capacity(0).unwrap();
+        assert_eq!(fat.capacity(), None);
+        fat.sample_capacity(u32::MAX).unwrap();
+        let (unit, total, initial_free) = fat.capacity().unwrap();
+        assert_eq!(unit, 512);
+        assert_eq!(initial_free, total - 1); // existing root directory
+        fat.create_file_path(b"/CAP.BIN").unwrap();
+        assert_eq!(fat.write_path(b"/CAP.BIN", 0, &[0x5a; 513]).unwrap(), 513);
+        assert_eq!(fat.capacity(), Some((unit, total, initial_free - 2)));
+        fat.sample_capacity(u32::MAX).unwrap();
+        assert_eq!(fat.capacity(), Some((unit, total, initial_free - 2)));
+        fat.unlink_path(b"/CAP.BIN").unwrap();
+        assert_eq!(fat.capacity(), Some((unit, total, initial_free)));
+        fat.sample_capacity(u32::MAX).unwrap();
+        assert_eq!(fat.capacity(), Some((unit, total, initial_free)));
+    }
+
+    #[test]
     fn mounts_and_reads_root_file() {
         let mut builder = FatImageBuilder::new(1);
         builder.add_file(builder.root(), "HELLO.TXT", b"boot volume\n");

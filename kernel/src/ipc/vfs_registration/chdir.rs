@@ -535,7 +535,8 @@ pub(super) fn finish_runtime(
             return Err(IpcError::InvalidCapability);
         }
     };
-    if errno == 0 && c.kind == api::Kind::Root && cwd != "/" {
+    let changes_root = c.kind == api::Kind::Root;
+    if errno == 0 && changes_root && cwd != "/" {
         return Err(IpcError::InvalidCapability);
     }
     let identity = c.identity;
@@ -573,6 +574,9 @@ pub(super) fn finish_runtime(
         let owner = sched.shared_process_index(idx);
         sched.processes[owner].cwd = cwd;
         sched.processes[owner].vfs_boot_root = false;
+        if changes_root {
+            sched.processes[owner].vfs_root_rebased = true;
+        }
         // Sibling profiles refer to the previous cwd. Revoke them atomically
         // with the shared-process commit; sticky routing prevents fallback.
         for i in 0..sched.processes.len() {
