@@ -6,6 +6,7 @@ pub mod eventfd;
 mod exec_authority;
 pub mod fd_table;
 pub mod inet_socket;
+pub(crate) mod route_netlink;
 pub mod foreground;
 pub mod fork;
 pub mod layout;
@@ -76,6 +77,7 @@ pub struct LinuxProcessState {
     pub brk_base: u64,
     pub brk_current: u64,
     pub poll_wake_tick: Option<u64>,
+    pub pselect_deadline_ns: Option<u64>,
     /// (eventfd pool index, required write value, waiting to write).
     pub eventfd_wait: Option<(u32, u64, bool)>,
     /// Underlying pipe ring and direction for a blocked read/write or recv.
@@ -96,6 +98,7 @@ impl LinuxProcessState {
             brk_base: 0,
             brk_current: 0,
             poll_wake_tick: None,
+            pselect_deadline_ns: None,
             eventfd_wait: None,
             pipe_wait: None,
             termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
@@ -138,6 +141,9 @@ pub struct Process {
     pub ppid: usize, // parent pid
     pub name: [u8; 32],
     pub telemetry_started_secs: u64,
+    pub(crate) proc_start_ticks: u64,
+    pub(crate) proc_reaped_runtime_ns: u64,
+    pub(crate) proc_args: alloc::vec::Vec<u8>,
     pub state: ProcessState,
     pub address_space: AddressSpace,
     pub owns_address_space: bool,
@@ -222,6 +228,7 @@ pub struct Process {
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
     pub native_signal: native_signal::State,
+    pub(crate) linux_signal: crate::arch::x86_64::linux_signal::ThreadState,
     pub trusted_display_service: bool,
     /// Set only by the kernel's embedded-path resolver for sunlight-swapd.
     pub trusted_swap_admin_service: bool,
@@ -269,6 +276,8 @@ pub struct Process {
     /// brokers (e.g. sunlight-kv) so callers can be classified as
     /// `Caller::Service(key)` without trusting user-supplied names.
     pub service_identity: u64,
+    /// This image may publish the executing stack's discovery snapshot only.
+    pub(crate) trusted_network_discovery: bool,
     /// When set, this process may only resolve nameserver entries that map to
     /// the declared service capability profile.
     pub service_lookup_restrictions: Option<u64>,
@@ -547,6 +556,9 @@ impl Process {
             ppid,
             name: name_arr,
             telemetry_started_secs: crate::timekeeping::uptime_secs(),
+            proc_start_ticks: crate::timekeeping::global_ticks(),
+            proc_reaped_runtime_ns: 0,
+            proc_args: alloc::vec::Vec::new(),
             state: ProcessState::Ready,
             address_space,
             owns_address_space: true,
@@ -606,6 +618,7 @@ impl Process {
             foreground: foreground::Foreground::for_process(),
             signal_state: signal::SignalState::new(),
             native_signal: native_signal::State::default(),
+            linux_signal: Default::default(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
@@ -626,6 +639,7 @@ impl Process {
             vfs_stat_routed: false,
             vfs_file_routed: false,
             service_identity: 0,
+            trusted_network_discovery: false,
             service_lookup_restrictions: None,
             mmap_next: 0,
             sched_type: 0,           // SCHED_NORMAL
@@ -793,6 +807,9 @@ impl Process {
             ppid,
             name: name_arr,
             telemetry_started_secs: crate::timekeeping::uptime_secs(),
+            proc_start_ticks: crate::timekeeping::global_ticks(),
+            proc_reaped_runtime_ns: 0,
+            proc_args: alloc::vec::Vec::new(),
             state: ProcessState::Ready,
             address_space,
             owns_address_space: false,
@@ -852,6 +869,7 @@ impl Process {
             foreground: foreground::Foreground::for_process(),
             signal_state: signal::SignalState::new(),
             native_signal: native_signal::State::default(),
+            linux_signal: Default::default(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
@@ -872,6 +890,7 @@ impl Process {
             vfs_stat_routed: false,
             vfs_file_routed: false,
             service_identity: 0,
+            trusted_network_discovery: false,
             service_lookup_restrictions: None,
             mmap_next: 0,
             sched_type: 0,

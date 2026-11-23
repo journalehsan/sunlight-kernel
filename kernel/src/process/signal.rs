@@ -170,6 +170,7 @@ impl Default for SignalMask {
 
 /// Per-process signal state
 pub struct SignalState {
+    pub(crate) linux_restorers: [u64; 2],
     // Signal handler for each signal (1-32)
     handlers: [SigAction; 32],
     // Pending signals to be delivered
@@ -195,6 +196,7 @@ impl SignalState {
         }
 
         Self {
+            linux_restorers: [0; 2],
             handlers,
             pending: SignalMask::new(),
             blocked: SignalMask::new(),

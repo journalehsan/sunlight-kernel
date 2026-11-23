@@ -4,6 +4,7 @@ pub mod cpu;
 pub(crate) mod cpu_identity;
 mod cpu_topology;
 pub mod interrupts;
+pub(crate) mod linux_signal;
 pub mod ioapic;
 pub mod keyboard;
 pub mod lapic;

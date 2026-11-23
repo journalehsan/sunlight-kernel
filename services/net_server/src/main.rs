@@ -147,11 +147,14 @@ pub extern "C" fn _start() -> ! {
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
     let lease = sunlight_net::acquire_lease(&mut iface, &mut sockets, &mut device).ok();
 
+    let loopback = ([127, 0, 0, 1], 8);
+    let mut loopback_installed = false;
     iface.update_ip_addrs(|addrs| {
-        let _ = addrs.push(smoltcp::wire::IpCidr::Ipv4(smoltcp::wire::Ipv4Cidr::new(
-            smoltcp::wire::Ipv4Address::new(127, 0, 0, 1),
-            8,
-        )));
+        let cidr = smoltcp::wire::Ipv4Cidr::new(
+            smoltcp::wire::Ipv4Address::from_bytes(&loopback.0),
+            loopback.1,
+        );
+        loopback_installed = addrs.push(smoltcp::wire::IpCidr::Ipv4(cidr)).is_ok();
     });
     let hosts_content = load_hosts_from_vfs();
     let mut chain = sunlight_net::ResolverChain::new(&hosts_content);
@@ -166,6 +169,13 @@ pub extern "C" fn _start() -> ! {
         LIVE_CONFIG = lease;
         NET_DEVICE = Some(device);
         NET_IFACE = Some(iface);
+    }
+    if !sunlight_ipc::net_publish_discovery(
+        &nic_info,
+        unsafe { LIVE_CONFIG.as_ref() }.map(|config| (config.ip, config.mask)),
+        loopback_installed.then_some(loopback),
+    ) {
+        debug_log("[NET] interface discovery publication unavailable");
     }
     debug_log("[DNS] /etc/hosts loaded into resolver chain");
     if nic_info.link_up {

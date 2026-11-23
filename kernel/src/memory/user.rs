@@ -467,7 +467,14 @@ pub fn validate_current_read(address: u64, len: usize) -> Result<(), UserMemoryE
 pub fn validate_current_execute(address: u64) -> Result<(), UserMemoryError> {
     let hhdm = current_hhdm()?;
     let scheduler = crate::sched::SCHEDULER.lock();
-    let process = scheduler.current_process();
+    validate_process_execute(scheduler.current_process(), hhdm, address)
+}
+
+pub(crate) fn validate_process_execute(
+    process: &Process,
+    hhdm: VirtAddr,
+    address: u64,
+) -> Result<(), UserMemoryError> {
     validate_process_read(process, hhdm, address, 1)?;
     let page = Page::<Size4KiB>::containing_address(VirtAddr::new(address));
     let (_, flags) = unsafe { process.address_space.lookup_entry(page, hhdm) }
@@ -581,7 +588,7 @@ pub fn read_pointer_array(address: u64, max_entries: usize) -> Result<Vec<u64>, 
     Err(UserMemoryError::ArrayTooLarge)
 }
 
-fn current_hhdm() -> Result<VirtAddr, UserMemoryError> {
+pub(crate) fn current_hhdm() -> Result<VirtAddr, UserMemoryError> {
     crate::HHDM_REQ
         .response()
         .map(|response| VirtAddr::new(response.offset))

@@ -329,6 +329,11 @@ pub fn exec_into_process(
         old_address_space.reclaim_user_space(pmm, hhdm_offset, true);
     }
 
+    // Bind this one publication to the actual embedded image. Do not reclassify
+    // net_server for general service credentials or trust a path/name supplied
+    // by a caller. A successful replacement also withdraws the marker.
+    process.trusted_network_discovery =
+        process.uid == 0 && core::ptr::eq(bytes, crate::NET_SERVER_ELF_BYTES);
     Ok(entry)
 }
 
@@ -377,6 +382,18 @@ fn build_exec_image(
 
     // Setup stack with argv/envp/auxv
     let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset)?;
+
+    process.proc_args.clear();
+    if process.is_linux_compat() {
+        for arg in argv {
+            let remaining = 1024 - process.proc_args.len();
+            if remaining == 0 {
+                break;
+            }
+            process.proc_args.extend_from_slice(&arg[..arg.len().min(remaining - 1)]);
+            process.proc_args.push(0);
+        }
+    }
 
     process.init_context(entry, stack.rsp);
     // SysV-style register convenience on top of the canonical stack layout:

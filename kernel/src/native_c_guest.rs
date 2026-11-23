@@ -204,16 +204,18 @@ fn launch(sched: &mut Scheduler, state: &mut State, hhdm: VirtAddr) {
     }
     let owned = pmm.owned_frame_count(process.pid as u32);
     drop(pmm);
+    let abi = if process.is_linux_compat() { "linux" } else { "native" };
     let slot = sched.add_process(process);
     state.slot = Some(slot);
     sched.enqueue_ready(slot);
     crate::serial_println!(
-        "[NATIVE-C-START] case={} name={} pid={} bytes={} owned_frames={} uid=1000",
+        "[NATIVE-C-START] case={} name={} pid={} bytes={} owned_frames={} uid=1000 abi={}",
         number,
         case.name,
         PID + number,
         bytes.len(),
-        owned
+        owned,
+        abi
     );
 }
 

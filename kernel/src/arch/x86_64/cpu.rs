@@ -72,6 +72,10 @@ impl FxState {
         Self(bytes)
     }
 
+    pub(crate) fn bytes(&self) -> &[u8; 512] {
+        &self.0
+    }
+
     /// Caller must own the currently executing task under the scheduler lock.
     pub unsafe fn save(&mut self) {
         core::arch::asm!("fxsave64 [{}]", in(reg) self.0.as_mut_ptr(), options(nostack));

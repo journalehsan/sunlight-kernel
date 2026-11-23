@@ -2905,6 +2905,8 @@ impl Scheduler {
                 self.wake_linux_pipe(write);
             } else if handle.is_inet_socket() {
                 crate::process::inet_socket::release(handle.inet_socket_index());
+            } else if handle.is_route_netlink() {
+                crate::process::route_netlink::release(handle.route_netlink_index());
             } else if handle.is_unix_socket() {
                 crate::process::unix_socket::release(handle.unix_socket_index());
             } else if handle.is_epoll() {
@@ -3024,6 +3026,16 @@ impl Scheduler {
                 .retain(|entry| entry.target.call.pid != dead_pid);
         }
         self.processes[idx].capabilities = Vec::new();
+        if let Some(tgid) = self.processes[idx].linux_tgid.filter(|&tgid| tgid != dead_pid) {
+            let vm = self.processes[idx].address_space.identity();
+            let runtime = self.effective_runtime_at(idx, self.now_ns());
+            if let Some(owner) = self.processes.iter_mut().find(|p| {
+                p.pid == tgid && p.address_space.identity() == vm
+            }) {
+                owner.proc_reaped_runtime_ns = owner.proc_reaped_runtime_ns.saturating_add(runtime);
+            }
+        }
+        self.processes[idx].proc_args = Vec::new();
         self.processes[idx].env = crate::process::env::EnvMap::new();
         self.processes[idx].cwd = alloc::string::String::new();
         // Only the group owner holds the (currently empty) SEM_UNDO table.

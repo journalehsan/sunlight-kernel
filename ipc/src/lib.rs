@@ -6053,6 +6053,40 @@ impl NetDeviceInfo {
     }
 }
 
+/// Publish only the addresses installed in the executing stack. This NetInfo
+/// operation is restricted to the embedded network service.
+pub const NET_PUBLISH_DISCOVERY: u64 = 5;
+
+pub fn net_publish_discovery(
+    info: &NetDeviceInfo,
+    ethernet: Option<([u8; 4], u8)>,
+    loopback: Option<([u8; 4], u8)>,
+) -> bool {
+    fn pack(address: Option<([u8; 4], u8)>) -> u64 {
+        address.map_or(0, |(ip, prefix)| {
+            u64::from(u32::from_le_bytes(ip)) | (u64::from(prefix) << 32)
+        })
+    }
+    let Some(kind) = info.backend else {
+        return false;
+    };
+    let mut mac = [0; 8];
+    mac[..6].copy_from_slice(&info.mac);
+    unsafe {
+        raw_syscall(
+            SunlightSyscall::NetInfo,
+            0,
+            0,
+            NET_PUBLISH_DISCOVERY,
+            u64::from_le_bytes(mac) | ((kind as u64) << 48),
+            pack(ethernet),
+            pack(loopback),
+            0,
+        )
+        .0 == 1
+    }
+}
+
 pub fn net_device_info() -> Option<NetDeviceInfo> {
     net_device_info_with_event(None)
 }

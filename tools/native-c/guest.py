@@ -70,6 +70,9 @@ def main():
     parser.add_argument('--linux-actor', action='store_true',
                         help='single raw Linux syscall actor (explicit OSABI=3); never the native suite')
     parser.add_argument('--out', type=Path, help='new evidence directory; default: unique path under target/native-c-guest-runs')
+    parser.add_argument('--mixed-abi', action='store_true',
+                        help='allow explicitly labeled Linux and native ELFs in --cases')
+    parser.add_argument('--memory-mb', type=int, default=2048, choices=(2048, 4096))
     parser.add_argument('--cpus', type=int, default=2, choices=(1, 2, 4))
     parser.add_argument('--timeout', type=int, default=90, help='guest wall-clock seconds')
     parser.add_argument('--expect-exit', type=int)
@@ -88,6 +91,8 @@ def main():
     opts = parser.parse_args()
     if opts.cases and (opts.net or opts.linux_actor):
         parser.error('--cases is a native non-network batch')
+    if opts.mixed_abi and not opts.cases:
+        parser.error('--mixed-abi requires --cases')
     if opts.service and not opts.net:
         parser.error('--service requires --net')
     if opts.net_subnet and not opts.net:
@@ -133,15 +138,15 @@ def main():
     command('qemu-version', ['qemu-system-x86_64', '--version'])
     cases, rows = [], []
 
-    def add(name, elf, expected=0, args=(), input=b'', stdout=None, stderr=None, historical=False, environment=(b'TMPDIR=/tmp',)):
+    def add(name, elf, expected=0, args=(), input=b'', stdout=None, stderr=None, historical=False, environment=(b'TMPDIR=/tmp',), abi='native'):
         elf = elf.resolve()
         data = elf.read_bytes()
         # Keep personality rejection explicit rather than accidentally testing Helios.
         if opts.linux_actor and (opts.suite or opts.net):
             raise ValueError('--linux-actor requires a single non-network Linux ELF')
-        expected_osabi = 3 if opts.linux_actor else 0
+        expected_osabi = 3 if opts.linux_actor or abi == 'linux' else 0
         if (data[:7] != b'\x7fELF\x02\x01\x01' or data[7] != expected_osabi or
-                (not opts.linux_actor and data[9:15] == b'HLNX01') or int.from_bytes(data[16:18], 'little') != 2 or
+                (expected_osabi == 0 and data[9:15] == b'HLNX01') or int.from_bytes(data[16:18], 'little') != 2 or
                 int.from_bytes(data[18:20], 'little') != 62):
             raise ValueError(f'{elf}: expected x86-64 ET_EXEC with OSABI={expected_osabi}')
         cases.append(dict(name=name, elf=elf, expected=expected, args=list(args), input=input,
@@ -287,7 +292,12 @@ def main():
                     environment=(b'TMPDIR=/tmp', b'LANG=en_US.UTF-8') if name == 'locale-environment' else (b'TMPDIR=/tmp',))
     elif opts.cases:
         for case in json.loads(opts.cases.read_text()):
-            add(case['name'], Path(case['elf']), case['expected_exit'], case.get('args', ()))
+            abi = case.get('abi', 'native')
+            if abi not in ('native', 'linux') or (abi == 'linux' and not opts.mixed_abi):
+                parser.error('Linux cases require --mixed-abi and abi=linux')
+            expected = {key: case[key].encode() for key in ('stdout', 'stderr') if key in case}
+            add(case['name'], Path(case['elf']), case['expected_exit'], case.get('args', ()),
+                abi=abi, **expected)
     else:
         add('elf', opts.elf, opts.expect_exit, opts.arg,
             opts.stdin_file.read_bytes() if opts.stdin_file else b'',
@@ -349,8 +359,10 @@ def main():
     if command('iso-build', ['bash', 'tools/make_hybrid_iso.sh',
             kernel, iso, ROOT / 'target/limine', stage]):
         return 1
+    with iso.open('rb') as stream:
+        (out / 'iso-sha256.log').write_text(hashlib.file_digest(stream, 'sha256').hexdigest() + '\n')
     serial = out / 'serial.log'
-    argv = ['qemu-system-x86_64', '-accel', 'tcg', '-cpu', 'max', '-m', '2048M', '-smp', str(opts.cpus),
+    argv = ['qemu-system-x86_64', '-accel', 'tcg', '-cpu', 'max', '-m', f'{opts.memory_mb}M', '-smp', str(opts.cpus),
             '-cdrom', str(iso), '-boot', 'd', '-display', 'none', '-monitor', 'none',
             '-serial', 'file:' + str(serial),
             '-device', 'virtio-rng-pci,disable-modern=on',

@@ -210,6 +210,7 @@ pub struct ProcSnap {
     pub cpu_ticks: u64,
     pub pml4_phys: x86_64::PhysAddr,
     pub generation: u32,
+    pub proc_identity: crate::linux_procfs::Identity,
     #[cfg(feature = "cpu_accounting_diag")]
     pub wake_audit: [u64; 4],
     #[cfg(feature = "cpu_accounting_diag")]
@@ -318,6 +319,7 @@ pub fn capture_telemetry_snapshot(
             cpu_ticks: runtime,
             pml4_phys: proc.address_space.pml4_phys,
             generation: (proc.address_space.identity().generation & 0xFFFF_FFFF) as u32,
+            proc_identity: crate::linux_procfs::Identity::of(proc),
             #[cfg(feature = "cpu_accounting_diag")]
             wake_audit: proc.wake_audit,
             #[cfg(feature = "cpu_accounting_diag")]
@@ -499,6 +501,9 @@ unsafe fn commit_telemetry_snapshot_inner(
     TELEMETRY.cpu_count = snap.cpu_count.max(1);
     TELEMETRY.gpu_count = snap.gpu_count;
 
+    crate::linux_procfs::publish_rss(snap.global_timekeeper_ticks, snap.procs.iter()
+        .take(MAX_PROCESSES)
+        .filter_map(|p| Some((p.proc_identity, spaces.get(&p.pml4_phys.as_u64())?.0))));
     let mut count = 0usize;
     for ps in &snap.procs {
         if count >= MAX_PROCESSES {

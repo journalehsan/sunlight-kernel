@@ -882,6 +882,9 @@ pub unsafe extern "C" fn timer_entry() {
         "push r13",
         "push r14",
         "push r15",
+        // A user interrupt may arrive with DF set; the hardware frame
+        // retains it, but the Rust ABI requires forward string operations.
+        "cld",
         "mov r12, rsp",
         "call {handoff_slot}",
         "mov r13, rax", // stable per-CPU release address, callee-saved
@@ -957,6 +960,9 @@ pub unsafe extern "C" fn reschedule_entry() {
         "push r13",
         "push r14",
         "push r15",
+        // A user interrupt may arrive with DF set; the hardware frame
+        // retains it, but the Rust ABI requires forward string operations.
+        "cld",
         "mov r12, rsp",
         "call {handoff_slot}",
         "mov r13, rax",
@@ -1160,6 +1166,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         if crate::sched::peek_reschedule_on(cpu_id) {
             bench_reason |= 1;
         }
+        // SAFETY: timer_entry supplies the live register and hardware frame.
+        unsafe { super::linux_signal::timer_boundary(&mut sched, saved_rsp) };
         sched.tick(cpu_id, ticks_total);
         #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
         crate::sched::t2_fixture::on_tick(&sched);

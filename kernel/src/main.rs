@@ -29,6 +29,7 @@ mod scheduler_bench_diag;
 mod scheduler_timer_trace;
 mod smbios;
 mod telemetry;
+mod linux_procfs;
 mod thermal_hw;
 mod timekeeping;
 

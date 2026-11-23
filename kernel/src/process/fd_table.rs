@@ -178,6 +178,18 @@ impl FileHandle {
         ((self.0 >> 23) & 1) as usize
     }
 
+    pub fn route_netlink(index: u32) -> Self {
+        Self(0x0010_0000 | index)
+    }
+
+    pub fn is_route_netlink(self) -> bool {
+        self.0 & 0xffff_0000 == 0x0010_0000
+    }
+
+    pub fn route_netlink_index(self) -> u32 {
+        self.0 & 0xffff
+    }
+
     pub fn inet_socket(index: u32) -> Self {
         Self(0x0080_0000 | index)
     }
@@ -200,6 +212,12 @@ impl FileHandle {
 
     pub fn unix_socket_index(self) -> u32 {
         self.0 & 0x00FF_FFFF
+    }
+
+    pub(crate) const PROC: Self = Self(0x0020_0000);
+
+    pub(crate) fn is_proc(self) -> bool {
+        self == Self::PROC
     }
 
     /// Descriptor backed by a service-owned description. The index names a
@@ -249,6 +267,9 @@ fn retain_endpoint_socket(handle: FileHandle) {
     if handle.is_inet_socket() {
         super::inet_socket::retain(handle.inet_socket_index());
     }
+    if handle.is_route_netlink() {
+        super::route_netlink::retain(handle.route_netlink_index());
+    }
     if handle.is_unix_socket() {
         super::unix_socket::retain(handle.unix_socket_index());
     }
@@ -257,6 +278,9 @@ fn retain_endpoint_socket(handle: FileHandle) {
 fn release_endpoint_socket(handle: FileHandle) {
     if handle.is_inet_socket() {
         super::inet_socket::release(handle.inet_socket_index());
+    }
+    if handle.is_route_netlink() {
+        super::route_netlink::release(handle.route_netlink_index());
     }
     if handle.is_unix_socket() {
         super::unix_socket::release(handle.unix_socket_index());
@@ -298,6 +322,14 @@ pub struct DupResult {
 }
 
 impl FileDescriptor {
+    pub(crate) fn with_proc<R>(
+        &self,
+        f: impl FnOnce(&crate::linux_procfs::OpenFile) -> R,
+    ) -> Option<R> {
+        let pool = DESCRIPTIONS.lock();
+        Some(f(pool[self.description as usize].as_ref()?.proc_file.as_ref()?))
+    }
+
     pub fn current_offset(&self) -> usize {
         DESCRIPTIONS.lock()[self.description as usize]
             .as_ref()
@@ -317,6 +349,7 @@ struct OpenDescription {
     offset: usize,
     status: u32,
     refs: usize,
+    proc_file: Option<crate::linux_procfs::OpenFile>,
 }
 
 static DESCRIPTIONS: Mutex<Vec<Option<OpenDescription>>> = Mutex::new(Vec::new());
@@ -327,6 +360,7 @@ fn new_description(flags: u32) -> u32 {
         offset: 0,
         status: flags & !0x0008_0000,
         refs: 1,
+        proc_file: None,
     };
     if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
         *slot = Some(item);
@@ -513,6 +547,17 @@ impl FdTable {
         flags: u32,
     ) -> Result<i32, FdError> {
         self.open_from(0, handle, rights, flags, 0, None)
+    }
+
+    pub(crate) fn open_proc(
+        &mut self,
+        file: crate::linux_procfs::OpenFile,
+        flags: u32,
+    ) -> Result<i32, FdError> {
+        let fd = self.open(FileHandle::PROC, CapRights::new(CapRights::READ | CapRights::FSTAT), flags)?;
+        let idx = self.get(fd).expect("installed proc descriptor").description;
+        DESCRIPTIONS.lock()[idx as usize].as_mut().expect("live description").proc_file = Some(file);
+        Ok(fd)
     }
 
     fn open_from(
