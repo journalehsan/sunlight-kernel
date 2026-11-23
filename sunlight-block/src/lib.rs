@@ -11,6 +11,7 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod busy_time;
 pub mod contract;
 pub mod partition;
 pub mod quiesce;

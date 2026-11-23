@@ -1898,7 +1898,7 @@ static BLOCK_VOLUME_KIND: core::sync::atomic::AtomicU8 =
 /// BlockDevice routing to the retained virtio disk or dedicated USB transport.
 #[derive(Clone, Copy)]
 pub enum KernelBlkDev {
-    Virtio,
+    Virtio(Option<sunlight_block::registry::DeviceInfo>),
     Usb,
 }
 static VIRTIO_DEVICE_ID: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
@@ -1921,9 +1921,10 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
         }
         let mut cell = VIRTIO_BLK.lock();
         let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Unavailable)?;
+        let Self::Virtio(partition) = *self else { unreachable!() };
         // SAFETY: blk was initialized with valid queue/req buffers and the
         // mutex serializes all device access.
-        unsafe { blk.read_typed(lba, buf) }.legacy()
+        unsafe { storage::read_virtio(blk, partition, true, lba, buf) }
     }
 
     fn write_block(
@@ -2064,6 +2065,7 @@ pub static SVGA_DEVICE: spin::Mutex<Option<sunlight_virtio::VmwareSvga>> = spin:
 /// BlockDevice adapter used during boot-time FAT probing.
 struct VirtioBootDisk<'a> {
     blk: &'a mut sunlight_virtio::VirtioBlk,
+    partition: Option<sunlight_block::registry::DeviceInfo>,
 }
 
 impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
@@ -2074,7 +2076,7 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
     ) -> Result<(), sunlight_block::BlockError> {
         // SAFETY: blk was initialized with valid queue/req buffers, and the
         // kernel is single-threaded during boot-time FAT access.
-        unsafe { self.blk.read_typed(lba, buf) }.legacy()
+        unsafe { storage::read_virtio(self.blk, self.partition, false, lba, buf) }
     }
 
     fn write_block(
@@ -2234,7 +2236,10 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
         return share_phys;
     }
     serial_println!("[BLK]  Read LBA 0 OK");
-    let table = match sunlight_block::partition::discover(&mut VirtioBootDisk { blk: &mut blk }) {
+    let table = match sunlight_block::partition::discover(&mut VirtioBootDisk {
+        blk: &mut blk,
+        partition: None,
+    }) {
         Ok(table) => table,
         Err(error) => {
             serial_println!("[PART] rejected disk: {:?}", error);
@@ -2243,6 +2248,16 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     };
     storage::DEVICES.lock().register_partitions(device_id, &table)
         .expect("boot partition registry capacity");
+    if option_env!("SUNLIGHT_BTOP16_TRACE") == Some("1") {
+        for index in 0..sunlight_block::registry::MAX_DEVICES {
+            let info = storage::DEVICES.lock().enumerate(index);
+            if let Some(info) = info.filter(|info| info.parent == device_id) {
+                serial_println!("[BTOP16] register parent={} id={} start={} blocks={}",
+                    device_id, info.id, info.start, info.blocks);
+                storage::trace_read_totals(info.id);
+            }
+        }
+    }
     let superfloppy = table.layout == sunlight_block::partition::Layout::Superfloppy;
     let selected = if superfloppy {
         sunlight_block::partition::Partition {
@@ -2256,7 +2271,11 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
         let mut selected = None;
         for p in table.partitions().iter().filter(|p| p.fat_candidate) {
             let view = sunlight_block::PartitionBlockDevice::new(
-                VirtioBootDisk { blk: &mut blk },
+                VirtioBootDisk {
+                    blk: &mut blk,
+                    partition: Some(storage::virtio_partition(device_id, p.start, p.blocks)
+                        .expect("registered FAT partition")),
+                },
                 p.start,
                 p.blocks,
             )
@@ -2308,7 +2327,10 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     // Mount FAT32 over the virtio-blk device through the BlockDevice trait.
     let mut fat = match sunlight_fat::Fat32::mount(
         sunlight_block::PartitionBlockDevice::new(
-            VirtioBootDisk { blk: &mut blk },
+            VirtioBootDisk {
+                blk: &mut blk,
+                partition: storage::virtio_partition(device_id, selected.start, selected.blocks),
+            },
             selected.start,
             selected.blocks,
         )
@@ -2399,7 +2421,11 @@ fn init_kernel_vfs() {
             && !sunlight_fs::fstab::defer_uuid_to_runtime(sunlight_fs::fstab::FSTAB_TEXT, &partition.uuid)
     }) {
         let view = sunlight_block::PartitionBlockDevice::new(
-            KernelBlkDev::Virtio,
+            KernelBlkDev::Virtio(storage::virtio_partition(
+                VIRTIO_DEVICE_ID.load(core::sync::atomic::Ordering::Acquire),
+                partition.start,
+                partition.blocks,
+            )),
             partition.start,
             partition.blocks,
         )

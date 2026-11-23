@@ -470,7 +470,18 @@ impl VirtioBlk {
         input: Option<&[u8; 512]>,
         output: Option<&mut [u8; 512]>,
     ) -> IoOutcome {
-        let id = match self.start_transfer(operation, lba, input) {
+        self.transfer_observed(operation, lba, input, output, || ())
+    }
+
+    unsafe fn transfer_observed<T>(
+        &mut self,
+        operation: Operation,
+        lba: u64,
+        input: Option<&[u8; 512]>,
+        output: Option<&mut [u8; 512]>,
+        before_publish: impl FnOnce() -> T,
+    ) -> IoOutcome {
+        let (id, _observation) = match self.start_transfer(operation, lba, input, before_publish) {
             Ok(id) => id,
             Err(outcome) => return outcome,
         };
@@ -488,12 +499,13 @@ impl VirtioBlk {
         self.timeout_transfer(id).expect("exclusive active timeout")
     }
 
-    unsafe fn start_transfer(
+    unsafe fn start_transfer<T>(
         &mut self,
         operation: Operation,
         lba: u64,
         input: Option<&[u8; 512]>,
-    ) -> Result<RequestId, IoOutcome> {
+        before_publish: impl FnOnce() -> T,
+    ) -> Result<(RequestId, T), IoOutcome> {
         if self.uncertain {
             return Err(self.receipt(
                 operation,
@@ -642,6 +654,7 @@ impl VirtioBlk {
         fence(Ordering::SeqCst);
 
         let new_idx = self.avail_idx.wrapping_add(1);
+        let observation = before_publish();
         ((self.avail_virt + 2) as *mut u16).write_volatile(new_idx);
         self.avail_idx = new_idx;
         fence(Ordering::SeqCst);
@@ -675,7 +688,7 @@ impl VirtioBlk {
         let _ = mapping.acquire(epoch);
         self.slot = Some(slot);
         self.mapping = Some(mapping);
-        Ok(id)
+        Ok((id, observation))
     }
 
     /// Submit one write without waiting. Caller retains the pinned-DMA contract.
@@ -688,7 +701,8 @@ impl VirtioBlk {
         lba: u64,
         data: &[u8; 512],
     ) -> Result<RequestId, IoOutcome> {
-        self.start_transfer(Operation::Write, lba, Some(data))
+        self.start_transfer(Operation::Write, lba, Some(data), || ())
+            .map(|(id, ())| id)
     }
 
     /// One completion observation, without waiting. A stale token cannot consume
@@ -899,6 +913,22 @@ impl VirtioBlk {
     pub unsafe fn read_typed(&mut self, lba: u64, buf: &mut [u8; 512]) -> IoOutcome {
         self.transfer(Operation::Read, lba, None, Some(buf))
     }
+
+    /// Observes a synchronous read from immediately before avail-index publication
+    /// until the driver returns its outcome. Preflight rejections do not invoke
+    /// the observer. Dropping its return value does not certify DMA quiescence.
+    ///
+    /// # Safety
+    /// Same requirements as read_typed; the observer must not unwind or reenter
+    /// the device.
+    pub unsafe fn read_observed<T>(
+        &mut self,
+        lba: u64,
+        buf: &mut [u8; 512],
+        before_publish: impl FnOnce() -> T,
+    ) -> IoOutcome {
+        self.transfer_observed(Operation::Read, lba, None, Some(buf), before_publish)
+    }
     /// Completion is visibility only; a failed write may have side effects.
     /// Safety: same pinned-buffer and exclusive-access requirements as init.
     pub unsafe fn write_typed(&mut self, lba: u64, buf: &[u8; 512]) -> IoOutcome {
@@ -950,6 +980,47 @@ unsafe impl Send for VirtioBlk {}
 #[cfg(test)]
 mod ownership_tests {
     use super::*;
+
+    #[test]
+    fn observed_read_retires_on_failure_and_timeout() {
+        use core::cell::RefCell;
+        use sunlight_block::busy_time::BusyTime;
+
+        struct Observation<'a>(&'a RefCell<BusyTime>);
+        impl Drop for Observation<'_> {
+            fn drop(&mut self) {
+                self.0.borrow_mut().finish(17);
+            }
+        }
+
+        for fail_status in [true, false] {
+            let mut queue = Pages([0; QUEUE_PAGES * 4096]);
+            let mut request = Pages([0; QUEUE_PAGES * 4096]);
+            let mut disk = device(&mut queue, &mut request);
+            if fail_status {
+                disk.injection = Some((1, 0, 1, 1, false));
+            }
+            let busy = RefCell::new(BusyTime::new());
+            let mut buffer = [0xa5; 512];
+            let rejected = unsafe {
+                disk.read_observed::<()>(8192, &mut buffer, || panic!("rejected before publication"))
+            };
+            assert!(rejected.legacy().is_err());
+            assert_eq!(busy.borrow().snapshot(9), 0);
+            let outcome = unsafe {
+                disk.read_observed(1, &mut buffer, || {
+                    busy.borrow_mut().begin(10);
+                    assert_eq!(busy.borrow().snapshot(12), 2);
+                    Observation(&busy)
+                })
+            };
+            assert!(outcome.legacy().is_err());
+            assert_eq!(disk.has_uncertain_io(), !fail_status);
+            assert_eq!(buffer, [0xa5; 512]);
+            assert_eq!(busy.borrow().snapshot(17), 7);
+            assert_eq!(busy.borrow().snapshot(100), 7);
+        }
+    }
 
     #[repr(C, align(4096))]
     struct Pages([u8; QUEUE_PAGES * 4096]);
@@ -1030,6 +1101,102 @@ mod ownership_tests {
             Pages([0; QUEUE_PAGES * 4096]),
             Pages([0; QUEUE_PAGES * 4096]),
         )
+    }
+
+    #[test]
+    fn btop21_read_deadline_orders() {
+        extern crate std;
+        for order in ["poll-first", "used-before-timeout", "used-after-timeout"] {
+            let (mut queue, mut request) = fixture();
+            let mut disk = device(&mut queue, &mut request);
+            let mut output = [0x99; 512];
+            unsafe {
+                let (id, ()) = disk.start_transfer(Operation::Read, 1, None, || ()).unwrap();
+                assert_eq!(disk.poll_transfer(id, Some(&mut output)), None);
+                let complete = |disk: &VirtioBlk| {
+                    let entry = (disk.used_virt + 4) as *mut u32;
+                    entry.write_volatile(0);
+                    entry.add(1).write_volatile(513);
+                    ((disk.req_virt + 528) as *mut u8).write_volatile(0);
+                    ((disk.used_virt + 2) as *mut u16).write_volatile(1);
+                };
+                if order != "used-after-timeout" {
+                    complete(&disk);
+                }
+                if order == "poll-first" {
+                    assert!(disk
+                        .poll_transfer(id, Some(&mut output))
+                        .unwrap()
+                        .legacy()
+                        .is_ok());
+                    assert_eq!(disk.last_used_idx, 1);
+                    assert_eq!(disk.mapping_retired(), Some(true));
+                    assert_eq!(disk.timeout_transfer(id), None);
+                    assert_eq!(disk.poll_transfer(id, None), None);
+                    let (next, ()) = disk.start_transfer(Operation::Read, 2, None, || ()).unwrap();
+                    assert_eq!(next.head, id.head);
+                    assert_ne!(next, id);
+                    assert_eq!(disk.poll_transfer(id, None), None);
+                    assert_eq!(disk.timeout_transfer(id), None);
+                    assert_eq!(disk.poll_transfer(next, None), None);
+                    std::println!("{order}: consumed=1 mapping_retired=true old_token_rejected=true");
+                    continue;
+                }
+                let timeout = disk.timeout_transfer(id).unwrap();
+                assert_eq!(timeout.source, StatusSource::Deadline);
+                assert!(timeout.legacy().is_err());
+                if order == "used-after-timeout" {
+                    complete(&disk);
+                }
+                let queue_before = queue.0;
+                let request_before = request.0;
+                assert_eq!(disk.poll_transfer(id, Some(&mut output)), None);
+                assert_eq!(disk.timeout_transfer(id), None);
+                assert!(disk.start_transfer(Operation::Read, 2, None, || ()).is_err());
+                assert_eq!(output, [0x99; 512]);
+                assert_eq!(disk.pending, Some((Operation::Read, 1, id)));
+                assert_eq!(disk.last_used_idx, 0);
+                assert_eq!(disk.mapping_users(), Some(1));
+                assert_eq!(disk.mapping_retired(), Some(false));
+                assert_eq!(disk.begin_terminal_reset().state, ResetState::Waiting);
+                disk.observe_reset_status(0);
+                assert_eq!(
+                    disk.reset_observation().state,
+                    ResetState::VerifiedRetained
+                );
+                assert_eq!(disk.first_uncertain(), Some(timeout));
+                assert_eq!(disk.pending, Some((Operation::Read, 1, id)));
+                assert_eq!(disk.mapping_users(), Some(1));
+                assert_eq!(disk.mapping_retired(), Some(false));
+                assert_eq!(disk.poll_transfer(id, None), None);
+                assert!(queue.0 == queue_before && request.0 == request_before);
+                std::println!("{order}: Deadline consumed=0 users=1 reset=VerifiedRetained mapping_retired=false");
+            }
+        }
+    }
+
+    #[test]
+    fn btop21_invalid_completion_retires_only_bookkeeping() {
+        extern crate std;
+        let (mut queue, mut request) = fixture();
+        let mut disk = device(&mut queue, &mut request);
+        let mut output = [0x99; 512];
+        disk.injection = Some((1, 1, 513, 0, false));
+        let outcome = unsafe { disk.read_typed(1, &mut output) };
+        assert_eq!(outcome.completion, Completion::Uncertain);
+        assert_eq!(outcome.source, StatusSource::Queue);
+        assert_eq!(disk.last_used_idx, 0);
+        assert!(disk.has_uncertain_io());
+        assert_eq!(disk.mapping_users(), Some(0));
+        assert_eq!(disk.mapping_retired(), Some(true));
+        assert_eq!(
+            disk.callback_state(),
+            Some(sunlight_block::quiesce::SlotState::Terminal(
+                sunlight_block::quiesce::Terminal::Completed
+            ))
+        );
+        assert_eq!(output, [0x99; 512]);
+        std::println!("invalid head: Queue/Uncertain consumed=0 callback=Completed mapping_retired=true");
     }
     #[test]
     fn queue_allocation_bounds() {

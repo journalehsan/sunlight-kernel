@@ -1,0 +1,55 @@
+--- a/kernel/src/main.rs
++++ b/kernel/src/main.rs
+@@ -2254,6 +2254,7 @@
+             if let Some(info) = info.filter(|info| info.parent == device_id) {
+                 serial_println!("[BTOP16] register parent={} id={} start={} blocks={}",
+                     device_id, info.id, info.start, info.blocks);
++                serial_println!("[BTOP19] registration id={} stamp={:?}", info.id, storage::timing_stamp());
+                 storage::trace_read_totals(info.id);
+             }
+         }
+@@ -2443,6 +2444,7 @@
+                     "/boot"
+                 };
+                 if vfs.mount_fat(mountpoint, fat).is_ok() {
++                    serial_println!("[BTOP19] mount path={} stamp={:?}", mountpoint, storage::timing_stamp());
+                     if let Some(info) = storage::DEVICES.lock().find_extent(
+                         VIRTIO_DEVICE_ID.load(core::sync::atomic::Ordering::Acquire),
+                         partition.start,
+--- a/kernel/src/storage.rs
++++ b/kernel/src/storage.rs
+@@ -10,6 +10,15 @@
+ 
+ pub static DEVICES: spin::Mutex<DeviceRegistry> = spin::Mutex::new(DeviceRegistry::new());
+ 
++pub(crate) fn timing_stamp() -> (usize, u64, u64, u64) {
++    x86_64::instructions::interrupts::without_interrupts(|| {
++        let cpu = crate::sched::current_cpu_id();
++        let before = crate::arch::x86_64::interrupts::now_ns();
++        let after = crate::arch::x86_64::interrupts::now_ns();
++        (cpu, before, after, crate::arch::x86_64::interrupts::tsc_hz())
++    })
++}
++
+ pub(crate) fn virtio_partition(parent: u64, start: u64, blocks: u64) -> Option<DeviceInfo> {
+     DEVICES.lock().find_extent(parent, start, blocks).filter(|info| info.parent == parent)
+ }
+@@ -26,12 +35,18 @@
+     };
+     let mut start = None;
+     let mut busy = None;
++    let mut timing_start = None;
+     let result = blk.read_observed(lba, buf, || {
+         busy = retained.then(|| ReadBusy::begin(part, lba));
+         start = Some(crate::timekeeping::monotonic_ns());
++        timing_start = Some(timing_stamp());
+     }).legacy();
++    let timing_end = timing_start.map(|_| timing_stamp());
+     let end = crate::timekeeping::monotonic_ns();
+     drop(busy);
++    if let Some((first, last)) = timing_start.zip(timing_end) {
++        crate::serial_println!("[BTOP19] id={} lba={} first={:?} last={:?}", part.id, lba, first, last);
++    }
+     if let Some(start) = start {
+         let bytes = if result.is_ok() { buf.len() as u64 } else { 0 };
+         DEVICES.lock().retire_read(part.id, bytes, end.saturating_sub(start));

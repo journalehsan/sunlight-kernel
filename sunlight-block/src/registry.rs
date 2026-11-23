@@ -27,8 +27,20 @@ pub struct DeviceInfo {
 
 pub struct DeviceRegistry {
     entries: [Option<DeviceInfo>; MAX_DEVICES],
+    reads: [ReadTotals; MAX_DEVICES],
     // Never wrap or reset when an entry is replaced. Exhaustion fails closed.
     next_id: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ReadTotals {
+    pub completions: u64,
+    pub sectors_512: u64,
+    pub elapsed_ns: u64,
+}
+
+impl ReadTotals {
+    const ZERO: Self = Self { completions: 0, sectors_512: 0, elapsed_ns: 0 };
 }
 
 impl Default for DeviceRegistry {
@@ -41,15 +53,17 @@ impl DeviceRegistry {
     pub const fn new() -> Self {
         Self {
             entries: [None; MAX_DEVICES],
+            reads: [ReadTotals::ZERO; MAX_DEVICES],
             next_id: 1,
         }
     }
 
     fn insert(&mut self, mut entry: DeviceInfo) -> Option<u64> {
-        let slot = self.entries.iter_mut().find(|e| e.is_none())?;
+        let slot = self.entries.iter().position(Option::is_none)?;
         let next = self.next_id.checked_add(1)?;
         entry.id = self.next_id;
-        *slot = Some(entry);
+        self.reads[slot] = ReadTotals::ZERO;
+        self.entries[slot] = Some(entry);
         self.next_id = next;
         Some(entry.id)
     }
@@ -123,6 +137,39 @@ impl DeviceRegistry {
         self.entries.iter().flatten().find(|e| e.id == id).copied()
     }
 
+    fn child_slot(&self, id: u64) -> Option<usize> {
+        self.entries.iter().position(|entry| {
+            entry.is_some_and(|entry| entry.id == id && entry.parent != 0)
+        })
+    }
+
+    pub fn read_totals(&self, id: u64) -> Option<ReadTotals> {
+        Some(self.reads[self.child_slot(id)?])
+    }
+
+    pub fn retire_read(&mut self, id: u64, successful_bytes: u64, elapsed_ns: u64) {
+        if let Some(slot) = self.child_slot(id) {
+            let totals = &mut self.reads[slot];
+            totals.completions = totals.completions.saturating_add(1);
+            totals.sectors_512 = totals.sectors_512.saturating_add(successful_bytes >> 9);
+            totals.elapsed_ns = totals.elapsed_ns.saturating_add(elapsed_ns);
+        }
+    }
+
+    pub fn partition_at(&self, parent: u64, lba: u64) -> Option<DeviceInfo> {
+        if parent == 0 {
+            return None;
+        }
+        let mut matches = self.entries.iter().flatten().filter(|entry| {
+            entry.parent == parent
+                && lba
+                    .checked_sub(entry.start)
+                    .is_some_and(|offset| offset < entry.blocks)
+        });
+        let partition = *matches.next()?;
+        matches.next().is_none().then_some(partition)
+    }
+
     pub fn enumerate(&self, index: usize) -> Option<DeviceInfo> {
         self.entries.iter().flatten().nth(index).copied()
     }
@@ -144,6 +191,59 @@ impl DeviceRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partition_read_lifetime_and_coherent_snapshots() {
+        use std::sync::Mutex;
+        use std::thread;
+
+        let mut bytes = [0u8; 512 * 100];
+        bytes[510..512].copy_from_slice(&[0x55, 0xaa]);
+        for (offset, start) in [(446, 10u32), (462, 40u32)] {
+            bytes[offset + 4] = 0x0c;
+            bytes[offset + 8..offset + 12].copy_from_slice(&start.to_le_bytes());
+            bytes[offset + 12..offset + 16].copy_from_slice(&20u32.to_le_bytes());
+        }
+        let table = crate::partition::discover(&mut crate::MemDisk::new(&mut bytes)).unwrap();
+        let mut registry = DeviceRegistry::new();
+        let disk = registry.register_disk(100, READ).unwrap();
+        registry.register_partitions(disk, &table).unwrap();
+        let first = registry.enumerate(1).unwrap().id;
+        let sibling = registry.enumerate(2).unwrap().id;
+        assert_eq!(registry.read_totals(first), Some(ReadTotals::ZERO));
+        assert_eq!(registry.read_totals(disk), None);
+        // Intervals [10, 20) and [15, 25): one success and one failure.
+        registry.retire_read(first, 512, 20 - 10);
+        registry.retire_read(first, 0, 25 - 15);
+        let baseline = ReadTotals { completions: 2, sectors_512: 1, elapsed_ns: 20 };
+        assert_eq!(registry.read_totals(first), Some(baseline));
+        assert_eq!(registry.read_totals(first), Some(baseline));
+        let registry = Mutex::new(registry);
+        thread::scope(|scope| {
+            for _ in 0..2 {
+                scope.spawn(|| {
+                    for _ in 0..1_000 {
+                        registry.lock().unwrap().retire_read(first, 4096, 2);
+                    }
+                });
+            }
+            for _ in 0..1_000 {
+                let totals = registry.lock().unwrap().read_totals(first).unwrap();
+                let delta = totals.completions - baseline.completions;
+                assert_eq!(totals.sectors_512, 1 + 8 * delta);
+                assert_eq!(totals.elapsed_ns, 20 + 2 * delta);
+            }
+        });
+        let mut registry = registry.into_inner().unwrap();
+        assert_eq!(registry.read_totals(first).unwrap().completions, 2002);
+        assert_eq!(registry.read_totals(sibling), Some(ReadTotals::ZERO));
+        registry.entries[1] = None;
+        let replacement_parent = registry.register_disk(100, READ).unwrap();
+        registry.register_partitions(replacement_parent, &table).unwrap();
+        assert_eq!(registry.read_totals(first), None);
+        let replacement = registry.find_extent(replacement_parent, 10, 20).unwrap();
+        assert_eq!(registry.read_totals(replacement.id), Some(ReadTotals::ZERO));
+    }
 
     #[test]
     fn unknown_stale_replacement_and_exhausted_ids() {
