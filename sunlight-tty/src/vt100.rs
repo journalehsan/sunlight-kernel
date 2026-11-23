@@ -3,15 +3,33 @@
 //! State machine that reads one byte at a time and produces discrete output
 //! events. Designed for embedded use — zero heap, fixed parameter buffer.
 
+pub const MAX_PARAMS: usize = 16;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VtOutput {
     Char(u8),
-    MoveCursor { row: i16, col: i16 },
-    SetCursor { row: u16, col: u16 },
-    ClearScreen { mode: u16 },
-    ClearLine { mode: u16 },
-    Sgr { params: [u16; 8], count: usize },
-    DecPrivateMode { mode: u16, enabled: bool },
+    MoveCursor {
+        row: i16,
+        col: i16,
+    },
+    SetCursor {
+        row: u16,
+        col: u16,
+    },
+    ClearScreen {
+        mode: u16,
+    },
+    ClearLine {
+        mode: u16,
+    },
+    Sgr {
+        params: [u16; MAX_PARAMS],
+        count: usize,
+    },
+    DecPrivateMode {
+        mode: u16,
+        enabled: bool,
+    },
     SaveCursor,
     RestoreCursor,
     CarriageReturn,
@@ -31,7 +49,7 @@ enum VtState {
 
 pub struct Vt100Parser {
     state: VtState,
-    params: [u16; 8],
+    params: [u16; MAX_PARAMS],
     param_count: usize,
     current_param: u16,
     has_digit: bool,
@@ -42,7 +60,7 @@ impl Vt100Parser {
     pub const fn new() -> Self {
         Self {
             state: VtState::Ground,
-            params: [0; 8],
+            params: [0; MAX_PARAMS],
             param_count: 0,
             current_param: 0,
             has_digit: false,
@@ -203,7 +221,7 @@ impl Vt100Parser {
     }
 
     fn store_param(&mut self) {
-        if self.param_count < 8 {
+        if self.param_count < MAX_PARAMS {
             self.params[self.param_count] = if self.has_digit {
                 self.current_param
             } else {
@@ -289,7 +307,7 @@ mod tests {
         assert_eq!(
             p.feed(b'm'),
             VtOutput::Sgr {
-                params: [31, 1, 0, 0, 0, 0, 0, 0],
+                params: [31, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                 count: 2,
             }
         );

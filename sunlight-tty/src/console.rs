@@ -132,7 +132,7 @@ mod tests {
             );
         }
         console.feed(b"\x1b[?1049l");
-        assert_eq!(console.to_term_cells(&PALETTE)[0].ch, b's');
+        assert_eq!(console.to_term_cells(&PALETTE)[0].ch, 's');
     }
 
     #[test]
@@ -141,9 +141,9 @@ mod tests {
         console.feed(b"one\r\ntwo\r\nthree\r\nfour");
         assert_eq!(console.scrollback_len(), 1);
         let cells = console.to_term_cells_with_offset(&PALETTE, 1);
-        assert_eq!(cells[0].ch, b'o');
-        assert_eq!(cells[8].ch, b't');
-        assert_eq!(cells[17].ch, b'h');
+        assert_eq!(cells[0].ch, 'o');
+        assert_eq!(cells[8].ch, 't');
+        assert_eq!(cells[17].ch, 'h');
     }
 
     #[test]
@@ -162,11 +162,11 @@ mod tests {
         assert_eq!(console.scrollback_len(), 0);
         assert_eq!(console.cursor(), (1, 3));
         let cells = console.to_term_cells(&PALETTE);
-        assert_eq!(cells[0].ch, b'a');
-        assert_eq!(cells[7].ch, b'h');
+        assert_eq!(cells[0].ch, 'a');
+        assert_eq!(cells[7].ch, 'h');
         console.feed(b"i");
         assert_eq!(console.scrollback_len(), 1);
-        assert_eq!(console.to_term_cells(&PALETTE)[4].ch, b'i');
+        assert_eq!(console.to_term_cells(&PALETTE)[4].ch, 'i');
     }
 
     #[test]
@@ -179,7 +179,7 @@ mod tests {
         assert!(console.in_alt_screen());
         assert_eq!(console.scrollback_len(), 0);
         console.feed(b"\x1b[?1049l");
-        assert_eq!(console.to_term_cells(&PALETTE)[0].ch, b's');
+        assert_eq!(console.to_term_cells(&PALETTE)[0].ch, 's');
         assert_eq!(console.cursor(), (0, 13));
     }
 }

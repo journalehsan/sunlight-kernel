@@ -763,17 +763,6 @@ impl VirtioBlk {
         if used_idx_ptr.read_volatile() == self.last_used_idx {
             return None;
         }
-        self.pending = None;
-        // Completion publication owns the exit: exactly one terminal outcome,
-        // then the mapping authority is dropped and the record retired once.
-        if let Some(slot) = self.slot.as_ref() {
-            slot.begin_completion();
-            slot.finish(sunlight_block::quiesce::Terminal::Completed);
-        }
-        if let Some(mapping) = self.mapping.as_ref() {
-            mapping.release();
-            mapping.retire(id.queue_incarnation);
-        }
         Some(self.finish_transfer(operation, lba, id, output))
     }
 
@@ -826,6 +815,15 @@ impl VirtioBlk {
                 StatusSource::Queue,
                 Durability::Uncertain,
             );
+        }
+        self.pending = None;
+        if let Some(slot) = self.slot.as_ref() {
+            slot.begin_completion();
+            slot.finish(sunlight_block::quiesce::Terminal::Completed);
+        }
+        if let Some(mapping) = self.mapping.as_ref() {
+            mapping.release();
+            mapping.retire(id.queue_incarnation);
         }
         if status == VIRTIO_BLK_S_OK {
             if let Some(buf) = output {
@@ -1139,6 +1137,10 @@ mod ownership_tests {
                     assert_eq!(disk.poll_transfer(id, None), None);
                     assert_eq!(disk.timeout_transfer(id), None);
                     assert_eq!(disk.poll_transfer(next, None), None);
+                    assert_eq!(disk.pending, Some((Operation::Read, 2, next)));
+                    assert_eq!(disk.last_used_idx, 1);
+                    assert_eq!(disk.mapping_users(), Some(1));
+                    assert_eq!(disk.mapping_retired(), Some(false));
                     std::println!("{order}: consumed=1 mapping_retired=true old_token_rejected=true");
                     continue;
                 }
@@ -1187,16 +1189,18 @@ mod ownership_tests {
         assert_eq!(outcome.source, StatusSource::Queue);
         assert_eq!(disk.last_used_idx, 0);
         assert!(disk.has_uncertain_io());
-        assert_eq!(disk.mapping_users(), Some(0));
-        assert_eq!(disk.mapping_retired(), Some(true));
+        let id = outcome.request.unwrap();
+        assert_eq!(disk.pending, Some((Operation::Read, 1, id)));
+        assert_eq!(disk.mapping_users(), Some(1));
+        assert_eq!(disk.mapping_retired(), Some(false));
         assert_eq!(
             disk.callback_state(),
-            Some(sunlight_block::quiesce::SlotState::Terminal(
-                sunlight_block::quiesce::Terminal::Completed
-            ))
+            Some(sunlight_block::quiesce::SlotState::Active)
         );
+        assert_eq!(outcome.completed, Amount::Unknown);
+        assert_eq!(unsafe { disk.poll_transfer(id, None) }, None);
         assert_eq!(output, [0x99; 512]);
-        std::println!("invalid head: Queue/Uncertain consumed=0 callback=Completed mapping_retired=true");
+        std::println!("invalid head: Queue/Uncertain consumed=0 callback=Active mapping_retired=false");
     }
     #[test]
     fn queue_allocation_bounds() {

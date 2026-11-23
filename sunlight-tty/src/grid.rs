@@ -4,17 +4,17 @@
 //! history for the normal screen. Feeds bytes through the VT parser,
 //! interprets output events, and updates screen state.
 
-use crate::vt100::{Vt100Parser, VtOutput};
+use crate::vt100::{Vt100Parser, VtOutput, MAX_PARAMS};
 use alloc::vec::Vec;
-pub use sunlight_tui::TermCell;
+pub use sunlight_tui::{paint_terminal_symbol, TermCell};
 
 const SCROLLBACK_LINES: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
-    pub ch: u8,
-    pub fg: u8,
-    pub bg: u8,
+    pub ch: char,
+    fg: CellColor,
+    bg: CellColor,
     pub bold: bool,
     pub inverse: bool,
     pub underline: bool,
@@ -23,12 +23,39 @@ pub struct Cell {
 impl Cell {
     const fn blank() -> Self {
         Self {
-            ch: b' ',
-            fg: 7,
-            bg: 0,
+            ch: ' ',
+            fg: CellColor::Ansi(7),
+            bg: CellColor::Ansi(0),
             bold: false,
             inverse: false,
             underline: false,
+        }
+    }
+
+    pub fn colors(self, palette: &[u32; 16], cursor: bool) -> (u32, u32) {
+        let fg = self.fg.resolve(palette, self.bold);
+        let bg = self.bg.resolve(palette, false);
+        if self.inverse ^ cursor {
+            (bg, fg)
+        } else {
+            (fg, bg)
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CellColor {
+    Ansi(u8),
+    Rgb(u32),
+}
+
+impl CellColor {
+    fn resolve(self, palette: &[u32; 16], bold: bool) -> u32 {
+        match self {
+            Self::Ansi(index) => {
+                palette[usize::from(if bold && index < 8 { index + 8 } else { index })]
+            }
+            Self::Rgb(rgb) => rgb,
         }
     }
 }
@@ -50,14 +77,17 @@ pub struct TerminalGrid {
     alt_wrap_pending: bool,
     saved_cursor: Option<(usize, usize)>,
     saved_main_cursor: (usize, usize),
-    cur_fg: u8,
-    cur_bg: u8,
+    cur_fg: CellColor,
+    cur_bg: CellColor,
     cur_bold: bool,
     cur_inverse: bool,
     cur_underline: bool,
     cursor_visible: bool,
     use_alt_screen: bool,
     parser: Vt100Parser,
+    utf8: [u8; 4],
+    utf8_len: usize,
+    utf8_width: usize,
 }
 
 impl TerminalGrid {
@@ -75,7 +105,7 @@ impl TerminalGrid {
         term_cells.resize(
             cols * rows,
             TermCell {
-                ch: b' ',
+                ch: ' ',
                 fg: 0,
                 bg: 0,
             },
@@ -98,19 +128,39 @@ impl TerminalGrid {
             alt_wrap_pending: false,
             saved_cursor: None,
             saved_main_cursor: (0, 0),
-            cur_fg: 7,
-            cur_bg: 0,
+            cur_fg: CellColor::Ansi(7),
+            cur_bg: CellColor::Ansi(0),
             cur_bold: false,
             cur_inverse: false,
             cur_underline: false,
             cursor_visible: true,
             use_alt_screen: false,
             parser: Vt100Parser::new(),
+            utf8: [0; 4],
+            utf8_len: 0,
+            utf8_width: 0,
         }
     }
 
     pub fn feed(&mut self, bytes: &[u8]) {
         for &byte in bytes {
+            if self.utf8_len != 0 {
+                if byte & 0xc0 == 0x80 {
+                    self.utf8[self.utf8_len] = byte;
+                    self.utf8_len += 1;
+                    if self.utf8_len == self.utf8_width {
+                        let ch = core::str::from_utf8(&self.utf8[..self.utf8_len])
+                            .ok()
+                            .and_then(|text| text.chars().next())
+                            .unwrap_or(char::REPLACEMENT_CHARACTER);
+                        self.utf8_len = 0;
+                        self.write_char(ch);
+                    }
+                    continue;
+                }
+                self.utf8_len = 0;
+                self.write_char(char::REPLACEMENT_CHARACTER);
+            }
             let output = self.parser.feed(byte);
             self.handle_output(output);
         }
@@ -150,7 +200,7 @@ impl TerminalGrid {
         term_cells.resize(
             cell_count,
             TermCell {
-                ch: b' ',
+                ch: ' ',
                 fg: 0,
                 bg: 0,
             },
@@ -191,7 +241,24 @@ impl TerminalGrid {
 
     fn handle_output(&mut self, output: VtOutput) {
         match output {
-            VtOutput::Char(ch) => self.write_char(ch),
+            VtOutput::Char(byte) => {
+                self.utf8_width = match byte {
+                    0x20..=0x7e => {
+                        self.write_char(char::from(byte));
+                        return;
+                    }
+                    0xc2..=0xdf => 2,
+                    0xe0..=0xef => 3,
+                    0xf0..=0xf4 => 4,
+                    0x80..=0xff => {
+                        self.write_char(char::REPLACEMENT_CHARACTER);
+                        return;
+                    }
+                    _ => return,
+                };
+                self.utf8[0] = byte;
+                self.utf8_len = 1;
+            }
             VtOutput::MoveCursor { row, col } => self.move_cursor(row, col),
             VtOutput::SetCursor { row, col } => self.set_cursor(row as usize, col as usize),
             VtOutput::ClearScreen { mode } => self.clear_screen_mode(mode),
@@ -236,7 +303,7 @@ impl TerminalGrid {
         }
     }
 
-    fn write_char(&mut self, ch: u8) {
+    fn write_char(&mut self, ch: char) {
         let wrap_pending = if self.use_alt_screen {
             self.alt_wrap_pending
         } else {
@@ -348,6 +415,7 @@ impl TerminalGrid {
         self.use_alt_screen = false;
         self.reset_attrs();
         self.parser = Vt100Parser::new();
+        self.utf8_len = 0;
     }
 
     fn clear_screen_mode(&mut self, mode: u16) {
@@ -441,7 +509,7 @@ impl TerminalGrid {
         }
     }
 
-    fn apply_sgr(&mut self, params: &[u16; 8], count: usize) {
+    fn apply_sgr(&mut self, params: &[u16; MAX_PARAMS], count: usize) {
         if count == 0 {
             self.reset_attrs();
             return;
@@ -457,18 +525,18 @@ impl TerminalGrid {
                 22 => self.cur_bold = false,
                 24 => self.cur_underline = false,
                 27 => self.cur_inverse = false,
-                30..=37 => self.cur_fg = (params[i] - 30) as u8,
-                39 => self.cur_fg = 7,
-                40..=47 => self.cur_bg = (params[i] - 40) as u8,
-                49 => self.cur_bg = 0,
-                90..=97 => self.cur_fg = (params[i] - 90 + 8) as u8,
-                100..=107 => self.cur_bg = (params[i] - 100 + 8) as u8,
+                30..=37 => self.cur_fg = CellColor::Ansi((params[i] - 30) as u8),
+                39 => self.cur_fg = CellColor::Ansi(7),
+                40..=47 => self.cur_bg = CellColor::Ansi((params[i] - 40) as u8),
+                49 => self.cur_bg = CellColor::Ansi(0),
+                90..=97 => self.cur_fg = CellColor::Ansi((params[i] - 90 + 8) as u8),
+                100..=107 => self.cur_bg = CellColor::Ansi((params[i] - 100 + 8) as u8),
                 38 => {
                     if i + 2 < count && params[i + 1] == 5 {
                         self.cur_fg = map_extended_color(params[i + 2]);
                         i += 2;
                     } else if i + 4 < count && params[i + 1] == 2 {
-                        self.cur_fg = map_rgb_to_ansi(params[i + 2], params[i + 3], params[i + 4]);
+                        self.cur_fg = rgb(params[i + 2], params[i + 3], params[i + 4]);
                         i += 4;
                     }
                 }
@@ -477,7 +545,7 @@ impl TerminalGrid {
                         self.cur_bg = map_extended_color(params[i + 2]);
                         i += 2;
                     } else if i + 4 < count && params[i + 1] == 2 {
-                        self.cur_bg = map_rgb_to_ansi(params[i + 2], params[i + 3], params[i + 4]);
+                        self.cur_bg = rgb(params[i + 2], params[i + 3], params[i + 4]);
                         i += 4;
                     }
                 }
@@ -525,8 +593,8 @@ impl TerminalGrid {
     }
 
     fn reset_attrs(&mut self) {
-        self.cur_fg = 7;
-        self.cur_bg = 0;
+        self.cur_fg = CellColor::Ansi(7);
+        self.cur_bg = CellColor::Ansi(0);
         self.cur_bold = false;
         self.cur_inverse = false;
         self.cur_underline = false;
@@ -650,16 +718,7 @@ impl TerminalGrid {
 }
 
 fn resolve_cell(cell: Cell, ansi_colors: &[u32; 16]) -> TermCell {
-    let fg_idx = if cell.bold && cell.fg < 8 {
-        cell.fg + 8
-    } else {
-        cell.fg
-    };
-    let mut fg = ansi_colors[fg_idx as usize % 16];
-    let mut bg = ansi_colors[cell.bg as usize % 16];
-    if cell.inverse {
-        core::mem::swap(&mut fg, &mut bg);
-    }
+    let (fg, bg) = cell.colors(ansi_colors, false);
     TermCell {
         ch: cell.ch,
         fg,
@@ -667,57 +726,30 @@ fn resolve_cell(cell: Cell, ansi_colors: &[u32; 16]) -> TermCell {
     }
 }
 
-fn map_extended_color(color: u16) -> u8 {
+fn map_extended_color(color: u16) -> CellColor {
     match color {
-        0..=15 => color as u8,
+        0..=15 => CellColor::Ansi(color as u8),
         16..=231 => {
-            let idx = color - 16;
-            let r = idx / 36;
-            let g = (idx / 6) % 6;
-            let b = idx % 6;
-            map_rgb_to_ansi((r * 51) as u16, (g * 51) as u16, (b * 51) as u16)
+            let index = color - 16;
+            let levels = [0, 95, 135, 175, 215, 255];
+            rgb(
+                levels[(index / 36) as usize],
+                levels[(index / 6 % 6) as usize],
+                levels[(index % 6) as usize],
+            )
         }
         232..=255 => {
             let gray = 8 + (color - 232) * 10;
-            map_rgb_to_ansi(gray, gray, gray)
+            rgb(gray, gray, gray)
         }
-        _ => 7,
+        _ => CellColor::Ansi(7),
     }
 }
 
-fn map_rgb_to_ansi(r: u16, g: u16, b: u16) -> u8 {
-    const ANSI_RGB: [(u16, u16, u16); 16] = [
-        (0x00, 0x00, 0x00),
-        (0xCC, 0x24, 0x1D),
-        (0x98, 0x97, 0x1A),
-        (0xD7, 0x99, 0x21),
-        (0x45, 0x85, 0x88),
-        (0xB1, 0x62, 0x86),
-        (0x68, 0x9D, 0x6A),
-        (0xA8, 0x99, 0x84),
-        (0x92, 0x83, 0x74),
-        (0xFB, 0x49, 0x34),
-        (0xB8, 0xBB, 0x26),
-        (0xFA, 0xBD, 0x2F),
-        (0x83, 0xA5, 0x98),
-        (0xD3, 0x86, 0x9B),
-        (0x8E, 0xC0, 0x7C),
-        (0xEB, 0xDB, 0xB2),
-    ];
-
-    let mut best = 7u8;
-    let mut best_dist = u32::MAX;
-    for (idx, &(pr, pg, pb)) in ANSI_RGB.iter().enumerate() {
-        let dr = pr.abs_diff(r) as u32;
-        let dg = pg.abs_diff(g) as u32;
-        let db = pb.abs_diff(b) as u32;
-        let dist = dr * dr + dg * dg + db * db;
-        if dist < best_dist {
-            best_dist = dist;
-            best = idx as u8;
-        }
-    }
-    best
+fn rgb(red: u16, green: u16, blue: u16) -> CellColor {
+    CellColor::Rgb(
+        u32::from(red.min(255)) << 16 | u32::from(green.min(255)) << 8 | u32::from(blue.min(255)),
+    )
 }
 
 #[cfg(test)]
@@ -733,31 +765,63 @@ mod tests {
     fn plain_text_writes_cells() {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"ab");
-        assert_eq!(grid.cell(0, 0).ch, b'a');
-        assert_eq!(grid.cell(0, 1).ch, b'b');
+        assert_eq!(grid.cell(0, 0).ch, 'a');
+        assert_eq!(grid.cell(0, 1).ch, 'b');
+    }
+
+    #[test]
+    fn utf8_graphics_keep_cell_alignment_across_reads() {
+        let mut grid = TerminalGrid::new(8, 2);
+        let bytes = "╭─⣿╮X".as_bytes();
+        for byte in bytes {
+            grid.feed(core::slice::from_ref(byte));
+        }
+        for (col, expected) in "╭─⣿╮X".chars().enumerate() {
+            assert_eq!(grid.cell(0, col).ch, expected);
+        }
+        assert_eq!(grid.cursor(), (0, 5));
+    }
+
+    #[test]
+    fn incomplete_utf8_does_not_consume_escape_sequence() {
+        let mut grid = TerminalGrid::new(8, 2);
+        grid.feed(b"\xe2\x94");
+        grid.feed(b"\x1b[2;3HX");
+        assert_eq!(grid.cell(0, 0).ch, char::REPLACEMENT_CHARACTER);
+        assert_eq!(grid.cell(1, 2).ch, 'X');
+    }
+
+    #[test]
+    fn sgr_keeps_rgb_background_and_indexed_foreground() {
+        let mut grid = TerminalGrid::new(4, 1);
+        grid.feed(b"\x1b[1;38;2;12;34;56;48;2;8;9;10mA\x1b[38;5;67mB\x1b[0mC");
+        let cells = grid.to_term_cells(&ANSI_COLORS);
+        assert_eq!((cells[0].fg, cells[0].bg), (0x0c2238, 0x08090a));
+        assert_eq!((cells[1].fg, cells[1].bg), (0x5f87af, 0x08090a));
+        assert_eq!((cells[2].fg, cells[2].bg), (ANSI_COLORS[7], ANSI_COLORS[0]));
     }
 
     #[test]
     fn newline_and_carriage_return_work() {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"ab\rZ\nQ");
-        assert_eq!(grid.cell(0, 0).ch, b'Z');
-        assert_eq!(grid.cell(1, 0).ch, b'Q');
+        assert_eq!(grid.cell(0, 0).ch, 'Z');
+        assert_eq!(grid.cell(1, 0).ch, 'Q');
     }
 
     #[test]
     fn cursor_movement_updates_in_place() {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"ab\x1b[1D!");
-        assert_eq!(grid.cell(0, 0).ch, b'a');
-        assert_eq!(grid.cell(0, 1).ch, b'!');
+        assert_eq!(grid.cell(0, 0).ch, 'a');
+        assert_eq!(grid.cell(0, 1).ch, '!');
     }
 
     #[test]
     fn clear_screen_resets_cells() {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"ab\x1b[2J");
-        assert_eq!(grid.cell(0, 0).ch, b' ');
+        assert_eq!(grid.cell(0, 0).ch, ' ');
         assert_eq!(grid.cursor(), (0, 0));
     }
 
@@ -765,25 +829,25 @@ mod tests {
     fn clear_line_mode_two_clears_current_row() {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"ab\ncd\x1b[2K");
-        assert_eq!(grid.cell(1, 0).ch, b' ');
-        assert_eq!(grid.cell(1, 1).ch, b' ');
+        assert_eq!(grid.cell(1, 0).ch, ' ');
+        assert_eq!(grid.cell(1, 1).ch, ' ');
     }
 
     #[test]
     fn sgr_color_reset_restores_defaults() {
         let mut grid = TerminalGrid::new(4, 1);
         grid.feed(b"\x1b[31mA\x1b[0mB");
-        assert_eq!(grid.cell(0, 0).fg, 1);
-        assert_eq!(grid.cell(0, 1).fg, 7);
+        assert_eq!(grid.cell(0, 0).fg, CellColor::Ansi(1));
+        assert_eq!(grid.cell(0, 1).fg, CellColor::Ansi(7));
     }
 
     #[test]
     fn alternate_screen_enter_exit_restores_main_buffer() {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"main\x1b[?1049hALT\x1b[?1049l");
-        assert_eq!(grid.cell(0, 0).ch, b'm');
+        assert_eq!(grid.cell(0, 0).ch, 'm');
         let cells = grid.to_term_cells(&ANSI_COLORS);
-        assert_eq!(cells[0].ch, b'm');
+        assert_eq!(cells[0].ch, 'm');
     }
 
     #[test]
@@ -791,8 +855,8 @@ mod tests {
         let mut grid = TerminalGrid::new(4, 2);
         grid.clear_screen();
         grid.feed(b"\x1b[31mX");
-        assert_eq!(grid.cell(0, 0).ch, b'X');
-        assert_eq!(grid.cell(0, 0).fg, 1);
+        assert_eq!(grid.cell(0, 0).ch, 'X');
+        assert_eq!(grid.cell(0, 0).fg, CellColor::Ansi(1));
     }
 
     #[test]
@@ -800,10 +864,10 @@ mod tests {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"ab");
         assert!(grid.resize(8, 4));
-        assert_eq!(grid.cell(0, 0).ch, b'a');
-        assert_eq!(grid.cell(0, 1).ch, b'b');
+        assert_eq!(grid.cell(0, 0).ch, 'a');
+        assert_eq!(grid.cell(0, 1).ch, 'b');
         assert!(grid.resize(2, 1));
-        assert_eq!(grid.cell(0, 0).ch, b'a');
+        assert_eq!(grid.cell(0, 0).ch, 'a');
         let (row, col) = grid.cursor();
         assert!(row < grid.rows && col < grid.cols);
     }
@@ -831,6 +895,6 @@ mod tests {
     fn unknown_escape_does_not_crash_or_print() {
         let mut grid = TerminalGrid::new(4, 2);
         grid.feed(b"\x1b[?9999hA");
-        assert_eq!(grid.cell(0, 0).ch, b'A');
+        assert_eq!(grid.cell(0, 0).ch, 'A');
     }
 }

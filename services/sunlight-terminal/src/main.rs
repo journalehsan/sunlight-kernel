@@ -931,16 +931,7 @@ impl TerminalViewport {
                     continue;
                 }
                 self.painted[index] = Some(painted);
-                let foreground = if cell.bold && cell.fg < 8 {
-                    cell.fg + 8
-                } else {
-                    cell.fg
-                };
-                let mut fg = ANSI_COLORS[foreground as usize % 16];
-                let mut bg = ANSI_COLORS[cell.bg as usize % 16];
-                if cell.inverse ^ painted.cursor {
-                    core::mem::swap(&mut fg, &mut bg);
-                }
+                let (fg, bg) = cell.colors(&ANSI_COLORS, painted.cursor);
                 let rect = Rect::new(
                     col as i32 * CELL_W as i32,
                     row as i32 * CELL_H as i32,
@@ -949,9 +940,21 @@ impl TerminalViewport {
                 );
                 let mut target = clipped.sub_canvas(rect);
                 target.fill_rect(Rect::new(0, 0, CELL_W, CELL_H), sunlight_ui::Color(bg));
-                if cell.ch.is_ascii_graphic() {
-                    let bytes = [cell.ch];
-                    let text = core::str::from_utf8(&bytes).unwrap_or("?");
+                if cell.ch != ' '
+                    && !sunlight_tty::grid::paint_terminal_symbol(
+                        cell.ch,
+                        CELL_W,
+                        CELL_H,
+                        |x, y, w, h| {
+                            target.fill_rect(
+                                Rect::new(x as i32, y as i32, w, h),
+                                sunlight_ui::Color(fg),
+                            );
+                        },
+                    )
+                {
+                    let mut bytes = [0; 4];
+                    let text = cell.ch.encode_utf8(&mut bytes);
                     let role = if cell.bold {
                         FontRole::MonoMedium
                     } else {
@@ -2119,8 +2122,8 @@ mod tests {
         let mut tab = test_tab(1, b"Tab 1");
         let mut console_buf = [0u8; READ_BUF];
         tab.ingest(b"hi", &mut console_buf, DebugFlags::new());
-        assert_eq!(tab.grid.cell(0, 0).ch, b'h');
-        assert_eq!(tab.grid.cell(0, 1).ch, b'i');
+        assert_eq!(tab.grid.cell(0, 0).ch, 'h');
+        assert_eq!(tab.grid.cell(0, 1).ch, 'i');
     }
 
     #[test]
@@ -2136,8 +2139,8 @@ mod tests {
             .unwrap()
             .ingest(b"top", &mut console_buf, DebugFlags::new());
 
-        assert_eq!(app.tabs[0].as_ref().unwrap().grid.cell(0, 0).ch, b't');
-        assert_eq!(app.tabs[1].as_ref().unwrap().grid.cell(0, 0).ch, b' ');
+        assert_eq!(app.tabs[0].as_ref().unwrap().grid.cell(0, 0).ch, 't');
+        assert_eq!(app.tabs[1].as_ref().unwrap().grid.cell(0, 0).ch, ' ');
     }
 
     #[test]

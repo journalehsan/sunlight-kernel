@@ -32,9 +32,179 @@ const ICON_SHUTDOWN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_shut
 /// A terminal cell with character and pre-resolved RGB colors.
 #[derive(Clone, Copy, Debug)]
 pub struct TermCell {
-    pub ch: u8,
+    pub ch: char,
     pub fg: u32, // RGB color
     pub bg: u32, // RGB color
+}
+
+pub fn paint_terminal_symbol(
+    ch: char,
+    width: u32,
+    height: u32,
+    mut fill: impl FnMut(u32, u32, u32, u32),
+) -> bool {
+    let mid_x = width / 2;
+    let mid_y = height / 2;
+    let arms = match ch {
+        '─' => 3,
+        '│' => 12,
+        '┌' | '╭' => 10,
+        '┐' | '╮' => 9,
+        '└' | '╰' => 6,
+        '┘' | '╯' => 5,
+        '├' => 14,
+        '┤' => 13,
+        '┬' => 11,
+        '┴' => 7,
+        '┼' => 15,
+        _ => 0,
+    };
+    if arms != 0 {
+        if arms & 1 != 0 {
+            fill(0, mid_y, mid_x + 1, 1);
+        }
+        if arms & 2 != 0 {
+            fill(mid_x, mid_y, width - mid_x, 1);
+        }
+        if arms & 4 != 0 {
+            fill(mid_x, 0, 1, mid_y + 1);
+        }
+        if arms & 8 != 0 {
+            fill(mid_x, mid_y, 1, height - mid_y);
+        }
+        return true;
+    }
+    match ch {
+        '⠀'..='⣿' => {
+            let dots = ch as u32 - 0x2800;
+            for (bit, (col, row)) in [
+                (0, 0),
+                (0, 1),
+                (0, 2),
+                (1, 0),
+                (1, 1),
+                (1, 2),
+                (0, 3),
+                (1, 3),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if dots & (1 << bit) != 0 {
+                    let dot_w = (width / 4).max(1);
+                    let dot_h = (height / 8).max(1);
+                    fill(
+                        (2 * col + 1) * width / 4 - dot_w / 2,
+                        (2 * row + 1) * height / 8 - dot_h / 2,
+                        dot_w,
+                        dot_h,
+                    );
+                }
+            }
+        }
+        '▀' | '▄' | '█' | '▌' | '▐' | '▖'..='▟' => {
+            let mask = match ch {
+                '▀' => 3,
+                '▄' => 12,
+                '█' => 15,
+                '▌' => 5,
+                '▐' => 10,
+                '▖' => 4,
+                '▗' => 8,
+                '▘' => 1,
+                '▙' => 13,
+                '▚' => 9,
+                '▛' => 7,
+                '▜' => 11,
+                '▝' => 2,
+                '▞' => 6,
+                '▟' => 14,
+                _ => unreachable!(),
+            };
+            for (bit, (left, top, w, h)) in [
+                (0, 0, mid_x, mid_y),
+                (mid_x, 0, width - mid_x, mid_y),
+                (0, mid_y, mid_x, height - mid_y),
+                (mid_x, mid_y, width - mid_x, height - mid_y),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if mask & (1 << bit) != 0 {
+                    fill(left, top, w, h);
+                }
+            }
+        }
+        '■' => {
+            let side = width.min(height).saturating_sub(2).max(1);
+            fill((width - side) / 2, (height - side) / 2, side, side);
+        }
+        '▲' | '▼' => {
+            let radius = width.saturating_sub(1).min(height.saturating_sub(1)) / 2;
+            let top = (height - radius - 1) / 2;
+            for row in 0..=radius {
+                let inset = if ch == '▲' { row } else { radius - row };
+                fill(mid_x - inset, top + row, 2 * inset + 1, 1);
+            }
+        }
+        '╎' => {
+            fill(mid_x, height / 8, 1, height / 4);
+            fill(mid_x, height * 5 / 8, 1, height / 4);
+        }
+        '░'..='▓' => {
+            let density = ch as u32 - '░' as u32 + 1;
+            for row in 0..height {
+                for col in 0..width {
+                    if (col + (row % 2) * 2) % 4 < density {
+                        fill(col, row, 1, 1);
+                    }
+                }
+            }
+        }
+        _ => return false,
+    }
+    true
+}
+
+fn draw_terminal_glyph(
+    fb: &mut framebuffer::Framebuffer,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    ch: char,
+    color: u32,
+) {
+    if ch == ' '
+        || paint_terminal_symbol(ch, width, height, |left, top, w, h| {
+            fb.fill_rect(x + left, y + top, w, h, color);
+        })
+    {
+        return;
+    }
+    let ascii = match ch {
+        '!'..='~' => ch as u8,
+        '⁰' => b'0',
+        '¹' => b'1',
+        '²' => b'2',
+        '³' => b'3',
+        '⁴'..='⁹' => b'4' + (ch as u32 - '⁴' as u32) as u8,
+        '←' => b'<',
+        '→' => b'>',
+        '↑' => b'^',
+        '↓' => b'v',
+        '↵' => b'<',
+        _ => b'?',
+    };
+    fontatlas::draw_mono_char(
+        fb,
+        x,
+        y,
+        height,
+        ascii,
+        color,
+        fontatlas::FontSize::MonoRegular,
+    );
 }
 
 /// Display info for a single tab in the tab bar.
@@ -575,17 +745,7 @@ pub unsafe fn render_terminal_grid_interactive(
 
             // Fill cell background first, then alpha-blend the glyph on top
             fb.fill_rect(x, y, cell_w, cell_h, cell.bg);
-            if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
-                fontatlas::draw_mono_char(
-                    &mut fb,
-                    x,
-                    y,
-                    cell_h,
-                    cell.ch,
-                    cell.fg,
-                    fontatlas::FontSize::MonoRegular,
-                );
-            }
+            draw_terminal_glyph(&mut fb, x, y, cell_w, cell_h, cell.ch, cell.fg);
         }
     }
 
@@ -601,17 +761,7 @@ pub unsafe fn render_terminal_grid_interactive(
         if cell_idx < cells.len() {
             let cell = cells[cell_idx];
             fb.fill_rect(x, y, cell_w, cell_h, cell.fg); // fg becomes bg
-            if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
-                fontatlas::draw_mono_char(
-                    &mut fb,
-                    x,
-                    y,
-                    cell_h,
-                    cell.ch,
-                    cell.bg,
-                    fontatlas::FontSize::MonoRegular,
-                ); // bg becomes fg
-            }
+            draw_terminal_glyph(&mut fb, x, y, cell_w, cell_h, cell.ch, cell.bg);
         } else {
             // Empty cell: just draw inverted space
             fb.fill_rect(x, y, cell_w, cell_h, layout::palette::TEXT);
@@ -1374,7 +1524,8 @@ pub unsafe fn render_login_grid_interactive(
     }
 
     // ── Bottom hint bar ──────────────────────────────────────────────────────
-    let footer = "Tab navigate   Enter select   Space/Up/Down session   Ctrl+F1 TTY   Ctrl+F2 Desktop";
+    let footer =
+        "Tab navigate   Enter select   Space/Up/Down session   Ctrl+F1 TTY   Ctrl+F2 Desktop";
     let footer_w = fontatlas::measure_text(footer, fontatlas::FontSize::Regular);
     fontatlas::draw_text(
         &mut fb,
