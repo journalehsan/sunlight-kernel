@@ -1133,6 +1133,7 @@ dependencies = [
 name = "helios-wayland-fixture"
 version = "0.1.0"
 dependencies = [
+ "sha2",
  "sunlight-ipc",
  "sunlight-libc",
  "sunlight-ui",

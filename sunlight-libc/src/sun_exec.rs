@@ -294,6 +294,41 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         aliases: &[],
         executable: b"/Applications/SunlightCanvas.sunapp",
     },
+    #[cfg(feature = "helios-dynamic-elf-probe")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-pie",
+        display_name: "ELF pie probe",
+        aliases: &[],
+        executable: b"/Applications/elf-pie.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-probe")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-exec",
+        display_name: "ELF exec probe",
+        aliases: &[],
+        executable: b"/Applications/elf-exec.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-probe")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-static",
+        display_name: "ELF static probe",
+        aliases: &[],
+        executable: b"/Applications/elf-static.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-relocation-fixture")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-relocation",
+        display_name: "ELF relocation probe",
+        aliases: &[],
+        executable: b"/Applications/elf-relocation.sunapp",
+    },
+    #[cfg(feature = "helios-qalculate-probe")]
+    ApplicationRegistryEntry {
+        canonical_id: "qalculate",
+        display_name: "Qalculate!",
+        aliases: &[],
+        executable: b"/Applications/Qalculate.sunapp",
+    },
     ApplicationRegistryEntry {
         canonical_id: "dos-navigator",
         display_name: "DOS Navigator 1.51",

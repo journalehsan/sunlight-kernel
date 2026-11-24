@@ -334,6 +334,7 @@ pub struct Process {
     /// the parent from `BlockedOnIpc` when that child exits, instead of having
     /// the parent busy-spin in a yield loop.
     pub wait_child: Option<usize>,
+    pub(crate) child_wait: ChildWait,
 
     /// TTY tab this process is attached to, if any. Set when the shell is
     /// spawned for a tab and inherited by children, so a spawned app's fd0/fd1
@@ -666,6 +667,7 @@ impl Process {
             block_start_tick: 0,   // Not blocked yet
             aging_counter: 0,      // No aging yet
             wait_child: None,      // Not waiting on a child
+            child_wait: ChildWait::Untracked,
             tty_tab: None,         // Attached to a TTY tab only when spawned for one
             tty_generation: 0,
             owned_shared: alloc::vec::Vec::new(),
@@ -918,6 +920,7 @@ impl Process {
             block_start_tick: 0,
             aging_counter: 0,
             wait_child: None,
+            child_wait: ChildWait::Untracked,
             tty_tab,
             tty_generation,
             owned_shared: Vec::new(),
@@ -960,4 +963,11 @@ impl Process {
             _ => QueueTier::Low,            // Clamp to Low for out-of-range values
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChildWait {
+    Untracked,
+    Pending,
+    Consumed,
 }

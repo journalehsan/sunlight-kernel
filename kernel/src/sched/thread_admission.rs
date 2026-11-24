@@ -49,6 +49,7 @@ impl Scheduler {
             .find(|(idx, p)| {
                 p.state == ProcessState::Reaped
                     && p.service_reap_watcher.is_none()
+                    && !self.child_wait_retained(*idx)
                     && p.owning_core == u8::MAX
                     && p.queued_on_core == u8::MAX
                     && !self.stack_is_pinned(*idx)
@@ -148,6 +149,7 @@ impl Scheduler {
             && !self.processes.iter().enumerate().any(|(idx, p)| {
                 p.state == ProcessState::Reaped
                     && p.service_reap_watcher.is_none()
+                    && !self.child_wait_retained(idx)
                     && p.owning_core == u8::MAX
                     && p.queued_on_core == u8::MAX
                     && !self.stack_is_pinned(idx)

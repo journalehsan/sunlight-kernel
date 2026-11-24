@@ -136,6 +136,76 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
     RamEntry::dir("/bin", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-relocation-fixture"))]
+    RamEntry::dir("/Applications/elf-relocation.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-relocation-fixture"))]
+    RamEntry::dir("/Applications/elf-relocation.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-relocation-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-relocation.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-relocation.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-relocation-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-relocation.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-relocation.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::dir("/Applications/elf-pie.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::dir("/Applications/elf-pie.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::file(
+        "/Applications/elf-pie.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-pie.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::file(
+        "/Applications/elf-pie.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-pie.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::dir("/Applications/elf-exec.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::dir("/Applications/elf-exec.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::file(
+        "/Applications/elf-exec.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-exec.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::file(
+        "/Applications/elf-exec.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-exec.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::dir("/Applications/elf-static.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::dir("/Applications/elf-static.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::file(
+        "/Applications/elf-static.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-static.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
+    RamEntry::file(
+        "/Applications/elf-static.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-static.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-qalculate-probe"))]
+    RamEntry::dir("/Applications/Qalculate.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-qalculate-probe"))]
+    RamEntry::dir("/Applications/Qalculate.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-qalculate-probe"))]
+    RamEntry::file(
+        "/Applications/Qalculate.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!("../../Qalculate.sunapp/Manifest.toml"),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-qalculate-probe"))]
+    RamEntry::file(
+        "/Applications/Qalculate.sunapp/Program/qalculate-qt", 0, 0, mode::FILE_755,
+        include_bytes!(env!("SUNLIGHT_QALCULATE_ELF")),
+    ),
     #[cfg(all(debug_assertions, feature = "helios-wayland-sunapp-test"))]
     RamEntry::dir("/Applications/SunlightCanvas.sunapp", 0, 0, mode::DIR_755),
     #[cfg(all(debug_assertions, feature = "helios-wayland-sunapp-test"))]

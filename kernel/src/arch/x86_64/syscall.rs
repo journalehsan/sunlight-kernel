@@ -671,7 +671,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         // capabilities and existing per-syscall permissions still apply.
         if linux_compat && num & ::sunlight_ipc::NATIVE_SYSCALL_TAG != 0 {
             let native = num & !::sunlight_ipc::NATIVE_SYSCALL_TAG;
-            num = if matches!(native, 1..=8 | 10..=18 | 21 | 25 | 32 | 33 | 39 | 72 | 86 | 92..=94 | 99)
+            let capture_control =
+                cfg!(all(debug_assertions, feature = "helios_wayland_test")) && native == 0x574c;
+            num = if capture_control
+                || matches!(native, 1..=8 | 10..=18 | 21 | 25 | 32 | 33 | 39 | 72 | 86 | 92..=94 | 99)
             {
                 native
             } else {
@@ -1344,6 +1347,18 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         1064 if linux_compat => sys_linux_memfd_create(frame),
         1065 if linux_compat => sys_linux_recvmsg(frame),
         99 => debug_log(frame.rdi, frame.rsi),
+        #[cfg(all(debug_assertions, feature = "helios_wayland_test"))]
+        0x574c if !linux_compat => {
+            let mut status = x86_64::instructions::port::Port::<u8>::new(0x3fd);
+            let mut data = x86_64::instructions::port::Port::<u8>::new(0x3f8);
+            unsafe {
+                if status.read() & 1 != 0 {
+                    u64::from(data.read())
+                } else {
+                    0
+                }
+            }
+        }
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
             if linux_compat {
@@ -4080,18 +4095,26 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let me = sched.current_process().pid;
+    let generation = sched.current_process().foreground.incarnation;
 
-    let mut found = false;
-    let mut finished_code = None;
-    for p in sched.processes.iter() {
-        if p.pid == pid && p.ppid == me {
-            found = true;
-            finished_code = p.wait_exit_code().map(|code| (code as u8) as u64);
-            break;
-        }
-    }
+    use crate::process::ChildWait;
+    let child = sched.processes.iter().position(|child| {
+        child.pid == pid
+            && child.ppid == me
+            && match child.child_wait {
+                ChildWait::Untracked => true,
+                ChildWait::Pending => child.foreground.parent_generation == generation,
+                ChildWait::Consumed => false,
+            }
+    });
 
-    if !found {
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    crate::serial_println!(
+        "[WAIT-LIFE] lookup parent={}:{} child={} match={:?} cpu={}",
+        me, generation, pid, child, crate::sched::current_cpu_id()
+    );
+
+    let Some(child) = child else {
         #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
         if (me, pid) == (711, 712) {
             crate::serial_println!("[FD-WAIT] pid=711 child=712 result=no-child");
@@ -4099,9 +4122,15 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
         // No such child — clear any stale wait and report failure.
         sched.current_process_mut().wait_child = None;
         return u64::MAX;
-    }
+    };
 
-    if let Some(code) = finished_code {
+    if let Some(code) = sched.processes[child].wait_exit_code() {
+        let code = (code as u8) as u64;
+        if sched.processes[child].child_wait == ChildWait::Pending {
+            sched.processes[child].child_wait = ChildWait::Consumed;
+        }
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+        sched.trace_wait_lifecycle(child, "wait-reap", None);
         #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
         if (me, pid) == (711, 712) {
             crate::serial_println!("[FD-WAIT] pid=711 child=712 result={}", code);
@@ -4115,6 +4144,8 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
         // Do not install a child wait or alter scheduler/IPC state here.
         return EAGAIN;
     }
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    sched.trace_wait_lifecycle(child, "park", None);
 
     // Child still running: park the caller until the child exits.
     #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
@@ -4611,7 +4642,10 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // [LAUNCH-TRACE] Point 6: child_process_created (pid assigned)
     trace.child_created_ns = now_ns();
 
+    child.child_wait = crate::process::ChildWait::Pending;
     let idx = sched.add_process_after_reaping(child);
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    sched.trace_wait_lifecycle(idx, "published", None);
     // The initial-cwd fixture deliberately exercises boot-root provisioning.
     if !sched.processes[idx].vfs_root_metadata {
         crate::ipc::provision_vfs_inheritance(idx, &mut sched, vfs_source);

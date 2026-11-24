@@ -1164,15 +1164,21 @@ pub extern "C" fn _start() -> ! {
     {
         for (pid, name, elf) in [
             (716, "native-wayland-fixture", include_bytes!(env!("SUNLIGHT_WAYLAND_SERVER")).as_slice()),
-            #[cfg(not(feature = "helios_wayland_sunapp_test"))]
+            #[cfg(not(any(feature = "helios_wayland_sunapp_test", feature = "helios_qalculate_probe")))]
             (717, "helios-wayland-client", include_bytes!(env!("SUNLIGHT_WAYLAND_CLIENT")).as_slice()),
             #[cfg(feature = "helios_wayland_sunapp_test")]
             (717, "canvas-sunapp-launcher", include_bytes!(env!("SUNLIGHT_CANVAS_LAUNCHER")).as_slice()),
+            #[cfg(feature = "helios_qalculate_probe")]
+            (718, "qalculate-probe-launcher", include_bytes!(env!("SUNLIGHT_QALCULATE_LAUNCHER")).as_slice()),
         ] {
             let mut pmm = PMM.lock();
             let mut probe = unsafe { Process::new(pid, 0, name, &mut pmm, hhdm_offset) };
             #[cfg(feature = "helios_wayland_sunapp_test")]
             if name == "canvas-sunapp-launcher" {
+                probe.system_allocation = true;
+            }
+            #[cfg(feature = "helios_qalculate_probe")]
+            if name == "qalculate-probe-launcher" {
                 probe.system_allocation = true;
             }
             process::spawn::exec_into_process(
@@ -1184,6 +1190,25 @@ pub extern "C" fn _start() -> ! {
                 sched.add_process(probe);
             });
         }
+    }
+
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_probe"))]
+    {
+        #[cfg(feature = "helios_dynamic_elf_handoff")]
+        process::spawn::test_handoff_rollback();
+        let name = "dynamic-elf-probe";
+        let mut pmm = PMM.lock();
+        let mut probe = unsafe { Process::new(719, 0, name, &mut pmm, hhdm_offset) };
+        probe.system_allocation = true;
+        #[cfg(feature = "helios_dynamic_elf_handoff")]
+        probe.env.set("HELIOS_HANDOFF", "fixture");
+        process::spawn::exec_into_process(
+            include_bytes!(env!("SUNLIGHT_DYNAMIC_PROBE_LAUNCHER")),
+            &mut probe, &mut pmm, hhdm_offset, &[name.as_bytes()], &[], false,
+        )
+        .expect("Dynamic ELF diagnostic launcher");
+        drop(pmm);
+        sched::with_scheduler(|sched| sched.add_process(probe));
     }
 
     splash.set_progress(975); // 97.5%

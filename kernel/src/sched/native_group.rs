@@ -94,12 +94,6 @@ impl Scheduler {
             code,
             reason
         );
-        let parent_pid = self.processes[owner].ppid;
-        if self
-            .process_mut_by_pid(parent_pid)
-            .is_some_and(|p| p.wait_child == Some(pid))
-        {
-            self.wake_pid(parent_pid);
-        }
+        self.notify_waiting_parent(owner);
     }
 }

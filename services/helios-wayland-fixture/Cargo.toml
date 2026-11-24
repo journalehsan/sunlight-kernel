@@ -5,13 +5,27 @@ edition = "2021"
 publish = false
 
 [dependencies]
+sha2 = { version = "0.10", default-features = false, features = ["force-soft"], optional = true }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 
 [features]
-sunapp-launcher = ["sunlight-libc/helios-wayland-sunapp-test"]
+sunapp-launcher = ["sunlight-libc/helios-wayland-sunapp-test", "dep:sha2"]
 pointer-fixture = []
+dynamic-elf-probe = ["sunlight-libc/helios-dynamic-elf-probe"]
+dynamic-elf-relocation-fixture = ["dynamic-elf-probe", "sunlight-libc/helios-dynamic-elf-relocation-fixture"]
+qalculate-probe = ["sunlight-libc/helios-qalculate-probe"]
+
+[[bin]]
+name = "dynamic-elf-probe"
+path = "src/bin/dynamic-elf-probe.rs"
+required-features = ["dynamic-elf-probe"]
+
+[[bin]]
+name = "qalculate-probe-launcher"
+path = "src/bin/qalculate-probe-launcher.rs"
+required-features = ["qalculate-probe"]
 
 [[bin]]
 name = "canvas-sunapp-launcher"

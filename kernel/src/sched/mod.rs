@@ -576,6 +576,46 @@ impl Scheduler {
         self.add_process_after_reaping(process)
     }
 
+    pub(crate) fn child_wait_retained(&self, index: usize) -> bool {
+        let child = &self.processes[index];
+        child.child_wait == crate::process::ChildWait::Pending
+            && self.processes.iter().any(|parent| {
+                parent.pid == child.ppid
+                    && parent.foreground.incarnation == child.foreground.parent_generation
+                    && parent.process_lifetime_live()
+            })
+    }
+
+    pub(crate) fn notify_waiting_parent(&mut self, index: usize) {
+        let child = &self.processes[index];
+        let parent_pid = child.ppid;
+        if self.processes.iter().any(|parent| {
+            parent.pid == parent_pid
+                && parent.wait_child == Some(child.pid)
+                && (child.child_wait == crate::process::ChildWait::Untracked
+                    || parent.foreground.incarnation == child.foreground.parent_generation)
+        }) {
+            #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+            self.trace_wait_lifecycle(index, "wake-parent", None);
+            self.wake_pid(parent_pid);
+        }
+    }
+
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    pub(crate) fn trace_wait_lifecycle(&self, index: usize, event: &str, replacement: Option<usize>) {
+        let child = &self.processes[index];
+        if child.child_wait == crate::process::ChildWait::Untracked {
+            return;
+        }
+        serial_println!(
+            "[WAIT-LIFE] {} parent={}:{} child={}:{} slot={} tick={} cpu={} state={:?} wait={:?} status={:?} retained={} next={:?}",
+            event, child.ppid, child.foreground.parent_generation,
+            child.pid, child.foreground.incarnation, index, self.global_tick,
+            current_cpu_id(), child.state, child.child_wait, child.wait_exit_code(),
+            self.child_wait_retained(index), replacement
+        );
+    }
+
     pub fn add_process_after_reaping(&mut self, mut process: Process) -> usize {
         // Process construction reserves identity before resource setup.
         // Publication must not transfer those resources to another incarnation.
@@ -623,6 +663,7 @@ impl Scheduler {
                 (p.state == ProcessState::Reaped
                     || (p.state == ProcessState::Finished && !p.exit_cleanup_pending))
                     && p.service_reap_watcher.is_none()
+                    && !self.child_wait_retained(*idx)
                     && in_use[..online].iter().all(|&cur| cur != *idx)
                     && !self.stack_is_pinned(*idx)
             })
@@ -631,6 +672,8 @@ impl Scheduler {
             let reused_borrower = self.processes[id].native_thread
                 && self.processes[id].state == ProcessState::Reaped;
             self.remove_from_ready_queues(id);
+            #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+            self.trace_wait_lifecycle(id, "slot-release", Some(process.pid));
             serial_println!(
                 "[SCHED] process_slot_reused idx={} pid={} (reused reaped slot)",
                 id,
@@ -661,6 +704,7 @@ impl Scheduler {
             .find(|(idx, p)| {
                 p.state == ProcessState::Reaped
                     && p.service_reap_watcher.is_none()
+                    && !self.child_wait_retained(*idx)
                     && in_use[..online].iter().all(|&cur| cur != *idx)
                     && !self.stack_is_pinned(*idx)
             })
@@ -668,6 +712,8 @@ impl Scheduler {
         {
             let reused_borrower = self.processes[id].native_thread;
             self.remove_from_ready_queues(id);
+            #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+            self.trace_wait_lifecycle(id, "slot-release", Some(process.pid));
             serial_println!("[SCHED] process_slot_reused idx={} (reaped)", id);
             self.processes[id] = process;
             if reused_borrower {
@@ -3098,6 +3144,8 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+        self.trace_wait_lifecycle(idx, "cleanup-completed", None);
         #[cfg(feature = "native_c_guest")]
         crate::native_c_guest::after_reap(&self.processes[idx], &reclaim);
         #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
@@ -3359,12 +3407,8 @@ impl Scheduler {
             reason
         );
 
-        let parent_pid = self.processes[idx].ppid;
-        let parent_waiting = self
-            .process_mut_by_pid(parent_pid)
-            .is_some_and(|parent| parent.wait_child == Some(pid));
-        if parent_waiting && !self.processes[idx].native_group_owner() {
-            self.wake_pid(parent_pid);
+        if !self.processes[idx].native_group_owner() {
+            self.notify_waiting_parent(idx);
         }
 
         #[cfg(feature = "native_session_h4_test")]
@@ -3442,12 +3486,8 @@ impl Scheduler {
             note_process_finished(pid, self.processes[idx].name_str());
         }
 
-        let parent_pid = self.processes[idx].ppid;
-        let parent_waiting = self
-            .process_mut_by_pid(parent_pid)
-            .is_some_and(|parent| parent.wait_child == Some(pid));
-        if parent_waiting && !self.processes[idx].native_group_owner() {
-            self.wake_pid(parent_pid);
+        if !self.processes[idx].native_group_owner() {
+            self.notify_waiting_parent(idx);
         }
 
         let owning = self.processes[idx].owning_core;
@@ -4643,12 +4683,10 @@ fn finish_current_process_scoped(code: i32, reason: &str, group_exit: bool) -> u
         note_process_finished(my_pid, my_name);
     }
 
-    let parent_pid = sched.processes[cur].ppid;
-    let parent_waiting = sched
-        .process_mut_by_pid(parent_pid)
-        .is_some_and(|parent| !is_linux_worker && parent.wait_child == Some(my_pid));
-    if parent_waiting && !sched.processes[cur].native_group_owner() {
-        sched.wake_pid(parent_pid);
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    sched.trace_wait_lifecycle(cur, "exit-published", None);
+    if !is_linux_worker && !sched.processes[cur].native_group_owner() {
+        sched.notify_waiting_parent(cur);
     }
 
     #[cfg(feature = "native_session_h4_test")]

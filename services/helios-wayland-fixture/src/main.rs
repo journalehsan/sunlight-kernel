@@ -3,11 +3,12 @@
 
 use core::fmt::{self, Write};
 use sunlight_ipc::{
-    debug_log, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_yield, sgp::SgpMsg,
-    IpcMsg, ProcessExit, SunlightSyscall,
+    debug_log, monotonic_millis, process_yield, sgp::SgpMsg, ProcessExit, SunlightSyscall,
 };
 use sunlight_libc::{close, mman, sys, write, Fd};
 use sunlight_ui::{theme::Color, Window, WindowConfig, WindowDecoration};
+
+mod desktop;
 
 const WIDTH: usize = 256;
 const HEIGHT: usize = 160;
@@ -259,6 +260,7 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                 (1, 1, 12) if !registry && word(bytes, 8) == 2 => {
                     claim_object(&mut objects, 2)?;
                     advertise(stream)?;
+                    debug_log("[WL-FIXTURE] advertised globals registry=2\n");
                     registry = true;
                 }
                 (1, 0, 12) if registry && !synced && bound == [0; GLOBALS.len()] => {
@@ -267,6 +269,7 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                     event(stream, 1, 1, &[sync_id])?;
                     objects &= !(1 << sync_id);
                     synced = true;
+                    log(format_args!("[WL-FIXTURE] registry sync callback={sync_id}\n"));
                 }
                 #[cfg(feature = "pointer-fixture")]
                 (1, 0, 12) if frame == 1 && pointer_id != 0 && !click_sent => {
@@ -380,6 +383,10 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                                 return Err("fixture frame limit");
                             }
                             if surface.is_none() {
+                                if !desktop::wait_for_desktop(120_000) {
+                                    return Err("desktop unavailable");
+                                }
+                                debug_log("[WL-FIXTURE] desktop ready for first commit\n");
                                 surface = Some(
                                     Window::connect_with_flags(
                                         WindowConfig {
@@ -437,6 +444,7 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
             }
         }
         if frame == 2 {
+            debug_log("[WL-FIXTURE] peer EOF after frame=2\n");
             Ok(())
         } else {
             Err("EOF before two frames")
@@ -448,19 +456,6 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
         debug_log("[WL-FIXTURE] SGP close returned\n");
     }
     result
-}
-
-fn desktop_ready() -> bool {
-    nameserver_lookup("display_server").is_some_and(|display| {
-        (0..16).any(|index| {
-            ipc_call_timeout(
-                display,
-                IpcMsg::with_label(SgpMsg::LIST_WINDOWS).word(0, index),
-                100,
-            )
-            .is_ok_and(|reply| reply.words[0] != 0 && reply.words[3] & 0xff == 2)
-        })
-    })
 }
 
 #[no_mangle]
@@ -479,6 +474,7 @@ pub extern "C" fn _start() -> ! {
         ProcessExit::exit(1);
     }
     let listener = Descriptor(listener as i32);
+    debug_log("[WL-FIXTURE] listener registered\n");
     let result = loop {
         let accepted =
             unsafe { sys::syscall1(SunlightSyscall::NativeUnixAccept as u64, listener.0 as u64) }
@@ -487,22 +483,8 @@ pub extern "C" fn _start() -> ! {
             process_yield();
         } else if accepted >= 0 {
             let stream = Descriptor(accepted as i32);
-            let start = monotonic_millis();
-            while !desktop_ready() {
-                if monotonic_millis().wrapping_sub(start) >= 120_000 {
-                    break;
-                }
-                let delay = sunlight_libc::time::Timespec {
-                    tv_sec: 0,
-                    tv_nsec: 100_000_000,
-                };
-                unsafe { sunlight_libc::time::nanosleep(&delay, core::ptr::null_mut()) };
-            }
-            break if desktop_ready() {
-                serve(&stream)
-            } else {
-                Err("desktop unavailable")
-            };
+            debug_log("[WL-FIXTURE] client accepted\n");
+            break serve(&stream);
         } else {
             break Err("accept");
         }

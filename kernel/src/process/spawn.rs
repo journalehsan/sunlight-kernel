@@ -148,6 +148,31 @@ pub fn exec_into_process(
     envp: &[&[u8]],
     activate_on_success: bool,
 ) -> Result<u64, SpawnError> {
+    exec_into_process_inner(
+        bytes,
+        process,
+        pmm,
+        hhdm_offset,
+        argv,
+        envp,
+        activate_on_success,
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+        None,
+    )
+}
+
+fn exec_into_process_inner(
+    bytes: &[u8],
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+    argv: &[&[u8]],
+    envp: &[&[u8]],
+    activate_on_success: bool,
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))] fault: Option<
+        super::elf_loader::handoff::Fault,
+    >,
+) -> Result<u64, SpawnError> {
     let personality = match super::elf_loader::personality(bytes) {
         sunlight_elf::Personality::Native => super::ProcessPersonality::Native,
         sunlight_elf::Personality::Linux => {
@@ -195,14 +220,31 @@ pub fn exec_into_process(
         crate::serial_println!("[EXEC] Linux ELF detected");
     }
 
-    let result = build_exec_image(bytes, process, pmm, hhdm_offset, argv, envp);
+    let result = build_exec_image(
+        bytes,
+        process,
+        pmm,
+        hhdm_offset,
+        argv,
+        envp,
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+        fault,
+    );
     let entry = match result {
         Ok(entry) => entry,
         Err(error) => {
             let mut failed_address_space =
                 core::mem::replace(&mut process.address_space, old_address_space);
-            unsafe {
-                failed_address_space.reclaim_user_space(pmm, hhdm_offset, true);
+            let _reclaimed =
+                unsafe { failed_address_space.reclaim_user_space(pmm, hhdm_offset, true) };
+            #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+            if fault.is_some() {
+                crate::serial_println!(
+                    "[HELIOS-HANDOFF] rollback pid={} frames={} tables={}",
+                    process.pid,
+                    _reclaimed.user_frames,
+                    _reclaimed.page_tables
+                );
             }
             process.trusted_display_service = old_trusted_display;
             process.trusted_swap_admin_service = old_trusted_swap_admin;
@@ -344,11 +386,49 @@ fn build_exec_image(
     hhdm_offset: VirtAddr,
     argv: &[&[u8]],
     envp: &[&[u8]],
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))] fault: Option<
+        super::elf_loader::handoff::Fault,
+    >,
 ) -> Result<u64, SpawnError> {
-    let entry = super::elf_loader::load_elf(bytes, process, pmm, hhdm_offset)
-        .ok_or(SpawnError::ElfLoadFailed)?;
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+    let handoff = super::elf_loader::handoff::load(bytes, process, pmm, hhdm_offset, fault)
+        .map_err(|stage| {
+            crate::serial_println!(
+                "[HELIOS-HANDOFF] rejected stage={} pid={}",
+                stage,
+                process.pid
+            );
+            SpawnError::ElfLoadFailed
+        })?;
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+    let dynamic_entry = handoff.as_ref().map(|image| image.entry);
+    #[cfg(not(all(debug_assertions, feature = "helios_dynamic_elf_handoff")))]
+    let dynamic_entry = None;
+    let entry = match dynamic_entry {
+        Some(entry) => entry,
+        None => super::elf_loader::load_elf(bytes, process, pmm, hhdm_offset)
+            .ok_or(SpawnError::ElfLoadFailed)?,
+    };
 
-    map_user_stack(process, pmm, hhdm_offset)?;
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    let fail_stack = fault == Some(super::elf_loader::handoff::Fault::PostRelocationAllocation);
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    if fail_stack {
+        pmm.fail_test_allocations_after(0);
+    }
+    let stack_mapping = map_user_stack(process, pmm, hhdm_offset);
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    if fail_stack {
+        pmm.clear_test_allocation_failure();
+    }
+    stack_mapping.inspect_err(|_error| {
+        if dynamic_entry.is_some() {
+            crate::serial_println!(
+                "[HELIOS-HANDOFF] rejected stage=initial stack pid={}",
+                process.pid
+            );
+        }
+    })?;
 
     // Build auxv for Linux-compat processes so musl's _start doesn't scan
     // past the stack top looking for AT_NULL and fault at USER_STACK_TOP.
@@ -357,39 +437,92 @@ fn build_exec_image(
     // the walk never advances, TLS stays zeroed, and Rust `OnceLock` treats the
     // all-zero Once state as COMPLETE — e.g. ratatui's layout cache then
     // null-derefs on first `Layout::split` (helios-note page fault at 0x48).
-    let auxv: alloc::vec::Vec<(u64, u64)> = if process.is_linux_compat() {
-        match sunlight_elf::parse_elf_header(bytes) {
-            Ok(hdr) => {
-                let at_phdr = compute_at_phdr(bytes, &hdr);
-                alloc::vec![
+    let mut auxv = heapless::Vec::<(u64, u64), 11>::new();
+    if process.is_linux_compat() {
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+        let metadata = handoff
+            .as_ref()
+            .map(|image| (image.header, image.phdr, image.app_entry));
+        #[cfg(not(all(debug_assertions, feature = "helios_dynamic_elf_handoff")))]
+        let metadata: Option<(sunlight_elf::ElfHeader, u64, u64)> = None;
+        let metadata = metadata.or_else(|| {
+            sunlight_elf::parse_elf_header(bytes)
+                .ok()
+                .map(|header| (header, compute_at_phdr(bytes, &header), header.entry))
+        });
+        match metadata {
+            Some((hdr, at_phdr, app_entry)) => {
+                let entries = [
                     (sunlight_compat_linux::abi::AT_PHDR, at_phdr),
                     (sunlight_compat_linux::abi::AT_PHENT, hdr.phentsize as u64),
                     (sunlight_compat_linux::abi::AT_PHNUM, hdr.phnum as u64),
                     (sunlight_compat_linux::abi::AT_PAGESZ, 4096u64),
-                    (sunlight_compat_linux::abi::AT_ENTRY, hdr.entry),
+                    (sunlight_compat_linux::abi::AT_ENTRY, app_entry),
                     (sunlight_compat_linux::abi::AT_UID, process.uid as u64),
                     (sunlight_compat_linux::abi::AT_EUID, process.uid as u64),
                     (sunlight_compat_linux::abi::AT_GID, process.gid as u64),
                     (sunlight_compat_linux::abi::AT_EGID, process.gid as u64),
                     (sunlight_compat_linux::abi::AT_SECURE, 0u64),
-                ]
+                ];
+                auxv.extend_from_slice(&entries)
+                    .map_err(|_| SpawnError::NoMemory)?;
             }
-            Err(_) => alloc::vec![],
+            None => (),
         }
-    } else {
-        alloc::vec![]
-    };
+    }
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+    if let Some(image) = &handoff {
+        use super::elf_loader::handoff::Fault;
+        let capacity = if fault == Some(Fault::Auxv) {
+            0
+        } else {
+            auxv.capacity()
+        };
+        if auxv.len() >= capacity {
+            crate::serial_println!("[HELIOS-HANDOFF] rejected stage=auxv pid={}", process.pid);
+            return Err(SpawnError::NoMemory);
+        }
+        auxv.push((sunlight_compat_linux::abi::AT_BASE, image.base))
+            .map_err(|_| SpawnError::NoMemory)?;
+        crate::serial_println!(
+            "[HELIOS-HANDOFF] pid={} AT_BASE={:#x} AT_PHDR={:#x} AT_PHNUM={} AT_ENTRY={:#x} interpreter_entry={:#x}",
+            process.pid, image.base, image.phdr, image.header.phnum, image.app_entry, entry
+        );
+    }
 
     // Setup stack with argv/envp/auxv
-    let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset)?;
+    let stack_floor = super::layout::USER_STACK_TOP - super::layout::USER_STACK_SIZE;
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+    let stack_floor = if fault == Some(super::elf_loader::handoff::Fault::Stack) {
+        super::layout::USER_STACK_TOP - 16
+    } else {
+        stack_floor
+    };
+    let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset, stack_floor)
+        .inspect_err(|_error| {
+            if dynamic_entry.is_some() {
+                crate::serial_println!(
+                    "[HELIOS-HANDOFF] rejected stage=initial stack pid={}",
+                    process.pid
+                );
+            }
+        })?;
 
+    if dynamic_entry.is_some() {
+        process
+            .proc_args
+            .try_reserve(1024)
+            .map_err(|_| SpawnError::NoMemory)?;
+    }
     process.proc_args.clear();
     for arg in argv {
         let remaining = 1024 - process.proc_args.len();
         if remaining == 0 {
             break;
         }
-        process.proc_args.extend_from_slice(&arg[..arg.len().min(remaining - 1)]);
+        process
+            .proc_args
+            .extend_from_slice(&arg[..arg.len().min(remaining - 1)]);
         process.proc_args.push(0);
     }
 
@@ -404,6 +537,141 @@ fn build_exec_image(
         stack.rsp
     );
     Ok(entry)
+}
+
+#[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+pub(crate) fn test_handoff_rollback() {
+    use super::elf_loader::handoff::{Fault, INTERPRETER};
+    use crate::memory::accounting::{class_frame_count, PhysicalMemoryClass};
+
+    let fixture = include_bytes!(concat!(
+        env!("SUNLIGHT_DYNAMIC_PROBES"),
+        "/elf-pie.sunapp/Program/probe"
+    ));
+    let mut rejected = fixture.to_vec();
+    let start = rejected
+        .windows(INTERPRETER.len())
+        .position(|window| window == INTERPRETER)
+        .expect("fixture PT_INTERP");
+    rejected[start + 1] = b'x';
+
+    let mut scheduler = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+    let task_count = scheduler.processes.len();
+    let pid = super::pid::next_pid(scheduler.processes.iter().map(|task| task.pid))
+        .expect("rollback test pid");
+    let cases = [
+        (
+            Fault::Missing,
+            "missing_interpreter",
+            SpawnError::ElfLoadFailed,
+        ),
+        (Fault::Path, "rejected_path", SpawnError::ElfLoadFailed),
+        (Fault::Machine, "wrong_machine", SpawnError::ElfLoadFailed),
+        (
+            Fault::Malformed,
+            "malformed_interpreter",
+            SpawnError::ElfLoadFailed,
+        ),
+        (
+            Fault::Application,
+            "application_mapping",
+            SpawnError::ElfLoadFailed,
+        ),
+        (
+            Fault::Interpreter,
+            "interpreter_mapping",
+            SpawnError::ElfLoadFailed,
+        ),
+        (
+            Fault::PageTable,
+            "page_table_allocation",
+            SpawnError::ElfLoadFailed,
+        ),
+        (Fault::Stack, "initial_stack", SpawnError::NoMemory),
+        (Fault::Auxv, "auxv", SpawnError::NoMemory),
+    ];
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    let relocation_fixture = include_bytes!(concat!(
+        env!("SUNLIGHT_DYNAMIC_PROBES"),
+        "/elf-relocation.sunapp/Program/probe"
+    ));
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    let relocation_cases = [
+        (Fault::RelocationWrite, "partial_write", SpawnError::ElfLoadFailed),
+        (Fault::PostRelocationAllocation, "post_relocation_allocation", SpawnError::NoMemory),
+    ];
+    #[cfg(not(feature = "helios_dynamic_elf_relocation_fixture"))]
+    let relocation_cases = [];
+    for (index, (fault, label, expected)) in cases.into_iter()
+        .chain(relocation_cases).enumerate()
+    {
+        let free = pmm.free_page_count();
+        let tables = class_frame_count(PhysicalMemoryClass::PageTable);
+        let owned = pmm.owned_frame_count(pid as u32);
+        {
+            let mut child = unsafe { Process::try_new(pid, 0, "handoff-rollback", &mut pmm, hhdm) }
+                .expect("rollback test process");
+            let bytes = if fault == Fault::Path {
+                rejected.as_slice()
+            } else {
+                fixture
+            };
+            #[cfg(feature = "helios_dynamic_elf_relocation_fixture")]
+            let bytes = if index >= cases.len() { relocation_fixture } else { bytes };
+            assert_eq!(
+                exec_into_process_inner(
+                    bytes,
+                    &mut child,
+                    &mut pmm,
+                    hhdm,
+                    &[b"probe"],
+                    &[b"TEST=1"],
+                    false,
+                    Some(fault),
+                ),
+                Err(expected),
+                "rollback fault {label}"
+            );
+            assert_eq!(
+                child.address_space.region_count(),
+                0,
+                "rollback fault {label}"
+            );
+            drop(child);
+        }
+        assert_eq!(pmm.free_page_count(), free, "rollback fault {label}");
+        assert_eq!(
+            class_frame_count(PhysicalMemoryClass::PageTable),
+            tables,
+            "rollback fault {label}"
+        );
+        assert_eq!(
+            pmm.owned_frame_count(pid as u32),
+            owned,
+            "rollback fault {label}"
+        );
+        assert_eq!(
+            scheduler.processes.len(),
+            task_count,
+            "rollback fault {label}"
+        );
+        assert!(
+            scheduler.process_mut_by_pid(pid).is_none(),
+            "rollback fault {label}"
+        );
+        let family = if index < cases.len() { "HELIOS-HANDOFF" } else { "HELIOS-RELOC" };
+        crate::serial_println!(
+            "[{}] rollback verified case={} pid={} free={} tables={} owned={}",
+            family,
+            label,
+            pid,
+            free,
+            tables,
+            owned
+        );
+    }
 }
 
 pub fn map_user_stack(
@@ -569,9 +837,9 @@ fn setup_exec_stack(
     auxv: &[(u64, u64)],
     process: &mut Process,
     hhdm_offset: VirtAddr,
+    stack_floor: u64,
 ) -> Result<ExecStack, SpawnError> {
     let stack_top = super::layout::USER_STACK_TOP;
-    let stack_floor = stack_top - super::layout::USER_STACK_SIZE;
     let mut cursor = stack_top;
 
     let copy_string = |cursor: &mut u64, s: &[u8]| -> Result<u64, SpawnError> {
@@ -599,11 +867,17 @@ fn setup_exec_stack(
     // Align cursor down to 8 bytes before the string data.
     cursor &= !0x7;
 
-    let mut argv_addrs = alloc::vec::Vec::with_capacity(argv.len());
+    let mut argv_addrs = alloc::vec::Vec::new();
+    argv_addrs
+        .try_reserve_exact(argv.len())
+        .map_err(|_| SpawnError::NoMemory)?;
     for arg in argv {
         argv_addrs.push(copy_string(&mut cursor, arg)?);
     }
-    let mut envp_addrs = alloc::vec::Vec::with_capacity(envp.len());
+    let mut envp_addrs = alloc::vec::Vec::new();
+    envp_addrs
+        .try_reserve_exact(envp.len())
+        .map_err(|_| SpawnError::NoMemory)?;
     for env in envp {
         envp_addrs.push(copy_string(&mut cursor, env)?);
     }
@@ -623,7 +897,10 @@ fn setup_exec_stack(
         return Err(SpawnError::NoMemory);
     }
 
-    let mut table = alloc::vec::Vec::with_capacity(table_words * 8);
+    let mut table = alloc::vec::Vec::new();
+    table
+        .try_reserve_exact(table_words * 8)
+        .map_err(|_| SpawnError::NoMemory)?;
     table.extend_from_slice(&(argv.len() as u64).to_le_bytes());
     for addr in &argv_addrs {
         table.extend_from_slice(&addr.to_le_bytes());

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-out="$PWD/target/helios-wayland"
+out=${HELIOS_WAYLAND_OUT:-"$PWD/target/helios-wayland"}
 mkdir -p "$out"
 flags=(-Wall -Wextra -Werror -Os -static -nostdlib -fno-pie -no-pie -ffreestanding -fno-stack-protector -Wl,--build-id=none)
 "${CC:-cc}" "${flags[@]}" tools/tests/helios-wayland-client.c -o "$out/client.elf"
@@ -14,6 +14,8 @@ SUNLIGHT_WAYLAND_CLIENT="$out/client.elf" \
     cargo build -p sunlight-kernel --features helios_wayland_test >"$out/kernel-build.log" 2>&1
 bash tools/make_hybrid_iso.sh target/x86_64-unknown-none/debug/sunlight-kernel \
     "$out/guest.iso" >"$out/pack.log" 2>&1
+sha256sum "$out/client.elf" target/iso_root/boot/sunlight-kernel.elf "$out/guest.iso" >"$out/artifacts.sha256"
+[[ ${1:-} != --build-only ]] || exit 0
 
 status=0
 for accel in "${@:-tcg}"; do

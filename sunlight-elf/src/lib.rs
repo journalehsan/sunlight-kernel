@@ -98,6 +98,9 @@ pub enum ElfError {
     WritableExecutable,
     /// The entry point is not inside an executable PT_LOAD.
     EntryNotExecutable,
+    InvalidInterpreter,
+    InvalidDynamicHeader,
+    UnmappedProgramHeaders,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +131,10 @@ pub fn classify_personality(elf_bytes: &[u8]) -> Personality {
 
 /// Parse ELF64 header and verify it is a static ET_EXEC for x86-64.
 pub fn parse_elf_header(elf_bytes: &[u8]) -> Result<ElfHeader, ElfError> {
+    parse_header(elf_bytes, false)
+}
+
+fn parse_header(elf_bytes: &[u8], allow_dyn: bool) -> Result<ElfHeader, ElfError> {
     if elf_bytes.len() < 64 {
         return Err(ElfError::Truncated);
     }
@@ -141,7 +148,7 @@ pub fn parse_elf_header(elf_bytes: &[u8]) -> Result<ElfHeader, ElfError> {
     let osabi = elf_bytes[0x07];
     // e_type at offset 0x10
     let elf_type = u16::from_le_bytes(elf_bytes[0x10..0x12].try_into().unwrap());
-    if elf_type != 2 {
+    if elf_type != 2 && !(allow_dyn && elf_type == 3) {
         // ET_EXEC = 2
         return Err(ElfError::NotStaticExecutable);
     }
@@ -181,9 +188,17 @@ pub fn parse_elf_header(elf_bytes: &[u8]) -> Result<ElfHeader, ElfError> {
 
 /// Iterate over PT_LOAD segments in an ELF64 binary.
 /// `f` is called for each segment; if it returns Err, iteration stops.
-pub fn for_each_load_segment<F>(
+pub fn for_each_load_segment<F>(elf_bytes: &[u8], header: &ElfHeader, f: F) -> Result<(), ElfError>
+where
+    F: FnMut(&ElfSegment) -> Result<(), ElfError>,
+{
+    walk_loads(elf_bytes, header, false, f)
+}
+
+fn walk_loads<F>(
     elf_bytes: &[u8],
     header: &ElfHeader,
+    allow_interp: bool,
     mut f: F,
 ) -> Result<(), ElfError>
 where
@@ -209,7 +224,7 @@ where
         }
         let ph = &elf_bytes[ph_start..ph_end];
         let p_type = u32::from_le_bytes(ph[0x00..0x04].try_into().unwrap());
-        if p_type == PT_INTERP {
+        if p_type == PT_INTERP && !allow_interp {
             // Dynamic linker needed
             return Err(ElfError::HasDynamicSection);
         }
@@ -320,17 +335,40 @@ pub fn plan_segments(
     user_hi: u64,
     emit: &mut dyn FnMut(&SegmentPlan),
 ) -> Result<(), ElfError> {
+    plan_image(elf_bytes, header, (user_lo, user_hi), 0, false, emit)
+}
+
+fn plan_image(
+    elf_bytes: &[u8],
+    header: &ElfHeader,
+    (user_lo, user_hi): (u64, u64),
+    bias: u64,
+    allow_interp: bool,
+    emit: &mut dyn FnMut(&SegmentPlan),
+) -> Result<(), ElfError> {
     let elf_len = elf_bytes.len() as u64;
+    let entry = header
+        .entry
+        .checked_add(bias)
+        .ok_or(ElfError::InvalidEntry)?;
+    let validate = |seg: &ElfSegment| {
+        let mut seg = *seg;
+        seg.p_vaddr = seg
+            .p_vaddr
+            .checked_add(bias)
+            .ok_or(ElfError::SegmentOutOfRange)?;
+        validate_segment(&seg, elf_len, user_lo, user_hi)
+    };
 
     // Pass 1: validate everything (including entry coverage) before emitting.
     let mut entry_executable = false;
-    for_each_load_segment(elf_bytes, header, |seg| {
-        let Some(plan) = validate_segment(seg, elf_len, user_lo, user_hi)? else {
+    walk_loads(elf_bytes, header, allow_interp, |seg| {
+        let Some(plan) = validate(seg)? else {
             return Ok(());
         };
         if plan.prot == SegmentProt::ReadExec
-            && header.entry >= plan.vaddr
-            && header.entry < plan.vaddr + plan.mem_size
+            && entry >= plan.vaddr
+            && entry < plan.vaddr + plan.mem_size
         {
             entry_executable = true;
         }
@@ -341,12 +379,113 @@ pub fn plan_segments(
     }
 
     // Pass 2: emit the validated plans.
-    for_each_load_segment(elf_bytes, header, |seg| {
-        if let Some(plan) = validate_segment(seg, elf_len, user_lo, user_hi)? {
+    walk_loads(elf_bytes, header, allow_interp, |seg| {
+        if let Some(plan) = validate(seg)? {
             emit(&plan);
         }
         Ok(())
     })
+}
+
+pub struct DynamicImage<'a> {
+    bytes: &'a [u8],
+    pub header: ElfHeader,
+    pub interpreter: Option<&'a [u8]>,
+}
+
+pub mod relative;
+
+impl<'a> DynamicImage<'a> {
+    pub fn parse(bytes: &'a [u8]) -> Result<Self, ElfError> {
+        let header = parse_header(bytes, true)?;
+        if bytes[5] != 1
+            || bytes[6] != 1
+            || bytes[8] != 0
+            || !matches!(bytes[7], 0 | ELFOSABI_LINUX)
+            || classify_personality(bytes) != Personality::Linux
+            || bytes[20..24] != [1, 0, 0, 0]
+            || bytes[52..54] != [64, 0]
+            || header.phoff < 64
+            || header.phnum == 0
+        {
+            return Err(ElfError::InvalidDynamicHeader);
+        }
+        let mut interpreter = None;
+        let start = header.phoff as usize;
+        let end = start + usize::from(header.phnum) * 56;
+        for ph in bytes[start..end].chunks_exact(56) {
+            let kind = u32::from_le_bytes(ph[..4].try_into().unwrap());
+            let offset = u64::from_le_bytes(ph[8..16].try_into().unwrap());
+            let size = u64::from_le_bytes(ph[32..40].try_into().unwrap());
+            if kind == PT_LOAD {
+                let vaddr = u64::from_le_bytes(ph[16..24].try_into().unwrap());
+                let memsz = u64::from_le_bytes(ph[40..48].try_into().unwrap());
+                let align = u64::from_le_bytes(ph[48..56].try_into().unwrap());
+                if size > memsz
+                    || offset % PAGE_SIZE != vaddr % PAGE_SIZE
+                    || (align > 1 && (!align.is_power_of_two() || align > PAGE_SIZE))
+                {
+                    return Err(ElfError::InvalidSegment);
+                }
+            }
+            if kind != PT_INTERP {
+                continue;
+            }
+            if interpreter.is_some() || !(2..=256).contains(&size) {
+                return Err(ElfError::InvalidInterpreter);
+            }
+            let end = offset
+                .checked_add(size)
+                .filter(|end| *end <= bytes.len() as u64)
+                .ok_or(ElfError::InvalidInterpreter)?;
+            let path = &bytes[offset as usize..end as usize];
+            let path = path
+                .strip_suffix(&[0])
+                .filter(|path| !path.contains(&0))
+                .ok_or(ElfError::InvalidInterpreter)?;
+            interpreter = Some(path);
+        }
+        Ok(Self {
+            bytes,
+            header,
+            interpreter,
+        })
+    }
+
+    pub fn plan(
+        &self,
+        window: (u64, u64),
+        bias: u64,
+        emit: &mut dyn FnMut(&SegmentPlan),
+    ) -> Result<(), ElfError> {
+        plan_image(self.bytes, &self.header, window, bias, true, emit)
+    }
+
+    pub fn program_headers(&self, plans: &[SegmentPlan]) -> Result<u64, ElfError> {
+        let start = self.header.phoff;
+        let end = start + u64::from(self.header.phnum) * u64::from(self.header.phentsize);
+        let mut address = None;
+        for plan in plans {
+            if plan.file_offset <= start && end <= plan.file_offset + plan.file_size {
+                let mapped = plan.vaddr + (start - plan.file_offset);
+                if address.replace(mapped).is_some() {
+                    return Err(ElfError::UnmappedProgramHeaders);
+                }
+            }
+        }
+        let address = address.ok_or(ElfError::UnmappedProgramHeaders)?;
+        for plan in plans {
+            if plan.vaddr < address + (end - start)
+                && address < plan.vaddr + plan.file_size
+                && !(plan.file_offset <= start
+                    && end <= plan.file_offset + plan.file_size
+                    && plan.vaddr + (start - plan.file_offset) == address)
+            {
+                return Err(ElfError::UnmappedProgramHeaders);
+            }
+        }
+        Ok(address)
+    }
 }
 
 #[cfg(test)]

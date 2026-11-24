@@ -11,6 +11,7 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,12 +24,14 @@ VISIBLE = {
 
 
 class Guest:
-    def __init__(self, iso, out, vga="virtio", accel=None):
+    def __init__(self, iso, out, vga="virtio", accel=None, serial_control=False):
         self.out = out.resolve()
         self.out.mkdir(parents=True, exist_ok=True)
         self.serial = self.out / "serial.log"
         self.serial.write_text("")
         self.socket_path = f"/tmp/sunlight-session-ux-{os.getpid()}.sock"
+        self.control_path = self.socket_path + ".serial" if serial_control else None
+        self.control = None
         code = Path(os.environ.get("SUNLIGHT_OVMF_CODE", "/usr/share/edk2/x64/OVMF_CODE.4m.fd"))
         variables = Path(os.environ.get("SUNLIGHT_OVMF_VARS", "/usr/share/edk2/x64/OVMF_VARS.4m.fd"))
         shutil.copyfile(variables, self.out / "vars.fd")
@@ -39,6 +42,9 @@ class Guest:
                "-device", "virtio-rng-pci,disable-modern=on", "-qmp",
                f"unix:{self.socket_path},server=on,wait=off", "-no-reboot", "-no-shutdown"]
         cmd += (["-device", "virtio-vga,xres=1280,yres=800"] if vga == "virtio" else ["-vga", vga])
+        if self.control_path:
+            cmd[cmd.index("-serial") + 1] = "chardev:capture"
+            cmd += ["-chardev", f"socket,id=capture,path={self.control_path},server=on,wait=off,logfile={self.serial}"]
         if accel is not None:
             cmd += ["-accel", accel]
             if accel == "kvm":
@@ -59,6 +65,17 @@ class Guest:
         self.stream = self.connection.makefile("rwb")
         self.stream.readline()
         self.request("qmp_capabilities")
+        if self.control_path:
+            self.control = socket.socket(socket.AF_UNIX)
+            self.control.settimeout(5)
+            self.control.connect(self.control_path)
+            self.control.settimeout(None)
+            self.control_reader = threading.Thread(target=self.drain_control, daemon=True)
+            self.control_reader.start()
+
+    def drain_control(self):
+        while self.control.recv(65536):
+            pass
 
     def read(self):
         return self.serial.read_text(errors="replace")
@@ -209,6 +226,10 @@ class Guest:
             self.process.kill()
             self.process.wait()
         self.log.close()
+        if self.control:
+            self.control_reader.join(timeout=2)
+            self.control.close()
+            Path(self.control_path).unlink(missing_ok=True)
         Path(self.socket_path).unlink(missing_ok=True)
 
 

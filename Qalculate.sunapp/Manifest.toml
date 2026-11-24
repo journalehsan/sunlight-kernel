@@ -1,0 +1,13 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.helios.qalculate"
+name = "Qalculate!"
+kind = "gui"
+
+[runtime]
+type = "helios"
+
+[entry]
+executable = "Program/qalculate-qt"

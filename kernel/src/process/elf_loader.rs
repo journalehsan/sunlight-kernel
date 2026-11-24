@@ -77,9 +77,20 @@ pub fn load_elf(
         return None;
     }
 
+    map_image(&plans, elf_bytes, process, pmm, hhdm_offset)?;
+    Some(header.entry)
+}
+
+fn map_image(
+    plans: &[SegmentPlan],
+    elf_bytes: &[u8],
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Option<()> {
     // PTE collision preflight covers the union before any allocation. Repeated
     // pages caused by overlapping ELF segments are checked harmlessly twice.
-    for plan in &plans {
+    for plan in plans {
         for page_idx in 0..plan.page_count {
             let address = plan
                 .vaddr_page_start
@@ -92,16 +103,16 @@ pub fn load_elf(
         }
     }
 
-    let mut reservations = reserve_final_regions(&plans, process)?;
+    let mut reservations = reserve_final_regions(plans, process)?;
     let mut map_failed = false;
-    for plan in &plans {
+    for plan in plans {
         if map_segment(plan, elf_bytes, process, pmm, hhdm_offset).is_none() {
             map_failed = true;
             break;
         }
     }
     if map_failed {
-        rollback_elf_pages(&plans, process, pmm, hhdm_offset);
+        rollback_elf_pages(plans, process, pmm, hhdm_offset);
         while let Some(reservation) = reservations.pop() {
             process.address_space.cancel_region(reservation);
         }
@@ -111,13 +122,197 @@ pub fn load_elf(
 
     for reservation in reservations {
         if process.address_space.commit_region(reservation).is_err() {
-            rollback_elf_pages(&plans, process, pmm, hhdm_offset);
+            rollback_elf_pages(plans, process, pmm, hhdm_offset);
             crate::serial_println!("[ELF] ledger commit invariant failed");
             return None;
         }
     }
 
-    Some(header.entry)
+    Some(())
+}
+
+#[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+pub(super) mod handoff {
+    use super::*;
+    use sunlight_elf::{DynamicImage, ElfError};
+
+    pub(in crate::process) const INTERPRETER: &[u8] = b"/lib/helios/ld-handoff.so.1";
+    const RESOURCE: &[u8] = include_bytes!(env!("SUNLIGHT_HELIOS_HANDOFF_INTERPRETER"));
+    const PIE_BASE: u64 = 0x2000_0000;
+    const INTERP_BASE: u64 = 0x8000_0000;
+    const INTERP_LIMIT: u64 = 0x8100_0000;
+    type Plans = heapless::Vec<SegmentPlan, MAX_ELF_SEGMENTS>;
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub enum Fault {
+        Missing,
+        Path,
+        Machine,
+        Malformed,
+        Application,
+        Interpreter,
+        PageTable,
+        Stack,
+        Auxv,
+        #[cfg(feature = "helios_dynamic_elf_relocation_fixture")]
+        RelocationWrite,
+        #[cfg(feature = "helios_dynamic_elf_relocation_fixture")]
+        PostRelocationAllocation,
+    }
+
+    pub struct Handoff {
+        pub header: sunlight_elf::ElfHeader,
+        pub phdr: u64,
+        pub base: u64,
+        pub app_entry: u64,
+        pub entry: u64,
+    }
+
+    fn plan(image: &DynamicImage<'_>, window: (u64, u64), bias: u64) -> Result<Plans, ElfError> {
+        let mut plans = Plans::new();
+        let mut overflow = false;
+        image.plan(window, bias, &mut |segment| {
+            overflow |= plans.push(*segment).is_err()
+        })?;
+        if overflow {
+            return Err(ElfError::InvalidSegment);
+        }
+        Ok(plans)
+    }
+
+    pub fn load(
+        bytes: &[u8],
+        process: &mut Process,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm: VirtAddr,
+        fault: Option<Fault>,
+    ) -> Result<Option<Handoff>, &'static str> {
+        if !process.is_linux_compat() {
+            return Ok(None);
+        }
+        let app = match DynamicImage::parse(bytes) {
+            Ok(app) => app,
+            Err(error) => {
+                if sunlight_elf::parse_elf_header(bytes).is_ok_and(|header| {
+                    sunlight_elf::for_each_load_segment(bytes, &header, |_| Ok(()))
+                        != Err(ElfError::HasDynamicSection)
+                }) {
+                    return Ok(None);
+                }
+                crate::serial_println!("[HELIOS-HANDOFF] application validation: {:?}", error);
+                return Err("ELF type validation / PT_INTERP policy");
+            }
+        };
+        let Some(path) = app.interpreter else {
+            return if app.header.elf_type == 2 {
+                Ok(None)
+            } else {
+                Err("PT_INTERP policy")
+            };
+        };
+        if path != INTERPRETER {
+            return Err("PT_INTERP policy");
+        }
+        let mut mutated_header = [0; 64];
+        let resource = match fault {
+            Some(Fault::Missing) => None,
+            Some(Fault::Machine) if RESOURCE.len() >= 64 => {
+                mutated_header.copy_from_slice(&RESOURCE[..64]);
+                mutated_header[18..20].copy_from_slice(&183u16.to_le_bytes());
+                Some(mutated_header.as_slice())
+            }
+            Some(Fault::Malformed) => Some(&RESOURCE[..RESOURCE.len().min(63)]),
+            _ if RESOURCE.is_empty() => None,
+            _ => Some(RESOURCE),
+        }
+        .ok_or("interpreter lookup")?;
+        let ld = DynamicImage::parse(resource).map_err(|error| {
+            crate::serial_println!("[HELIOS-HANDOFF] interpreter validation: {:?}", error);
+            "interpreter validation"
+        })?;
+        if ld.header.elf_type != 3 || ld.interpreter.is_some() {
+            return Err("interpreter validation");
+        }
+        let ld_plans = plan(&ld, (INTERP_BASE, INTERP_LIMIT), INTERP_BASE)
+            .map_err(|_| "interpreter validation")?;
+        let bias = if app.header.elf_type == 3 {
+            PIE_BASE
+        } else {
+            0
+        };
+        let app_plans =
+            plan(&app, (USER_LO, INTERP_BASE), bias).map_err(|_| "application mapping plan")?;
+        let phdr = app
+            .program_headers(&app_plans)
+            .map_err(|_| "program-header handoff")?;
+        crate::serial_println!(
+            "[HELIOS-HANDOFF] interpreter=/lib/helios/ld-handoff.so.1 source=kernel pid={}",
+            process.pid
+        );
+        if let Some(budget) = match fault {
+            Some(Fault::PageTable) => Some(2),
+            Some(Fault::Application) => Some(4),
+            _ => None,
+        } {
+            pmm.fail_test_allocations_after(budget);
+        }
+        let mapped = map_image(&app_plans, bytes, process, pmm, hhdm);
+        if matches!(fault, Some(Fault::PageTable | Fault::Application)) {
+            pmm.clear_test_allocation_failure();
+        }
+        mapped.ok_or(if fault == Some(Fault::PageTable) {
+            "page-table allocation"
+        } else {
+            "application mapping"
+        })?;
+        if fault == Some(Fault::Interpreter) {
+            pmm.fail_test_allocations_after(3);
+        }
+        let mapped = map_image(&ld_plans, resource, process, pmm, hhdm);
+        if fault == Some(Fault::Interpreter) {
+            pmm.clear_test_allocation_failure();
+        }
+        mapped.ok_or("interpreter mapping")?;
+        use sunlight_elf::relative::Error;
+        sunlight_elf::relative::apply(&app, &app_plans, phdr, |address, value| {
+            let page = Page::containing_address(VirtAddr::new(address));
+            let (frame, flags) = unsafe { process.address_space.lookup_entry(page, hhdm) }
+                .ok_or(Error::Target(address))?;
+            if !flags.contains(PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE) {
+                return Err(Error::Permission(address));
+            }
+            let physical = frame.as_u64().checked_add(address & 4095)
+                .ok_or(Error::Target(address))?;
+            unsafe { (hhdm + physical).as_mut_ptr::<u64>().write(value.to_le()) };
+            crate::serial_println!(
+                "[HELIOS-RELOC] pid={} type=R_X86_64_RELATIVE address={:#x} value={:#x}",
+                process.pid, address, value
+            );
+            #[cfg(feature = "helios_dynamic_elf_relocation_fixture")]
+            if fault == Some(Fault::RelocationWrite) {
+                return Err(Error::Target(address));
+            }
+            Ok(())
+        }).map_err(|error| {
+            crate::serial_println!("[HELIOS-RELOC] pid={} rejected: {:?}", process.pid, error);
+            match error {
+                Error::Discovery => "PT_DYNAMIC discovery",
+                Error::Dynamic | Error::Tag(_) => "dynamic-table validation",
+                Error::Table => "relocation-table validation",
+                Error::Bias => "load-bias calculation",
+                Error::Unsupported { .. } => "unsupported relocation",
+                Error::Target(_) => "relocation target validation",
+                Error::Permission(_) => "write-permission validation",
+            }
+        })?;
+        Ok(Some(Handoff {
+            header: app.header,
+            phdr,
+            base: INTERP_BASE,
+            app_entry: app.header.entry + bias,
+            entry: ld.header.entry + INTERP_BASE,
+        }))
+    }
 }
 
 fn reserve_final_regions(

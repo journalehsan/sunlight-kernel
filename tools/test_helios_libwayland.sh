@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-out="$PWD/target/helios-wayland-lib"
+out=${HELIOS_WAYLAND_OUT:-"$PWD/target/helios-wayland-lib"}
+build=${HELIOS_WAYLAND_DEPS:-"$out/build"}
+mkdir -p "$out"
 mode=libwayland
 canvas_args=()
-if [[ ${1:-} == --canvas || ${1:-} == --canvas-input-elf ]]; then
+if [[ ${1:-} == --canvas || ${1:-} == --canvas-elf || ${1:-} == --canvas-input-elf ]]; then
     variant=$1
     shift
     mode=canvas
@@ -18,7 +20,6 @@ if [[ ${1:-} == --canvas || ${1:-} == --canvas-input-elf ]]; then
         canvas_args+=(-DSUNLIGHT_CANVAS_INPUT)
     fi
 fi
-build="$out/build"
 mkdir -p "$build"
 
 (
@@ -70,8 +71,10 @@ musl-gcc -static -no-pie -O2 -Wall -Wextra -Werror \
     tools/tests/helios-libwayland-client.c "$build/xdg-shell.c" \
     "$build/wl/src/libwayland-client.a" "$build/prefix/lib/libffi.a" \
     "${canvas_args[@]}" -pthread -o "$guest_out/client.elf"
+sha256sum "$guest_out/client.elf" >"$guest_out/linked.sha256"
 bash tools/stamp_helios_elf.sh "$guest_out/client.elf"
-if [[ $mode == canvas-input ]]; then
+(cd "$guest_out" && sha256sum client.elf >client.sha256)
+if [[ $mode == canvas-input || ${variant:-} == --canvas-elf ]]; then
     exit 0
 fi
 
@@ -83,6 +86,8 @@ SUNLIGHT_WAYLAND_CLIENT="$guest_out/client.elf" \
     cargo build -p sunlight-kernel --features helios_wayland_test >"$guest_out/kernel-build.log" 2>&1
 bash tools/make_hybrid_iso.sh target/x86_64-unknown-none/debug/sunlight-kernel \
     "$guest_out/guest.iso" >"$guest_out/pack.log" 2>&1
+sha256sum "$guest_out/client.elf" target/iso_root/boot/sunlight-kernel.elf "$guest_out/guest.iso" >"$guest_out/artifacts.sha256"
+[[ ${1:-} != --build-only ]] || exit 0
 status=0
 for accel in "${@:-kvm}"; do
     python3 tools/helios_wayland_gate.py "$guest_out/guest.iso" "$guest_out/$accel" "$accel" "$mode" || status=1

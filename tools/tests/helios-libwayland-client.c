@@ -127,6 +127,7 @@ static void require(int ok, const char *stage)
     }
 }
 
+#ifdef SUNLIGHT_CANVAS_INPUT
 static void hold_for_capture(void)
 {
     struct timespec start, now;
@@ -138,6 +139,29 @@ static void hold_for_capture(void)
     } while ((now.tv_sec - start.tv_sec) * INT64_C(1000000000)
              + now.tv_nsec - start.tv_nsec < INT64_C(5000000000));
 }
+#else
+static long capture_native(long number, long arg0, long arg1)
+{
+    long result;
+    __asm__ volatile("syscall" : "=a"(result)
+                     : "a"((1UL << 63) | number), "D"(arg0), "S"(arg1)
+                     : "rcx", "r11", "memory");
+    return result;
+}
+
+static void capture_log(const char *message)
+{
+    capture_native(99, (long)message, strlen(message));
+}
+
+static void capture_pause(void)
+{
+    const struct timespec pause = {.tv_nsec = 10000000};
+    require(nanosleep(&pause, NULL) == 0, "capture acknowledgement poll");
+}
+
+#include "helios-capture-ack.h"
+#endif
 
 static void global(void *data, struct wl_registry *registry, uint32_t name,
                    const char *interface, uint32_t version)
@@ -338,8 +362,8 @@ int main(void)
         wl_surface_commit(surface);
         wait_for(display, &released[slot], &done, "frame dispatch");
         fprintf(stderr, "[WL-LIB] frame %u released and callback completed\n", frame + 1);
-        hold_for_capture();
 #ifdef SUNLIGHT_CANVAS_INPUT
+        hold_for_capture();
         if (frame == 0) {
             synced = 0;
             sync = wl_display_sync(display);
@@ -347,6 +371,8 @@ int main(void)
                     "pointer fixture sync listener");
             wait_for(display, &clicked, &synced, "pointer button dispatch / hit test");
         }
+#else
+        capture_ack(frame + 1);
 #endif
     }
 #ifdef SUNLIGHT_CANVAS_INPUT
@@ -354,6 +380,9 @@ int main(void)
     wl_seat_destroy(seat);
 #endif
     wl_display_disconnect(display);
+#ifndef SUNLIGHT_CANVAS_INPUT
+    capture_ack(3);
+#endif
     munmap(map, POOL);
     return 0;
 }

@@ -2984,6 +2984,10 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
 
     let old_damage = window_decoration_damage_bounds(state, &state.windows[pos]);
     let win = state.windows.remove(pos);
+    #[cfg(feature = "helios_wayland_test")]
+    if win.owner_pid == 716 && win.config.title.starts_with(b"HeliosWL\0") {
+        debug_log(&alloc::format!("[WL-SGP] removed window={win_id}\n"));
+    }
     if let Some(switch) = &mut state.window_switch {
         switch.retain_live(&state.windows);
     }
@@ -9532,18 +9536,9 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             SgpMsg::CLOSE_WINDOW => {
                 let win_id = msg.words[0];
-                #[cfg(feature = "helios_wayland_test")]
-                let fixture = state.windows.iter().any(|win| {
-                    win.id == win_id && win.owner_pid == 716
-                        && win.config.title.starts_with(b"HeliosWL\0")
-                });
                 if close_window(&mut state, win_id, Some(msg.badge)) {
                     mark_dirty_full(&mut state);
                     redraw_scene(&mut state);
-                    #[cfg(feature = "helios_wayland_test")]
-                    if fixture {
-                        debug_log(&alloc::format!("[WL-SGP] removed window={win_id}\n"));
-                    }
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }

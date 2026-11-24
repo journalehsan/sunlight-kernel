@@ -40,11 +40,33 @@ static void hold(unsigned ms)
 }
 
 static long stream;
+static long io_deadline;
+
+static long capture_native(long number, long arg0, long arg1)
+{
+    return call(native(number), arg0, arg1, 0);
+}
+
+static void capture_log(const char *message)
+{
+    long length = 0;
+    while (message[length]) ++length;
+    capture_native(99, (long)message, length);
+}
+
+static void capture_pause(void)
+{
+    call(24, 0, 0, 0);
+}
+
+#include "helios-capture-ack.h"
 
 static void transfer(const void *data, unsigned len, int writing)
 {
     const unsigned char *cursor = data;
     while (len) {
+        require(capture_native(86, 0, 0) < io_deadline,
+                "[WL-CLIENT] FAIL Wayland transfer deadline\n");
         long count = call(writing, stream, (long)cursor, len);
         if (count == -11) {
             call(24, 0, 0, 0);
@@ -160,6 +182,7 @@ void _start(void)
         call(24, 0, 0, 0);
     } while (call(native(86), 0, 0, 0) - started < 15000);
     require(status == 0, "[WL-CLIENT] FAIL connect");
+    io_deadline = capture_native(86, 0, 0) + 20000;
     bind_globals();
     request(3, 0, 6);
     request(5, 2, 7, 6);
@@ -185,6 +208,7 @@ void _start(void)
     expect(10, 0, 8, 0);
 
     for (unsigned frame = 1; frame <= 2; ++frame) {
+        io_deadline = capture_native(86, 0, 0) + 20000;
         paint(map, frame);
         request(6, 1, 10 + frame, 0, 0);
         request(6, 2, 0, 0, WIDTH, HEIGHT);
@@ -195,10 +219,11 @@ void _start(void)
         require(event(callback) == 12 && callback[0] == 12 + frame &&
                 (callback[1] & 65535) == 0, "[WL-CLIENT] FAIL frame callback");
         expect(1, 1, 12, 12 + frame);
-        hold(5000);
+        capture_ack(frame);
     }
     require(call(11, addr, POOL, 0) == 0 && call(3, stream, 0, 0) == 0,
             "[WL-CLIENT] FAIL disconnect");
+    capture_ack(3);
     call(60, 0, 0, 0);
     __builtin_trap();
 }

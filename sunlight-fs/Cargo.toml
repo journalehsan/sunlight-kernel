@@ -679,6 +679,9 @@ edition = "2021"
 [features]
 helios-git = []
 helios-wayland-sunapp-test = []
+helios-dynamic-elf-probe = []
+helios-dynamic-elf-relocation-fixture = []
+helios-qalculate-probe = []
 
 [dependencies]
 sunlight-mm = { path = "../sunlight-mm" }

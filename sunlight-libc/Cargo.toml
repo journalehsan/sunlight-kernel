@@ -682,6 +682,9 @@ sunlight-ipc = { path = "../ipc" }
 
 [features]
 helios-wayland-sunapp-test = []
+helios-dynamic-elf-probe = []
+helios-dynamic-elf-relocation-fixture = ["helios-dynamic-elf-probe"]
+helios-qalculate-probe = []
 # Enable #[global_allocator] for `extern crate alloc` (Vec, String, Box, …).
 # Only one crate in a binary may declare a global allocator, so this feature
 # must not be enabled in libraries — only in top-level binary crates.
