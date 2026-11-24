@@ -1139,6 +1139,27 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
+    {
+        let server = include_bytes!(env!("SUNLIGHT_FD_SHARED_SERVER")).as_slice();
+        let client = include_bytes!(env!("SUNLIGHT_FD_SHARED_CLIENT")).as_slice();
+        for (pid, parent, name, elf) in [
+            (711, 0, "native-shared-page", server),
+            (712, 711, "helios-shared-page", client),
+        ] {
+            let mut pmm = PMM.lock();
+            let mut probe = unsafe { Process::new(pid, parent, name, &mut pmm, hhdm_offset) };
+            process::spawn::exec_into_process(
+                elf, &mut probe, &mut pmm, hhdm_offset, &[name.as_bytes()], &[], false,
+            )
+            .expect("FD shared mmap fixture ELF");
+            drop(pmm);
+            sched::with_scheduler(|sched| {
+                sched.add_process(probe);
+            });
+        }
+    }
+
     splash.set_progress(975); // 97.5%
     splash.redraw();
 

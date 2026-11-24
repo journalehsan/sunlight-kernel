@@ -183,7 +183,7 @@ pub fn connect(path: &[u8], uid: u32) -> Result<(u32, u32), u32> {
     if socket.pending.len() >= DEFAULT_BACKLOG {
         return Err(abi::EAGAIN);
     }
-    let pair = super::pipe::alloc_socketpair();
+    let pair = super::pipe::alloc_socketpair(socket.allowed_uid.is_some());
     socket.pending.push_back(pair);
     Ok((idx as u32, pair))
 }

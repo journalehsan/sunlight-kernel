@@ -20,6 +20,19 @@ pub fn unix_stream_try_accept(listener: i32) -> i64 {
     unsafe { sys::syscall1(SunlightSyscall::NativeUnixAccept as u64, listener as u64) as i64 }
 }
 
+/// Receive the marked stream byte and its close-on-exec descriptor atomically.
+/// Negative errno values leave the stream unchanged.
+pub fn unix_stream_try_recv_fd(stream: i32) -> Result<(i32, u8), i64> {
+    let result = unsafe {
+        sys::syscall1(SunlightSyscall::NativeUnixRecvFd as u64, stream as u64) as i64
+    };
+    if result < 0 {
+        Err(result)
+    } else {
+        Ok((result as i32, (result >> 32) as u8))
+    }
+}
+
 pub const AF_UNIX: i32 = 1;
 pub const AF_INET: i32 = 2;
 pub const IPPROTO_TCP: i32 = 6;

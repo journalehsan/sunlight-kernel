@@ -386,6 +386,9 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_MADVISE => SHIM_MADVISE,
         SYS_RECVFROM => SHIM_RECVFROM,
         SYS_SENDTO => SHIM_SENDTO,
+        SYS_SENDMSG => SHIM_SENDMSG,
+        SYS_FTRUNCATE => SHIM_FTRUNCATE,
+        SYS_MEMFD_CREATE => SHIM_MEMFD_CREATE,
         SYS_SOCKET => SHIM_SOCKET,
         SYS_CONNECT => SHIM_CONNECT,
         SYS_BIND => SHIM_BIND,
@@ -483,6 +486,9 @@ pub const LINUX_MAP_STACK: u64 = abi::MAP_STACK;
 /// strict native mmap surface. MAP_STACK is advisory on Linux, so it is
 /// accepted and removed only after the complete request has been validated.
 pub fn translate_mmap_flags(flags: u64) -> Option<u32> {
+    if flags == 0x01 {
+        return Some(0x01); // MAP_SHARED, without modifiers
+    }
     const SUPPORTED: u64 = LINUX_MAP_PRIVATE
         | LINUX_MAP_FIXED
         | LINUX_MAP_ANONYMOUS

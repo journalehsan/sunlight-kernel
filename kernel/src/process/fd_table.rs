@@ -215,6 +215,8 @@ impl FileHandle {
     }
 
     pub(crate) const PROC: Self = Self(0x0020_0000);
+    pub(crate) const SHARED_PAGE: Self = Self(0x0030_0000);
+    pub(crate) const MEMFD: Self = Self(0x0030_0001);
 
     pub(crate) fn is_proc(self) -> bool {
         self == Self::PROC
@@ -312,6 +314,14 @@ pub struct FileDescriptor {
     pub release_backend: bool,
 }
 
+pub struct QueuedSharedPage(FileDescriptor);
+
+impl Drop for QueuedSharedPage {
+    fn drop(&mut self) {
+        release_description(self.0.description);
+    }
+}
+
 /// Result of a descriptor replacement. `service_close` is the exact service
 /// token whose final kernel reference was displaced and must now be closed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -350,9 +360,125 @@ struct OpenDescription {
     status: u32,
     refs: usize,
     proc_file: Option<crate::linux_procfs::OpenFile>,
+    memfd: Option<Memfd>,
 }
 
 static DESCRIPTIONS: Mutex<Vec<Option<OpenDescription>>> = Mutex::new(Vec::new());
+static MEMFD_USAGE: Mutex<(usize, usize)> = Mutex::new((0, 0));
+static MEMFD_RECLAIM: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+use crate::memory::pmm::PhysicalMemoryManager;
+use core::sync::atomic::Ordering;
+use x86_64::{structures::paging::{PhysFrame, Size4KiB}, VirtAddr};
+
+struct Memfd {
+    length: u64,
+    frames: Vec<PhysFrame<Size4KiB>>,
+}
+
+impl FileDescriptor {
+    pub(crate) fn memfd_view(&self) -> u32 {
+        assert_eq!(self.handle, FileHandle::MEMFD);
+        self.description
+    }
+
+    pub(crate) fn size_memfd(
+        &self,
+        length: u64,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm: VirtAddr,
+    ) -> Result<(), u32> {
+        use sunlight_compat_linux::abi;
+        if self.handle != FileHandle::MEMFD {
+            return Err(abi::EOPNOTSUPP);
+        }
+        if !self.rights.contains(CapRights::new(CapRights::FTRUNCATE)) {
+            return Err(abi::EACCES);
+        }
+        if length == 0 || length > i64::MAX as u64 {
+            return Err(abi::EINVAL);
+        }
+        if length > 1024 * 1024 {
+            return Err(abi::EFBIG);
+        }
+        let mut descriptions = DESCRIPTIONS.lock();
+        let backing = descriptions[self.description as usize]
+            .as_mut().unwrap().memfd.as_mut().unwrap();
+        if backing.length == length {
+            return Ok(());
+        }
+        if backing.length != 0 {
+            return Err(abi::EPERM);
+        }
+        let pages = length.div_ceil(4096) as usize;
+        let mut usage = MEMFD_USAGE.lock();
+        if usage.1 + pages > 4096 {
+            return Err(abi::ENOMEM);
+        }
+        backing.frames.try_reserve_exact(pages).map_err(|_| abi::ENOMEM)?;
+        for _ in 0..pages {
+            let Some(physical) = pmm.alloc_frame_class(
+                crate::memory::accounting::PhysicalMemoryClass::SharedMemory,
+            ) else {
+                for frame in backing.frames.drain(..) {
+                    pmm.free_frame(frame.start_address());
+                }
+                return Err(abi::ENOMEM);
+            };
+            assert!(crate::memory::security::sanitize_user_frame(physical, hhdm));
+            backing.frames.push(PhysFrame::containing_address(physical));
+        }
+        backing.length = length;
+        usage.1 += pages;
+        #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
+        crate::serial_println!("[MEMFD] sized object={} pages={} live_pages={}", self.description, pages, usage.1);
+        Ok(())
+    }
+}
+
+pub(crate) fn with_memfd_frames<R>(
+    id: u32,
+    f: impl FnOnce(u64, &[PhysFrame<Size4KiB>]) -> R,
+) -> R {
+    let descriptions = DESCRIPTIONS.lock();
+    let backing = descriptions[id as usize].as_ref().unwrap().memfd.as_ref().unwrap();
+    f(backing.length, &backing.frames)
+}
+
+pub(crate) fn retain_memfd_view(id: u32) {
+    retain_description(id);
+}
+
+pub(crate) fn release_memfd_view(id: u32) {
+    release_description(id);
+}
+
+pub(crate) fn memfd_reclaim_pending() -> bool {
+    MEMFD_RECLAIM.load(Ordering::Acquire)
+}
+
+pub(crate) fn drain_memfd_frames(pmm: &mut PhysicalMemoryManager) {
+    if !memfd_reclaim_pending() {
+        return;
+    }
+    let mut descriptions = DESCRIPTIONS.lock();
+    MEMFD_RECLAIM.store(false, Ordering::Release);
+    let mut usage = MEMFD_USAGE.lock();
+    for (_id, slot) in descriptions.iter_mut().enumerate() {
+        if !slot.as_ref().is_some_and(|row| row.refs == 0) {
+            continue;
+        }
+        let backing = slot.take().unwrap().memfd.unwrap();
+        let pages = backing.frames.len();
+        for frame in backing.frames {
+            pmm.free_frame(frame.start_address());
+        }
+        usage.0 -= 1;
+        usage.1 -= pages;
+        #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
+        crate::serial_println!("[MEMFD] freed object={} pages={} live_objects={} live_pages={}", _id, pages, usage.0, usage.1);
+    }
+}
 
 fn new_description(flags: u32) -> u32 {
     let mut pool = DESCRIPTIONS.lock();
@@ -361,6 +487,7 @@ fn new_description(flags: u32) -> u32 {
         status: flags & !0x0008_0000,
         refs: 1,
         proc_file: None,
+        memfd: None,
     };
     if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
         *slot = Some(item);
@@ -383,7 +510,11 @@ fn release_description(idx: u32) -> bool {
     let item = pool[idx as usize].as_mut().expect("live description");
     item.refs -= 1;
     if item.refs == 0 {
-        pool[idx as usize] = None;
+        if item.memfd.is_some() {
+            MEMFD_RECLAIM.store(true, Ordering::Release);
+        } else {
+            pool[idx as usize] = None;
+        }
         true
     } else {
         false
@@ -465,6 +596,39 @@ pub struct FdTable {
 }
 
 impl FdTable {
+    pub(crate) fn open_memfd(&mut self, flags: u32) -> Result<i32, u32> {
+        use sunlight_compat_linux::abi;
+        if MEMFD_USAGE.lock().0 >= 128 {
+            return Err(abi::ENOMEM);
+        }
+        let rights = CapRights::new(
+            CapRights::READ | CapRights::WRITE | CapRights::FTRUNCATE |
+            CapRights::MMAP_R | CapRights::MMAP_W,
+        );
+        let fd = self.open(FileHandle::MEMFD, rights, flags).map_err(|_| abi::EMFILE)?;
+        let description = self.get(fd).unwrap().description;
+        DESCRIPTIONS.lock()[description as usize].as_mut().unwrap().memfd =
+            Some(Memfd { length: 0, frames: Vec::new() });
+        MEMFD_USAGE.lock().0 += 1;
+        Ok(fd)
+    }
+
+    pub fn retain_shared_page(&self, fd: i32) -> Result<QueuedSharedPage, u32> {
+        use sunlight_compat_linux::abi;
+        let entry = *self.get(fd).ok_or(abi::EBADF)?;
+        if !matches!(entry.handle, FileHandle::SHARED_PAGE | FileHandle::MEMFD) {
+            return Err(abi::EOPNOTSUPP);
+        }
+        retain_description(entry.description);
+        Ok(QueuedSharedPage(entry))
+    }
+
+    pub fn install_shared_page(&mut self, queued: &QueuedSharedPage) -> Result<i32, FdError> {
+        let entry = &queued.0;
+        self.open_from(0, entry.handle, entry.rights, entry.flags | 0x80000,
+            entry.offset, Some(entry.description))
+    }
+
     pub fn new() -> Self {
         let entries: [Option<FileDescriptor>; 256] = [None; 256];
         let mut table = Self { entries };

@@ -230,6 +230,7 @@ pub enum SunlightSyscall {
     NativeUnixListen = 183,
     /// Try to accept one stream from a native Unix listener (listener FD).
     NativeUnixAccept = 184,
+    NativeUnixRecvFd = 185,
     /// rdi=storage operation, rsi=index/device ID/mount ID, rdx=record/path.
     StorageCtl = 168,
     /// Paged ReadDir: r10 is the entry offset.

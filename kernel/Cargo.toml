@@ -726,6 +726,7 @@ restricted_remote_test = ["quota_lifecycle_test", "fastlane_mapping_test"]
 # Isolated bounded thread admission and allocation fault controls; debug only.
 thread_admission_test = []
 native_unix_listener_test = []
+fd_shared_mmap_test = []
 thread_lifecycle_race_test = []
 # T4A bounded ring-3 futex race controls; excluded from production.
 atomic_futex_test = []

@@ -1474,7 +1474,13 @@ impl AddressSpace {
             end,
             protection,
             MappingKind::SharedMemory,
-            RegionPolicy::SHARED.union(RegionPolicy::OWNER_MANAGED),
+            RegionPolicy::SHARED.union(RegionPolicy::OWNER_MANAGED).union(
+                if matches!(backing, RegionBacking::Memfd { .. }) {
+                    RegionPolicy::NO_MERGE
+                } else {
+                    RegionPolicy::empty()
+                },
+            ),
             backing,
         )
         .map_err(|_| crate::memory::shared::SharedMemError::InvalidAddress)?;
@@ -1506,6 +1512,8 @@ impl AddressSpace {
                     let Ok(rollback_page) = Page::<Size4KiB>::from_start_address(
                         base + (rollback_index as u64) * PAGE_SIZE,
                     ) else {
+                        assert!(!matches!(backing, RegionBacking::Memfd { .. }),
+                            "memfd map rollback lost its leaf");
                         ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
                         continue;
                     };
@@ -1514,6 +1522,8 @@ impl AddressSpace {
                         .rollback_mapped_page(rollback_page, rollback_frame, pmm, hhdm_offset)
                         .is_err()
                     {
+                        assert!(!matches!(backing, RegionBacking::Memfd { .. }),
+                            "memfd map rollback lost its frame");
                         ROLLBACK_INVARIANT_FAILURES.fetch_add(1, Ordering::Relaxed);
                     }
                 }
@@ -1529,8 +1539,10 @@ impl AddressSpace {
                 )
                 .map_err(|_| crate::memory::shared::SharedMemError::InternalInvariant)?;
                 let rollback_frame = frames[rollback_index].start_address();
-                self.rollback_mapped_page(rollback_page, rollback_frame, pmm, hhdm_offset)
-                    .map_err(crate::memory::shared::SharedMemError::from)?;
+                let result = self.rollback_mapped_page(rollback_page, rollback_frame, pmm, hhdm_offset);
+                assert!(result.is_ok() || !matches!(backing, RegionBacking::Memfd { .. }),
+                    "memfd map commit rollback lost its frame");
+                result.map_err(crate::memory::shared::SharedMemError::from)?;
             }
             return Err(crate::memory::shared::SharedMemError::from(error));
         }
@@ -1853,6 +1865,13 @@ impl AddressSpace {
         }
 
         if free_root {
+            for index in 0..self.region_count() {
+                if let Some(RegionBacking::Memfd { description, .. }) =
+                    self.region_at(index).map(|region| region.backing)
+                {
+                    super::fd_table::release_memfd_view(description);
+                }
+            }
             self.destroy_ledger()
                 .expect("address-space ledger teardown failed");
             #[cfg(all(
@@ -1876,6 +1895,7 @@ impl AddressSpace {
             stats.page_tables += 1;
             self.pml4_phys = PhysAddr::new(0);
             self.identity = AddressSpaceIdentity::INVALID;
+            super::fd_table::drain_memfd_frames(pmm);
         }
 
         stats

@@ -104,6 +104,8 @@ pub enum RegionBacking {
     AnonymousOwner(u32),
     ElfImage(u64),
     SharedMemory(u64),
+    FdSharedPage,
+    Memfd { description: u32, first_page: u16 },
     Internal(u64),
 }
 

@@ -7,6 +7,7 @@ use crate::process::region::{
     MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
 };
 use crate::sched::Scheduler;
+use crate::process::fd_table::{CapRights, FileHandle};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
@@ -14,6 +15,7 @@ use x86_64::{PhysAddr, VirtAddr};
 
 // mmap flags
 pub const MAP_PRIVATE: u32 = 0x02;
+pub const MAP_SHARED: u32 = 0x01;
 pub const MAP_ANONYMOUS: u32 = 0x20;
 pub const MAP_FIXED: u32 = 0x10;
 pub const MAP_FIXED_NOREPLACE: u32 = 0x100000;
@@ -29,6 +31,7 @@ pub const PROT_EXEC: u32 = 0x4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MmapError {
+    BadFd,
     InvalidAddress,
     NoMemory,
     InvalidFlags,
@@ -227,8 +230,9 @@ pub fn sys_mmap(
     if flags & MAP_NATIVE_THREAD != 0 && sched.current_process().is_linux_compat() {
         return Err(MmapError::InvalidFlags);
     }
-    // Backed mappings are not implemented.  Reject descriptor/offset use so
-    // no caller can mistake this for a file or device mapping interface.
+    if flags == MAP_SHARED {
+        return map_shared_fd(addr, length, prot, fd, offset, pmm, sched);
+    }
     if fd != -1 || offset != 0 {
         return Err(MmapError::InvalidFlags);
     }
@@ -246,6 +250,123 @@ pub fn sys_mmap(
         MappingKind::Anonymous,
         demand_backed,
     )
+}
+
+pub(crate) const SHARED_PAGE_PATH: &str = "/dev/sunlight-shared-page";
+static SHARED_PAGE: spin::Mutex<Option<PhysFrame<Size4KiB>>> = spin::Mutex::new(None);
+
+fn map_shared_fd(
+    addr: u64,
+    length: u64,
+    prot: u32,
+    fd: i32,
+    offset: u64,
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+) -> Result<u64, MmapError> {
+    if addr != 0 || offset & 4095 != 0 || length == 0 {
+        return Err(MmapError::InvalidAddress);
+    }
+    let protection = match prot {
+        PROT_READ => RegionProtection::READ_ONLY,
+        3 => RegionProtection::READ_WRITE,
+        _ => return Err(MmapError::InvalidProt),
+    };
+    let descriptor = sched.current_shared_process().fd_table.get(fd).ok_or(MmapError::BadFd)?;
+    if !matches!(descriptor.handle, FileHandle::SHARED_PAGE | FileHandle::MEMFD) {
+        return Err(MmapError::Unsupported);
+    }
+    let mut required = CapRights::READ | CapRights::MMAP_R;
+    if prot & PROT_WRITE != 0 {
+        required |= CapRights::WRITE | CapRights::MMAP_W;
+    }
+    if !descriptor.rights.contains(CapRights::new(required)) {
+        return Err(MmapError::PermissionDenied);
+    }
+    let hhdm_offset = crate::HHDM_REQ
+        .response()
+        .map(|response| VirtAddr::new(response.offset))
+        .ok_or(MmapError::InternalInvariant)?;
+    if descriptor.handle == FileHandle::MEMFD {
+        let id = descriptor.memfd_view();
+        let end = offset.checked_add(length).ok_or(MmapError::InvalidAddress)?;
+        let space = &mut sched.current_shared_process_mut().address_space;
+        let address = super::fd_table::with_memfd_frames(id, |size, frames| {
+            if end > size {
+                return Err(MmapError::InvalidAddress);
+            }
+            unsafe {
+                space.map_shared_region_protected(
+                    &frames[(offset / 4096) as usize..end.div_ceil(4096) as usize],
+                    RegionBacking::Memfd {
+                        description: id,
+                        first_page: (offset / 4096) as u16,
+                    },
+                    protection,
+                    pmm,
+                    hhdm_offset,
+                )
+            }
+            .map_err(shared_mapping_error)
+        })?;
+        super::fd_table::retain_memfd_view(id);
+        return Ok(address.as_u64());
+    }
+    if offset != 0 || length != 4096 {
+        return Err(MmapError::InvalidAddress);
+    }
+    let mut backing = SHARED_PAGE.lock();
+    let frame = match *backing {
+        Some(frame) => frame,
+        None => {
+            let physical = pmm.alloc_frame().ok_or(MmapError::NoMemory)?;
+            if !crate::memory::security::sanitize_user_frame(physical, hhdm_offset) {
+                pmm.free_frame(physical);
+                return Err(MmapError::InternalInvariant);
+            }
+            PhysFrame::containing_address(physical)
+        }
+    };
+    let process = sched.current_process_mut();
+    let mapped = unsafe {
+        process.address_space.map_shared_region_protected(
+            &[frame],
+            RegionBacking::FdSharedPage,
+            protection,
+            pmm,
+            hhdm_offset,
+        )
+    };
+    match mapped {
+        Ok(address) => {
+            *backing = Some(frame);
+            #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
+            crate::serial_println!(
+                "[FD-SHARED] pid={} fd={} object=shared-page frame={:#x} va={:#x}",
+                process.pid, fd, frame.start_address().as_u64(), address.as_u64()
+            );
+            Ok(address.as_u64())
+        }
+        Err(error) => {
+            if backing.is_none() {
+                pmm.free_frame(frame.start_address());
+            }
+            match error {
+                crate::memory::shared::SharedMemError::OutOfMemory => Err(MmapError::NoMemory),
+                crate::memory::shared::SharedMemError::AlreadyMapped => Err(MmapError::AlreadyMapped),
+                _ => Err(MmapError::InternalInvariant),
+            }
+        }
+    }
+}
+
+fn shared_mapping_error(error: crate::memory::shared::SharedMemError) -> MmapError {
+    use crate::memory::shared::SharedMemError;
+    match error {
+        SharedMemError::OutOfMemory => MmapError::NoMemory,
+        SharedMemError::AlreadyMapped => MmapError::AlreadyMapped,
+        _ => MmapError::InternalInvariant,
+    }
 }
 
 pub fn map_brk(
@@ -1017,6 +1138,38 @@ pub fn sys_munmap(
         .response()
         .map(|response| VirtAddr::new(response.offset))
         .ok_or(MmapError::InternalInvariant)?;
+
+    let space = &mut sched.current_shared_process_mut().address_space;
+    if let Some(region) = space.lookup_region(addr) {
+        if let RegionBacking::Memfd { description, first_page } = region.backing {
+            if region.start != addr || region.end != end {
+                return Err(MmapError::Protected);
+            }
+            super::fd_table::with_memfd_frames(description, |_, frames| {
+                for (index, address) in (addr..end).step_by(4096).enumerate() {
+                    let page = Page::<Size4KiB>::containing_address(VirtAddr::new(address));
+                    assert_eq!(
+                        unsafe { space.lookup_phys(page, hhdm_offset) },
+                        Some(frames[first_page as usize + index].start_address()),
+                        "memfd mapping does not match its backing",
+                    );
+                }
+            });
+            for address in (addr..end).step_by(4096) {
+                let page = Page::<Size4KiB>::containing_address(VirtAddr::new(address));
+                let physical = unsafe { space.unmap_page(page, hhdm_offset) };
+                assert!(physical.is_some(), "memfd mapping lost its leaf");
+                unsafe { space.reclaim_empty_tables_for_page(page, pmm, hhdm_offset) };
+            }
+            space.remove_region_exact(region).expect("memfd mapping lost its region");
+            super::fd_table::release_memfd_view(description);
+            super::fd_table::drain_memfd_frames(pmm);
+            MUNMAP_SUCCESSES.fetch_add(1, Ordering::Relaxed);
+            MUNMAP_FULL_REGIONS.fetch_add(1, Ordering::Relaxed);
+            MUNMAP_PAGES.fetch_add(page_count as u64, Ordering::Relaxed);
+            return Ok(());
+        }
+    }
 
     let plan = match sched
         .current_process()

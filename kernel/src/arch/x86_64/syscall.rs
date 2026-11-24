@@ -1007,6 +1007,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
                 }
                 sunlight_compat_linux::abi::SHIM_RT_SIGRETURN => num = 1060,
                 sunlight_compat_linux::abi::SHIM_STATFS => num = 1061,
+                sunlight_compat_linux::abi::SHIM_SENDMSG => num = 1062,
+                sunlight_compat_linux::abi::SHIM_FTRUNCATE => num = 1063,
+                sunlight_compat_linux::abi::SHIM_MEMFD_CREATE => num = 1064,
                 -38 => {
                     crate::serial_println!(
                         "[HELIOS] Unsupported Linux syscall {} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
@@ -1126,6 +1129,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         179 => sys_resolve_path(frame),
         183 if !linux_compat => sys_native_unix_listen(frame),
         184 if !linux_compat => sys_native_unix_accept(frame.rdi as i32),
+        185 if !linux_compat => sys_native_unix_recv_fd(frame.rdi as i32),
         160 => sys_foreground(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
@@ -1334,6 +1338,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
             }
         }
         1061 if linux_compat => sys_linux_statfs(frame.rdi, frame.rsi),
+        1062 if linux_compat => sys_linux_sendmsg(frame),
+        1063 if linux_compat => sys_linux_ftruncate_memfd(frame),
+        1064 if linux_compat => sys_linux_memfd_create(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -1344,6 +1351,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
             }
         }
     };
+
+    if crate::process::fd_table::memfd_reclaim_pending() {
+        crate::process::fd_table::drain_memfd_frames(&mut crate::PMM.lock());
+    }
 
     #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
     crate::sched::SCHEDULER.lock().fastlane_mapping_sweep();
@@ -4079,12 +4090,20 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
     }
 
     if !found {
+        #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
+        if (me, pid) == (711, 712) {
+            crate::serial_println!("[FD-WAIT] pid=711 child=712 result=no-child");
+        }
         // No such child — clear any stale wait and report failure.
         sched.current_process_mut().wait_child = None;
         return u64::MAX;
     }
 
     if let Some(code) = finished_code {
+        #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
+        if (me, pid) == (711, 712) {
+            crate::serial_println!("[FD-WAIT] pid=711 child=712 result={}", code);
+        }
         sched.current_process_mut().wait_child = None;
         return code;
     }
@@ -4096,6 +4115,10 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
     }
 
     // Child still running: park the caller until the child exits.
+    #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
+    if (me, pid) == (711, 712) {
+        crate::serial_println!("[FD-WAIT] pid=711 child=712 park");
+    }
     let global_tick = sched.global_tick;
     let cur = sched.current_process_index().unwrap_or(0);
     // Phase 1 + 4: account + possible churn penalty for short work before wait
@@ -5740,6 +5763,24 @@ fn open_resolved_path(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u6
                 truncate,
             )
         };
+    if path == crate::process::mmap::SHARED_PAGE_PATH {
+        use crate::process::fd_table::{CapRights, FileHandle};
+        let allowed_flags = O_ACCMODE | O_CLOEXEC;
+        if flags & !allowed_flags != 0 || !wants_read {
+            return ERR_EINVAL;
+        }
+        let mut sched = crate::sched::SCHEDULER.lock();
+        if sched.current_process().uid != 0 {
+            return ERR_EACCES;
+        }
+        let mut rights = CapRights::READ | CapRights::MMAP_R;
+        if wants_write {
+            rights |= CapRights::WRITE | CapRights::MMAP_W;
+        }
+        return sched.current_shared_process_mut().fd_table
+            .open(FileHandle::SHARED_PAGE, CapRights::new(rights), flags as u32)
+            .map_or(if is_linux { linux_errno(24) } else { u64::MAX }, |fd| fd as u64);
+    }
     let trace_yazi_path = path == "/root/.config/yazi/yazi.toml"
         || (path.starts_with("/dev/shm/") && path.contains("yazi-"));
     if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") && trace_yazi_path {
@@ -9282,6 +9323,150 @@ fn sys_native_unix_listen(frame: &SyscallFrame) -> u64 {
     }
 }
 
+fn sys_linux_memfd_create(frame: &SyscallFrame) -> u64 {
+    use sunlight_compat_linux::abi;
+    const MFD_CLOEXEC: u64 = 1;
+    if frame.rsi & !MFD_CLOEXEC != 0 {
+        return linux_errno(abi::EINVAL as u64);
+    }
+    use crate::memory::user::UserMemoryError;
+    if let Err(error) = read_user_cstr(frame.rdi, 250) {
+        return linux_errno(match error {
+            UserMemoryError::StringTooLong => abi::EINVAL,
+            UserMemoryError::AllocationFailed => abi::ENOMEM,
+            _ => abi::EFAULT,
+        } as u64);
+    }
+    let flags = 2 | if frame.rsi & MFD_CLOEXEC != 0 { 0x80000 } else { 0 };
+    let mut sched = crate::sched::SCHEDULER.lock();
+    crate::process::fd_table::drain_memfd_frames(&mut crate::PMM.lock());
+    match sched.current_shared_process_mut().fd_table.open_memfd(flags) {
+        Ok(fd) => fd as u64,
+        Err(error) => linux_errno(error as u64),
+    }
+}
+
+fn sys_linux_ftruncate_memfd(frame: &SyscallFrame) -> u64 {
+    use sunlight_compat_linux::abi;
+    let sched = crate::sched::SCHEDULER.lock();
+    let Some(descriptor) = sched.current_shared_process().fd_table.get(frame.rdi as i32) else {
+        return linux_errno(abi::EBADF as u64);
+    };
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().unwrap().offset);
+    let mut pmm = crate::PMM.lock();
+    crate::process::fd_table::drain_memfd_frames(&mut pmm);
+    match descriptor.size_memfd(frame.rsi, &mut pmm, hhdm) {
+        Ok(()) => 0,
+        Err(error) => linux_errno(error as u64),
+    }
+}
+
+fn sys_linux_sendmsg(frame: &SyscallFrame) -> u64 {
+    use crate::process::{fd_table::CapRights, pipe};
+    use sunlight_compat_linux::abi;
+
+    let unsupported = linux_errno(abi::EOPNOTSUPP as u64);
+    if frame.rdx as u32 & !(0x40 | 0x4000) != 0 {
+        return unsupported;
+    }
+    let mut header = [0; 56];
+    if let Err(error) = copy_from_user(frame.rsi, &mut header) {
+        return error;
+    }
+    let field = |offset| u64::from_le_bytes(header[offset..offset + 8].try_into().unwrap());
+    if field(0) != 0 || u32::from_le_bytes(header[8..12].try_into().unwrap()) != 0
+        || field(24) != 1
+    {
+        return unsupported;
+    }
+    let control = field(32);
+    let control_len = field(40);
+    if control_len == 0 || control_len > 24 {
+        return unsupported;
+    }
+    if (control_len != 20 && control_len != 24) || control % 8 != 0 {
+        return linux_errno(abi::EINVAL as u64);
+    }
+    let mut ancillary = [0; 24];
+    if let Err(error) = copy_from_user(control, &mut ancillary[..control_len as usize]) {
+        return error;
+    }
+    if u64::from_le_bytes(ancillary[..8].try_into().unwrap()) != 20 {
+        return linux_errno(abi::EINVAL as u64);
+    }
+    if ancillary[8..16] != [1, 0, 0, 0, 1, 0, 0, 0] {
+        return unsupported;
+    }
+    let fd = i32::from_le_bytes(ancillary[16..20].try_into().unwrap());
+    let mut iov = [0; 16];
+    if let Err(error) = copy_from_user(field(16), &mut iov) {
+        return error;
+    }
+    let length = u64::from_le_bytes(iov[8..].try_into().unwrap());
+    if !(1..=pipe::RIGHTS_PAYLOAD_MAX as u64).contains(&length) {
+        return unsupported;
+    }
+    let mut payload = [0; pipe::RIGHTS_PAYLOAD_MAX];
+    let payload = &mut payload[..length as usize];
+    if let Err(error) = copy_from_user(u64::from_le_bytes(iov[..8].try_into().unwrap()), payload) {
+        return error;
+    }
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_shared_process();
+    let Some(stream) = process.fd_table.get(frame.rdi as i32) else {
+        return linux_errno(abi::EBADF as u64);
+    };
+    let handle = stream.handle;
+    if !handle.is_socket() {
+        return unsupported;
+    }
+    if !stream.rights.contains(CapRights::new(CapRights::WRITE)) {
+        return linux_errno(abi::EACCES as u64);
+    }
+    let Some(ring) = pipe::rights_stream(handle.socket_index(), handle.socket_endpoint(), true) else {
+        return unsupported;
+    };
+    let right = match process.fd_table.retain_shared_page(fd) {
+        Ok(right) => right,
+        Err(error) => return linux_errno(error as u64),
+    };
+    if let Err(error) = pipe::send_right(ring, handle.socket_index(), payload, right) {
+        return linux_errno(error as u64);
+    }
+    crate::process::epoll::refresh_after_io(handle, process);
+    sched.wake_linux_pipe(ring);
+    length
+}
+
+fn sys_native_unix_recv_fd(fd: i32) -> u64 {
+    use crate::process::{fd_table::CapRights, pipe};
+    use sunlight_compat_linux::abi;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_shared_process_mut();
+    let Some(stream) = process.fd_table.get(fd) else {
+        return linux_errno(abi::EBADF as u64);
+    };
+    let handle = stream.handle;
+    if !handle.is_socket() {
+        return linux_errno(abi::EOPNOTSUPP as u64);
+    }
+    if !stream.rights.contains(CapRights::new(CapRights::READ)) {
+        return linux_errno(abi::EACCES as u64);
+    }
+    let Some(ring) = pipe::rights_stream(handle.socket_index(), handle.socket_endpoint(), false) else {
+        return linux_errno(abi::EOPNOTSUPP as u64);
+    };
+    match pipe::recv_right(ring, handle.socket_index(), &mut process.fd_table) {
+        Ok((received, byte)) => {
+            crate::process::epoll::refresh_after_io(handle, process);
+            sched.wake_linux_pipe(ring);
+            ((byte as u64) << 32) | received as u64
+        }
+        Err(error) => linux_errno(error as u64),
+    }
+}
+
 fn sys_native_unix_accept(fd: i32) -> u64 {
     use crate::process::{fd_table::{CapRights, FileHandle}, unix_socket};
     use sunlight_compat_linux::abi;
@@ -11442,6 +11627,7 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             }
                         }
                         crate::process::pipe::PipeResult::Eof => 0,
+                        crate::process::pipe::PipeResult::RightsPending => linux_errno(95),
                         crate::process::pipe::PipeResult::BrokenPipe => u64::MAX,
                     }
                 } else if fd_entry.handle.is_vfs() {
@@ -11776,7 +11962,8 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                                 ERR_EPIPE
                             }
                         }
-                        crate::process::pipe::PipeResult::Eof => u64::MAX,
+                        crate::process::pipe::PipeResult::Eof
+                        | crate::process::pipe::PipeResult::RightsPending => u64::MAX,
                     }
                 } else if fd_entry.handle.is_vfs() {
                     let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
@@ -12486,6 +12673,8 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
             );
             if linux_compat {
                 match error {
+                    crate::process::mmap::MmapError::BadFd => linux_errno(9),
+                    crate::process::mmap::MmapError::Unsupported if flags == crate::process::mmap::MAP_SHARED => linux_errno(19),
                     crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
                     crate::process::mmap::MmapError::NoMemory => linux_errno(12),
                     crate::process::mmap::MmapError::AlreadyMapped => linux_errno(17),

@@ -1,8 +1,11 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
+use super::fd_table::{FdTable, QueuedSharedPage};
+use sunlight_compat_linux::abi;
 
 const PIPE_BUFFER_SIZE: usize = 4096;
+pub const RIGHTS_PAYLOAD_MAX: usize = 16;
 const PIPE_FLAG: u32 = 0x8000_0000;
 const PIPE_WRITE_FLAG: u32 = 0x4000_0000;
 
@@ -14,6 +17,8 @@ pub struct Pipe {
     data_len: usize,
     readers: u32, // reference count for read side
     writers: u32, // reference count for write side
+    rights_owner: Option<u32>,
+    rights: Option<(usize, QueuedSharedPage)>,
 }
 
 /// Global pipe pool (slot table, None = free slot)
@@ -22,6 +27,7 @@ static PIPE_POOL: spin::Mutex<Vec<Option<Pipe>>> = spin::Mutex::new(Vec::new());
 /// A Unix stream pair uses two of the existing pipe rings, one in each
 /// direction. Endpoints retain their own status descriptions in FdTable.
 struct SocketPair {
+    native_listener: bool,
     incoming: [u32; 2],
     refs: [usize; 2],
     /// One pending urgent byte per destination endpoint. Out-of-band data is
@@ -37,6 +43,50 @@ pub fn socket_stream(index: u32, endpoint: usize) -> Option<(u32, u32)> {
         .get(index as usize)?
         .as_ref()
         .map(|pair| (pair.incoming[endpoint], pair.incoming[1 - endpoint]))
+}
+
+pub fn rights_stream(index: u32, endpoint: usize, sending: bool) -> Option<u32> {
+    let pool = SOCKET_PAIRS.lock();
+    let pair = pool.get(index as usize)?.as_ref()?;
+    (pair.native_listener && endpoint == usize::from(!sending)).then_some(pair.incoming[1])
+}
+
+pub fn send_right(pool_idx: u32, owner: u32, payload: &[u8], right: QueuedSharedPage) -> Result<(), u32> {
+    let mut pool = PIPE_POOL.lock();
+    let pipe = pool.get_mut(pool_idx as usize).and_then(Option::as_mut).ok_or(abi::EPIPE)?;
+    if pipe.rights_owner != Some(owner) || !pipe.has_readers() || !pipe.has_writers() {
+        return Err(abi::EPIPE);
+    }
+    if pipe.rights.is_some() || payload.len() > PIPE_BUFFER_SIZE - pipe.data_len {
+        return Err(abi::EAGAIN);
+    }
+    pipe.rights = Some((pipe.write_pos, right));
+    for &byte in payload {
+        pipe.buffer[pipe.write_pos] = byte;
+        pipe.write_pos = (pipe.write_pos + 1) % PIPE_BUFFER_SIZE;
+    }
+    pipe.data_len += payload.len();
+    Ok(())
+}
+
+pub fn recv_right(pool_idx: u32, owner: u32, table: &mut FdTable) -> Result<(i32, u8), u32> {
+    let mut pool = PIPE_POOL.lock();
+    let pipe = pool.get_mut(pool_idx as usize).and_then(Option::as_mut).ok_or(abi::ENOMSG)?;
+    if pipe.rights_owner != Some(owner) || !pipe.has_readers() {
+        return Err(abi::ENOMSG);
+    }
+    if pipe.data_len == 0 && pipe.has_writers() {
+        return Err(abi::EAGAIN);
+    }
+    let Some((_, right)) = pipe.rights.as_ref().filter(|(pos, _)| *pos == pipe.read_pos) else {
+        return Err(abi::ENOMSG);
+    };
+    let fd = table.install_shared_page(right).map_err(|_| abi::EMFILE)?;
+    let byte = pipe.buffer[pipe.read_pos];
+    pipe.rights = None;
+    pipe.read_pos = (pipe.read_pos + 1) % PIPE_BUFFER_SIZE;
+    pipe.data_len -= 1;
+    Ok((fd, byte))
 }
 
 /// Publish one urgent byte to `endpoint`. A second unconsumed urgent byte
@@ -110,7 +160,7 @@ pub fn create_socketpair(
     flags: u32,
 ) -> Result<(i32, i32), PipeError> {
     use crate::process::fd_table::{CapRights, FileHandle};
-    let index = alloc_socketpair();
+    let index = alloc_socketpair(false);
     let rights = CapRights::new(CapRights::READ | CapRights::WRITE);
     let (a, b) = {
         let table = &mut sched.current_shared_process_mut().fd_table;
@@ -140,23 +190,28 @@ pub fn create_socketpair(
 /// Both endpoints start with one owner each; callers that hand an endpoint to
 /// a descriptor or a listener queue must not retain it again, and release it
 /// with `socket_close` when that owner goes away.
-pub fn alloc_socketpair() -> u32 {
+pub fn alloc_socketpair(native_listener: bool) -> u32 {
     let first = alloc_pipe();
     let second = alloc_pipe();
     let item = SocketPair {
+        native_listener,
         incoming: [first, second],
         refs: [1, 1],
         oob: [None, None],
     };
     let mut pool = SOCKET_PAIRS.lock();
-    if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
+    let index = if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
         *slot = Some(item);
         idx as u32
     } else {
         let idx = pool.len();
         pool.push(Some(item));
         idx as u32
+    };
+    if native_listener {
+        PIPE_POOL.lock()[second as usize].as_mut().expect("new ring").rights_owner = Some(index);
     }
+    index
 }
 
 /// Result type for pipe operations
@@ -166,6 +221,7 @@ pub enum PipeResult {
     WouldBlock, // no data/space available
     Eof,        // no writers (on read)
     BrokenPipe, // no readers (on write)
+    RightsPending,
 }
 
 impl Pipe {
@@ -177,6 +233,8 @@ impl Pipe {
             data_len: 0,
             readers: 1,
             writers: 1,
+            rights_owner: None,
+            rights: None,
         }
     }
 
@@ -278,7 +336,14 @@ pub fn pipe_read(pool_idx: u32, buf: &mut [u8]) -> PipeResult {
             return PipeResult::WouldBlock;
         }
 
-        let to_read = core::cmp::min(buf.len(), pipe.data_len);
+        let mut to_read = core::cmp::min(buf.len(), pipe.data_len);
+        if let Some((pos, _)) = &pipe.rights {
+            let preceding = (*pos + PIPE_BUFFER_SIZE - pipe.read_pos) % PIPE_BUFFER_SIZE;
+            if preceding == 0 {
+                return PipeResult::RightsPending;
+            }
+            to_read = to_read.min(preceding);
+        }
 
         for i in 0..to_read {
             buf[i] = pipe.buffer[(pipe.read_pos + i) % PIPE_BUFFER_SIZE];
@@ -334,6 +399,10 @@ pub fn pipe_close_end(pool_idx: u32, is_write: bool) {
         } else {
             if pipe.readers > 0 {
                 pipe.readers -= 1;
+            }
+            if pipe.readers == 0 && pipe.rights.take().is_some() {
+                #[cfg(feature = "fd_shared_mmap_test")]
+                crate::serial_println!("[SCM-RIGHTS] dropped queued reference on receiver close");
             }
         }
 
