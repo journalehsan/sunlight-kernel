@@ -136,6 +136,20 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
     RamEntry::dir("/bin", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-wayland-sunapp-test"))]
+    RamEntry::dir("/Applications/SunlightCanvas.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-wayland-sunapp-test"))]
+    RamEntry::dir("/Applications/SunlightCanvas.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-wayland-sunapp-test"))]
+    RamEntry::file(
+        "/Applications/SunlightCanvas.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!("../../SunlightCanvas.sunapp/Manifest.toml"),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-wayland-sunapp-test"))]
+    RamEntry::file(
+        "/Applications/SunlightCanvas.sunapp/Program/sunlight-ui-wayland", 0, 0, mode::FILE_755,
+        include_bytes!(env!("SUNLIGHT_CANVAS_BUNDLE_ELF")),
+    ),
     RamEntry::dir("/Applications/ChronosDosShell.sunapp", 0, 0, mode::DIR_755),
     RamEntry::dir(
         "/Applications/ChronosDosShell.sunapp/Program",
@@ -421,6 +435,11 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/Applications/VoiceRecorder.sunapp/Manifest.toml", 0, 0, mode::FILE_644, include_bytes!("../../VoiceRecorder.sunapp/Manifest.toml")),
     RamEntry::file("/Applications/VoiceRecorder.sunapp/Resources/icon.svg", 0, 0, mode::FILE_644, include_bytes!("../../docs/icons/SunlightOS/devices/16/audio-input-microphone.svg")),
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
+    #[cfg(feature = "helios-git")]
+    RamEntry::file(
+        "/bin/git", 0, 0, mode::FILE_755,
+        include_bytes!("../../target/git-helios/git"),
+    ),
     RamEntry::dir("/mnt", 0, 0, mode::DIR_755),
     RamEntry::file("/bin/lsblk", 0, 0, mode::FILE_755, b"#!/kernel/lsblk\n"),
     RamEntry::file("/bin/storagectl", 0, 0, mode::FILE_755, b"#!/kernel/storagectl\n"),

@@ -8,3 +8,12 @@ publish = false
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
+
+[features]
+sunapp-launcher = ["sunlight-libc/helios-wayland-sunapp-test"]
+pointer-fixture = []
+
+[[bin]]
+name = "canvas-sunapp-launcher"
+path = "src/bin/canvas-sunapp-launcher.rs"
+required-features = ["sunapp-launcher"]

@@ -12,7 +12,13 @@ use sunlight_ui::{theme::Color, Window, WindowConfig, WindowDecoration};
 const WIDTH: usize = 256;
 const HEIGHT: usize = 160;
 const TITLE: &str = "HeliosWL";
-const GLOBALS: [&[u8]; 3] = [b"wl_compositor", b"wl_shm", b"xdg_wm_base"];
+const GLOBALS: &[&[u8]] = &[
+    b"wl_compositor",
+    b"wl_shm",
+    b"xdg_wm_base",
+    #[cfg(feature = "pointer-fixture")]
+    b"wl_seat",
+];
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -223,7 +229,11 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
     let mut registry = false;
     let mut synced = false;
     let mut objects = 0;
-    let mut bound = [0; 3];
+    let mut bound = [0; GLOBALS.len()];
+    #[cfg(feature = "pointer-fixture")]
+    let mut pointer_id = 0;
+    #[cfg(feature = "pointer-fixture")]
+    let mut click_sent = false;
     let mut surface_id = 0;
     let mut xdg_id = 0;
     let mut toplevel_id = 0;
@@ -251,12 +261,27 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                     advertise(stream)?;
                     registry = true;
                 }
-                (1, 0, 12) if registry && !synced && bound == [0; 3] => {
+                (1, 0, 12) if registry && !synced && bound == [0; GLOBALS.len()] => {
                     let sync_id = claim_object(&mut objects, word(bytes, 8))?;
                     event(stream, sync_id, 0, &[0])?;
                     event(stream, 1, 1, &[sync_id])?;
                     objects &= !(1 << sync_id);
                     synced = true;
+                }
+                #[cfg(feature = "pointer-fixture")]
+                (1, 0, 12) if frame == 1 && pointer_id != 0 && !click_sent => {
+                    let sync_id = claim_object(&mut objects, word(bytes, 8))?;
+                    let time = monotonic_millis() as u32;
+                    event(stream, pointer_id, 0, &[2, surface_id, 64 << 8, 112 << 8])?;
+                    event(stream, pointer_id, 3, &[3, time, 0x110, 1])?;
+                    event(stream, pointer_id, 3, &[4, time, 0x110, 0])?;
+                    event(stream, sync_id, 0, &[4])?;
+                    event(stream, 1, 1, &[sync_id])?;
+                    objects &= !(1 << sync_id);
+                    click_sent = true;
+                    log(format_args!(
+                        "[WL-FIXTURE] click surface={surface_id} x=64 y=112 button=272 state=1 serial=3\n"
+                    ));
                 }
                 (2, 0, len) if registry && len >= 24 => {
                     let index = word(bytes, 8).wrapping_sub(1) as usize;
@@ -276,6 +301,14 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                         event(stream, bound[1], 0, &[0])?;
                         event(stream, bound[1], 0, &[1])?;
                     }
+                    #[cfg(feature = "pointer-fixture")]
+                    if index == 3 {
+                        event(stream, bound[3], 0, &[1])?;
+                    }
+                }
+                #[cfg(feature = "pointer-fixture")]
+                (id, 0, 12) if id != 0 && id == bound[3] && pointer_id == 0 => {
+                    pointer_id = claim_object(&mut objects, word(bytes, 8))?;
                 }
                 (id, 0, 12) if id != 0 && id == bound[0] && role == 0 => {
                     surface_id = claim_object(&mut objects, word(bytes, 8))?;

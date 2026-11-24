@@ -1,0 +1,13 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.helios.canvas"
+name = "Sunlight Canvas"
+kind = "gui"
+
+[runtime]
+type = "helios"
+
+[entry]
+executable = "Program/sunlight-ui-wayland"

@@ -287,6 +287,13 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         aliases: &[],
         executable: b"/Applications/Btop.sunapp",
     },
+    #[cfg(feature = "helios-wayland-sunapp-test")]
+    ApplicationRegistryEntry {
+        canonical_id: "sunlight-canvas",
+        display_name: "Sunlight Canvas",
+        aliases: &[],
+        executable: b"/Applications/SunlightCanvas.sunapp",
+    },
     ApplicationRegistryEntry {
         canonical_id: "dos-navigator",
         display_name: "DOS Navigator 1.51",
@@ -664,12 +671,16 @@ fn launch_bundle(
     environment: Option<&[u8]>,
 ) -> Result<LaunchResult, LaunchError> {
     let bundle = request.command;
-    if let Some(entry) = terminal_bundle_entry(bundle) {
-        let entry = entry?;
+    if let Some(entry) = helios_bundle_entry(bundle) {
+        let (entry, kind) = entry?;
         if !request.args.is_empty() {
             return Err(LaunchError::InvalidCommand);
         }
-        if !request.require_display {
+        if kind == HeliosKind::Gui || !request.require_display {
+            if kind == HeliosKind::Gui && !request.require_display {
+                return Err(LaunchError::DisplayUnavailable);
+            }
+            launch_trace::log_phase_now(request.trace, entry.subject(), "spawn_entered", None);
             let pid = spawn_environment(entry.path(), &[entry.path()], environment)
                 .map_err(LaunchError::SpawnFailed)?;
             return Ok(LaunchResult { pid, path: entry.path, path_len: entry.path_len });
@@ -695,13 +706,21 @@ fn launch_bundle(
 }
 
 pub fn resolve_terminal_application(command: &[u8]) -> Result<Option<([u8; MAX_PATH], usize)>, LaunchError> {
-    match terminal_bundle_entry(command) {
-        Some(result) => result.map(|entry| Some((entry.path, entry.path_len))),
+    match helios_bundle_entry(command) {
+        Some(result) => result.map(|(entry, kind)| {
+            (kind == HeliosKind::Terminal).then_some((entry.path, entry.path_len))
+        }),
         None => Ok(None),
     }
 }
 
-fn terminal_bundle_entry(command: &[u8]) -> Option<Result<ResolvedApp, LaunchError>> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HeliosKind {
+    Terminal,
+    Gui,
+}
+
+fn helios_bundle_entry(command: &[u8]) -> Option<Result<(ResolvedApp, HeliosKind), LaunchError>> {
     let bundle = map_app_id(command).unwrap_or(command);
     if !is_bundle_path(bundle) || !APPLICATION_REGISTRY.iter().any(|app| app.executable == bundle) {
         return None;
@@ -710,11 +729,11 @@ fn terminal_bundle_entry(command: &[u8]) -> Option<Result<ResolvedApp, LaunchErr
     if toml_value(&manifest, b"runtime", b"type") != Some(b"helios") {
         return None;
     }
-    Some(validate_terminal_entry(bundle, &manifest))
+    Some(validate_helios_entry(bundle, &manifest))
 }
 
-fn validate_terminal_entry(bundle: &[u8], manifest: &[u8]) -> Result<ResolvedApp, LaunchError> {
-    let entry = parse_terminal_entry(manifest)?;
+fn validate_helios_entry(bundle: &[u8], manifest: &[u8]) -> Result<(ResolvedApp, HeliosKind), LaunchError> {
+    let (entry, kind) = parse_helios_entry(manifest)?;
     let mut path = [0; MAX_PATH];
     for relative in [b"".as_slice(), b"Manifest.toml", b"Program", entry] {
         let full_path = if relative.is_empty() {
@@ -741,15 +760,19 @@ fn validate_terminal_entry(bundle: &[u8], manifest: &[u8]) -> Result<ResolvedApp
     if count != Ok(ident.len()) || &ident[..5] != b"\x7fELF\x02" || &ident[9..15] != b"HLNX01" {
         return Err(LaunchError::UnsupportedRuntime);
     }
-    Ok(ResolvedApp { path, path_len: length })
+    Ok((ResolvedApp { path, path_len: length }, kind))
 }
 
-fn parse_terminal_entry(manifest: &[u8]) -> Result<&[u8], LaunchError> {
+fn parse_helios_entry(manifest: &[u8]) -> Result<(&[u8], HeliosKind), LaunchError> {
     let manifest = manifest.split(|byte| *byte == 0).next().unwrap_or_default();
     let entry = toml_value(manifest, b"entry", b"executable").ok_or(LaunchError::MissingEntry)?;
+    let kind = match toml_value(manifest, b"application", b"kind") {
+        Some(b"terminal") => HeliosKind::Terminal,
+        Some(b"gui") => HeliosKind::Gui,
+        _ => return Err(LaunchError::InvalidBundle),
+    };
     if toml_value(manifest, b"bundle", b"format") != Some(b"1")
         || toml_value(manifest, b"runtime", b"type") != Some(b"helios")
-        || toml_value(manifest, b"application", b"kind") != Some(b"terminal")
         || !toml_value(manifest, b"application", b"id").is_some_and(valid_app_id)
         || !entry.strip_prefix(b"Program/").is_some_and(|name| {
             is_strict_identifier(name) && !matches!(name, b"." | b"..")
@@ -760,7 +783,7 @@ fn parse_terminal_entry(manifest: &[u8]) -> Result<&[u8], LaunchError> {
     {
         return Err(LaunchError::InvalidBundle);
     }
-    Ok(entry)
+    Ok((entry, kind))
 }
 
 fn launch_chronos_bundle(
@@ -1338,13 +1361,17 @@ mod tests {
         extern crate std;
 
         let manifest = include_str!("../../Btop.sunapp/Manifest.toml");
-        assert_eq!(super::parse_terminal_entry(manifest.as_bytes()), Ok(b"Program/btop".as_slice()));
+        assert!(matches!(super::parse_helios_entry(manifest.as_bytes()),
+            Ok((b"Program/btop", super::HeliosKind::Terminal))));
+        let gui = include_bytes!("../../SunlightCanvas.sunapp/Manifest.toml");
+        assert!(matches!(super::parse_helios_entry(gui),
+            Ok((b"Program/sunlight-ui-wayland", super::HeliosKind::Gui))));
         for entry in ["Program/..", "Program/../btop", "/bin/btop", "Resources/btop"] {
             let invalid = manifest.replace("Program/btop", entry);
-            assert!(super::parse_terminal_entry(invalid.as_bytes()).is_err());
+            assert!(super::parse_helios_entry(invalid.as_bytes()).is_err());
         }
         let invalid = std::format!("{manifest}\n[permissions]\nnetwork = true\n");
-        assert!(super::parse_terminal_entry(invalid.as_bytes()).is_err());
+        assert!(super::parse_helios_entry(invalid.as_bytes()).is_err());
     }
 
     #[test]

@@ -217,6 +217,7 @@ impl FileHandle {
     pub(crate) const PROC: Self = Self(0x0020_0000);
     pub(crate) const SHARED_PAGE: Self = Self(0x0030_0000);
     pub(crate) const MEMFD: Self = Self(0x0030_0001);
+    pub(crate) const NULL_DEVICE: Self = Self(0x0030_0002);
 
     pub(crate) fn is_proc(self) -> bool {
         self == Self::PROC

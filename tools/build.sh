@@ -48,7 +48,14 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-resolved --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-powerd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thermald --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-audiod --release
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
+git_kernel_features=()
+git_vfs_features=()
+if [[ "${SUNLIGHT_HELIOS_GIT:-0}" == 1 ]]; then
+    bash "$SCRIPT_DIR/build_helios_git.sh"
+    git_kernel_features=(--features helios-git)
+    git_vfs_features=(--features sunlight-fs/helios-git)
+fi
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release "${git_vfs_features[@]}"
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release
@@ -161,7 +168,7 @@ else
     document_kernel_features=(--no-default-features)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --no-default-features
 fi
-cargo build --package sunlight-kernel "${document_kernel_features[@]}"
+cargo build --package sunlight-kernel "${document_kernel_features[@]}" "${git_kernel_features[@]}"
 
 # --- Step 3–6: Limine hybrid ISO (legacy BIOS + x86_64 UEFI) ---
 echo "[build] Building hybrid ISO (BIOS + UEFI)..."

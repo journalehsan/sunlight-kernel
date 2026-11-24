@@ -49,6 +49,7 @@ pub mod sched {
     pub struct Process {
         pub pid: usize, pub trusted_vfs_service: bool, pub exiting: bool,
         pub vfs_root_metadata: bool, pub vfs_boot_root: bool, pub vfs_file_routed: bool,
+        pub vfs_root_rebased: bool,
         pub cwd: String,
         pub uid: u32, pub gid: u32,
         pub state: ProcessState, pub pending_call: Option<()>,
@@ -80,6 +81,7 @@ mod ipc {
         use crate::sched::{AddressSpace, Foreground, Process, Scheduler};
         let mut sched = Scheduler { global_tick: 0, processes: vec![Process {
             pid: 3, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
+            vfs_root_rebased: false,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
             foreground: Foreground { incarnation: 5 }, address_space: AddressSpace { generation: 7 },
@@ -106,6 +108,7 @@ mod ipc {
         assert_eq!(vfs_registration::register(3, 8, &sched, &caps), Ok(()));
         sched.processes.push(Process {
             pid: 4, trusted_vfs_service: true, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
+            vfs_root_rebased: false,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
             foreground: Foreground { incarnation: 6 }, address_space: AddressSpace { generation: 8 },
@@ -129,6 +132,7 @@ mod ipc {
         // from process records, independently of the service's credentials.
         sched.processes.push(Process {
             pid: 10, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
+            vfs_root_rebased: false,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 1001, gid: 1002,
             foreground: Foreground { incarnation: 11 }, address_space: AddressSpace { generation: 12 },

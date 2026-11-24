@@ -64,6 +64,51 @@ impl<D: BlockDevice> Vfs<D> {
             .map(|(_, metadata)| metadata)
     }
 
+    /// Create a directory under authenticated anchors. The namespace owner
+    /// supplies its write policy for the resolved, mount-visible path.
+    pub fn mkdir_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+        mode: u16,
+        authorize: impl FnOnce(&str) -> Result<(), FsError>,
+    ) -> Result<(), FsError> {
+        if path.is_empty() || path.len() > LOOKUP_PATH_MAX || path.as_bytes().contains(&0) {
+            return Err(FsError::InvalidPath);
+        }
+        let trimmed = path.trim_end_matches('/');
+        if trimmed.is_empty() {
+            self.resolve_beneath(root, cwd, path, caller)?;
+            return Err(FsError::AlreadyExists);
+        }
+        let (parent, leaf) = match trimmed.rsplit_once('/') {
+            Some(("", leaf)) => ("/", leaf),
+            Some((parent, leaf)) => (parent, leaf),
+            None => (".", trimmed),
+        };
+        let (mut resolved, metadata) = self.resolve_beneath(root, cwd, parent, caller)?;
+        if metadata.stat.file_type != FileType::Directory {
+            return Err(FsError::NotDir);
+        }
+        if !check_permission(&metadata.stat, &caller, PermCheck::Execute) {
+            return Err(FsError::PermissionDenied);
+        }
+        if matches!(leaf, "." | "..") {
+            return Err(FsError::AlreadyExists);
+        }
+        if !check_permission(&metadata.stat, &caller, PermCheck::Write) {
+            return Err(FsError::PermissionDenied);
+        }
+        if resolved.as_str() != "/" {
+            resolved.append("/")?;
+        }
+        resolved.append(leaf)?;
+        authorize(resolved.as_str())?;
+        self.mkdir(resolved.as_str(), caller.uid, caller.gid, mode & 0o777)
+    }
+
     /// Open an existing regular file under retained anchors. Search, access
     /// checks and handle acquisition share this exclusive borrow. The returned
     /// handle owns the inode independently of subsequent unlink or rename.

@@ -1,0 +1,13 @@
+[package]
+name = "sunlight-ui-wayland"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+test = false
+doctest = false
+
+[dependencies]
+sunlight-ui = { path = "../sunlight-ui", default-features = false }

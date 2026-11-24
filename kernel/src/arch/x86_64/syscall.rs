@@ -4397,6 +4397,13 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.cwd = parent_cwd;
     child.capabilities = capabilities;
     child.service_lookup_restrictions = service_lookup_restrictions;
+    #[cfg(all(debug_assertions, feature = "helios_wayland_sunapp_test"))]
+    if path_str == "/Applications/SunlightCanvas.sunapp/Program/sunlight-ui-wayland" {
+        crate::serial_println!(
+            "[CANVAS-SUNAPP] child context pid={} uid={} gid={} cwd={} env_count={} capabilities={} service_lookup_mask={:?}",
+            pid, uid, gid, child.cwd, child.env.len(), child.capabilities.len(), service_lookup_restrictions,
+        );
+    }
     #[cfg(feature = "native_session_race_test")]
     if path_str == "/bin/session-racer" && sched.online_cores > 1 {
         child.cpu_mask = if option_env!("SUNLIGHT_SESSION_N4_AP") == Some("1") {
@@ -5703,6 +5710,28 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn open_resolved_path(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64) -> u64 {
+    if path == "/dev/null" && current_is_linux() {
+        use crate::process::fd_table::{CapRights, FileHandle};
+        let Ok(open) = sunlight_compat_linux::open_flags::parse(flags) else {
+            return ERR_EINVAL;
+        };
+        if open.directory {
+            return linux_errno(20);
+        }
+        if open.create && open.exclusive {
+            return linux_errno(17);
+        }
+        let mut rights = CapRights::FSTAT;
+        if open.read {
+            rights |= CapRights::READ;
+        }
+        if open.write {
+            rights |= CapRights::WRITE;
+        }
+        return crate::sched::SCHEDULER.lock().current_shared_process_mut().fd_table
+            .open(FileHandle::NULL_DEVICE, CapRights::new(rights), flags as u32)
+            .map_or(linux_errno(24), |fd| fd as u64);
+    }
     if procfs::owns(path) && current_is_linux() {
         // This namespace is kernel virtual: no native VFS or service traversal.
         return procfs::native_result(procfs::open(path, flags));
@@ -10077,6 +10106,9 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
     if flags == 0x1000
         && crate::memory::user::read_value::<1>(frame.rsi).is_ok_and(|first| first == [0])
     {
+        if is_null_device_fd(dirfd) {
+            return linux_null_stat(stat_ptr);
+        }
         if let Some(result) = procfs::fstat(dirfd, stat_ptr) {
             return result;
         }
@@ -10090,6 +10122,9 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
     // grants and fail-closed behavior still apply to all native paths.
     let resolved = linux_resolve_at(dirfd, frame.rsi);
     if let Ok(path) = &resolved {
+        if path == "/dev/null" {
+            return linux_null_stat(stat_ptr);
+        }
         if procfs::owns(path) {
             return procfs::stat(path, stat_ptr, flags != 0);
         }
@@ -11614,6 +11649,9 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
     ) {
         Ok(()) => {
             if let Some(&fd_entry) = sched.current_shared_process().fd_table.get(fd) {
+                if fd_entry.handle == crate::process::fd_table::FileHandle::NULL_DEVICE {
+                    return 0;
+                }
                 if fd_entry.handle.is_inet_socket() {
                     return ERR_ENOTCONN;
                 }
@@ -11946,6 +11984,9 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
     ) {
         Ok(()) => {
             if let Some(&fd_entry) = sched.current_shared_process().fd_table.get(fd) {
+                if fd_entry.handle == crate::process::fd_table::FileHandle::NULL_DEVICE {
+                    return count as u64;
+                }
                 if fd_entry.handle.is_inet_socket() {
                     return ERR_ENOTCONN;
                 }
@@ -12478,12 +12519,33 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
 ///   [24..28] st_mode, [28..32] st_uid, [32..36] st_gid, [36..40] __pad0,
 ///   [40..48] st_rdev, [48..56] st_size, [56..64] st_blksize, [64..72] st_blocks,
 ///   [72..120] timestamps (atim/mtim/ctim), [120..144] __unused
+fn is_null_device_fd(fd: i32) -> bool {
+    crate::sched::with_scheduler(|sched| {
+        sched.current_shared_process().fd_table.get(fd).is_some_and(|entry| {
+            entry.handle == crate::process::fd_table::FileHandle::NULL_DEVICE
+        })
+    })
+}
+
+fn linux_null_stat(buf: u64) -> u64 {
+    let mut record = [0u8; 144];
+    record[8..16].copy_from_slice(&synthetic_ino("/dev/null").to_le_bytes());
+    record[16..24].copy_from_slice(&1u64.to_le_bytes());
+    record[24..28].copy_from_slice(&0o020666u32.to_le_bytes());
+    record[40..48].copy_from_slice(&0x103u64.to_le_bytes());
+    record[56..64].copy_from_slice(&4096u64.to_le_bytes());
+    copy_to_user(buf, &record).map_or_else(|_| linux_errno(14), |_| 0)
+}
+
 fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     use sunlight_fs::vfs::{FileHandle as VfsHandle, FileType};
 
     let fd = frame.rdi as i32;
     let buf_ptr = frame.rsi;
 
+    if current_is_linux() && is_null_device_fd(fd) {
+        return linux_null_stat(buf_ptr);
+    }
     if let Some(result) = procfs::fstat(fd, buf_ptr) {
         return procfs::native_result(result);
     }

@@ -3494,6 +3494,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-ui-wayland"
+version = "0.1.0"
+dependencies = [
+ "sunlight-ui",
+]
+
+[[package]]
 name = "sunlight-usb-mouse"
 version = "0.2.8896-alpha.2"
 dependencies = [

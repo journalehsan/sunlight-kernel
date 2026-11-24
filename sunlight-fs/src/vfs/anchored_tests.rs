@@ -4,6 +4,65 @@ const OWNER: Credential = Credential { uid: 42, gid: 42 };
 const OTHER: Credential = Credential { uid: 43, gid: 43 };
 
 #[test]
+fn mkdir_publishes_under_retained_anchors_and_preserves_permissions() {
+    let (mut fs, root, cwd) = fixture();
+    let observer = fs.open("/jail").unwrap();
+    let allow = |_: &str| Ok(());
+    assert_eq!(
+        fs.mkdir_beneath(root, cwd, "new/child", OWNER, 0o750, allow),
+        Err(FsError::NotFound)
+    );
+    assert_eq!(
+        fs.mkdir_beneath(root, cwd, "new", OTHER, 0o755, allow),
+        Err(FsError::PermissionDenied)
+    );
+    assert_eq!(
+        fs.mkdir_beneath(root, cwd, "new", OWNER, 0o755, |_| Err(
+            FsError::ReadOnlyFilesystem
+        )),
+        Err(FsError::ReadOnlyFilesystem)
+    );
+    assert_eq!(fs.stat("/jail/cwd/new"), Err(FsError::NotFound));
+    fs.mkdir_beneath(root, cwd, "new/", OWNER, 0o755, |path| {
+        assert_eq!(path, "/jail/cwd/new");
+        Ok(())
+    })
+    .unwrap();
+    fs.mkdir_beneath(root, cwd, "new/child", OWNER, 0o750, allow)
+        .unwrap();
+    assert_eq!(
+        fs.mkdir_beneath(root, cwd, "new/child", OWNER, 0o777, allow),
+        Err(FsError::AlreadyExists)
+    );
+    let stat = fs
+        .stat_beneath(observer, observer, "/cwd/new/child", OTHER)
+        .unwrap()
+        .stat;
+    assert_eq!(
+        (stat.file_type, stat.uid, stat.gid, stat.mode & 0o777),
+        (FileType::Directory, OWNER.uid, OWNER.gid, 0o750)
+    );
+    assert_eq!(
+        fs.pin_directory_beneath(observer, observer, "/cwd/new/child", OTHER),
+        Err(FsError::PermissionDenied)
+    );
+    let (new_root, new_cwd) = fs
+        .pin_directory_beneath(root, cwd, "new/child", OWNER)
+        .unwrap();
+    let file = fs
+        .create_file_exclusive("/jail/cwd/new/child/data", OWNER.uid, OWNER.gid, 0o600)
+        .unwrap();
+    fs.close(file).unwrap();
+    let file = fs
+        .open_file_beneath(new_root, new_cwd, "data", OWNER, true, false)
+        .unwrap();
+    for handle in [file, new_cwd, new_root, observer, cwd, root] {
+        fs.close(handle).unwrap();
+    }
+    assert_eq!(fs.open_handle_count(), 0);
+}
+
+#[test]
 fn cwd_reporting_is_root_relative_bounded_and_rejects_escaped_or_hidden_anchors() {
     let (mut fs, root, cwd) = fixture();
     let mut bytes = [0; 32];

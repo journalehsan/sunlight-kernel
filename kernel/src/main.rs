@@ -1164,10 +1164,17 @@ pub extern "C" fn _start() -> ! {
     {
         for (pid, name, elf) in [
             (716, "native-wayland-fixture", include_bytes!(env!("SUNLIGHT_WAYLAND_SERVER")).as_slice()),
+            #[cfg(not(feature = "helios_wayland_sunapp_test"))]
             (717, "helios-wayland-client", include_bytes!(env!("SUNLIGHT_WAYLAND_CLIENT")).as_slice()),
+            #[cfg(feature = "helios_wayland_sunapp_test")]
+            (717, "canvas-sunapp-launcher", include_bytes!(env!("SUNLIGHT_CANVAS_LAUNCHER")).as_slice()),
         ] {
             let mut pmm = PMM.lock();
             let mut probe = unsafe { Process::new(pid, 0, name, &mut pmm, hhdm_offset) };
+            #[cfg(feature = "helios_wayland_sunapp_test")]
+            if name == "canvas-sunapp-launcher" {
+                probe.system_allocation = true;
+            }
             process::spawn::exec_into_process(
                 elf, &mut probe, &mut pmm, hhdm_offset, &[name.as_bytes()], &[], false,
             )

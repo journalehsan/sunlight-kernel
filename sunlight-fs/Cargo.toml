@@ -676,6 +676,10 @@ version = "0.2.8896-alpha.2"
 
 edition = "2021"
 
+[features]
+helios-git = []
+helios-wayland-sunapp-test = []
+
 [dependencies]
 sunlight-mm = { path = "../sunlight-mm" }
 sunlight-block = { path = "../sunlight-block" }
