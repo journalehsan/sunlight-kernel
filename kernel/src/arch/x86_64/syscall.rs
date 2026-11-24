@@ -1010,6 +1010,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
                 sunlight_compat_linux::abi::SHIM_SENDMSG => num = 1062,
                 sunlight_compat_linux::abi::SHIM_FTRUNCATE => num = 1063,
                 sunlight_compat_linux::abi::SHIM_MEMFD_CREATE => num = 1064,
+                sunlight_compat_linux::abi::SHIM_RECVMSG => num = 1065,
                 -38 => {
                     crate::serial_println!(
                         "[HELIOS] Unsupported Linux syscall {} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
@@ -1341,6 +1342,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         1062 if linux_compat => sys_linux_sendmsg(frame),
         1063 if linux_compat => sys_linux_ftruncate_memfd(frame),
         1064 if linux_compat => sys_linux_memfd_create(frame),
+        1065 if linux_compat => sys_linux_recvmsg(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -9361,7 +9363,7 @@ fn sys_linux_ftruncate_memfd(frame: &SyscallFrame) -> u64 {
     }
 }
 
-fn sys_linux_sendmsg(frame: &SyscallFrame) -> u64 {
+fn sys_linux_sendmsg(frame: &mut SyscallFrame) -> u64 {
     use crate::process::{fd_table::CapRights, pipe};
     use sunlight_compat_linux::abi;
 
@@ -9381,7 +9383,34 @@ fn sys_linux_sendmsg(frame: &SyscallFrame) -> u64 {
     }
     let control = field(32);
     let control_len = field(40);
-    if control_len == 0 || control_len > 24 {
+    if control_len == 0 {
+        let mut iov = [0; 16];
+        if let Err(error) = copy_from_user(field(16), &mut iov) {
+            return error;
+        }
+        {
+            let sched = crate::sched::SCHEDULER.lock();
+            let Some(stream) = sched.current_shared_process().fd_table.get(frame.rdi as i32) else {
+                return linux_errno(abi::EBADF as u64);
+            };
+            let handle = stream.handle;
+            if !handle.is_socket()
+                || pipe::rights_stream(handle.socket_index(), handle.socket_endpoint(), true).is_none()
+            {
+                return unsupported;
+            }
+            if !stream.rights.contains(CapRights::new(CapRights::WRITE)) {
+                return linux_errno(abi::EACCES as u64);
+            }
+        }
+        let (message, flags) = (frame.rsi, frame.rdx);
+        frame.rsi = u64::from_le_bytes(iov[..8].try_into().unwrap());
+        frame.rdx = u64::from_le_bytes(iov[8..].try_into().unwrap());
+        let result = sys_write_with_nonblocking(frame, flags & MSG_DONTWAIT != 0);
+        (frame.rsi, frame.rdx) = (message, flags);
+        return result;
+    }
+    if control_len > 24 {
         return unsupported;
     }
     if (control_len != 20 && control_len != 24) || control % 8 != 0 {
@@ -9436,6 +9465,67 @@ fn sys_linux_sendmsg(frame: &SyscallFrame) -> u64 {
     crate::process::epoll::refresh_after_io(handle, process);
     sched.wake_linux_pipe(ring);
     length
+}
+
+fn sys_linux_recvmsg(frame: &mut SyscallFrame) -> u64 {
+    use crate::process::{fd_table::CapRights, pipe};
+    use sunlight_compat_linux::abi;
+
+    const MSG_CMSG_CLOEXEC: u64 = 0x40000000;
+    let unsupported = linux_errno(abi::EOPNOTSUPP as u64);
+    let flags = frame.rdx;
+    if flags & !(MSG_DONTWAIT | MSG_CMSG_CLOEXEC) != 0 {
+        return unsupported;
+    }
+    let message = frame.rsi;
+    let mut header = [0; 56];
+    if let Err(error) = copy_from_user(message, &mut header) {
+        return error;
+    }
+    let field = |offset| u64::from_le_bytes(header[offset..offset + 8].try_into().unwrap());
+    if field(0) != 0 || !(1..=2).contains(&field(24)) {
+        return unsupported;
+    }
+    let mut iov = [0; 16];
+    if let Err(error) = copy_from_user(field(16), &mut iov) {
+        return error;
+    }
+    if field(24) == 2 && iov[8..] == [0; 8] {
+        let Some(second) = field(16).checked_add(16) else {
+            return linux_errno(abi::EFAULT as u64);
+        };
+        if let Err(error) = copy_from_user(second, &mut iov) {
+            return error;
+        }
+    }
+    {
+        let sched = crate::sched::SCHEDULER.lock();
+        let Some(stream) = sched.current_shared_process().fd_table.get(frame.rdi as i32) else {
+            return linux_errno(abi::EBADF as u64);
+        };
+        let handle = stream.handle;
+        if !handle.is_socket()
+            || pipe::rights_stream(handle.socket_index(), handle.socket_endpoint(), true).is_none()
+        {
+            return unsupported;
+        }
+        if !stream.rights.contains(CapRights::new(CapRights::READ)) {
+            return linux_errno(abi::EACCES as u64);
+        }
+    }
+    let restart_ip = frame.rcx;
+    frame.rsi = u64::from_le_bytes(iov[..8].try_into().unwrap());
+    frame.rdx = u64::from_le_bytes(iov[8..].try_into().unwrap());
+    let result = sys_read_with_nonblocking(frame, flags & MSG_DONTWAIT != 0);
+    (frame.rsi, frame.rdx) = (message, flags);
+    if frame.rcx == restart_ip && (result as i64) >= 0 {
+        header[8..12].fill(0);
+        header[40..52].fill(0);
+        if let Err(error) = copy_to_user(message, &header) {
+            return error;
+        }
+    }
+    result
 }
 
 fn sys_native_unix_recv_fd(fd: i32) -> u64 {

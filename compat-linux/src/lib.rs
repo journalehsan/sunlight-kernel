@@ -387,6 +387,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_RECVFROM => SHIM_RECVFROM,
         SYS_SENDTO => SHIM_SENDTO,
         SYS_SENDMSG => SHIM_SENDMSG,
+        SYS_RECVMSG => SHIM_RECVMSG,
         SYS_FTRUNCATE => SHIM_FTRUNCATE,
         SYS_MEMFD_CREATE => SHIM_MEMFD_CREATE,
         SYS_SOCKET => SHIM_SOCKET,

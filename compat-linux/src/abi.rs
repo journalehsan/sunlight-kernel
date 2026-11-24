@@ -120,6 +120,7 @@ pub const SYS_CONNECT: u64 = 42;
 pub const SYS_ACCEPT: u64 = 43;
 pub const SYS_SENDTO: u64 = 44;
 pub const SYS_SENDMSG: u64 = 46;
+pub const SYS_RECVMSG: u64 = 47;
 pub const SYS_FTRUNCATE: u64 = 77;
 pub const SYS_MEMFD_CREATE: u64 = 319;
 pub const SYS_RECVFROM: u64 = 45;
@@ -276,6 +277,7 @@ pub const SHIM_STATFS: i64 = -59;
 pub const SHIM_SENDMSG: i64 = -60;
 pub const SHIM_FTRUNCATE: i64 = -61;
 pub const SHIM_MEMFD_CREATE: i64 = -62;
+pub const SHIM_RECVMSG: i64 = -63;
 
 pub const MAP_PRIVATE: u64 = 0x02;
 pub const MAP_FIXED: u64 = 0x10;

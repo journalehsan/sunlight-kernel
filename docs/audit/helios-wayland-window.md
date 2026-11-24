@@ -79,3 +79,66 @@ on KVM and TCG. The original global-page gate passed on TCG and failed at
 the final `waitpid` on KVM with `no-child`
 (`target/mmap-regression-kvm/serial.log`). That issue remains open; its
 assertion and timeout are unchanged.
+
+## Independent libwayland client
+
+Weston 14.0's `simple-shm` target uses Weston's shared helper library,
+whose build also brings in Pixman, EGL and libweston dependencies. A Weston
+guest binary was not built. The smaller probe uses unmodified libwayland
+1.26.0, libffi 3.4.8, static musl, and `wayland-scanner` output for stable
+xdg-shell. It connects to the existing UID-scoped socket and hands the FD
+to `wl_display_connect_to_fd`; all protocol requests go through the library.
+
+With an x86-64 musl toolchain, a matching host Wayland scanner, the
+wayland-protocols XML, Meson, Ninja, and the normal guest build prerequisites:
+
+```sh
+bash tools/test_helios_wayland.sh kvm tcg
+bash tools/test_helios_libwayland.sh kvm tcg
+```
+
+Each boot directory has `command.json` and `serial.log`. The independent
+client enters main and connects on KVM, then exits with
+`[WL-CLIENT] FAIL registry (errno=95)`. The bridge accepts the connection
+and logs `[WL-FIXTURE] FAIL EOF before two frames`. The first run is under
+`target/helios-wayland-lib/first-kvm/`. Build logs are in that run's parent
+directory and its `build/` subdirectory.
+
+The first failure was transport: the registry roundtrip flush calls
+`sendmsg(MSG_NOSIGNAL | MSG_DONTWAIT)` with zero ancillary bytes.
+`sys_linux_sendmsg` returned `EOPNOTSUPP` for that shape. The transport now
+routes control-free sends and byte-only replies on Linux client endpoints
+of native Unix listeners through the existing stream I/O paths. It does
+not change the single-FD send path. The probe flushes `create_pool` alone,
+so libwayland marks byte zero of that request.
+
+The bridge now handles the initial registry sync and tracks the client
+object IDs it accepts, including reuse after callback deletion. The probe
+uses the library's timed dispatcher: the earlier untimed roundtrip hit a
+poll assertion, and an experimental infinite-poll change did not make it
+reliable. No poll change is included.
+
+KVM and TCG both captured window 2 at (541, 180), with frame hashes
+`f2d6fd05` and `21373585`, followed by removal on disconnect. The logs
+confirm configure/ack serial 1, the 170509-byte pool, and both buffer
+releases and frame callbacks. See `target/helios-wayland-lib/kvm/` and
+`target/helios-wayland-lib/tcg-replay/` for `command.json`, `serial.log`,
+`result.json`, and all three PNGs per run. The first timed TCG run closed
+the window during setup; the same ISO passed on replay:
+
+```sh
+python3 tools/helios_wayland_gate.py target/helios-wayland-lib/guest.iso \
+    target/helios-wayland-lib/tcg-replay tcg libwayland
+```
+
+The original fixture also passed against the updated bridge on TCG and
+on a KVM replay after the first KVM boot timed out before login. See
+`target/helios-wayland/{kvm-replay,tcg}/`.
+
+Standalone one-FD SCM_RIGHTS and multipage pool transfer/reclaim passed
+on KVM and TCG. Separately, the original global-page mmap gate passed
+through `waitpid` and the final native read on both accelerators. These
+runs did not reproduce the historical KVM `no-child` failure; they do not
+establish that it was fixed. See
+`target/helios-wayland-lib/regressions/` for the build and serial logs.
+The standalone native listener gate was not rerun.

@@ -211,9 +211,23 @@ fn layout(bytes: &[u8], pool_len: usize) -> Option<(usize, usize)> {
     (end <= pool_len).then_some((offset, stride))
 }
 
+fn claim_object(objects: &mut u32, id: u32) -> Result<u32, &'static str> {
+    if !(2..32).contains(&id) || *objects & (1 << id) != 0 {
+        return Err("invalid object ID");
+    }
+    *objects |= 1 << id;
+    Ok(id)
+}
+
 fn serve(stream: &Descriptor) -> Result<(), &'static str> {
     let mut registry = false;
-    let mut bound = [false; 3];
+    let mut synced = false;
+    let mut objects = 0;
+    let mut bound = [0; 3];
+    let mut surface_id = 0;
+    let mut xdg_id = 0;
+    let mut toplevel_id = 0;
+    let mut pool_id = 0;
     let mut role = 0;
     let mut configured = false;
     let mut acked = false;
@@ -228,52 +242,67 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
             let bytes = &msg.bytes[..msg.len];
             let id = word(bytes, 0);
             let opcode = word(bytes, 4) & 0xffff;
-            if msg.right.is_some() && (id, opcode) != (4, 0) {
+            if msg.right.is_some() && (id, opcode) != (bound[1], 0) {
                 return Err("FD outside create_pool");
             }
             match (id, opcode, msg.len) {
                 (1, 1, 12) if !registry && word(bytes, 8) == 2 => {
+                    claim_object(&mut objects, 2)?;
                     advertise(stream)?;
                     registry = true;
+                }
+                (1, 0, 12) if registry && !synced && bound == [0; 3] => {
+                    let sync_id = claim_object(&mut objects, word(bytes, 8))?;
+                    event(stream, sync_id, 0, &[0])?;
+                    event(stream, 1, 1, &[sync_id])?;
+                    objects &= !(1 << sync_id);
+                    synced = true;
                 }
                 (2, 0, len) if registry && len >= 24 => {
                     let index = word(bytes, 8).wrapping_sub(1) as usize;
                     let interface = *GLOBALS.get(index).ok_or("unknown global")?;
                     let version = 16 + ((interface.len() + 1).div_ceil(4) * 4);
-                    if bound[index]
+                    if bound[index] != 0
                         || len != version + 8
                         || word(bytes, 12) as usize != interface.len() + 1
                         || &bytes[16..16 + interface.len()] != interface
                         || bytes[16 + interface.len()] != 0
                         || word(bytes, version) != 1
-                        || word(bytes, version + 4) != index as u32 + 3
                     {
                         return Err("invalid registry bind");
                     }
-                    bound[index] = true;
+                    bound[index] = claim_object(&mut objects, word(bytes, version + 4))?;
                     if index == 1 {
-                        event(stream, 4, 0, &[0])?;
-                        event(stream, 4, 0, &[1])?;
+                        event(stream, bound[1], 0, &[0])?;
+                        event(stream, bound[1], 0, &[1])?;
                     }
                 }
-                (3, 0, 12) if bound[0] && role == 0 && word(bytes, 8) == 6 => role = 1,
-                (5, 2, 16)
-                    if bound[2] && role == 1 && word(bytes, 8) == 7 && word(bytes, 12) == 6 =>
-                {
-                    role = 2
+                (id, 0, 12) if id != 0 && id == bound[0] && role == 0 => {
+                    surface_id = claim_object(&mut objects, word(bytes, 8))?;
+                    role = 1;
                 }
-                (7, 1, 12) if role == 2 && word(bytes, 8) == 8 => role = 3,
-                (6, 6, 8) if role == 3 && !configured => {
-                    event(stream, 8, 0, &[WIDTH as u32, HEIGHT as u32, 0])?;
-                    event(stream, 7, 0, &[1])?;
+                (id, 2, 16)
+                    if id != 0 && id == bound[2] && role == 1 && word(bytes, 12) == surface_id =>
+                {
+                    xdg_id = claim_object(&mut objects, word(bytes, 8))?;
+                    role = 2;
+                }
+                (id, 1, 12) if id == xdg_id && role == 2 => {
+                    toplevel_id = claim_object(&mut objects, word(bytes, 8))?;
+                    role = 3;
+                }
+                (id, 6, 8) if id == surface_id && role == 3 && !configured => {
+                    event(stream, toplevel_id, 0, &[WIDTH as u32, HEIGHT as u32, 0])?;
+                    event(stream, xdg_id, 0, &[1])?;
                     configured = true;
                     debug_log("[WL-FIXTURE] configure serial=1\n");
                 }
-                (7, 4, 12) if configured && !acked && word(bytes, 8) == 1 => {
+                (id, 4, 12) if id == xdg_id && configured && !acked && word(bytes, 8) == 1 => {
                     acked = true;
                     debug_log("[WL-FIXTURE] ack_configure serial=1\n");
                 }
-                (4, 0, 16) if bound[1] && pool.is_none() && word(bytes, 8) == 9 => {
+                (id, 0, 16) if id != 0 && id == bound[1] && pool.is_none() => {
+                    pool_id = claim_object(&mut objects, word(bytes, 8))?;
                     let (mark, fd) = msg.right.take().ok_or("missing pool FD")?;
                     let len = word(bytes, 12) as usize;
                     pool = Some(Pool::map(fd, len)?);
@@ -281,21 +310,23 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                         "[WL-FIXTURE] create_pool bytes={len} fd_mark={mark}\n"
                     ));
                 }
-                (9, 0, 32) if pool.is_some() => {
-                    let id = word(bytes, 8);
-                    let index = id
-                        .checked_sub(10)
-                        .filter(|index| *index < 3)
-                        .ok_or("buffer ID")? as usize;
-                    if buffers[index].is_some() {
-                        return Err("duplicate buffer");
-                    }
-                    buffers[index] = Some(Buffer {
+                (id, 0, 32) if id == pool_id && pool.is_some() => {
+                    let id = claim_object(&mut objects, word(bytes, 8))?;
+                    let slot = buffers
+                        .iter_mut()
+                        .find(|slot| slot.is_none())
+                        .ok_or("buffer limit")?;
+                    *slot = Some(Buffer {
                         id,
                         layout: layout(bytes, pool.as_ref().unwrap().len),
                     });
                 }
-                (6, 1, 20) if acked && word(bytes, 12) == 0 && word(bytes, 16) == 0 => {
+                (id, 1, 20)
+                    if id == surface_id
+                        && acked
+                        && word(bytes, 12) == 0
+                        && word(bytes, 16) == 0 =>
+                {
                     pending = Some(
                         buffers
                             .iter()
@@ -305,11 +336,11 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                             .ok_or("unknown attachment")?,
                     );
                 }
-                (6, 2, 24) if acked => {}
-                (6, 3, 12) if acked && callback.is_none() && matches!(word(bytes, 8), 13 | 14) => {
-                    callback = Some(word(bytes, 8));
+                (id, 2, 24) if id == surface_id && acked => {}
+                (id, 3, 12) if id == surface_id && acked && callback.is_none() => {
+                    callback = Some(claim_object(&mut objects, word(bytes, 8))?);
                 }
-                (6, 6, 8) if acked => {
+                (id, 6, 8) if id == surface_id && acked => {
                     if let Some(buffer) = pending.take() {
                         if let Some((offset, stride)) = buffer.layout {
                             if frame == 2 {
@@ -366,6 +397,7 @@ fn serve(stream: &Descriptor) -> Result<(), &'static str> {
                     if let Some(id) = callback.take() {
                         event(stream, id, 0, &[monotonic_millis() as u32])?;
                         event(stream, 1, 1, &[id])?;
+                        objects &= !(1 << id);
                     }
                 }
                 _ => return Err("unsupported request or invalid order"),

@@ -38,7 +38,7 @@ def pattern(image, frame):
     return None
 
 
-def run(iso, out, accel):
+def run(iso, out, accel, libwayland=False):
     (out / "result.json").unlink(missing_ok=True)
     guest = Guest(iso, out, vga="std", accel=accel)
     try:
@@ -48,6 +48,9 @@ def run(iso, out, accel):
         guest.type("root")
         guest.key("ret")
         guest.wait("[SESSION] switched to F2 GraphicalDesktop")
+        if libwayland:
+            guest.wait("[WL-LIB] entered main", timeout=30)
+            guest.wait("[WL-LIB] discovered compositor, shm and xdg-shell", timeout=15)
         locations = []
         for frame in (1, 2):
             guest.wait("[WL-SGP] redraw window=", frame, timeout=30)
@@ -63,11 +66,18 @@ def run(iso, out, accel):
         windows = re.findall(r"\[WL-SGP\] redraw window=(\d+)", serial)
         assert len(windows) == 2 and windows[0] == windows[1], windows
         assert f"[WL-SGP] removed window={windows[0]}" in serial
-        assert "[WL-FIXTURE] create_pool bytes=170509 fd_mark=5" in serial
-        assert "[WL-FIXTURE] skipped invalid buffer=10" in serial
+        if libwayland:
+            assert "[WL-FIXTURE] ack_configure serial=" in serial
+            assert "[WL-FIXTURE] create_pool bytes=170509 fd_mark=" in serial
+            assert "[WL-LIB] frame 2 released and callback completed" in serial
+        else:
+            assert "[WL-FIXTURE] create_pool bytes=170509 fd_mark=5" in serial
+            assert "[WL-FIXTURE] skipped invalid buffer=10" in serial
         assert "[WL-CLIENT] FAIL" not in serial and "[WL-FIXTURE] FAIL" not in serial
         commits = re.findall(r"\[WL-FIXTURE\] wl_surface.commit frame=(\d) buffer=(\d+) hash=([a-f0-9]+)", serial)
-        assert [(seq, buf) for seq, buf, _ in commits] == [("1", "11"), ("2", "12")], commits
+        assert [seq for seq, _, _ in commits] == ["1", "2"], commits
+        if not libwayland:
+            assert [buf for _, buf, _ in commits] == ["11", "12"], commits
         assert commits[0][2] != commits[1][2], commits
         evidence = {"accel": accel, "vcpus": 2, "window": int(windows[0]),
                     "origin": locations[0], "commits": commits, "verdict": "PASS"}
@@ -78,7 +88,9 @@ def run(iso, out, accel):
 
 
 if __name__ == "__main__":
-    iso, out, accel = sys.argv[1:]
+    iso, out, accel, *mode = sys.argv[1:]
     if accel not in ("kvm", "tcg"):
         raise ValueError(f"unknown accelerator: {accel}")
-    run(Path(iso), Path(out), accel)
+    if mode not in ([], ["libwayland"]):
+        raise ValueError(f"unknown gate mode: {mode}")
+    run(Path(iso), Path(out), accel, libwayland=bool(mode))
