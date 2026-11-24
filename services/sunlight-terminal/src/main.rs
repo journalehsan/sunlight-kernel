@@ -1340,6 +1340,7 @@ struct TerminalApp {
     /// so a lagging FocusChanged edge cannot inject into a background terminal.
     window_focused: bool,
     pending_spawn: Option<PendingSpawn>,
+    startup_app: Option<&'static [u8]>,
     layout: TerminalLayout,
     last_output_ms: u64,
     cursor_phase: bool,
@@ -1371,6 +1372,7 @@ impl TerminalApp {
             // compositor. FocusChanged will correct this if we were wrong.
             window_focused: true,
             pending_spawn: None,
+            startup_app: None,
             layout,
             last_output_ms: 0,
             cursor_phase: true,
@@ -1545,7 +1547,7 @@ impl TerminalApp {
                         return true;
                     }
                 };
-                match spawn_shell(&pty, slave, shell_id) {
+                match spawn_shell(&pty, slave, shell_id, self.startup_app.take()) {
                     Ok(shell_pid) => {
                         log_tab_phase(pending.tab_id, "shell_spawned");
                         Ok(Some(SpawnStep::RegisterForeground(pty, shell_pid)))
@@ -2820,6 +2822,16 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     };
 
     let mut app = TerminalApp::new(pty_cap, parse_debug_flags(argc, argv));
+    let mut raw = [core::ptr::null(); libc::MAX_ARGS + 1];
+    let count = unsafe { libc::crt0::collect_raw_args(argc, argv, &mut raw) };
+    for ptr in raw[1..count.max(1)].iter().copied() {
+        let length = unsafe { libc::crt0::cstr_len(ptr, 128) };
+        let argument = unsafe { core::slice::from_raw_parts(ptr, length) };
+        if argument.starts_with(libc::sun_exec::TERMINAL_APP_ARG) {
+            app.startup_app = Some(argument);
+            break;
+        }
+    }
 
     // Drive the very first tab through the same bounded, non-blocking state
     // machine used for every later tab (see `advance_pending_spawn`). In the
@@ -3039,7 +3051,12 @@ const fn hex_digit(nibble: u8) -> u8 {
     }
 }
 
-fn spawn_shell(pty: &PtySession, slave: CapabilityToken, shell_id: u64) -> Result<u64, ()> {
+fn spawn_shell(
+    pty: &PtySession,
+    slave: CapabilityToken,
+    shell_id: u64,
+    startup_app: Option<&[u8]>,
+) -> Result<u64, ()> {
     let mut path_buf = [0u8; 32];
     let mut arg0 = [0u8; 16];
     let mut arg_session = [0u8; 48];
@@ -3071,8 +3088,10 @@ fn spawn_shell(pty: &PtySession, slave: CapabilityToken, shell_id: u64) -> Resul
         &arg_generation[..apg_len],
         &arg_service[..apc_len],
         &arg_slave[..apsl_len],
+        startup_app.unwrap_or_default(),
     ];
-    libc::spawn(&path_buf[..path_len], &argv, None).map_err(|_| ())
+    let argc = if startup_app.is_some() { 6 } else { 5 };
+    libc::spawn(&path_buf[..path_len], &argv[..argc], None).map_err(|_| ())
 }
 
 fn copy_ascii(src: &[u8], dst: &mut [u8]) -> usize {

@@ -1124,6 +1124,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         177 => sys_native_epoll_bridge(frame),
         178 => sys_native_process_identity(frame.rdi),
         179 => sys_resolve_path(frame),
+        183 if !linux_compat => sys_native_unix_listen(frame),
+        184 if !linux_compat => sys_native_unix_accept(frame.rdi as i32),
         160 => sys_foreground(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
@@ -1314,6 +1316,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         1047 => sys_linux_ppoll(frame),
         1048 => sys_linux_clock_nanosleep(frame),
         1049 => sys_linux_readv(frame),
+        1050..=1058 if !linux_compat => u64::MAX,
         1050 => sys_linux_socket(frame),
         1051 => sys_linux_connect(frame),
         1052 => sys_linux_bind(frame),
@@ -3158,6 +3161,29 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        if cfg!(debug_assertions)
+            && option_env!("SUNLIGHT_PROC02_REGISTRY_TRACE").is_some()
+            && matches!(s, "[PROC-REG] before" | "[PROC-REG] after")
+        {
+            let sched = crate::sched::SCHEDULER.lock();
+            crate::serial_println!(
+                "{} observer={} slots={}",
+                s, sched.current_process().pid, sched.processes.len()
+            );
+            for process in &sched.processes {
+                crate::serial_println!(
+                    "[PROC-REG] pid={} ppid={} name={:?} compat={} tgid={:?} native_owner={} user={} live={} exiting={} uid={} scope={} owned={} session_owner={} tab={:?} tty_gen={} incarnation={} parent_gen={} vm={}",
+                    process.pid, process.ppid, process.name_str(), process.is_linux_compat(),
+                    process.linux_tgid, process.native_group_owner(), process.user_stack_top != 0,
+                    process.process_lifetime_live(), process.is_exiting(), process.uid,
+                    process.foreground.execution(), process.foreground.owned,
+                    process.foreground.session_owner, process.tty_tab, process.tty_generation,
+                    process.foreground.incarnation, process.foreground.parent_generation,
+                    process.address_space.identity().generation
+                );
+            }
+            crate::serial_println!("[PROC-REG] end");
+        }
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
         if let Some(value) = crate::memory::quota_lifecycle::query(s) {
             return value;
@@ -9223,6 +9249,71 @@ fn sys_linux_socket(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+fn sys_native_unix_listen(frame: &SyscallFrame) -> u64 {
+    use crate::process::{fd_table::{CapRights, FileHandle}, unix_socket};
+    use sunlight_compat_linux::abi;
+
+    if frame.rsi > 107 || frame.rdx > u32::MAX as u64 {
+        return linux_errno(abi::EINVAL as u64);
+    }
+    let mut path = [0; 107];
+    let name = &mut path[..frame.rsi as usize];
+    if crate::memory::user::copy_from_current(frame.rdi, name).is_err() {
+        return linux_errno(abi::EFAULT as u64);
+    }
+    let mut sched = crate::sched::SCHEDULER.lock();
+    if sched.current_shared_process().uid != 0 {
+        return linux_errno(abi::EACCES as u64);
+    }
+    let index = match unix_socket::register_native(name.to_vec(), frame.rdx as u32) {
+        Ok(index) => index,
+        Err(errno) => return linux_errno(errno as u64),
+    };
+    match sched.current_shared_process_mut().fd_table.open(
+        FileHandle::unix_socket(index),
+        CapRights::new(CapRights::ACCEPT),
+        SOCK_NONBLOCK | SOCK_CLOEXEC | 2,
+    ) {
+        Ok(fd) => fd as u64,
+        Err(_) => {
+            unix_socket::release(index);
+            linux_errno(abi::EMFILE as u64)
+        }
+    }
+}
+
+fn sys_native_unix_accept(fd: i32) -> u64 {
+    use crate::process::{fd_table::{CapRights, FileHandle}, unix_socket};
+    use sunlight_compat_linux::abi;
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let Some(entry) = sched.current_shared_process().fd_table.get(fd) else {
+        return linux_errno(abi::EBADF as u64);
+    };
+    let handle = entry.handle;
+    if !handle.is_unix_socket() || !unix_socket::is_native_listener(handle.unix_socket_index()) {
+        return linux_errno(abi::EINVAL as u64);
+    }
+    if !entry.rights.contains(CapRights::new(CapRights::ACCEPT)) {
+        return linux_errno(abi::EACCES as u64);
+    }
+    let Some(pair) = unix_socket::dequeue(handle.unix_socket_index()) else {
+        return linux_errno(abi::EAGAIN as u64);
+    };
+    crate::process::epoll::refresh_after_io(handle, sched.current_shared_process());
+    match sched.current_shared_process_mut().fd_table.open(
+        FileHandle::socket(pair, 1),
+        CapRights::new(CapRights::READ | CapRights::WRITE),
+        SOCK_CLOEXEC | 2,
+    ) {
+        Ok(fd) => fd as u64,
+        Err(_) => {
+            crate::process::pipe::socket_close(pair, 1);
+            linux_errno(abi::EMFILE as u64)
+        }
+    }
+}
+
 fn sys_linux_bind(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
     let path = match read_unix_sockaddr(frame.rsi, frame.rdx) {
@@ -9304,19 +9395,12 @@ fn sys_linux_connect(frame: &mut SyscallFrame) -> u64 {
     if crate::process::unix_socket::is_listening(index) {
         return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
     }
-    let Some(listener) = crate::process::unix_socket::find_listener(&path) else {
-        if unix_trace_budget() {
-            crate::serial_println!("[HELIOS-UNIX] connect fd={} refused", fd);
-        }
-        return linux_errno(sunlight_compat_linux::abi::ECONNREFUSED as u64);
+    let (listener, pair) = match crate::process::unix_socket::connect(
+        &path, sched.current_shared_process().uid,
+    ) {
+        Ok(connection) => connection,
+        Err(errno) => return linux_errno(errno as u64),
     };
-
-    let pair = crate::process::pipe::alloc_socketpair();
-    if !crate::process::unix_socket::enqueue(listener, pair) {
-        crate::process::pipe::socket_close(pair, 0);
-        crate::process::pipe::socket_close(pair, 1);
-        return linux_errno(sunlight_compat_linux::abi::EAGAIN as u64);
-    }
 
     let rights =
         CapRights::new(CapRights::READ | CapRights::WRITE | CapRights::CONNECT | CapRights::ACCEPT);

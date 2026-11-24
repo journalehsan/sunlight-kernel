@@ -490,6 +490,7 @@ impl DockTheme {
             | AppId::ApiLab
             | AppId::Mines
             | AppId::DosNavigator
+            | AppId::Btop
             | AppId::SiliconEchoes
             | AppId::Welcome
             | AppId::WiseOwl
@@ -622,6 +623,7 @@ pub(crate) enum AppId {
     DocumentViewer,
     Empires,
     DosNavigator,
+    Btop,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -2023,6 +2025,7 @@ impl VortexShell {
                     "DOS Navigator 1.51",
                     AppId::DosNavigator,
                 ),
+                DockAppState::new(AppId::Btop, "Btop", AppId::Btop),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2332,6 +2335,7 @@ impl VortexShell {
             AppId::ApiLab => AppStateAppId::ApiLab,
             AppId::Mines => AppStateAppId::Mines,
             AppId::DosNavigator => AppStateAppId::DosNavigator,
+            AppId::Btop => AppStateAppId::Btop,
             AppId::SiliconEchoes => AppStateAppId::SiliconEchoes,
             AppId::Empires => AppStateAppId::Empires,
             AppId::Welcome => AppStateAppId::Welcome,
@@ -2374,6 +2378,7 @@ impl VortexShell {
             AppId::ApiLab => "/bin/sunlight-api-lab",
             AppId::Mines => "/Applications/SunlightMines.sunapp",
             AppId::DosNavigator => "/Applications/DosNavigator.sunapp",
+            AppId::Btop => "/Applications/Btop.sunapp",
             AppId::SiliconEchoes => "/bin/silicon-echoes",
             AppId::Empires => "/bin/sunlight-empires",
             AppId::Welcome => "/bin/welcome",
@@ -2401,6 +2406,7 @@ impl VortexShell {
             AppId::ApiLab => b"sunlight-api-lab",
             AppId::Mines => b"sunlight-mines",
             AppId::DosNavigator => b"dos-navigator",
+            AppId::Btop => b"btop",
             AppId::SiliconEchoes => b"silicon-echoes",
             AppId::Empires => b"/bin/sunlight-empires",
             AppId::Welcome => b"welcome",
@@ -2432,6 +2438,7 @@ impl VortexShell {
             AppId::ApiLab => "app=sunlight-api-lab",
             AppId::Mines => "app=sunlight-mines",
             AppId::DosNavigator => "app=dos-navigator",
+            AppId::Btop => "app=btop",
             AppId::SiliconEchoes => "app=silicon-echoes",
             AppId::Empires => "app=sunlight-empires",
             AppId::Welcome => "app=welcome",
@@ -4072,6 +4079,7 @@ impl VortexShell {
             AppId::DosNavigator => Some(include_bytes!(
                 "../../../DosNavigator.sunapp/Resources/icon.svg"
             )),
+            AppId::Btop => Some(include_bytes!("../../../Btop.sunapp/Resources/icon.svg")),
             AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_SVG),
             AppId::Empires => Some(ICON_EMPIRES_SVG),
             AppId::Welcome => Some(ICON_GENERIC_APP_SVG),

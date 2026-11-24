@@ -74,7 +74,7 @@ fn icon(bytes: &'static [u8]) -> Option<IconImage> {
     IconImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 22;
+const APP_CATALOG_LEN: usize = 23;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -240,6 +240,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         name: "Sunlight API Lab",
         category: "Network",
         icon_bytes: Some(ICON_API_LAB_SVG),
+        available: true,
+    },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::Btop),
+        name: "Btop",
+        category: "System",
+        icon_bytes: Some(include_bytes!("../../../Btop.sunapp/Resources/icon.svg")),
         available: true,
     },
     AppCatalogEntry {

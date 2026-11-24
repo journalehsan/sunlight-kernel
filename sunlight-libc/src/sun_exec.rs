@@ -282,6 +282,12 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         executable: b"/bin/sun-open",
     },
     ApplicationRegistryEntry {
+        canonical_id: "btop",
+        display_name: "Btop",
+        aliases: &[],
+        executable: b"/Applications/Btop.sunapp",
+    },
+    ApplicationRegistryEntry {
         canonical_id: "dos-navigator",
         display_name: "DOS Navigator 1.51",
         aliases: aliases![],
@@ -530,7 +536,7 @@ pub fn launch_with_environment(
     }
 
     if is_bundle_path(request.command) {
-        return launch_chronos_bundle(request, environment);
+        return launch_bundle(request, environment);
     }
     if is_com_path(request.command) || is_mz_path(request.command) {
         return launch_direct_com(request, environment);
@@ -544,7 +550,7 @@ pub fn launch_with_environment(
         }
     };
     if is_bundle_path(resolved.path()) {
-        return launch_chronos_bundle(
+        return launch_bundle(
             LaunchRequest {
                 command: resolved.path(),
                 ..request
@@ -648,6 +654,113 @@ pub fn open_registered_settings_page(
         args: &[b"--page", request.page.id()],
         require_display: true,
     })
+}
+
+const TERMINAL_PATH: &[u8] = b"/bin/sunlight-terminal";
+pub const TERMINAL_APP_ARG: &[u8] = b"--terminal-app=";
+
+fn launch_bundle(
+    request: LaunchRequest<'_>,
+    environment: Option<&[u8]>,
+) -> Result<LaunchResult, LaunchError> {
+    let bundle = request.command;
+    if let Some(entry) = terminal_bundle_entry(bundle) {
+        let entry = entry?;
+        if !request.args.is_empty() {
+            return Err(LaunchError::InvalidCommand);
+        }
+        if !request.require_display {
+            let pid = spawn_environment(entry.path(), &[entry.path()], environment)
+                .map_err(LaunchError::SpawnFailed)?;
+            return Ok(LaunchResult { pid, path: entry.path, path_len: entry.path_len });
+        }
+        let mut flag = [0; MAX_ARG_LEN];
+        let length = TERMINAL_APP_ARG.len() + bundle.len();
+        if length > flag.len().min(128) {
+            return Err(LaunchError::ArgTooLong);
+        }
+        flag[..TERMINAL_APP_ARG.len()].copy_from_slice(TERMINAL_APP_ARG);
+        flag[TERMINAL_APP_ARG.len()..length].copy_from_slice(bundle);
+        let mut trace_arg = [0; 64];
+        let trace_len = launch_trace::format_launch_arg(request.trace, &mut trace_arg).unwrap_or(0);
+        let args = [TERMINAL_PATH, &flag[..length], &trace_arg[..trace_len]];
+        let argc = if trace_len == 0 { 2 } else { 3 };
+        let pid = spawn_environment(TERMINAL_PATH, &args[..argc], environment)
+            .map_err(LaunchError::SpawnFailed)?;
+        let mut path = [0; MAX_PATH];
+        path[..TERMINAL_PATH.len()].copy_from_slice(TERMINAL_PATH);
+        return Ok(LaunchResult { pid, path, path_len: TERMINAL_PATH.len() });
+    }
+    launch_chronos_bundle(request, environment)
+}
+
+pub fn resolve_terminal_application(command: &[u8]) -> Result<Option<([u8; MAX_PATH], usize)>, LaunchError> {
+    match terminal_bundle_entry(command) {
+        Some(result) => result.map(|entry| Some((entry.path, entry.path_len))),
+        None => Ok(None),
+    }
+}
+
+fn terminal_bundle_entry(command: &[u8]) -> Option<Result<ResolvedApp, LaunchError>> {
+    let bundle = map_app_id(command).unwrap_or(command);
+    if !is_bundle_path(bundle) || !APPLICATION_REGISTRY.iter().any(|app| app.executable == bundle) {
+        return None;
+    }
+    let manifest = read_bundle_manifest(bundle).ok()?;
+    if toml_value(&manifest, b"runtime", b"type") != Some(b"helios") {
+        return None;
+    }
+    Some(validate_terminal_entry(bundle, &manifest))
+}
+
+fn validate_terminal_entry(bundle: &[u8], manifest: &[u8]) -> Result<ResolvedApp, LaunchError> {
+    let entry = parse_terminal_entry(manifest)?;
+    let mut path = [0; MAX_PATH];
+    for relative in [b"".as_slice(), b"Manifest.toml", b"Program", entry] {
+        let full_path = if relative.is_empty() {
+            bundle
+        } else {
+            let len = join_path(&mut path, bundle, relative).ok_or(LaunchError::InvalidBundle)?;
+            &path[..len]
+        };
+        let metadata = libc::stat(full_path).map_err(|_| LaunchError::MissingEntry)?;
+        if metadata.uid != 0 || metadata.mode & 0o022 != 0 {
+            return Err(LaunchError::PermissionDenied);
+        }
+    }
+    let length = join_path(&mut path, bundle, entry).ok_or(LaunchError::InvalidBundle)?;
+    let executable = &path[..length];
+    if !is_executable(executable) {
+        return Err(LaunchError::PermissionDenied);
+    }
+    let fd = libc::open_with_flags(executable, libc::O_NOFOLLOW)
+        .map_err(|_| LaunchError::MissingEntry)?;
+    let mut ident = [0; 16];
+    let count = libc::read(fd, &mut ident);
+    let _ = libc::close(fd);
+    if count != Ok(ident.len()) || &ident[..5] != b"\x7fELF\x02" || &ident[9..15] != b"HLNX01" {
+        return Err(LaunchError::UnsupportedRuntime);
+    }
+    Ok(ResolvedApp { path, path_len: length })
+}
+
+fn parse_terminal_entry(manifest: &[u8]) -> Result<&[u8], LaunchError> {
+    let manifest = manifest.split(|byte| *byte == 0).next().unwrap_or_default();
+    let entry = toml_value(manifest, b"entry", b"executable").ok_or(LaunchError::MissingEntry)?;
+    if toml_value(manifest, b"bundle", b"format") != Some(b"1")
+        || toml_value(manifest, b"runtime", b"type") != Some(b"helios")
+        || toml_value(manifest, b"application", b"kind") != Some(b"terminal")
+        || !toml_value(manifest, b"application", b"id").is_some_and(valid_app_id)
+        || !entry.strip_prefix(b"Program/").is_some_and(|name| {
+            is_strict_identifier(name) && !matches!(name, b"." | b"..")
+        })
+        || manifest.split(|byte| *byte == b'\n').map(trim).any(|line| {
+            line.starts_with(b"[") && !matches!(line, b"[bundle]" | b"[application]" | b"[runtime]" | b"[entry]")
+        })
+    {
+        return Err(LaunchError::InvalidBundle);
+    }
+    Ok(entry)
 }
 
 fn launch_chronos_bundle(
@@ -1220,6 +1333,20 @@ pub fn next_cli_trace(source: LaunchSource) -> LaunchTrace {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn helios_terminal_manifest_limits_payload_path_and_grants() {
+        extern crate std;
+
+        let manifest = include_str!("../../Btop.sunapp/Manifest.toml");
+        assert_eq!(super::parse_terminal_entry(manifest.as_bytes()), Ok(b"Program/btop".as_slice()));
+        for entry in ["Program/..", "Program/../btop", "/bin/btop", "Resources/btop"] {
+            let invalid = manifest.replace("Program/btop", entry);
+            assert!(super::parse_terminal_entry(invalid.as_bytes()).is_err());
+        }
+        let invalid = std::format!("{manifest}\n[permissions]\nnetwork = true\n");
+        assert!(super::parse_terminal_entry(invalid.as_bytes()).is_err());
+    }
+
     #[test]
     fn explicit_environment_validation_precedes_service_access() {
         use super::*;

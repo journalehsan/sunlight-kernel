@@ -3026,14 +3026,18 @@ impl Scheduler {
                 .retain(|entry| entry.target.call.pid != dead_pid);
         }
         self.processes[idx].capabilities = Vec::new();
-        if let Some(tgid) = self.processes[idx].linux_tgid.filter(|&tgid| tgid != dead_pid) {
-            let vm = self.processes[idx].address_space.identity();
+        let vm = self.processes[idx].address_space.identity();
+        let owner = if let Some(tgid) = self.processes[idx].linux_tgid.filter(|&tgid| tgid != dead_pid) {
+            self.processes.iter().position(|p| p.pid == tgid && p.address_space.identity() == vm)
+        } else if self.processes[idx].native_thread {
+            self.native_group_owner_index(idx)
+        } else {
+            None
+        };
+        if let Some(owner) = owner {
             let runtime = self.effective_runtime_at(idx, self.now_ns());
-            if let Some(owner) = self.processes.iter_mut().find(|p| {
-                p.pid == tgid && p.address_space.identity() == vm
-            }) {
-                owner.proc_reaped_runtime_ns = owner.proc_reaped_runtime_ns.saturating_add(runtime);
-            }
+            let owner = &mut self.processes[owner];
+            owner.proc_reaped_runtime_ns = owner.proc_reaped_runtime_ns.saturating_add(runtime);
         }
         self.processes[idx].proc_args = Vec::new();
         self.processes[idx].env = crate::process::env::EnvMap::new();

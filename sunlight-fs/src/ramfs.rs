@@ -163,6 +163,26 @@ pub static INITRAMFS: &[RamEntry] = &[
     ),
 
     RamEntry::dir("/Applications/DosNavigator.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/Btop.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/Btop.sunapp/Program", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/Btop.sunapp/Resources", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/Btop.sunapp/Licenses", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/Applications/Btop.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!("../../Btop.sunapp/Manifest.toml"),
+    ),
+    RamEntry::file(
+        "/Applications/Btop.sunapp/Program/btop", 0, 0, mode::FILE_755,
+        include_bytes!("../../Btop.sunapp/Program/btop"),
+    ),
+    RamEntry::file(
+        "/Applications/Btop.sunapp/Resources/icon.svg", 0, 0, mode::FILE_644,
+        include_bytes!("../../Btop.sunapp/Resources/icon.svg"),
+    ),
+    RamEntry::file(
+        "/Applications/Btop.sunapp/Licenses/Btop.txt", 0, 0, mode::FILE_644,
+        include_bytes!("../../Btop.sunapp/Licenses/Btop.txt"),
+    ),
     RamEntry::dir("/Applications/DosNavigator.sunapp/Program", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications/DosNavigator.sunapp/Program/CD", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications/DosNavigator.sunapp/Program/COLORS", 0, 0, mode::DIR_755),

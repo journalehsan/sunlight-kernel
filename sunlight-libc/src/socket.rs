@@ -1,5 +1,24 @@
 //! Native AF_UNIX pairs, unconnected IPv4 streams, and epoll readiness.
 use crate::{errno, sys};
+use sunlight_ipc::SunlightSyscall;
+
+/// Register an AF_UNIX stream name in the protected native namespace.
+/// Returns a descriptor or a negative errno. See the native listener contract.
+pub fn unix_stream_listen(name: &[u8], allowed_uid: u32) -> i64 {
+    unsafe {
+        sys::syscall3(
+            SunlightSyscall::NativeUnixListen as u64,
+            name.as_ptr() as u64,
+            name.len() as u64,
+            allowed_uid as u64,
+        ) as i64
+    }
+}
+
+/// Try to accept one stream. Returns a descriptor or a negative errno.
+pub fn unix_stream_try_accept(listener: i32) -> i64 {
+    unsafe { sys::syscall1(SunlightSyscall::NativeUnixAccept as u64, listener as u64) as i64 }
+}
 
 pub const AF_UNIX: i32 = 1;
 pub const AF_INET: i32 = 2;

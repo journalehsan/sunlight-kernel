@@ -1,0 +1,16 @@
+diff --git a/src/btop_shared.hpp b/src/btop_shared.hpp
+--- a/src/btop_shared.hpp
++++ b/src/btop_shared.hpp
+@@ -319,10 +319,10 @@ namespace Net {
+ 
+ 	class IfAddrsPtr {
+-		struct ifaddrs* ifaddr;
++		struct ifaddrs* ifaddr = nullptr;
+ 		int status;
+ 	public:
+ 		IfAddrsPtr() { status = getifaddrs(&ifaddr); }
+-		~IfAddrsPtr() noexcept { freeifaddrs(ifaddr); }
++		~IfAddrsPtr() noexcept { if (status == 0 && ifaddr != nullptr) freeifaddrs(ifaddr); }
+ 		IfAddrsPtr(const IfAddrsPtr &) = delete;
+ 		IfAddrsPtr& operator=(IfAddrsPtr& other) = delete;
+ 		IfAddrsPtr(IfAddrsPtr &&) = delete;

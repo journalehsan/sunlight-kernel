@@ -226,6 +226,10 @@ pub enum SunlightSyscall {
     /// UID-zero selected caller: narrow the service metadata root and reset cwd.
     /// This is not full chroot confinement; other file operations remain unmigrated.
     VfsNarrowRoot = 182,
+    /// Register a protected AF_UNIX stream listener (name, length, allowed UID).
+    NativeUnixListen = 183,
+    /// Try to accept one stream from a native Unix listener (listener FD).
+    NativeUnixAccept = 184,
     /// rdi=storage operation, rsi=index/device ID/mount ID, rdx=record/path.
     StorageCtl = 168,
     /// Paged ReadDir: r10 is the entry offset.

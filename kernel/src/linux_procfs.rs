@@ -8,7 +8,6 @@ use sunlight_fs::vfs::{mode, FileStat, FileType};
 use crate::{process::Process, sched::Scheduler, timekeeping};
 
 const MAX_OPEN: usize = 128;
-const MAX_PIDS: usize = 128;
 const MAX_TASK_SCAN: usize = 512;
 const MAX_BYTES: usize = 8192;
 const HZ: u64 = 100;
@@ -83,13 +82,65 @@ fn ethernet_counters(wait: bool) -> Result<sunlight_net::NetDeviceCounters, u64>
 fn visible(s: &Scheduler, idx: usize) -> bool {
     let p = &s.processes[idx];
     let caller = s.current_process();
-    !p.is_exiting()
-        && p.is_linux_compat()
-        && p.linux_tgid.unwrap_or(p.pid) == p.pid
-        && caller.uid == p.uid
-        && (caller.linux_tgid.unwrap_or(caller.pid) == p.pid
+    if !caller.is_linux_compat() || caller.uid != p.uid {
+        return false;
+    }
+    if p.is_linux_compat() {
+        !p.is_exiting()
+            && p.linux_tgid.unwrap_or(p.pid) == p.pid
+            && (caller.linux_tgid.unwrap_or(caller.pid) == p.pid
             || s.current_process_index()
                 .is_some_and(|i| s.can_signal_foreground(i, idx)))
+    } else {
+        let scope = p.foreground.execution();
+        p.native_group_owner()
+            && p.user_stack_top != 0
+            && p.process_lifetime_live()
+            && if scope == 0 {
+                caller.foreground.execution() == 0
+                    && caller.tty_tab.is_some()
+                    && caller.tty_tab == p.tty_tab
+                    && caller.tty_generation == p.tty_generation
+                    && legacy_tty_family(s, caller, p)
+            } else {
+                caller.foreground.execution() == scope
+            }
+    }
+}
+
+fn live_parent<'a>(s: &'a Scheduler, child: &Process) -> Option<&'a Process> {
+    let generation = child.foreground.parent_generation;
+    if generation == 0 {
+        return None;
+    }
+    let parent = &s.processes[s.process_index_by_pid(child.ppid)?];
+    (parent.foreground.incarnation == generation && parent.process_lifetime_live())
+        .then_some(parent)
+}
+
+fn legacy_tty_family(s: &Scheduler, caller: &Process, target: &Process) -> bool {
+    let mut child = caller;
+    for _ in 0..s.processes.len() {
+        let Some(parent) = live_parent(s, child) else {
+            return false;
+        };
+        if parent.uid != caller.uid || parent.tty_tab != caller.tty_tab
+            || parent.tty_generation != caller.tty_generation
+            || parent.foreground.execution() != 0
+        {
+            return false;
+        }
+        if parent.pid == target.pid {
+            return true;
+        }
+        if !target.foreground.session_owner
+            && live_parent(s, target).is_some_and(|owner| owner.pid == parent.pid)
+        {
+            return true;
+        }
+        child = parent;
+    }
+    false
 }
 
 fn find(s: &Scheduler, pid: usize) -> Option<usize> {
@@ -337,9 +388,6 @@ impl OpenFile {
             }
             for (idx, p) in s.processes.iter().enumerate() {
                 if visible(s, idx) {
-                    if sample.pids.len() == MAX_PIDS {
-                        return Err(75);
-                    }
                     sample.pids.push(Identity::of(p));
                 }
             }
@@ -496,7 +544,9 @@ fn render(s: &Scheduler, node: Node) -> Result<Vec<u8>, u64> {
             let idx = find(s, id.pid).ok_or(2u64)?;
             let p = &s.processes[idx];
             let name = p.name_str().replace(['\n', '\r'], "?");
-            let ppid = if find(s, p.ppid).is_some() { p.ppid } else { 0 };
+            let ppid = live_parent(s, p)
+                .filter(|parent| find(s, parent.pid).is_some())
+                .map_or(0, |parent| parent.pid);
             match node {
                 Node::Args(_) => return Ok(p.proc_args.clone()),
                 Node::Comm(_) => {
@@ -511,14 +561,22 @@ fn render(s: &Scheduler, node: Node) -> Result<Vec<u8>, u64> {
                     if rss.0 == 0 || timekeeping::global_ticks().saturating_sub(rss.0) > 3 * HZ {
                         return Err(11);
                     }
-                    let pages = rss.1.iter().find(|(key, _)| *key == id).ok_or(11u64)?.1;
+                    let pages = rss.1.iter()
+                        .find(|(key, _)| {
+                            *key == id || (p.retained_native_group_live() && key.vm == id.vm)
+                        })
+                        .ok_or(11u64)?.1;
                     drop(rss);
                     let now = s.now_ns();
                     let mut runtime = p.proc_reaped_runtime_ns;
                     let mut threads = 0u32;
                     for (i, task) in s.processes.iter().enumerate() {
-                        if task.linux_tgid.unwrap_or(task.pid) == p.pid
-                            && task.address_space.identity() == p.address_space.identity()
+                        let in_group = if p.is_linux_compat() {
+                            task.linux_tgid.unwrap_or(task.pid) == p.pid
+                        } else {
+                            task.pid == p.pid || task.native_thread
+                        };
+                        if in_group && task.address_space.identity() == p.address_space.identity()
                             && task.state != crate::process::ProcessState::Reaped
                         {
                             runtime = runtime.saturating_add(s.effective_runtime_at(i, now));

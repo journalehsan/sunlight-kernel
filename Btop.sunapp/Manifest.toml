@@ -1,0 +1,16 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.helios.btop"
+name = "Btop"
+description = "Monitor CPU, memory, disks, network and processes"
+version = "1.4.5"
+kind = "terminal"
+icon = "Resources/icon.svg"
+
+[runtime]
+type = "helios"
+
+[entry]
+executable = "Program/btop"

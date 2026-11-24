@@ -384,15 +384,13 @@ fn build_exec_image(
     let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset)?;
 
     process.proc_args.clear();
-    if process.is_linux_compat() {
-        for arg in argv {
-            let remaining = 1024 - process.proc_args.len();
-            if remaining == 0 {
-                break;
-            }
-            process.proc_args.extend_from_slice(&arg[..arg.len().min(remaining - 1)]);
-            process.proc_args.push(0);
+    for arg in argv {
+        let remaining = 1024 - process.proc_args.len();
+        if remaining == 0 {
+            break;
         }
+        process.proc_args.extend_from_slice(&arg[..arg.len().min(remaining - 1)]);
+        process.proc_args.push(0);
     }
 
     process.init_context(entry, stack.rsp);

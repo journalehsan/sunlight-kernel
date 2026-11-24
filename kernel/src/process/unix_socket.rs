@@ -1,7 +1,7 @@
 //! AF_UNIX `SOCK_STREAM` plumbing for the Helios Linux compatibility layer.
 //!
 //! A `socket(AF_UNIX, SOCK_STREAM, 0)` creates an unbound endpoint. `bind`
-//! attaches a filesystem path and `listen` publishes that path so a later
+//! attaches an internal name and `listen` publishes it so a later
 //! `connect` (possibly from another process) can find it. Once connected, both
 //! ends are represented by the existing pipe-backed socketpair rings, so
 //! ordinary read/write/poll/epoll handling applies unchanged.
@@ -17,12 +17,14 @@ use sunlight_compat_linux::abi;
 
 /// Advisory cap on queued, unaccepted connections for one listener.
 pub const DEFAULT_BACKLOG: usize = 128;
+pub const NATIVE_PREFIX: &[u8] = b"/sunlight/native-unix/";
 
 struct UnixSocket {
     /// Path attached by `bind`, if any (unnamed sockets have no path).
     path: Option<Vec<u8>>,
     /// True after `listen` published the path for connection lookup.
     listening: bool,
+    allowed_uid: Option<u32>,
     /// Pending connections as socketpair indices owned by this listener.
     pending: VecDeque<u32>,
     /// Open descriptors (plus queued endpoints) referencing this entry.
@@ -34,12 +36,16 @@ static SOCKETS: Mutex<Vec<Option<UnixSocket>>> = Mutex::new(Vec::new());
 /// Allocate an unbound AF_UNIX stream endpoint. Returns its pool index.
 pub fn create() -> u32 {
     let mut pool = SOCKETS.lock();
-    let socket = UnixSocket {
+    insert(&mut pool, UnixSocket {
         path: None,
         listening: false,
+        allowed_uid: None,
         pending: VecDeque::new(),
         refs: 1,
-    };
+    })
+}
+
+fn insert(pool: &mut Vec<Option<UnixSocket>>, socket: UnixSocket) -> u32 {
     if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
         *slot = Some(socket);
         idx as u32
@@ -48,6 +54,30 @@ pub fn create() -> u32 {
         pool.push(Some(socket));
         idx
     }
+}
+
+pub fn register_native(path: Vec<u8>, uid: u32) -> Result<u32, u32> {
+    if !path.starts_with(NATIVE_PREFIX) || path.len() == NATIVE_PREFIX.len()
+        || path.contains(&0)
+    {
+        return Err(abi::EINVAL);
+    }
+    let mut pool = SOCKETS.lock();
+    if pool.iter().flatten().any(|socket| socket.path.as_deref() == Some(&path)) {
+        return Err(abi::EADDRINUSE);
+    }
+    Ok(insert(&mut pool, UnixSocket {
+        path: Some(path),
+        listening: true,
+        allowed_uid: Some(uid),
+        pending: VecDeque::new(),
+        refs: 1,
+    }))
+}
+
+pub fn is_native_listener(idx: u32) -> bool {
+    SOCKETS.lock().get(idx as usize).and_then(Option::as_ref)
+        .is_some_and(|socket| socket.allowed_uid.is_some())
 }
 
 pub fn retain(idx: u32) {
@@ -91,6 +121,9 @@ pub fn is_live(idx: u32) -> bool {
 pub fn bind(idx: u32, path: Vec<u8>) -> Result<(), u32> {
     if path.is_empty() {
         return Err(abi::EINVAL);
+    }
+    if path.starts_with(NATIVE_PREFIX) {
+        return Err(abi::EACCES);
     }
     let mut pool = SOCKETS.lock();
     if !pool
@@ -136,16 +169,23 @@ pub fn listen(idx: u32, backlog: i32) -> Result<(), u32> {
     Ok(())
 }
 
-/// Find the live listener bound to `path`.
-pub fn find_listener(path: &[u8]) -> Option<u32> {
-    SOCKETS
-        .lock()
-        .iter()
-        .enumerate()
-        .find_map(|(idx, slot)| match slot {
-            Some(s) if s.listening && s.path.as_deref() == Some(path) => Some(idx as u32),
-            _ => None,
-        })
+/// Resolve, authorize and enqueue without releasing the name table lock.
+pub fn connect(path: &[u8], uid: u32) -> Result<(u32, u32), u32> {
+    let mut pool = SOCKETS.lock();
+    let (idx, socket) = pool.iter_mut().enumerate().find_map(|(idx, slot)| {
+        let socket = slot.as_mut()?;
+        (socket.listening && socket.path.as_deref() == Some(path))
+            .then_some((idx, socket))
+    }).ok_or(abi::ECONNREFUSED)?;
+    if socket.allowed_uid.is_some_and(|allowed| allowed != uid) {
+        return Err(abi::ECONNREFUSED);
+    }
+    if socket.pending.len() >= DEFAULT_BACKLOG {
+        return Err(abi::EAGAIN);
+    }
+    let pair = super::pipe::alloc_socketpair();
+    socket.pending.push_back(pair);
+    Ok((idx as u32, pair))
 }
 
 pub fn pending_count(idx: u32) -> usize {
@@ -155,19 +195,6 @@ pub fn pending_count(idx: u32) -> usize {
         .and_then(Option::as_ref)
         .map(|s| s.pending.len())
         .unwrap_or(0)
-}
-
-/// Queue an established connection's listener endpoint. Fails when the queue
-/// is full, which nonblocking `connect` surfaces as `EAGAIN`.
-pub fn enqueue(idx: u32, pair: u32) -> bool {
-    let mut pool = SOCKETS.lock();
-    match pool.get_mut(idx as usize).and_then(Option::as_mut) {
-        Some(socket) if socket.listening && socket.pending.len() < DEFAULT_BACKLOG => {
-            socket.pending.push_back(pair);
-            true
-        }
-        _ => false,
-    }
 }
 
 /// Take the oldest queued connection for `accept`.

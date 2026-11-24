@@ -346,6 +346,10 @@ mod sunlight {
             self.env.set("PWD", &self.cwd);
             // Locale foundation: overlay LANG/LC_* from /etc/locale.conf if present.
             self.load_locale_into_env();
+            if self.env.get("TERM").is_none() {
+                self.env.set("TERM", "xterm");
+                self.env.export("TERM");
+            }
         }
 
         /// Read /etc/locale.conf via VFS and inject known locale vars into ShellEnv.
@@ -1446,7 +1450,17 @@ mod sunlight {
                 return b"";
             }
 
-            let path = match self.resolve_in_path(cmd) {
+            let registered = || match ulibc::sun_exec::resolve_terminal_application(cmd.as_bytes()) {
+                Ok(Some((path, length))) => core::str::from_utf8(&path[..length])
+                    .ok()
+                    .map(alloc::string::String::from),
+                _ => None,
+            };
+            let path = match if cmd.ends_with(".sunapp") {
+                registered()
+            } else {
+                self.resolve_in_path(cmd).or_else(registered)
+            } {
                 Some(p) => p,
                 None => {
                     self.env.set("?", "127");
@@ -3698,6 +3712,7 @@ mod sunlight {
         generation: u64,
         service_cap: CapabilityToken,
         slave_cap: CapabilityToken,
+        terminal_app: Option<&str>,
     ) -> ! {
         debug_log("[PTY-SHELL] starting PTY slave mode");
         unsafe {
@@ -3722,14 +3737,41 @@ mod sunlight {
 
         // Send welcome banner as content output, then prompt via OSC.
         // The terminal shows content in the scroll area and the prompt in the footer.
-        emit_welcome_banner();
+        let mut foreground_scope = 0;
+        if let Some(bundle) = terminal_app {
+            let deadline = monotonic_millis().saturating_add(2000);
+            while !sunlight_libc::terminal_winsize()
+                .is_some_and(|size| size.pixel_width != 0 && size.pixel_height != 0)
+            {
+                if monotonic_millis() >= deadline {
+                    sunlight_libc::exit(1);
+                }
+                process_yield();
+            }
+            let scope = sunlight_ipc::foreground(0, 0);
+            if scope == u64::MAX {
+                sunlight_libc::exit(1);
+            }
+            foreground_scope = scope;
+            let output = shell.run_external(bundle, &[]);
+            pty_write_shell_output(service_cap, slave_cap, session_id, generation, output);
+            if shell.fg_pid.is_some() {
+                send_osc_app_start(service_cap, slave_cap, session_id, generation, bundle.as_bytes());
+            } else {
+                let _ = sunlight_ipc::foreground(2, scope);
+                foreground_scope = 0;
+            }
+        } else {
+            emit_welcome_banner();
+        }
         pty_write_shell_output(service_cap, slave_cap, session_id, generation, &[]);
-        send_osc_prompt(service_cap, slave_cap, session_id, generation, &shell);
+        if shell.fg_pid.is_none() {
+            send_osc_prompt(service_cap, slave_cap, session_id, generation, &shell);
+        }
         debug_log("[PTY-SHELL] welcome+prompt written to PTY master_out\n");
 
         let shell_tab = shell_id as u32;
         let mut in_buf = [0u8; 64];
-        let mut foreground_scope = 0;
         let mut child_buf = [0u8; PtyMsg::BULK_BYTES];
         // Track what the user is typing so we can extract the app name when it launches.
         let mut cmd_buf = [0u8; 64];
@@ -4081,6 +4123,7 @@ mod sunlight {
         let mut pty_generation = None;
         let mut pty_service_cap = None;
         let mut pty_slave_cap = None;
+        let mut terminal_app = None;
 
         for (idx, ptr) in raw[..raw_count].iter().copied().enumerate() {
             if ptr.is_null() {
@@ -4100,6 +4143,8 @@ mod sunlight {
                 pty_service_cap = parse_u64_bytes(rest).map(CapabilityToken);
             } else if let Some(rest) = bytes.strip_prefix(b"--pty-slave-cap=") {
                 pty_slave_cap = parse_u64_bytes(rest).map(CapabilityToken);
+            } else if let Some(rest) = bytes.strip_prefix(sunlight_libc::sun_exec::TERMINAL_APP_ARG) {
+                terminal_app = core::str::from_utf8(rest).ok().filter(|path| path.ends_with(".sunapp"));
             }
         }
 
@@ -4114,6 +4159,7 @@ mod sunlight {
                 generation,
                 service_cap,
                 slave_cap,
+                terminal_app,
             );
         }
         // A numbered shell spawned by another authenticated TTY shell uses the

@@ -502,7 +502,6 @@ unsafe fn commit_telemetry_snapshot_inner(
     TELEMETRY.gpu_count = snap.gpu_count;
 
     crate::linux_procfs::publish_rss(snap.global_timekeeper_ticks, snap.procs.iter()
-        .take(MAX_PROCESSES)
         .filter_map(|p| Some((p.proc_identity, spaces.get(&p.pml4_phys.as_u64())?.0))));
     let mut count = 0usize;
     for ps in &snap.procs {

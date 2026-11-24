@@ -1114,6 +1114,31 @@ pub extern "C" fn _start() -> ! {
         });
     }
 
+    #[cfg(all(debug_assertions, feature = "native_unix_listener_test"))]
+    {
+        let server = include_bytes!(env!("SUNLIGHT_NATIVE_UNIX_SERVER")).as_slice();
+        let client = include_bytes!(env!("SUNLIGHT_NATIVE_UNIX_CLIENT")).as_slice();
+        for (pid, name, uid, elf) in [
+            (701, "native-unix-server", 0, server),
+            (702, "helios-unix-denied", 1001, client),
+            (703, "helios-unix-allowed", 1000, client),
+            (704, "native-unix-denied", 1001, server),
+        ] {
+            let mut pmm = PMM.lock();
+            let mut probe = unsafe { Process::new(pid, 0, name, &mut pmm, hhdm_offset) };
+            probe.uid = uid;
+            probe.gid = uid;
+            process::spawn::exec_into_process(
+                elf, &mut probe, &mut pmm, hhdm_offset, &[name.as_bytes()], &[], false,
+            )
+            .expect("native Unix listener fixture ELF");
+            drop(pmm);
+            sched::with_scheduler(|sched| {
+                sched.add_process(probe);
+            });
+        }
+    }
+
     splash.set_progress(975); // 97.5%
     splash.redraw();
 
