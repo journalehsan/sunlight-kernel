@@ -1160,6 +1160,25 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    #[cfg(all(debug_assertions, feature = "helios_wayland_test"))]
+    {
+        for (pid, name, elf) in [
+            (716, "native-wayland-fixture", include_bytes!(env!("SUNLIGHT_WAYLAND_SERVER")).as_slice()),
+            (717, "helios-wayland-client", include_bytes!(env!("SUNLIGHT_WAYLAND_CLIENT")).as_slice()),
+        ] {
+            let mut pmm = PMM.lock();
+            let mut probe = unsafe { Process::new(pid, 0, name, &mut pmm, hhdm_offset) };
+            process::spawn::exec_into_process(
+                elf, &mut probe, &mut pmm, hhdm_offset, &[name.as_bytes()], &[], false,
+            )
+            .expect("Wayland window fixture ELF");
+            drop(pmm);
+            sched::with_scheduler(|sched| {
+                sched.add_process(probe);
+            });
+        }
+    }
+
     splash.set_progress(975); // 97.5%
     splash.redraw();
 

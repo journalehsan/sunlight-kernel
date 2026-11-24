@@ -92,6 +92,7 @@ members = [
     "sun-font",
     "sunlight-bench",
     "sunlight-calculator",
+    "services/helios-wayland-fixture",
     "sunlight-welcome",
     "sunlight-widget-gallery",
     "sunlight-files",

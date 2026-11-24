@@ -1,0 +1,10 @@
+[package]
+name = "helios-wayland-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
+sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }

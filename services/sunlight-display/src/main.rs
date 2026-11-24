@@ -9345,6 +9345,12 @@ pub extern "C" fn _start() -> ! {
                         mark_dirty_rect(&mut state, Rect::new(wx as i32, wy as i32, ww, wh));
                     }
                     redraw_scene(&mut state);
+                    #[cfg(feature = "helios_wayland_test")]
+                    if state.windows[win_idx].owner_pid == 716
+                        && state.windows[win_idx].config.title.starts_with(b"HeliosWL\0")
+                    {
+                        debug_log(&alloc::format!("[WL-SGP] redraw window={win_id}\n"));
+                    }
                     if first_present {
                         launch_trace::log_phase_now(
                             trace,
@@ -9526,9 +9532,18 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             SgpMsg::CLOSE_WINDOW => {
                 let win_id = msg.words[0];
+                #[cfg(feature = "helios_wayland_test")]
+                let fixture = state.windows.iter().any(|win| {
+                    win.id == win_id && win.owner_pid == 716
+                        && win.config.title.starts_with(b"HeliosWL\0")
+                });
                 if close_window(&mut state, win_id, Some(msg.badge)) {
                     mark_dirty_full(&mut state);
                     redraw_scene(&mut state);
+                    #[cfg(feature = "helios_wayland_test")]
+                    if fixture {
+                        debug_log(&alloc::format!("[WL-SGP] removed window={win_id}\n"));
+                    }
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }

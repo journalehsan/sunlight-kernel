@@ -608,6 +608,9 @@ sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dyn
 [build-dependencies]
 fontdue = "0.7"
 
+[features]
+helios_wayland_test = []
+
 [[bin]]
 name = "sunlight-display"
 path = "src/main.rs"

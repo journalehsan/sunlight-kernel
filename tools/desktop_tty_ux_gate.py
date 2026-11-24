@@ -23,7 +23,7 @@ VISIBLE = {
 
 
 class Guest:
-    def __init__(self, iso, out, vga="virtio"):
+    def __init__(self, iso, out, vga="virtio", accel=None):
         self.out = out.resolve()
         self.out.mkdir(parents=True, exist_ok=True)
         self.serial = self.out / "serial.log"
@@ -39,7 +39,11 @@ class Guest:
                "-device", "virtio-rng-pci,disable-modern=on", "-qmp",
                f"unix:{self.socket_path},server=on,wait=off", "-no-reboot", "-no-shutdown"]
         cmd += (["-device", "virtio-vga,xres=1280,yres=800"] if vga == "virtio" else ["-vga", vga])
-        if Path("/dev/kvm").exists():
+        if accel is not None:
+            cmd += ["-accel", accel]
+            if accel == "kvm":
+                cmd += ["-cpu", "host"]
+        elif Path("/dev/kvm").exists():
             cmd += ["-enable-kvm", "-cpu", "host"]
         (self.out / "command.json").write_text(json.dumps(cmd, indent=2))
         self.log = (self.out / "qemu.log").open("w")
