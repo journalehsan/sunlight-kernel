@@ -698,6 +698,7 @@ sunlight-virtio = { path = "../sunlight-virtio" }
 sunlight-block = { path = "../sunlight-block" }
 sunlight-fat = { path = "../sunlight-fat" }
 sunlight-elf = { path = "../sunlight-elf" }
+sha2 = { version = "0.10", default-features = false, optional = true }
 sunlight-mm = { path = "../sunlight-mm" }
 sunlight-fs = { path = "../sunlight-fs" }
 sunlight-compat-linux = { path = "../compat-linux" }
@@ -731,6 +732,13 @@ helios_wayland_test = []
 helios_dynamic_elf_probe = ["sunlight-fs/helios-dynamic-elf-probe"]
 helios_dynamic_elf_handoff = ["helios_dynamic_elf_probe", "mm2a_test_injection"]
 helios_dynamic_elf_relocation_fixture = ["helios_dynamic_elf_handoff", "sunlight-fs/helios-dynamic-elf-relocation-fixture"]
+helios_dynamic_elf_shared_fixture = ["helios_dynamic_elf_relocation_fixture", "sunlight-fs/helios-dynamic-elf-shared-fixture", "dep:sha2"]
+helios_dynamic_elf_orphan_fixture = ["helios_dynamic_elf_shared_fixture", "sunlight-fs/helios-dynamic-elf-orphan-fixture"]
+helios_dynamic_elf_tls_fixture = ["helios_dynamic_elf_orphan_fixture", "sunlight-fs/helios-dynamic-elf-tls-fixture"]
+helios_runtime_mmap = ["helios_dynamic_elf_tls_fixture", "sunlight-fs/helios-runtime-mmap"]
+helios_runtime_page_allocator = ["helios_runtime_mmap"]
+helios_runtime_c_startup = ["helios_runtime_page_allocator", "sunlight-fs/helios-runtime-c-startup"]
+helios_runtime_c_dso = ["helios_runtime_c_startup", "sunlight-fs/helios-runtime-c-dso"]
 helios_wayland_sunapp_test = ["helios_wayland_test", "sunlight-fs/helios-wayland-sunapp-test"]
 helios_qalculate_probe = ["helios_wayland_test", "sunlight-fs/helios-qalculate-probe"]
 thread_lifecycle_race_test = []

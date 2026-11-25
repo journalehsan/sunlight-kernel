@@ -53,6 +53,8 @@ pub struct Process {
     pub trusted_session_service: bool,
     pub trusted_auth_broker: bool,
     pub trusted_vfs_service: bool,
+    pub vfs_root_metadata: bool,
+    pub vfs_boot_root: bool,
     pub trusted_service_manager: bool,
     pub trusted_tty_session_service: bool,
     pub trusted_lock_service: bool,

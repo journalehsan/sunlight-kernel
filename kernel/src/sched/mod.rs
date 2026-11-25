@@ -616,6 +616,16 @@ impl Scheduler {
         );
     }
 
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+    fn trace_wait_allocation(&self, index: usize, sequence: usize) {
+        let child = &self.processes[index];
+        serial_println!(
+            "[WAIT-ALLOC] sequence={} slot={} child={}:{} parent={}:{} name={:?} status={:?}",
+            sequence, index, child.pid, child.foreground.incarnation, child.ppid,
+            child.foreground.parent_generation, child.name_str(), child.wait_exit_code()
+        );
+    }
+
     pub fn add_process_after_reaping(&mut self, mut process: Process) -> usize {
         // Process construction reserves identity before resource setup.
         // Publication must not transfer those resources to another incarnation.
@@ -681,6 +691,8 @@ impl Scheduler {
             );
             // Drop old (reaped) contents by overwrite; new process owns fresh resources.
             self.processes[id] = process;
+            #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+            self.trace_wait_allocation(id, created_count + 1);
             if reused_borrower {
                 BORROWER_SLOTS_REUSED.fetch_add(1, Ordering::Relaxed);
             }
@@ -716,6 +728,8 @@ impl Scheduler {
             self.trace_wait_lifecycle(id, "slot-release", Some(process.pid));
             serial_println!("[SCHED] process_slot_reused idx={} (reaped)", id);
             self.processes[id] = process;
+            #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+            self.trace_wait_allocation(id, created_count + 1);
             if reused_borrower {
                 BORROWER_SLOTS_REUSED.fetch_add(1, Ordering::Relaxed);
             }
@@ -740,6 +754,8 @@ impl Scheduler {
             process.get_queue_tier()
         );
         self.processes.push(process);
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
+        self.trace_wait_allocation(id, created_count + 1);
         id
     }
 
@@ -3144,6 +3160,20 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_orphan_fixture"))]
+        if matches!(name, "probe" | "helios-orphan-parent")
+            || (cfg!(feature = "helios_runtime_mmap") && name == "mmap-probe")
+            || (cfg!(feature = "helios_runtime_c_startup") && name == "helios-c-startup")
+        {
+            let process = &self.processes[idx];
+            let owned = crate::PMM.lock().owned_frame_count(pid as u32);
+            serial_println!(
+                "[ORPHAN-VM] child={}:{} vm={} regions={} root_reclaimed={} owned_frames={} stack_live={} cleanup_pending={}",
+                pid, process.foreground.incarnation, reaped_generation,
+                process.address_space.region_count(), process.address_space.is_reclaimed(),
+                owned, process.kernel_stack.is_some(), process.exit_cleanup_pending
+            );
+        }
         #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
         self.trace_wait_lifecycle(idx, "cleanup-completed", None);
         #[cfg(feature = "native_c_guest")]

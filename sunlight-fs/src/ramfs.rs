@@ -3,7 +3,12 @@ pub use crate::tmpfs::Tmpfs as RamFs;
 use crate::vfs::mode;
 pub const RAMFS_MAX_HANDLES: usize = 32;
 // Allow for the full DOS Navigator bundle in the existing boot namespace.
-pub const RAMFS_MAX_ENTRIES: usize = 640;
+pub const RAMFS_MAX_ENTRIES: usize = 640
+    + 6 * cfg!(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture")) as usize
+    + cfg!(all(debug_assertions, feature = "helios-dynamic-elf-orphan-fixture")) as usize
+    + 13 * cfg!(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture")) as usize
+    + 4 * cfg!(all(debug_assertions, feature = "helios-runtime-mmap")) as usize
+    + 4 * cfg!(all(debug_assertions, feature = "helios-runtime-c-dso")) as usize;
 
 pub struct RamEntry {
     pub path: &'static str,
@@ -136,6 +141,148 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/etc/sunlight", 0, 0, mode::DIR_755),
     RamEntry::dir("/bin", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::dir("/Applications/elf-shared.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::dir("/Applications/elf-shared.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-shared.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-shared.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-shared.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-shared.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-shared.sunapp/Program/libhelios-value.so", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-shared.sunapp/Program/libhelios-value.so")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::dir("/Applications/elf-graph.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::dir("/Applications/elf-tls.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::dir("/Applications/elf-tls.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-tls.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-tls.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-tls.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-tls.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::dir("/Applications/elf-tls-init.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::dir("/Applications/elf-tls-init.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-tls-init.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-tls-init.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-tls-init.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-tls-init.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::dir("/Applications/elf-graph.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::dir("/Applications/elf-tls-shared.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-mmap"))]
+    RamEntry::dir("/Applications/elf-mmap.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-c-dso"))]
+    RamEntry::dir("/Applications/elf-c-dso.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-c-dso"))]
+    RamEntry::dir("/Applications/elf-c-dso.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-c-dso"))]
+    RamEntry::file(
+        "/Applications/elf-c-dso.sunapp/Program/libhelios-util.so", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-c-dso.sunapp/Program/libhelios-util.so")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-c-dso"))]
+    RamEntry::file(
+        "/Applications/elf-c-dso.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-c-dso.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-c-startup"))]
+    RamEntry::file(
+        "/bin/helios-c-startup", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-c-startup.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-mmap"))]
+    RamEntry::dir("/Applications/elf-mmap.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-mmap"))]
+    RamEntry::file(
+        "/Applications/elf-mmap.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-mmap.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-runtime-mmap"))]
+    RamEntry::file(
+        "/Applications/elf-mmap.sunapp/Program/mmap-probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-mmap.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::dir("/Applications/elf-tls-shared.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-tls-shared.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-tls-shared.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-tls-shared.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-tls-shared.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-tls-shared.sunapp/Program/libhelios_tls.so", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-tls-shared.sunapp/Program/libhelios_tls.so")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-graph.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-graph.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-graph.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-graph.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-graph.sunapp/Program/libhelios_a.so", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-graph.sunapp/Program/libhelios_a.so")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-graph.sunapp/Program/libhelios_b.so", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-graph.sunapp/Program/libhelios_b.so")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::dir("/Applications/elf-real.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::dir("/Applications/elf-real.sunapp/Program", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-real.sunapp/Manifest.toml", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-real.sunapp/Manifest.toml")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-real.sunapp/Program/probe", 0, 0, mode::FILE_755,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-real.sunapp/Program/probe")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture"))]
+    RamEntry::file(
+        "/Applications/elf-real.sunapp/Program/libhelios-math.so", 0, 0, mode::FILE_644,
+        include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-real.sunapp/Program/libhelios-math.so")),
+    ),
     #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-relocation-fixture"))]
     RamEntry::dir("/Applications/elf-relocation.sunapp", 0, 0, mode::DIR_755),
     #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-relocation-fixture"))]
@@ -152,6 +299,11 @@ pub static INITRAMFS: &[RamEntry] = &[
     ),
     #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
     RamEntry::dir("/Applications/elf-pie.sunapp", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-orphan-fixture"))]
+    RamEntry::file(
+        "/bin/helios-orphan-parent", 0, 0, mode::FILE_755,
+        include_bytes!(env!("SUNLIGHT_DYNAMIC_PROBE_LAUNCHER")),
+    ),
     #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]
     RamEntry::dir("/Applications/elf-pie.sunapp/Program", 0, 0, mode::DIR_755),
     #[cfg(all(debug_assertions, feature = "helios-dynamic-elf-probe"))]

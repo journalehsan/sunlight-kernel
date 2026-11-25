@@ -32,6 +32,8 @@ fn process(pid: usize) -> Process {
         trusted_session_service: false,
         trusted_auth_broker: pid == 6,
         trusted_vfs_service: false,
+        vfs_root_metadata: false,
+        vfs_boot_root: false,
         trusted_service_manager: false,
         trusted_tty_session_service: false,
         trusted_lock_service: false,

@@ -680,7 +680,13 @@ edition = "2021"
 helios-git = []
 helios-wayland-sunapp-test = []
 helios-dynamic-elf-probe = []
+helios-dynamic-elf-orphan-fixture = []
+helios-dynamic-elf-tls-fixture = []
+helios-runtime-mmap = []
+helios-runtime-c-startup = []
+helios-runtime-c-dso = ["helios-runtime-c-startup"]
 helios-dynamic-elf-relocation-fixture = []
+helios-dynamic-elf-shared-fixture = []
 helios-qalculate-probe = []
 
 [dependencies]

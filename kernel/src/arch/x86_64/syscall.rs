@@ -12793,6 +12793,8 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
         None
     };
 
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    let before = mmap_probe_snapshot(&sched, &pmm, sched.current_memory_owner().mmap_next);
     let result = crate::process::mmap::sys_mmap(
         addr,
         length,
@@ -12803,6 +12805,23 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
         &mut *pmm,
         &mut *sched,
     );
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    if let Some(before) = before {
+        let after = mmap_probe_snapshot(&sched, &pmm, result.as_ref().copied().unwrap_or(addr));
+        crate::serial_println!(
+            "[ANON-MMAP-VM] pid={} op=map ok={} before={:?} after={:?}",
+            sched.current_process().pid, result.is_ok(), before, after.unwrap()
+        );
+        if let Ok(base) = result {
+            let region = sched.current_memory_owner().address_space.lookup_region(base);
+            if let Some(region) = region {
+                crate::serial_println!(
+                    "[ANON-MMAP-SPAN] pid={} requested={} effective={}",
+                    sched.current_process().pid, length, region.end - base
+                );
+            }
+        }
+    }
     if pty_lock_start != 0 {
         let (free, before) = pty_memory_before.unwrap();
         let after = crate::memory::swap::diagnostics();
@@ -12884,7 +12903,17 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let linux_compat = sched.current_process().is_linux_compat();
     let mut pmm = crate::PMM.lock();
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    let before = mmap_probe_snapshot(&sched, &pmm, addr);
     let result = crate::process::mmap::sys_munmap(addr, length, &mut pmm, &mut sched);
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    if let Some(before) = before {
+        crate::serial_println!(
+            "[ANON-MMAP-VM] pid={} op=unmap ok={} before={:?} after={:?}",
+            sched.current_process().pid, result.is_ok(), before,
+            mmap_probe_snapshot(&sched, &pmm, addr).unwrap()
+        );
+    }
     drop(pmm);
     drop(sched);
 
@@ -12909,7 +12938,17 @@ fn sys_mprotect(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let linux_compat = sched.current_process().is_linux_compat();
     let pmm = crate::PMM.lock();
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    let before = mmap_probe_snapshot(&sched, &pmm, addr);
     let result = crate::process::mmap::sys_mprotect(addr, length, prot, &pmm, &mut sched);
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    if let Some(before) = before {
+        crate::serial_println!(
+            "[ANON-MMAP-VM] pid={} op=protect ok={} before={:?} after={:?}",
+            sched.current_process().pid, result.is_ok(), before,
+            mmap_probe_snapshot(&sched, &pmm, addr).unwrap()
+        );
+    }
     drop(pmm);
     drop(sched);
 
@@ -12920,6 +12959,34 @@ fn sys_mprotect(frame: &mut SyscallFrame) -> u64 {
         }
         Err(_) => u64::MAX,
     }
+}
+
+#[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+fn mmap_probe_snapshot(
+    sched: &crate::sched::Scheduler,
+    pmm: &crate::memory::pmm::PhysicalMemoryManager,
+    addr: u64,
+) -> Option<(usize, usize, Option<(bool, bool, bool)>, Option<(bool, bool, bool)>)> {
+    use x86_64::structures::paging::{Page, PageTableFlags as Flags, Size4KiB};
+    use x86_64::VirtAddr;
+
+    if sched.current_process().name_str() != "mmap-probe" {
+        return None;
+    }
+    let space = &sched.current_memory_owner().address_space;
+    let region = space.lookup_region(addr).map(|region| {
+        let prot = region.protection;
+        (prot.readable(), prot.writable(), prot.executable())
+    });
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().unwrap().offset);
+    let leaf = VirtAddr::try_new(addr).ok().and_then(|addr| {
+        let page = Page::<Size4KiB>::containing_address(addr);
+        unsafe { space.lookup_entry(page, hhdm) }.map(|(_, flags)| {
+            (flags.contains(Flags::USER_ACCESSIBLE), flags.contains(Flags::WRITABLE),
+             !flags.contains(Flags::NO_EXECUTE))
+        })
+    });
+    Some((pmm.free_page_count(), space.region_count(), region, leaf))
 }
 
 /// Syscall: mremap (53)

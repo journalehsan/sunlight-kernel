@@ -172,7 +172,7 @@ fn parse_header(elf_bytes: &[u8], allow_dyn: bool) -> Result<ElfHeader, ElfError
     if table_end > elf_bytes.len() as u64 {
         return Err(ElfError::Truncated);
     }
-    if entry == 0 {
+    if entry == 0 && !allow_dyn {
         return Err(ElfError::InvalidEntry);
     }
     Ok(ElfHeader {
@@ -374,7 +374,7 @@ fn plan_image(
         }
         Ok(())
     })?;
-    if !entry_executable {
+    if !(entry_executable || allow_interp && header.elf_type == 3 && header.entry == 0) {
         return Err(ElfError::EntryNotExecutable);
     }
 
@@ -394,15 +394,24 @@ pub struct DynamicImage<'a> {
 }
 
 pub mod relative;
+pub mod shared_fixture;
 
 impl<'a> DynamicImage<'a> {
     pub fn parse(bytes: &'a [u8]) -> Result<Self, ElfError> {
+        Self::parse_with_sysv(bytes, false)
+    }
+
+    pub fn parse_bundle_image(bytes: &'a [u8]) -> Result<Self, ElfError> {
+        Self::parse_with_sysv(bytes, true)
+    }
+
+    fn parse_with_sysv(bytes: &'a [u8], trusted_sysv: bool) -> Result<Self, ElfError> {
         let header = parse_header(bytes, true)?;
         if bytes[5] != 1
             || bytes[6] != 1
             || bytes[8] != 0
             || !matches!(bytes[7], 0 | ELFOSABI_LINUX)
-            || classify_personality(bytes) != Personality::Linux
+            || (!trusted_sysv && classify_personality(bytes) != Personality::Linux)
             || bytes[20..24] != [1, 0, 0, 0]
             || bytes[52..54] != [64, 0]
             || header.phoff < 64
@@ -458,7 +467,32 @@ impl<'a> DynamicImage<'a> {
         bias: u64,
         emit: &mut dyn FnMut(&SegmentPlan),
     ) -> Result<(), ElfError> {
+        if self.header.entry == 0 {
+            return Err(ElfError::InvalidEntry);
+        }
         plan_image(self.bytes, &self.header, window, bias, true, emit)
+    }
+
+    pub fn plan_library(
+        &self,
+        window: (u64, u64),
+        bias: u64,
+        emit: &mut dyn FnMut(&SegmentPlan),
+    ) -> Result<(), ElfError> {
+        if self.header.elf_type != 3 || self.interpreter.is_some() {
+            return Err(ElfError::InvalidDynamicHeader);
+        }
+        plan_image(self.bytes, &self.header, window, bias, true, emit)
+    }
+
+    pub fn library_bias(&self, window_start: u64) -> Result<u64, ElfError> {
+        let start = self.header.phoff as usize;
+        let end = start + usize::from(self.header.phnum) * 56;
+        let lowest = self.bytes[start..end].chunks_exact(56)
+            .filter(|ph| ph[..4] == PT_LOAD.to_le_bytes() && ph[40..48] != [0; 8])
+            .map(|ph| u64::from_le_bytes(ph[16..24].try_into().unwrap()) & !(PAGE_SIZE - 1))
+            .min().ok_or(ElfError::InvalidSegment)?;
+        window_start.checked_sub(lowest).ok_or(ElfError::SegmentOutOfRange)
     }
 
     pub fn program_headers(&self, plans: &[SegmentPlan]) -> Result<u64, ElfError> {

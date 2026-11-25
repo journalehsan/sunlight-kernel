@@ -322,6 +322,55 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         aliases: &[],
         executable: b"/Applications/elf-relocation.sunapp",
     },
+    #[cfg(feature = "helios-dynamic-elf-shared-fixture")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-shared",
+        display_name: "ELF shared library probe",
+        aliases: &[],
+        executable: b"/Applications/elf-shared.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-shared-fixture")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-real",
+        display_name: "ELF toolchain library probe",
+        aliases: &[],
+        executable: b"/Applications/elf-real.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-shared-fixture")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-graph",
+        display_name: "ELF dependency graph probe",
+        aliases: &[],
+        executable: b"/Applications/elf-graph.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-tls-fixture")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-tls",
+        display_name: "ELF static TLS probe",
+        aliases: &[],
+        executable: b"/Applications/elf-tls.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-tls-fixture")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-tls-init",
+        display_name: "ELF initialized TLS control",
+        aliases: &[],
+        executable: b"/Applications/elf-tls-init.sunapp",
+    },
+    #[cfg(feature = "helios-dynamic-elf-tls-fixture")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-tls-shared",
+        display_name: "ELF shared TLS probe",
+        aliases: &[],
+        executable: b"/Applications/elf-tls-shared.sunapp",
+    },
+    #[cfg(feature = "helios-runtime-mmap")]
+    ApplicationRegistryEntry {
+        canonical_id: "elf-mmap",
+        display_name: "Helios anonymous mapping probe",
+        aliases: &[],
+        executable: b"/Applications/elf-mmap.sunapp",
+    },
     #[cfg(feature = "helios-qalculate-probe")]
     ApplicationRegistryEntry {
         canonical_id: "qalculate",
@@ -792,7 +841,15 @@ fn validate_helios_entry(bundle: &[u8], manifest: &[u8]) -> Result<(ResolvedApp,
     let mut ident = [0; 16];
     let count = libc::read(fd, &mut ident);
     let _ = libc::close(fd);
-    if count != Ok(ident.len()) || &ident[..5] != b"\x7fELF\x02" || &ident[9..15] != b"HLNX01" {
+    let mut helios_ident = &ident[9..15] == b"HLNX01";
+    if cfg!(feature = "helios-dynamic-elf-shared-fixture")
+        && matches!(executable, b"/Applications/elf-real.sunapp/Program/probe"
+            | b"/Applications/elf-graph.sunapp/Program/probe")
+        && ident[5..] == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    {
+        helios_ident = true;
+    }
+    if count != Ok(ident.len()) || &ident[..5] != b"\x7fELF\x02" || !helios_ident {
         return Err(LaunchError::UnsupportedRuntime);
     }
     Ok((ResolvedApp { path, path_len: length }, kind))

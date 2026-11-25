@@ -13,7 +13,7 @@ pub enum Error {
     Permission(u64),
 }
 
-fn word(bytes: &[u8], offset: usize) -> u64 {
+pub(super) fn word(bytes: &[u8], offset: usize) -> u64 {
     u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap())
 }
 
@@ -43,7 +43,7 @@ fn segment(plans: &[SegmentPlan], wanted: Range<u64>) -> Option<&SegmentPlan> {
     found
 }
 
-fn file_range(plans: &[SegmentPlan], wanted: Range<u64>) -> Option<Range<usize>> {
+pub(super) fn file_range(plans: &[SegmentPlan], wanted: Range<u64>) -> Option<Range<usize>> {
     let plan = segment(plans, wanted.clone())?;
     if wanted.end.checked_sub(plan.vaddr)? > plan.file_size {
         return None;

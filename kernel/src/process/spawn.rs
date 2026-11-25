@@ -1,3 +1,6 @@
+#[cfg(all(debug_assertions, feature = "helios_runtime_c_startup"))]
+mod c_startup;
+
 use super::{Process, ProcessState};
 use crate::capability::{CapabilityBroker, CapabilityRights};
 use crate::memory::pmm::PhysicalMemoryManager;
@@ -220,6 +223,13 @@ fn exec_into_process_inner(
         crate::serial_println!("[EXEC] Linux ELF detected");
     }
 
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_tls_fixture"))]
+    let result = if activate_on_success && bytes == super::elf_loader::handoff::tls::APP {
+        Err(SpawnError::ElfLoadFailed)
+    } else {
+        build_exec_image(bytes, process, pmm, hhdm_offset, argv, envp, fault)
+    };
+    #[cfg(not(all(debug_assertions, feature = "helios_dynamic_elf_tls_fixture")))]
     let result = build_exec_image(
         bytes,
         process,
@@ -391,7 +401,10 @@ fn build_exec_image(
     >,
 ) -> Result<u64, SpawnError> {
     #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
-    let handoff = super::elf_loader::handoff::load(bytes, process, pmm, hhdm_offset, fault)
+    let handoff = super::elf_loader::handoff::load(bytes, process, pmm, hhdm_offset, fault,
+        #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+        argv.first().and_then(|path| super::elf_loader::handoff::trusted_library(path)),
+    )
         .map_err(|stage| {
             crate::serial_println!(
                 "[HELIOS-HANDOFF] rejected stage={} pid={}",
@@ -412,6 +425,16 @@ fn build_exec_image(
 
     #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
     let fail_stack = fault == Some(super::elf_loader::handoff::Fault::PostRelocationAllocation);
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_shared_fixture"))]
+    let fail_stack = fail_stack || fault == Some(super::elf_loader::handoff::Fault::Shared(
+        super::elf_loader::handoff::SharedFault::Stack,
+    ));
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_tls_fixture"))]
+    let fail_stack = fail_stack || fault == Some(super::elf_loader::handoff::Fault::Tls(
+        super::elf_loader::handoff::tls::Fault::Stack,
+    )) || fault == Some(super::elf_loader::handoff::Fault::StartupTls(
+        super::elf_loader::handoff::tls::StartupFault::Stack,
+    ));
     #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
     if fail_stack {
         pmm.fail_test_allocations_after(0);
@@ -473,7 +496,10 @@ fn build_exec_image(
     #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
     if let Some(image) = &handoff {
         use super::elf_loader::handoff::Fault;
-        let capacity = if fault == Some(Fault::Auxv) {
+        let fail_auxv = fault == Some(Fault::Auxv);
+        #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+        let fail_auxv = fail_auxv || fault == Some(Fault::Shared(super::elf_loader::handoff::SharedFault::Auxv));
+        let capacity = if fail_auxv {
             0
         } else {
             auxv.capacity()
@@ -498,6 +524,12 @@ fn build_exec_image(
     } else {
         stack_floor
     };
+    #[cfg(all(debug_assertions, feature = "helios_runtime_c_startup"))]
+    let stack_floor = if fault == Some(super::elf_loader::handoff::Fault::CStartupOverflow) {
+        super::layout::USER_STACK_TOP - 64
+    } else {
+        stack_floor
+    };
     let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset, stack_floor)
         .inspect_err(|_error| {
             if dynamic_entry.is_some() {
@@ -507,6 +539,15 @@ fn build_exec_image(
                 );
             }
         })?;
+
+    #[cfg(all(debug_assertions, feature = "helios_runtime_c_startup"))]
+    let stack = if bytes == c_startup::IMAGE {
+        let mut stack = stack;
+        c_startup::validate(process, hhdm_offset, &mut stack, &auxv, fault)?;
+        stack
+    } else {
+        stack
+    };
 
     if dynamic_entry.is_some() {
         process
@@ -527,6 +568,10 @@ fn build_exec_image(
     }
 
     process.init_context(entry, stack.rsp);
+    #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_tls_fixture"))]
+    {
+        process.fs_base = handoff.as_ref().map_or(0, |image| image.thread_pointer);
+    }
     // SysV-style register convenience on top of the canonical stack layout:
     // rdi=argc, rsi=argv, rdx=envp. _start can use either.
     process.set_initial_args(argv.len() as u64, stack.argv_ptr, stack.envp_ptr, 0);
@@ -604,15 +649,162 @@ pub(crate) fn test_handoff_rollback() {
     ];
     #[cfg(not(feature = "helios_dynamic_elf_relocation_fixture"))]
     let relocation_cases = [];
+    #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+    use super::elf_loader::handoff::SharedFault;
+    #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+    let shared_cases = [
+        (SharedFault::Needed, "needed"),
+        (SharedFault::Missing, "missing_library"),
+        (SharedFault::Identity, "wrong_identity"),
+        (SharedFault::Malformed, "malformed_library"),
+        (SharedFault::Machine, "wrong_library_machine"),
+        (SharedFault::Mapping, "library_mapping"),
+        (SharedFault::Dynamic, "dynamic_table"),
+        (SharedFault::Symbol, "symbol_table"),
+        (SharedFault::Relocation, "jump_slot_write"),
+        (SharedFault::Stack, "shared_stack"),
+        (SharedFault::Auxv, "shared_auxv"),
+        (SharedFault::Process, "process_allocation"),
+    ].map(|(fault, label)| {
+        let expected = if matches!(fault, SharedFault::Stack | SharedFault::Auxv | SharedFault::Process) {
+            SpawnError::NoMemory
+        } else {
+            SpawnError::ElfLoadFailed
+        };
+        (Fault::Shared(fault), label, expected)
+    });
+    #[cfg(not(feature = "helios_dynamic_elf_shared_fixture"))]
+    let shared_cases = [];
+    #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+    let real_cases = {
+        use sunlight_elf::shared_fixture::TestFault;
+        [
+            (SharedFault::Identity, "real_wrong_hash"),
+            (SharedFault::Malformed, "real_malformed"),
+            (SharedFault::Mapping, "real_mapping"),
+            (SharedFault::Metadata(TestFault::MissingExport), "real_missing_export"),
+            (SharedFault::Metadata(TestFault::DuplicateExport), "real_duplicate_export"),
+            (SharedFault::Metadata(TestFault::UndefinedImport), "real_bad_undefined_symbol"),
+            (SharedFault::Metadata(TestFault::SymbolRange), "real_symbol_range"),
+            (SharedFault::Metadata(TestFault::RelocationRange), "real_relocation_range"),
+            (SharedFault::Metadata(TestFault::RelocationType), "real_unsupported_relocation"),
+        ].map(|(fault, label)| (Fault::Shared(fault), label, SpawnError::ElfLoadFailed))
+    };
+    #[cfg(not(feature = "helios_dynamic_elf_shared_fixture"))]
+    let real_cases = [];
+    #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+    let graph_cases = {
+        use super::elf_loader::handoff::GraphFault;
+        [
+            (GraphFault::Missing(0), "graph_missing_a"),
+            (GraphFault::Missing(1), "graph_missing_b"),
+            (GraphFault::Hash(0), "graph_hash_a"),
+            (GraphFault::Hash(1), "graph_hash_b"),
+            (GraphFault::Undeclared, "graph_undeclared"),
+            (GraphFault::Cycle, "graph_cycle"),
+            (GraphFault::Duplicate, "graph_duplicate"),
+            (GraphFault::Unresolved, "graph_unresolved"),
+            (GraphFault::Ambiguous, "graph_ambiguous"),
+            (GraphFault::Path, "graph_path"),
+            (GraphFault::NeededOffset, "graph_needed_offset"),
+            (GraphFault::Mapping, "graph_mapping"),
+            (GraphFault::LeafRelocation, "graph_leaf_relocation"),
+            (GraphFault::PageTable, "graph_page_table"),
+        ].map(|(fault, label)| (Fault::Shared(SharedFault::Graph(fault)), label, SpawnError::ElfLoadFailed))
+        .into_iter().chain([
+            (Fault::Shared(SharedFault::Stack), "graph_stack", SpawnError::NoMemory),
+            (Fault::Shared(SharedFault::Process), "graph_process", SpawnError::NoMemory),
+        ])
+    };
+    #[cfg(not(feature = "helios_dynamic_elf_shared_fixture"))]
+    let graph_cases = [];
+    #[cfg(feature = "helios_dynamic_elf_tls_fixture")]
+    let tls_cases = {
+        use super::elf_loader::handoff::tls::Fault as Tls;
+        [
+            (Fault::Tls(Tls::Validation), "tls_malformed", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::MissingTail), "tls_missing_tail", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::Alignment), "tls_alignment", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::Unmapped), "tls_unmapped", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::FileSize), "tls_filesz", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::Overflow), "tls_overflow", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::Allocation), "tls_allocation", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::Stack), "tls_stack", SpawnError::NoMemory),
+            (Fault::Tls(Tls::Interpreter), "tls_interpreter", SpawnError::ElfLoadFailed),
+            (Fault::Tls(Tls::Process), "tls_process", SpawnError::NoMemory),
+        ]
+    };
+    #[cfg(not(feature = "helios_dynamic_elf_tls_fixture"))]
+    let tls_cases = [];
+    #[cfg(feature = "helios_dynamic_elf_tls_fixture")]
+    let startup_tls_cases = {
+        use super::elf_loader::handoff::tls::StartupFault::*;
+        [
+            (Module, "startup_tls_module"), (Missing, "startup_tls_missing"),
+            (Duplicate, "startup_tls_duplicate"), (Malformed, "startup_tls_malformed"),
+            (FileSize, "startup_tls_filesz"), (Alignment, "startup_tls_alignment"),
+            (Unmapped, "startup_tls_unmapped"), (Allocation, "startup_tls_allocation"),
+            (TableAllocation, "startup_tls_table"), (ResolverAllocation, "startup_tls_resolver"),
+            (Relocation, "startup_tls_relocation"), (Index, "startup_tls_index"),
+            (Offset, "startup_tls_offset"), (Stack, "startup_tls_stack"),
+            (Interpreter, "startup_tls_interpreter"),
+        ].map(|(fault, label)| (Fault::StartupTls(fault), label,
+            if fault == Stack { SpawnError::NoMemory } else { SpawnError::ElfLoadFailed }))
+    };
+    #[cfg(not(feature = "helios_dynamic_elf_tls_fixture"))]
+    let startup_tls_cases = [];
+    #[cfg(feature = "helios_runtime_c_startup")]
+    let c_startup_cases = [
+        (Fault::CStartupOverflow, "c_startup_overflow", SpawnError::NoMemory),
+        (Fault::CStartupBeforeEntry, "c_startup_before_entry", SpawnError::NoMemory),
+        (Fault::CStartupArgc, "c_startup_argc", SpawnError::ElfLoadFailed),
+        (Fault::CStartupArgv, "c_startup_argv", SpawnError::ElfLoadFailed),
+        (Fault::CStartupString, "c_startup_string", SpawnError::ElfLoadFailed),
+        (Fault::CStartupEnvp, "c_startup_envp", SpawnError::ElfLoadFailed),
+        (Fault::CStartupAuxv, "c_startup_auxv", SpawnError::ElfLoadFailed),
+        (Fault::CStartupAlignment, "c_startup_alignment", SpawnError::ElfLoadFailed),
+    ];
+    #[cfg(not(feature = "helios_runtime_c_startup"))]
+    let c_startup_cases = [];
+    #[cfg(feature = "helios_runtime_c_dso")]
+    let c_dso_cases = {
+        use sunlight_elf::shared_fixture::TestFault::*;
+        [
+            (SharedFault::Metadata(UndefinedImport), "c_dso_import"),
+            (SharedFault::Needed, "c_dso_needed"),
+            (SharedFault::Metadata(RelocationType), "c_dso_relocation"),
+            (SharedFault::Metadata(MissingExport), "c_dso_lookup"),
+            (SharedFault::Symbol, "c_dso_after_mapping"),
+            (SharedFault::Relocation, "c_dso_after_resolution"),
+            (SharedFault::Stack, "c_dso_after_publication"),
+        ].map(|(fault, label)| (Fault::Shared(fault), label,
+            if fault == SharedFault::Stack { SpawnError::NoMemory } else { SpawnError::ElfLoadFailed }))
+    };
+    #[cfg(not(feature = "helios_runtime_c_dso"))]
+    let c_dso_cases = [];
     for (index, (fault, label, expected)) in cases.into_iter()
-        .chain(relocation_cases).enumerate()
+        .chain(relocation_cases).chain(shared_cases).chain(real_cases).chain(graph_cases).chain(tls_cases)
+        .chain(startup_tls_cases).chain(c_startup_cases).chain(c_dso_cases).enumerate()
     {
         let free = pmm.free_page_count();
         let tables = class_frame_count(PhysicalMemoryClass::PageTable);
         let owned = pmm.owned_frame_count(pid as u32);
         {
-            let mut child = unsafe { Process::try_new(pid, 0, "handoff-rollback", &mut pmm, hhdm) }
-                .expect("rollback test process");
+            #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+            let fail_process = fault == Fault::Shared(SharedFault::Process);
+            #[cfg(not(feature = "helios_dynamic_elf_shared_fixture"))]
+            let fail_process = false;
+            #[cfg(feature = "helios_dynamic_elf_tls_fixture")]
+            let fail_process = fail_process || fault == Fault::Tls(super::elf_loader::handoff::tls::Fault::Process);
+            if fail_process {
+                pmm.fail_test_allocations_after(0);
+            }
+            let child = unsafe { Process::try_new(pid, 0, "handoff-rollback", &mut pmm, hhdm) };
+            if fail_process {
+                pmm.clear_test_allocation_failure();
+                assert!(child.is_err(), "rollback fault {label}");
+            } else {
+            let mut child = child.expect("rollback test process");
             let bytes = if fault == Fault::Path {
                 rejected.as_slice()
             } else {
@@ -620,14 +812,61 @@ pub(crate) fn test_handoff_rollback() {
             };
             #[cfg(feature = "helios_dynamic_elf_relocation_fixture")]
             let bytes = if index >= cases.len() { relocation_fixture } else { bytes };
+            #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+            let bytes = if label.starts_with("graph_") {
+                super::elf_loader::handoff::GRAPH_APP
+            } else if label.starts_with("real_") {
+                super::elf_loader::handoff::REAL_APP
+            } else if matches!(fault, Fault::Shared(_)) {
+                include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-shared.sunapp/Program/probe"))
+            } else { bytes };
+            #[cfg(feature = "helios_dynamic_elf_tls_fixture")]
+            let bytes = if matches!(fault, Fault::StartupTls(_)) {
+                super::elf_loader::handoff::TLS_SHARED_APP
+            } else { bytes };
+            #[cfg(feature = "helios_dynamic_elf_tls_fixture")]
+            let mut tls_bytes;
+            #[cfg(feature = "helios_dynamic_elf_tls_fixture")]
+            let bytes = if let Fault::Tls(tls_fault) = fault {
+                use super::elf_loader::handoff::tls;
+                tls_bytes = tls::APP.to_vec();
+                tls::mutate(&mut tls_bytes, tls_fault);
+                tls_bytes.as_slice()
+            } else { bytes };
+            #[cfg(feature = "helios_runtime_c_startup")]
+            let bytes = if label.starts_with("c_startup_") {
+                c_startup::IMAGE
+            } else { bytes };
+            #[cfg(feature = "helios_runtime_c_dso")]
+            let bytes = if label.starts_with("c_dso_") {
+                include_bytes!(concat!(env!("SUNLIGHT_DYNAMIC_PROBES"), "/elf-c-dso.sunapp/Program/probe"))
+            } else { bytes };
+            let argv: &[&[u8]] = &[if label.starts_with("startup_tls_") {
+                b"/Applications/elf-tls-shared.sunapp/Program/probe"
+            } else if label.starts_with("tls_") {
+                b"/Applications/elf-tls.sunapp/Program/probe"
+            } else if label.starts_with("graph_") {
+                b"/Applications/elf-graph.sunapp/Program/probe"
+            } else if label.starts_with("real_") {
+                b"/Applications/elf-real.sunapp/Program/probe"
+            } else if cfg!(feature = "helios_dynamic_elf_shared_fixture") && index >= cases.len() + relocation_cases.len() {
+                b"/Applications/elf-shared.sunapp/Program/probe"
+            } else { b"probe" }];
+            let (argv, envp): (&[&[u8]], &[&[u8]]) = if label.starts_with("c_startup_") {
+                (&[b"c-startup", b"P"], &[])
+            } else if label.starts_with("c_dso_") {
+                (&[b"/Applications/elf-c-dso.sunapp/Program/probe", b"P"], &[])
+            } else {
+                (argv, &[b"TEST=1"])
+            };
             assert_eq!(
                 exec_into_process_inner(
                     bytes,
                     &mut child,
                     &mut pmm,
                     hhdm,
-                    &[b"probe"],
-                    &[b"TEST=1"],
+                    argv,
+                    envp,
                     false,
                     Some(fault),
                 ),
@@ -639,7 +878,13 @@ pub(crate) fn test_handoff_rollback() {
                 0,
                 "rollback fault {label}"
             );
+            if label.starts_with("c_startup_") || label.starts_with("c_dso_") {
+                assert_eq!(child.fs_base, 0);
+                assert!(child.proc_args.is_empty());
+                assert_eq!(child.entry_point, 0);
+            }
             drop(child);
+            }
         }
         assert_eq!(pmm.free_page_count(), free, "rollback fault {label}");
         assert_eq!(
@@ -662,6 +907,13 @@ pub(crate) fn test_handoff_rollback() {
             "rollback fault {label}"
         );
         let family = if index < cases.len() { "HELIOS-HANDOFF" } else { "HELIOS-RELOC" };
+        #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
+        let family = if matches!(fault, Fault::Shared(_)) { "HELIOS-SHARED" } else { family };
+        let family = if label.starts_with("graph_") { "HELIOS-GRAPH" } else { family };
+        let family = if label.starts_with("tls_") { "HELIOS-TLS" } else { family };
+        let family = if label.starts_with("startup_tls_") { "HELIOS-TLS-SHARED" } else { family };
+        let family = if label.starts_with("c_startup_") { "C-STARTUP" } else { family };
+        let family = if label.starts_with("c_dso_") { "C-DSO" } else { family };
         crate::serial_println!(
             "[{}] rollback verified case={} pid={} free={} tables={} owned={}",
             family,

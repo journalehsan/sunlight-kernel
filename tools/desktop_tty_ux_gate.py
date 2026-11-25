@@ -24,7 +24,7 @@ VISIBLE = {
 
 
 class Guest:
-    def __init__(self, iso, out, vga="virtio", accel=None, serial_control=False):
+    def __init__(self, iso, out, vga="virtio", accel=None, serial_control=False, offline=False, qmp=True):
         self.out = out.resolve()
         self.out.mkdir(parents=True, exist_ok=True)
         self.serial = self.out / "serial.log"
@@ -39,9 +39,12 @@ class Guest:
                "-drive", f"if=pflash,format=raw,readonly=on,file={code}",
                "-drive", f"if=pflash,format=raw,file={self.out / 'vars.fd'}",
                "-serial", f"file:{self.serial}", "-display", "none", "-m", "4096M", "-smp", "2",
-               "-device", "virtio-rng-pci,disable-modern=on", "-qmp",
-               f"unix:{self.socket_path},server=on,wait=off", "-no-reboot", "-no-shutdown"]
+               "-device", "virtio-rng-pci,disable-modern=on", "-no-reboot", "-no-shutdown"]
+        if qmp:
+            cmd += ["-qmp", f"unix:{self.socket_path},server=on,wait=off"]
         cmd += (["-device", "virtio-vga,xres=1280,yres=800"] if vga == "virtio" else ["-vga", vga])
+        if offline:
+            cmd += ["-nic", "none"]
         if self.control_path:
             cmd[cmd.index("-serial") + 1] = "chardev:capture"
             cmd += ["-chardev", f"socket,id=capture,path={self.control_path},server=on,wait=off,logfile={self.serial}"]
@@ -54,6 +57,9 @@ class Guest:
         (self.out / "command.json").write_text(json.dumps(cmd, indent=2))
         self.log = (self.out / "qemu.log").open("w")
         self.process = subprocess.Popen(cmd, cwd=ROOT, stdout=self.log, stderr=subprocess.STDOUT)
+        self.connection = None
+        if not qmp:
+            return
         deadline = time.monotonic() + 15
         while not Path(self.socket_path).exists():
             if self.process.poll() is not None or time.monotonic() > deadline:
@@ -217,8 +223,9 @@ class Guest:
         time.sleep(.5)
 
     def close(self):
-        self.stream.close()
-        self.connection.close()
+        if self.connection is not None:
+            self.stream.close()
+            self.connection.close()
         self.process.terminate()
         try:
             self.process.wait(timeout=5)

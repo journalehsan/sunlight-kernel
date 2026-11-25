@@ -2117,6 +2117,43 @@ fn run_mm2a_injected_failure_tests(
     }
     assert_eq!(pmm.free_page_count(), free_before);
 
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    {
+        use crate::process::mmap;
+        let process =
+            unsafe { crate::process::Process::new(0xB319, 0, "helios-publication-test", pmm, hhdm) };
+        let mut sched = crate::sched::Scheduler::new();
+        sched.processes.push(process);
+        let baseline = pmm.free_page_count();
+        let owned = pmm.owned_frame_count(0xB319);
+        let regions = sched.processes[0].address_space.region_count();
+        mmap::reject_next_eager_publication_for_test();
+        let result = mmap::sys_mmap(
+            0,
+            8192,
+            mmap::PROT_READ | mmap::PROT_WRITE,
+            mmap::MAP_PRIVATE | mmap::MAP_ANONYMOUS,
+            -1,
+            0,
+            pmm,
+            &mut sched,
+        );
+        assert_eq!(result, Err(mmap::MmapError::InternalInvariant));
+        let process = &mut sched.processes[0];
+        assert_eq!(process.mmap_next, 0);
+        assert_eq!(process.address_space.region_count(), regions);
+        assert_eq!(pmm.free_page_count(), baseline);
+        assert_eq!(pmm.owned_frame_count(0xB319), owned);
+        unsafe { process.address_space.reclaim_user_space(pmm, hhdm, true); }
+        assert!(process.address_space.is_reclaimed());
+        assert_eq!(pmm.owned_frame_count(0xB319), 0);
+        drop(sched);
+        assert_eq!(pmm.free_page_count(), free_before);
+        crate::serial_println!(
+            "[ANON-MMAP-FAULT] eager-publication stale-reservation rollback=pass root=reclaimed owned=0"
+        );
+    }
+
     let mut shm_process =
         unsafe { crate::process::Process::new(0xB313, 0, "mm2a-shm-oom", pmm, hhdm) };
     shm_process.system_allocation = true; // Explicit trusted kernel OOM fixture.

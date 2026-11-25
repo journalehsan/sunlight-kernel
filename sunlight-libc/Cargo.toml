@@ -684,6 +684,9 @@ sunlight-ipc = { path = "../ipc" }
 helios-wayland-sunapp-test = []
 helios-dynamic-elf-probe = []
 helios-dynamic-elf-relocation-fixture = ["helios-dynamic-elf-probe"]
+helios-dynamic-elf-shared-fixture = ["helios-dynamic-elf-relocation-fixture"]
+helios-dynamic-elf-tls-fixture = []
+helios-runtime-mmap = []
 helios-qalculate-probe = []
 # Enable #[global_allocator] for `extern crate alloc` (Vec, String, Box, …).
 # Only one crate in a binary may declare a global allocator, so this feature

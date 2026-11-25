@@ -63,6 +63,15 @@ pub const fn mprotect_linux_errno(error: MmapError) -> i32 {
     }
 }
 
+#[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+static REJECT_NEXT_EAGER_PUBLICATION: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+
+#[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+pub(crate) fn reject_next_eager_publication_for_test() {
+    REJECT_NEXT_EAGER_PUBLICATION.store(true, Ordering::Relaxed);
+}
+
 static MUNMAP_REQUESTS: AtomicU64 = AtomicU64::new(0);
 static MUNMAP_SUCCESSES: AtomicU64 = AtomicU64::new(0);
 static MUNMAP_PAGES: AtomicU64 = AtomicU64::new(0);
@@ -240,6 +249,30 @@ pub fn sys_mmap(
     // Linux stacks. Ordinary syscall execution itself uses the private T1
     // supervisor stack, independently of user-stack mapping permissions.
     let demand_backed = sched.current_process().is_linux_compat() && prot != PROT_NONE;
+    #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+    if length == 3 * 4096
+        && (mmap_fault_fixture(sched, "F")
+            || mmap_fault_fixture(sched, "T")
+            || mmap_fault_fixture(sched, "L"))
+    {
+        let pid = sched.current_process().pid;
+        let counts = |sched: &Scheduler, pmm: &PhysicalMemoryManager| {
+            let owner = sched.current_memory_owner();
+            (pmm.free_page_count(), pmm.owned_frame_count(pid as u32),
+             owner.address_space.region_count(), owner.mmap_next)
+        };
+        let before = counts(sched, pmm);
+        let result = map_anonymous_kind(
+            addr, length, prot, flags, pmm, sched, MappingKind::Anonymous, false,
+        );
+        assert!(result.is_err());
+        assert_eq!(before, counts(sched, pmm));
+        crate::serial_println!(
+            "[PAGE-ALLOC-VM] pid={} rollback=exact free={} owned={} regions={} cursor=unchanged",
+            pid, before.0, before.1, before.2
+        );
+        return result;
+    }
     map_anonymous_kind(
         addr,
         length,
@@ -542,6 +575,14 @@ fn map_anonymous_kind(
     // replacing a live range always releases its old pages in one transaction.
     if demand_backed && !fixed {
         if let Some(reservation) = reservation {
+            #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+            if length == 4097 && mmap_fault_fixture(sched, "S") {
+                sched.current_process().address_space.cancel_region(reservation);
+                crate::serial_println!(
+                    "[ANON-MMAP-FAULT] pid={} setup scratch publication cancelled requested=4097 effective=8192",
+                    pid
+                );
+            }
             if let Err(error) = sched
                 .current_process()
                 .address_space
@@ -596,7 +637,20 @@ fn map_anonymous_kind(
             Some((pid, page_vaddr)),
             &mut reclaim_budget,
         );
-        let frame_addr = match pmm.alloc_frame_owned(pid as u32) {
+        #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+        let reject_frame = length == 3 * 4096 && i == 1 && mmap_fault_fixture(sched, "F");
+        #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+        if reject_frame {
+            pmm.fail_test_allocations_after(0);
+        }
+        let allocated_frame = pmm.alloc_frame_owned(pid as u32);
+        #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+        if reject_frame {
+            pmm.clear_test_allocation_failure();
+            assert!(allocated_frame.is_none());
+            crate::serial_println!("[PAGE-ALLOC-VM] pid={} fault=frame page=2", pid);
+        }
+        let frame_addr = match allocated_frame {
             Some(addr) => addr,
             None => {
                 crate::process::address_space::note_frame_allocation_failure();
@@ -623,6 +677,8 @@ fn map_anonymous_kind(
         }
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
 
+        #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+        let reject_table = length == 3 * 4096 && i == 0 && mmap_fault_fixture(sched, "T");
         let proc = match sched.process_mut_by_pid(pid) {
             Some(process) => process,
             None => {
@@ -663,6 +719,10 @@ fn map_anonymous_kind(
         } else {
             None
         };
+        #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+        if reject_table {
+            pmm.fail_test_allocations_after(0);
+        }
         let install_result = match replaced {
             Some(expected) => unsafe {
                 proc.address_space.replace_mapping(
@@ -682,6 +742,12 @@ fn map_anonymous_kind(
                     .map_page(page, frame, page_flags, pmm, hhdm_offset)
             },
         };
+        #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+        if reject_table {
+            pmm.clear_test_allocation_failure();
+            assert!(matches!(install_result, Err(MappingError::PageTableAllocationFailed)));
+            crate::serial_println!("[PAGE-ALLOC-VM] pid={} fault=page-table page=1", pid);
+        }
         if let Err(error) = install_result {
             pmm.free_frame(frame_addr);
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
@@ -708,6 +774,15 @@ fn map_anonymous_kind(
     }
 
     if let Some(reservation) = reservation {
+        #[cfg(all(debug_assertions, feature = "helios_runtime_page_allocator"))]
+        if length == 3 * 4096 && mmap_fault_fixture(sched, "L") {
+            sched.current_process().address_space.cancel_region(reservation);
+            crate::serial_println!("[PAGE-ALLOC-VM] pid={} fault=mapping-publication leaves={}", pid, installed.len());
+        }
+        #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+        if REJECT_NEXT_EAGER_PUBLICATION.swap(false, Ordering::Relaxed) {
+            sched.current_process().address_space.cancel_region(reservation);
+        }
         if let Err(error) = sched
             .current_process()
             .address_space
@@ -1437,6 +1512,12 @@ fn munmap_invariant_failure(message: &str) -> ! {
     panic!("MM-2D munmap invariant failure: {message}");
 }
 
+#[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+fn mmap_fault_fixture(sched: &Scheduler, marker: &str) -> bool {
+    let process = sched.current_process();
+    process.name_str() == "mmap-probe" && process.env.get("M") == Some(marker)
+}
+
 /// Change protection on fully present, policy-authorized anonymous mappings.
 pub fn sys_mprotect(
     addr: u64,
@@ -1554,6 +1635,11 @@ pub fn sys_mprotect(
         return Ok(());
     }
 
+    #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+    let inject_update = changed_pages == 2
+        && length == 8192
+        && protection == RegionProtection::READ_ONLY
+        && mmap_fault_fixture(sched, "P");
     let identity = sched.current_process().address_space.identity();
     let mut transitions = ProtectionTransitions::default();
     for chunk in pages.chunks(MPROTECT_CHUNK_PAGES) {
@@ -1564,6 +1650,42 @@ pub fn sys_mprotect(
             }
             let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(expected.address))
                 .unwrap_or_else(|_| mprotect_invariant_failure("preflighted page lost alignment"));
+            #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
+            if inject_update && chunk_changed {
+                // Inject before the second write, with the first already applied
+                // and the staged ledger still unpublished.
+                let first = chunk.iter().flatten().find(|entry| entry.old != protection).unwrap();
+                let first_page = Page::containing_address(VirtAddr::new(first.address));
+                let space = &mut sched.current_process_mut().address_space;
+                let (_, flags) = unsafe { space.lookup_entry(first_page, hhdm_offset) }
+                    .expect("updated leaf must exist");
+                let permission_bits =
+                    PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
+                let applied = crate::process::address_space::AddressSpace::protection_to_pte_flags(protection)
+                    .expect("preflighted protection");
+                assert_eq!(flags & permission_bits, applied & permission_bits);
+                let restored = unsafe {
+                    space.update_permissions_expected(
+                        first_page, first.frame, flags, first.old, hhdm_offset,
+                    )
+                }.expect("fixture rollback must restore the first leaf");
+                assert!(restored);
+                crate::memory::tlb::invalidate_range(identity, first.address, 1)
+                    .expect("fixture rollback shootdown");
+                for original in [first, expected] {
+                    let page = Page::containing_address(VirtAddr::new(original.address));
+                    let (frame, flags) = unsafe { space.lookup_entry(page, hhdm_offset) }
+                        .expect("original leaf must exist");
+                    assert_eq!(frame, original.frame);
+                    assert_eq!(flags & permission_bits, original.flags & permission_bits);
+                }
+                assert!(unsafe { space.validate_ledger_ptes(hhdm_offset) });
+                crate::serial_println!(
+                    "[ANON-MMAP-FAULT] pid={} protect leaf=2 applied=1 restored=1 ptes=RW,RW metadata=RW errno=-12",
+                    sched.current_process().pid
+                );
+                return Err(MmapError::NoMemory);
+            }
             let updated = unsafe {
                 sched
                     .current_process_mut()
