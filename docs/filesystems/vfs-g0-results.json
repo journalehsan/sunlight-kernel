@@ -1,0 +1,101 @@
+{
+  "verdict": "BLOCKED",
+  "blocker": "Deferring legacy FAT capacity and mountinfo would remove previously native-qualified Btop-08 through BTop-10 behavior. An authoritative replacement is absent.",
+  "head": "57aed5a115c5bb9ab1b0089e7128c8d69b1dae0c",
+  "source_evidence": [
+    "target/vfs-g0/status-before.txt",
+    "target/vfs-g0/sha256-before.txt",
+    "target/vfs-g0/tracked-before.patch"
+  ],
+  "production_changes": [],
+  "temporarily_deferred": [],
+  "ownership_guard": {
+    "status": "FAIL",
+    "exit_code": 1,
+    "references": 71,
+    "outside_reviewed_baseline": 4,
+    "evidence": "target/vfs-g0/guard-before.log"
+  },
+  "ordinary_boot_gate": {
+    "status": "FAIL",
+    "exit_code": 1,
+    "kernel_build_started": false,
+    "qemu_started": false,
+    "evidence": "target/vfs-g0/boot-before.log"
+  },
+  "findings": [
+    {
+      "site": "kernel/src/process/mmap.rs:272",
+      "origin": "initial uncommitted worktree",
+      "classification": "legacy VFS handle consumption"
+    },
+    {
+      "site": "kernel/src/arch/x86_64/syscall.rs:6260",
+      "origin": "ca178af0c",
+      "classification": "legacy FAT capacity observation"
+    },
+    {
+      "site": "kernel/src/linux_procfs.rs:173",
+      "origin": "ca178af0c",
+      "classification": "legacy mount topology observation"
+    },
+    {
+      "site": "kernel/src/storage.rs:123",
+      "origin": "ca178af0c",
+      "classification": "constructor comparison artifact with substantive new capacity sampling at storage.rs:126 and main.rs:2533"
+    }
+  ],
+  "platform_smoke": {
+    "status": "NOT_RUN"
+  },
+  "native": {
+    "1": {
+      "last_owner_exit": "NOT_RUN",
+      "successful_exec": "NOT_RUN",
+      "failed_exec": "NOT_RUN",
+      "endpoint_withdrawal": "NOT_RUN",
+      "replacement_and_concurrency": "NOT_RUN",
+      "slot_recovery": "NOT_RUN",
+      "stale_authority_rejection": "NOT_RUN",
+      "sustained_recovery_and_resource_accounting": "NOT_RUN"
+    },
+    "2": {
+      "last_owner_exit": "NOT_RUN",
+      "successful_exec": "NOT_RUN",
+      "failed_exec": "NOT_RUN",
+      "endpoint_withdrawal": "NOT_RUN",
+      "replacement_and_concurrency": "NOT_RUN",
+      "slot_recovery": "NOT_RUN",
+      "stale_authority_rejection": "NOT_RUN",
+      "sustained_recovery_and_resource_accounting": "NOT_RUN"
+    },
+    "4": {
+      "last_owner_exit": "NOT_RUN",
+      "successful_exec": "NOT_RUN",
+      "failed_exec": "NOT_RUN",
+      "endpoint_withdrawal": "NOT_RUN",
+      "replacement_and_concurrency": "NOT_RUN",
+      "slot_recovery": "NOT_RUN",
+      "stale_authority_rejection": "NOT_RUN",
+      "sustained_recovery_and_resource_accounting": "NOT_RUN"
+    }
+  },
+  "current_host_regressions": {
+    "status": "NOT_RUN"
+  },
+  "current_compile_checks": {
+    "status": "NOT_RUN"
+  },
+  "historical_host_evidence": [
+    "docs/kernel/klc-1-results.json",
+    "docs/kernel/klc-1b-results.json"
+  ],
+  "historical_private_mmap_evidence": {
+    "report": "docs/audit/helios-qalculate.md",
+    "cited_raw_path": "target/helios-qalculate/private-mmap/tcg-replay/",
+    "raw_path_present": false
+  },
+  "vfs_l1_readiness": "BLOCKED",
+  "vfs_d1_readiness": "BLOCKED",
+  "historical_klc_raw_paths_present": false
+}

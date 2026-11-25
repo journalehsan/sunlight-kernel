@@ -345,6 +345,17 @@ pub(super) fn charged_bytes() -> usize {
     LEDGER.lock().bytes
 }
 
+#[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r5_test"))]
+pub(super) fn caller_charge(caller: Caller) -> (usize, usize) {
+    LEDGER
+        .lock()
+        .callers
+        .iter()
+        .flatten()
+        .find(|usage| usage.caller == caller)
+        .map_or((0, 0), |usage| (usage.bytes, usage.requests))
+}
+
 /// Non-cloneable reservation, acquired before buffer allocation or reference
 /// cloning. One request reserves two object-reference slots and two buffers.
 struct Charge {

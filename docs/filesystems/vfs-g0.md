@@ -1,0 +1,42 @@
+# VFS-G0 ordinary boot and kernel lifecycle qualification
+
+**BLOCKED.** The unchanged ownership guard and ordinary boot gate both exited 1. They report 71 ring-0 references, four outside the reviewed baseline. The boot script stopped before building the kernel or starting QEMU.
+
+BTop-08 qualified caller-visible mount topology, successful FAT capacity queries and Btop's capacity display on native guests. BTop-09 independently confirmed boot-mounted FAT capacity and the no-disk error contract. BTop-10 observed Btop using the runtime FAT mount's topology and statfs in native execution. Deferring these consumers would remove behavior with prior native PASS results. The existing VFS service provides neither authoritative replacement. The owner's stop condition applies before any production edit. [BTop-08](../Helios_LinuxCompat/btop-08-mountinfo-capacity.md) · [BTop-09](../Helios_LinuxCompat/btop-09-live-storage-capacity.md) · [BTop-10](../Helios_LinuxCompat/btop-10-partition-read-io.md)
+
+## Source and findings
+
+Initial HEAD was `57aed5a115c5bb9ab1b0089e7128c8d69b1dae0c`. The initial Git status, tracked binary diff and SHA-256 manifest of tracked and nonignored untracked files are in `target/vfs-g0/`. Only reports were edited. KLC-1, KLC-1B, the 94-test registration harness, early-construction rollback, descriptor harness, storage initialization, historical mmap work, Qalculate bundle and unrelated worktree changes were retained. The guard, baseline, allowlists and boot script were untouched.
+
+| Current source | Origin and reviewed behavior | Caller, boot role and potential deferral |
+| --- | --- | --- |
+| [mmap.rs:272](../../kernel/src/process/mmap.rs#L272) | Incoming uncommitted private file population adds a real legacy VFS consumer. The reviewed private path maps anonymous memory. The shared-FD path is separate. | Linux mmap reaches the kernel mmap adapter and reads through the legacy open handle for private mappings. Ordinary boot requires no such Helios file population on the inspected boot path. A scoped unsupported result maps to ENODEV and can preserve anonymous, shared, protection and rollback behavior. Qalculate's loader exercised this path historically and still exited 127. No previously qualified consumer was identified for this incoming implementation. |
+| [syscall.rs:6260](../../kernel/src/arch/x86_64/syscall.rs#L6260) | `ca178af0ce904e6f4031ccb3499646dfe5a11ca9` adds a real legacy namespace and FAT capacity query. The reviewed implementation provides no such query. | Helios statfs, including musl statvfs and Btop's /mnt probe. EOPNOTSUPP is the established no-capacity response and would be truthful while service capacity is unavailable. Capacity telemetry is separate from boot storage, but this deferral would regress qualified disk-backed behavior. |
+| [linux_procfs.rs:173](../../kernel/src/linux_procfs.rs#L173) | The same commit introduces a real observer of the legacy mount table and device registry. The reviewed procfs has no mountinfo node. | The Linux procfs open adapter snapshots /proc/self/mountinfo for eligible callers, including Btop. Restoring the earlier absent-node result, ENOENT, would avoid publishing fabricated topology. The node is separate from boot and other procfs entries, but its removal would regress qualified topology and Btop's mount/device join. |
+| [storage.rs:123](../../kernel/src/storage.rs#L123) | The StorageCtl FAT constructor originated in `6c77f3cc253e4bf918f33f2d83a7bd494138e968`. Immediately before `ca178af0c`, it already used the exact immutable binding recorded in the reviewed baseline. The guard counts path, category and exact trimmed source text, ignoring line numbers. The added `mut` produces a comparison artifact for the constructor. The new `sample_capacity` call is real backend work. | StorageCtl MOUNT_FAT32 needs the checked partition view, FAT constructor and publication. Boot FAT initialization is separate and also gained sampling in `ca178af0c` at [main.rs:2533](../../kernel/src/main.rs#L2533). Neither mount needs sampling to publish a filesystem. Removing sampling and restoring the immutable runtime binding would preserve the reviewed mount operation, but would remove capacity used by qualified Btop probes on those paths. |
+
+The [authority audit](helios-vfs-authority-audit.md) traces the missing service contracts. Moving source lines, changing the guard or substituting compatibility data would leave those contracts unresolved.
+
+## Evidence and execution scope
+
+- Current **FAIL** results are in `target/vfs-g0/guard-before.log` and `target/vfs-g0/boot-before.log`. No post-change gate applies because production source was preserved.
+- Platform smoke is **NOT_RUN** for scheduler startup, VFS registration, Service Manager, desktop, Terminal, filesystem access, FAT boot, process creation and exit, native app launch, Btop and Chronos. Qalculate startup is outside VFS-G0.
+- Native last-owner exit, successful exec, failed exec and endpoint-only withdrawal are **NOT_RUN** at 1, 2 and 4 vCPUs. Slot recovery after binding drainage, stale reply and wrong identity rejection, overlapping replacement, sustained recovery and physical resource accounting have no current native evidence.
+- Current host and compile reruns are **NOT_RUN** under the stop condition. The 94 registration tests, both 100-cycle host runs, IPC, VFS service, descriptor, scheduler, kernel host and retirement suites, lifecycle controls and transaction, mmap and session compile checks remain historical. The host cycles model scheduler and VM transitions. [KLC-1 results](../kernel/klc-1-results.json) · [KLC-1B results](../kernel/klc-1b-results.json)
+- The Qalculate report records five successful private file mappings before a later loader failure. Its cited raw replay directory, `target/helios-qalculate/private-mmap/tcg-replay/`, and the cited raw KLC directories, `target/klc-1/` and `target/klc-1b/`, were absent in this checkout. The reports and results metadata remain available. [Qalculate report](../audit/helios-qalculate.md)
+
+## Required replacements
+
+No deferral was applied. These milestones describe what would be needed to restore the corresponding functionality if deferred in a later authorized phase, or to preserve it through an authoritative cutover.
+
+| Functionality and impact of deferral | Restoration milestone and required regression coverage |
+| --- | --- |
+| Helios private file-backed mmap. The loader cannot map shared library contents with ENODEV. | After VFS-D1 production service-owned descriptions, qualify authenticated, bounded positional reads against an explicitly retained description. Restore private mapping through that source. Exercise offsets, short reads, shared cursor independence, close/rename/unlink, protection, fixed replacement, rollback, cancellation and image retirement. Replay the original loader mappings. |
+| Linux statfs and boot/runtime FAT capacity sampling. Btop loses its filesystem capacity and free-space display. | Qualify service-owned FAT capacity with authenticated, namespace-scoped path resolution and mount-incarnation-bound results. Verify boot and runtime mounts, independent FAT scans, no-disk and unsupported media controls, allocation/free accounting, mount replacement, and Btop's actual capacity display. Keep essential boot and runtime mount behavior throughout. |
+| Linux /proc/self/mountinfo. Btop loses caller-visible mounts and their partition join. | Qualify authoritative topology publication scoped to the caller's namespace and generation. Replay Linux ABI checks for escaping, IDs, nested parents, bounded reads, isolation and mount replacement, plus Btop's mount/device join. |
+
+## VFS-L1 readiness
+
+Pending-child integration remains **BLOCKED**, as does VFS-D1. KLC-1 and KLC-1B remain partial. Endpoint-only withdrawal can fence admission while holding obligations indefinitely if the owning image survives. No new PID reuse guarantee or native physical reclamation result follows from the host evidence.
+
+Independent VFS-L1 requirements are private pending-child ownership, PID reservation, process-incarnation safety, serialized commit/cancel arbitration, authenticated namespace registration, acknowledgement before publication, unpublished-child reclamation, parent lifecycle integration, service retirement handling, late acknowledgement handling, bounded caller cancellation and accountable retained cleanup obligations.

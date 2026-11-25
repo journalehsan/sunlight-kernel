@@ -4,6 +4,7 @@ pub mod env;
 pub mod epoll;
 pub mod eventfd;
 mod exec_authority;
+pub(crate) mod exec_retirement;
 pub mod fd_table;
 pub mod inet_socket;
 pub(crate) mod route_netlink;
@@ -14,6 +15,10 @@ pub(crate) mod mm2a_plan;
 pub(crate) mod mm2b_state;
 pub mod mmap;
 pub(crate) mod pid;
+// Production entry points are reserved for the subsequent publication transaction.
+#[allow(dead_code)]
+pub(crate) mod pending;
+pub(crate) mod pending_state;
 pub mod pipe;
 pub mod region;
 pub mod signal;
@@ -545,9 +550,37 @@ impl Process {
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<Self, address_space::MappingError> {
-        let address_space = AddressSpace::try_new(pmm, hhdm_offset)?;
+        Self::try_new_with_checkpoint(pid, ppid, name, pmm, hhdm_offset, || Ok(()))
+    }
 
-        let kernel_stack = new_kernel_stack();
+    pub(crate) unsafe fn try_new_with_checkpoint(
+        pid: usize,
+        ppid: usize,
+        name: &str,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+        mut checkpoint: impl FnMut() -> Result<(), address_space::MappingError>,
+    ) -> Result<Self, address_space::MappingError> {
+        use address_space::MappingError::FrameAllocationFailed;
+
+        checkpoint()?;
+        let kernel_stack = try_kernel_stack().map_err(|_| FrameAllocationFailed)?;
+        checkpoint()?;
+        let cwd = thread_admission::try_string("/").map_err(|_| FrameAllocationFailed)?;
+        checkpoint()?;
+        let storage = thread_admission::try_box_uninit().map_err(|_| FrameAllocationFailed)?;
+        let mut fd_table = fd_table::FdTable::try_init_boxed(storage, || checkpoint().map_err(|_| ()))
+            .map_err(|()| FrameAllocationFailed)?;
+        let address_space = match AddressSpace::try_new(pmm, hhdm_offset) {
+            Ok(space) => space,
+            Err(error) => {
+                for fd in 0..3 {
+                    fd_table.take(fd).expect("initial spawn descriptor");
+                }
+                return Err(error);
+            }
+        };
+
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
         let user_stack_top = USER_STACK_TOP;
 
@@ -617,7 +650,7 @@ impl Process {
             ipc_reply_target: None,
             deferred_reply_targets: VecDeque::new(),
             next_deferred_reply_token: 0,
-            fd_table: fd_table::FdTable::new_boxed(),
+            fd_table,
             capability_mode: false,
             foreground: foreground::Foreground::for_process(),
             signal_state: signal::SignalState::new(),
@@ -683,7 +716,7 @@ impl Process {
             wake_audit: [0; 4],
             cpu_charge_since: None,
             last_start_ns: 0,
-            cwd: alloc::string::String::from("/"),
+            cwd,
             exit_cleanup_pending: false,
             service_reap_receipt: [0; 4],
             service_reap_watcher: None,

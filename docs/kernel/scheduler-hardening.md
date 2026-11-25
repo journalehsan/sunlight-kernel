@@ -1,5 +1,8 @@
 # Scheduler correctness hardening — Phase B
 
+See the [SMP work-stealing audit](scheduler-smp-stealing.md) for the current
+Round Robin path and open findings.
+
 Date: 2026-10-18. Baseline: `d2faa88e6aee8974e131a19db4cc808af6d8b866`, plus
 the Phase A audit/probe already in the working tree. The existing
 `.version_state.json` modification is excluded. This work preserves the global

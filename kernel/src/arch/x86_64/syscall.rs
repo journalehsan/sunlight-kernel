@@ -1244,6 +1244,33 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         164 => sys_vfs_grant(frame),
         165 => sys_account_session(frame),
         180 => sys_vfs_retention(frame),
+        #[cfg(all(debug_assertions, feature = "vfs_l1c_1_test"))]
+        0xf1c1 if !linux_compat => {
+            match crate::ipc::vfs_registration::spawn::fixture::run(frame.rdi) {
+                Some(code) => code,
+                None => {
+                    frame.rcx = frame.rcx.saturating_sub(2);
+                    crate::sched::request_reschedule();
+                    frame.rax
+                }
+            }
+        }
+        #[cfg(all(debug_assertions, feature = "vfs_l1c_r5_test"))]
+        0xf1c2 if !linux_compat => {
+            crate::ipc::vfs_registration::spawn::fixture::heap_checkpoint(
+                frame.rdi as usize, frame.rsi as usize,
+            )
+        }
+        #[cfg(all(debug_assertions, feature = "vfs_l1c_file_ipc_test"))]
+        0xf1c3 if !linux_compat => {
+            crate::ipc::vfs_registration::spawn::fixture::file_ipc_checkpoint(
+                frame.rdi as usize, frame.rsi as usize,
+            )
+        }
+        #[cfg(feature = "zram_lifecycle_test")]
+        0xf1c4 if !linux_compat => {
+            crate::memory::zram_lifecycle::checkpoint(frame.rdi, frame.rsi)
+        }
         181 => sys_vfs_stat(frame),
         182 => sys_service_directory_transition(frame, true),
         // Hardware identity + thermal sensors (read-only; gated by process name).
@@ -3089,7 +3116,7 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
         Err(_) => return u64::MAX - 1,
     };
 
-    let Some(new_tid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
+    let Some(new_tid) = sched.next_process_pid() else {
         return u64::MAX - 1;
     };
     if u32::try_from(new_tid).is_err() {
@@ -3498,7 +3525,7 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     // The scheduler lock serializes clone against mmap/munmap and FD mutation.
     // Only the group leader owns the VM and shared resources; it remains live
     // until every borrower is reaped, even if the leader exits first.
-    let Some(tid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
+    let Some(tid) = sched.next_process_pid() else {
         return linux_errno(11);
     };
     if tid > i32::MAX as usize {
@@ -4410,7 +4437,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     }
 
-    let Some(pid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
+    let Some(pid) = sched.next_process_pid() else {
         return u64::MAX;
     };
     let proc_name = crate::process::spawn::name_from_path(path_str);
@@ -4558,7 +4585,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             // happen before exec_into_process takes ownership of this root.
             // Reclamation is idempotent for errors that already retired it.
             unsafe {
-                child.address_space.reclaim_user_space(&mut pmm, hhdm, true);
+                crate::process::spawn::rollback_initial_image(&mut child, &mut pmm, hhdm);
             }
             #[cfg(all(debug_assertions, feature = "session_launch_test"))]
             crate::serial_println!(
@@ -4570,6 +4597,23 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             trace.emit(path_str, path_str, None, "failed:elf_load");
             return u64::MAX;
         }
+    }
+
+    // SCHEDULER fences registry retirement; recheck deadline after ELF setup.
+    if let Some(reference) = inherited_membership {
+        if !crate::capability::CAP_BROKER
+            .lock()
+            .session_allocation_live(reference, crate::timekeeping::global_ticks())
+        {
+            unsafe {
+                crate::process::spawn::rollback_initial_image(&mut child, &mut pmm, hhdm);
+            }
+            return u64::MAX;
+        }
+        child.account_membership = Some(reference);
+        child.restrict_account_member_roles();
+        // Authenticated descendants retain the parent's permitted lookup set.
+        child.service_lookup_restrictions = sched.current_process().service_lookup_restrictions;
     }
 
     // Wire the child's stdio. If attached to a TTY tab, fd0/fd1 route to that
@@ -4608,22 +4652,6 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
-    // SCHEDULER fences registry retirement; recheck deadline after ELF setup.
-    if let Some(reference) = inherited_membership {
-        if !crate::capability::CAP_BROKER
-            .lock()
-            .session_allocation_live(reference, crate::timekeeping::global_ticks())
-        {
-            unsafe {
-                child.address_space.reclaim_user_space(&mut pmm, hhdm, true);
-            }
-            return u64::MAX;
-        }
-        child.account_membership = Some(reference);
-        child.restrict_account_member_roles();
-        // Authenticated descendants retain the parent's permitted lookup set.
-        child.service_lookup_restrictions = sched.current_process().service_lookup_restrictions;
-    }
     let parent_idx = sched.shared_process_index(sched.current_process_index().unwrap());
     let vfs_source = crate::ipc::capture_vfs_inheritance(
         parent_idx,
@@ -6914,7 +6942,12 @@ fn sys_vfs_retention(frame: &mut SyscallFrame) -> u64 {
     match result {
         Ok(Some(bytes)) => match copy_to_user(frame.rsi, &bytes[..length]) {
             Ok(()) => 0,
-            Err(error) => error,
+            Err(error) => {
+                if frame.rdi == api::NEXT {
+                    crate::ipc::vfs_registration::spawn::copy_failed(&bytes);
+                }
+                error
+            }
         },
         Ok(None) if frame.rdi == api::NEXT => api::EMPTY,
         Ok(None) => 0,
@@ -10442,7 +10475,10 @@ fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
         );
         return linux_errno(22);
     };
-    if frame.rdi == 0 {
+    use crate::process::mmap::{MAP_ANONYMOUS, MAP_FIXED, MAP_FIXED_NOREPLACE, MAP_PRIVATE};
+    let file_hint = native_flags & (MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_FIXED_NOREPLACE)
+        == MAP_PRIVATE;
+    if frame.rdi == 0 || file_hint {
         crate::sched::with_scheduler(|sched| {
             let process = sched.current_shared_process_mut();
             if process.is_linux_compat() && process.mmap_next == 0 {
@@ -11139,6 +11175,10 @@ fn sys_service_stat(frame: &mut SyscallFrame, path: &str, linux: bool) -> u64 {
             };
             drop(completion);
             crate::ipc::reconcile_vfs_namespaces();
+            #[cfg(all(debug_assertions, feature = "vfs_l1c_2_test"))]
+            if result == 0 {
+                crate::ipc::vfs_registration::spawn::fixture::observe_metadata(caller);
+            }
             result
         }
         Err(crate::ipc::StatError::Identity) | Err(crate::ipc::StatError::Prepare) => {
@@ -12879,7 +12919,8 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
             if linux_compat {
                 match error {
                     crate::process::mmap::MmapError::BadFd => linux_errno(9),
-                    crate::process::mmap::MmapError::Unsupported if flags == crate::process::mmap::MAP_SHARED => linux_errno(19),
+                    crate::process::mmap::MmapError::Unsupported => linux_errno(19),
+                    crate::process::mmap::MmapError::FileIo => linux_errno(5),
                     crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
                     crate::process::mmap::MmapError::NoMemory => linux_errno(12),
                     crate::process::mmap::MmapError::AlreadyMapped => linux_errno(17),

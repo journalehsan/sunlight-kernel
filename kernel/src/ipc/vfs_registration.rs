@@ -3,6 +3,8 @@
 use super::vfs_resources::{Error as ResourceError, NamespaceBinding, NamespacePolicy, Resources};
 use super::IpcError;
 use crate::capability::CapabilityBroker;
+use crate::process::exec_retirement::PrivateVfsExecRetired;
+use crate::sched::image_retirement::PrivateImageRetired;
 use crate::sched::Scheduler;
 use alloc::sync::Arc;
 use sunlight_ipc::vfs_rpc::registration::{EndpointOwner, Registry};
@@ -28,6 +30,7 @@ const REMOTE_LEASES: usize = 64;
 struct RemoteRegistration {
     registration: Registration,
     retired: bool,
+    image_retired: bool,
     ownership: Ownership<REMOTE_LEASES>,
     local: [Option<LocalLease>; REMOTE_LEASES],
     unsent: [Option<Frame>; REMOTE_LEASES],
@@ -101,6 +104,7 @@ enum NamespaceRetentionError {
 struct Runtime {
     publications: [Option<stat::Publication>; 64],
     chdirs: [Option<chdir::Call>; 64],
+    spawns: [Option<spawn::Call>; 8],
     file_publications: [Option<file::Publication>; 64],
     file_ids: RequestIds,
     registry: Registry,
@@ -114,6 +118,7 @@ impl Runtime {
         Self {
             publications: [const { None }; 64],
             chdirs: [const { None }; 64],
+            spawns: [const { None }; 8],
             file_publications: [const { None }; 64],
             file_ids: RequestIds::new(),
             registry: Registry::new(),
@@ -146,6 +151,7 @@ impl Runtime {
         self.remote[slot] = Some(RemoteRegistration {
             registration,
             retired: false,
+            image_retired: false,
             ownership: Ownership::new(registration).expect("validated VFS registration"),
             local: [const { None }; REMOTE_LEASES],
             unsent: [None; REMOTE_LEASES],
@@ -332,11 +338,51 @@ impl Runtime {
     fn collect_remote(&mut self) {
         for slot in &mut self.remote {
             if slot.as_ref().is_some_and(|r| {
-                r.retired && r.ownership.outstanding() == 0 && r.callers.iter().all(Option::is_none)
+                r.retired
+                    && if r.image_retired {
+                        // Service-backed objects are gone. Local continuations
+                        // retain their bindings until their own terminal cleanup.
+                        r.local.iter().flatten().all(|lease| match lease {
+                            LocalLease::Bound { binding, .. } => NamespaceBinding::drained(binding),
+                            LocalLease::Preparing { .. } => true,
+                        })
+                    } else {
+                        r.ownership.outstanding() == 0 && r.callers.iter().all(Option::is_none)
+                    }
             }) {
                 *slot = None;
             }
         }
+    }
+
+    fn complete_image_exit(&mut self, proof: PrivateImageRetired) {
+        self.settle_private_backing(proof.image());
+    }
+
+    fn complete_private_exec(&mut self, proof: PrivateVfsExecRetired) {
+        self.settle_private_backing(proof.image());
+    }
+
+    fn settle_private_backing(&mut self, image: crate::capability::delivery::RecipientIdentity) {
+        let caller = Caller {
+            pid: image.pid as u64,
+            incarnation: image.incarnation,
+            address_space_generation: image.vm_generation,
+        };
+        for remote in self.remote.iter_mut().flatten() {
+            if remote.retired && owner_matches(remote.registration.owner, caller) {
+                // Each row already pins the exact endpoint and epoch. The
+                // embedded service keeps directory pairs and file-owner rows
+                // in private memory, and cannot hand them off by IPC.
+                remote.image_retired = true;
+                for slot in &mut remote.local {
+                    if matches!(slot, Some(LocalLease::Preparing { .. })) {
+                        *slot = None;
+                    }
+                }
+            }
+        }
+        self.collect_remote();
     }
 
     fn remote_owner(
@@ -430,6 +476,7 @@ impl Runtime {
                 c.result = Some(5);
             }
         }
+        self.retire_spawns(expected);
         self.namespaces.retire_registration(expected);
         self.pending.retire_service(expected.service());
         self.retire_file_registration(expected);
@@ -441,9 +488,14 @@ impl Runtime {
         }
         self.reconcile_namespaces();
         self.collect_remote();
+        #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r2_test"))]
+        spawn::fixture::observe_withdrawal(self, expected);
+        #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r3_test"))]
+        spawn::fixture::r3::withdrawn(self, expected);
     }
 
     fn retire_process(&mut self, expected: Caller) {
+        self.detach_spawns_for(expected);
         self.retire_caller_profile(expected);
         // Reserved before namespace admission and retained after metadata ack:
         // exit/exec needs neither allocation nor still-live metadata authority.
@@ -462,6 +514,7 @@ impl Runtime {
     }
 
     fn retire_caller_profile(&mut self, expected: Caller) {
+        self.cancel_spawns_for(expected);
         if let Some(registration) = self
             .chdirs
             .iter()
@@ -590,8 +643,21 @@ fn owner_matches(owner: EndpointOwner, caller: Caller) -> bool {
 static CLEANUP_PENDING: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 static RUNTIME: spin::Mutex<Runtime> = spin::Mutex::new(Runtime::new());
 
+/// Scheduler exit delivers synchronously, before the process slot can be reused.
+pub(crate) fn complete_image_exit(proof: PrivateImageRetired) {
+    RUNTIME.lock().complete_image_exit(proof);
+    #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r1_test"))]
+    spawn::fixture::observe_service_exit(proof.image());
+}
+
+pub(crate) fn complete_private_exec(proof: PrivateVfsExecRetired) {
+    RUNTIME.lock().complete_private_exec(proof);
+}
+
 #[path = "vfs_registration/chdir.rs"]
 mod chdir;
+#[path = "vfs_registration/spawn.rs"]
+pub(crate) mod spawn;
 #[path = "vfs_registration/file.rs"]
 mod file;
 #[path = "vfs_registration/stat.rs"]
@@ -823,6 +889,8 @@ pub(super) fn reap_next() -> Option<Retired<Resources>> {
 /// one atomic read; caller retirement requests a bounded drain. Live published
 /// continuations retain their results for the caller rather than this worker.
 pub(crate) fn cleanup_abandoned() {
+    #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_1_test"))]
+    spawn::fixture::dispose_orphan();
     if !CLEANUP_PENDING.load(core::sync::atomic::Ordering::Acquire) {
         return;
     }
@@ -839,7 +907,9 @@ pub(crate) fn cleanup_abandoned() {
 /// and lifecycle guards. Record release obligations without sending or waiting.
 #[allow(dead_code)]
 pub(crate) fn reconcile_namespaces() {
-    RUNTIME.lock().reconcile_namespaces();
+    let mut runtime = RUNTIME.lock();
+    runtime.reconcile_namespaces();
+    runtime.collect_remote();
 }
 
 fn live_registration(
@@ -866,7 +936,8 @@ fn live_registration(
     }
 }
 
-pub(super) fn register(
+fn register_service(
+    runtime: &mut Runtime,
     caller_pid: usize,
     endpoint: u32,
     sched: &Scheduler,
@@ -889,14 +960,22 @@ pub(super) fn register(
         incarnation: process.foreground.incarnation,
         address_space_generation: process.address_space.identity().generation,
     };
-    // Lock order: scheduler -> broker (when needed) -> VFS runtime. Never
-    // acquire lifecycle locks or wait for IPC while holding RUNTIME.
-    let mut runtime = RUNTIME.lock();
-    live_registration(&mut runtime, sched, caps);
+    live_registration(runtime, sched, caps);
     runtime
         .register(candidate)
         .map(|_| ())
         .map_err(|_| IpcError::InvalidCapability)
+}
+
+pub(super) fn register(
+    caller_pid: usize,
+    endpoint: u32,
+    sched: &Scheduler,
+    caps: &CapabilityBroker,
+) -> Result<(), IpcError> {
+    // Lock order: scheduler -> broker (when needed) -> VFS runtime. Never
+    // acquire lifecycle locks or wait for IPC while holding RUNTIME.
+    register_service(&mut RUNTIME.lock(), caller_pid, endpoint, sched, caps)
 }
 
 #[cfg(test)]
@@ -1430,6 +1509,66 @@ mod tests {
         assert_eq!(request_id, 2);
         assert!(runtime.refused(first, 1, &refusal).is_err());
         assert_eq!(runtime.remote_owner(replacement).unwrap().outstanding(), 1);
+    }
+
+    #[test]
+    fn lost_retain_reply_at_service_exit_exhausts_epoch_slots() {
+        use sunlight_ipc::vfs_rpc::retention::Table;
+        let mut runtime = Runtime::new();
+        for generation in 0..REMOTE_REGISTRATIONS {
+            let mut identity = owner();
+            identity.address_space_generation += generation as u64;
+            let registration = runtime.register(identity).unwrap();
+            let mut service = Table::<(), 1>::new(registration).unwrap();
+            let Frame::Retain { request_id, .. } =
+                runtime.prepare_retain(registration, scope()).unwrap()
+            else {
+                panic!()
+            };
+            service.retain(registration, request_id, scope(), || Ok::<_, ()>(())).unwrap();
+            drop(service);
+            runtime.retire_process(Caller {
+                pid: identity.pid,
+                incarnation: identity.incarnation,
+                address_space_generation: identity.address_space_generation,
+            });
+            assert_eq!(runtime.remote_owner(registration).unwrap().outstanding(), 1);
+        }
+        assert!(runtime.registry.active().is_none());
+        assert!(runtime.register(owner()).is_err());
+    }
+
+    #[test]
+    fn exact_exit_completion_recovers_one_slot_at_full_capacity() {
+        let mut runtime = Runtime::new();
+        let mut retired = alloc::vec::Vec::new();
+        for offset in 0..REMOTE_REGISTRATIONS as u64 {
+            let registration = runtime
+                .register(EndpointOwner {
+                    pid: owner().pid + offset,
+                    ..owner()
+                })
+                .unwrap();
+            runtime.prepare_retain(registration, scope()).unwrap();
+            runtime.retire_registration(registration);
+            retired.push(registration);
+        }
+        assert!(runtime.register(owner()).is_err());
+        let old = retired.remove(1);
+        let image = crate::capability::delivery::RecipientIdentity {
+            pid: old.owner.pid as usize,
+            incarnation: old.owner.incarnation,
+            vm_generation: old.owner.address_space_generation,
+        };
+        let completion = crate::sched::exit_proof(image, true, true, true).unwrap();
+        runtime.complete_image_exit(completion);
+        let replacement = runtime.register(owner()).unwrap();
+        runtime.complete_image_exit(completion);
+        assert_eq!(runtime.registry.active(), Some(replacement));
+        assert!(runtime.remote_owner(old).is_err());
+        for registration in retired {
+            assert_eq!(runtime.remote_owner(registration).unwrap().outstanding(), 1);
+        }
     }
 
     #[test]

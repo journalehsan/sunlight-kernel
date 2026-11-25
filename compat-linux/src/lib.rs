@@ -483,27 +483,28 @@ pub const LINUX_MAP_ANONYMOUS: u64 = abi::MAP_ANONYMOUS;
 pub const LINUX_MAP_FIXED_NOREPLACE: u64 = abi::MAP_FIXED_NOREPLACE;
 pub const LINUX_MAP_STACK: u64 = abi::MAP_STACK;
 
-/// Translate the Linux anonymous-mapping flags supported by Helios into the
-/// strict native mmap surface. MAP_STACK is advisory on Linux, so it is
-/// accepted and removed only after the complete request has been validated.
+const LINUX_MAP_DENYWRITE: u64 = 0x0800;
+const LINUX_MAP_EXECUTABLE: u64 = 0x1000;
+
+/// Translate supported Linux mmap flags and strip advisory modifiers.
 pub fn translate_mmap_flags(flags: u64) -> Option<u32> {
     if flags == 0x01 {
         return Some(0x01); // MAP_SHARED, without modifiers
     }
+    const ADVICE: u64 = LINUX_MAP_STACK | LINUX_MAP_DENYWRITE | LINUX_MAP_EXECUTABLE;
     const SUPPORTED: u64 = LINUX_MAP_PRIVATE
         | LINUX_MAP_FIXED
         | LINUX_MAP_ANONYMOUS
         | LINUX_MAP_FIXED_NOREPLACE
-        | LINUX_MAP_STACK;
+        | ADVICE;
 
     if flags & !SUPPORTED != 0
-        || flags & (LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS)
-            != (LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS)
+        || flags & LINUX_MAP_PRIVATE == 0
     {
         return None;
     }
 
-    Some((flags & !LINUX_MAP_STACK) as u32)
+    Some((flags & !ADVICE) as u32)
 }
 
 /// Helper to determine if a syscall requires special handling.
@@ -675,6 +676,16 @@ mod tests {
             translate_mmap_flags(LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | 0x4000_0000),
             None
         );
+    }
+
+    #[test]
+    fn mmap_flags_accept_gnu_loader_file_segments() {
+        assert_eq!(translate_mmap_flags(0x802), Some(LINUX_MAP_PRIVATE as u32));
+        assert_eq!(
+            translate_mmap_flags(0x1812),
+            Some((LINUX_MAP_PRIVATE | LINUX_MAP_FIXED) as u32)
+        );
+        assert_eq!(translate_mmap_flags(0x803), None);
     }
 
     #[test]

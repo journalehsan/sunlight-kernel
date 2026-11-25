@@ -1,0 +1,43 @@
+# VFS-L1C-1 authenticated spawn continuation
+
+**VFS-L1C-1 passes at component and isolated native candidate scope.** The continuation authenticates a retain for an actual private child and delivers its terminal result to the exact parent. A retained receipt is provisional: the child has no ordinary process row, no ready-queue entry, and no installed kernel namespace binding. Neither ordinary spawn path uses this continuation. VFS-L1C remains partial; ordinary first-dispatch qualification, VFS-L1Q and VFS-D1 remain blocked.
+
+## Implementation
+
+- `kernel/src/ipc/vfs_registration/spawn.rs` adds a bounded continuation to the VFS registration runtime. Each call holds the scheduler's creation ticket, PID, incarnation and VM generation, the parent's exact image and credential snapshot, the source namespace scope, the complete service registration, the staging operation's exact request ID, the start tick, the armed waiter state, and one terminal result.
+- `inheritance.rs` reuses the same derivation staging as ordinary inheritance and returns the actual request ID to the new caller. The preparation pins the parent's bound source receipt. The private association is installed while scheduler, broker and runtime serialization still excludes the service pull. Boot root, chdir and ordinary inheritance keep their existing correlation and wire protocol.
+- The copied control path authenticates endpoint ownership, trusted service image and epoch before dispatch. Derivation checks the delivered frame and the scheduler's exact private reservation. A reply additionally goes through registration ownership's exact request and receipt validation. Numeric request IDs do not confer authority. A wrong service, epoch, request or wire scope is rejected without completing the waiter; an exact correlated acknowledgement that fails live identity or authority validation cannot confer eligibility and is compensated.
+- The waiter checks for a terminal result and arms `BlockedOnIpc` under scheduler and runtime serialization. The existing timer-side VFS continuation poll uses the standard IPC wake primitive. A result stored before parking is consumed directly. A result stored after parking disarms the waiter on wake; terminal consumption removes the record. Copied VFS delivery and syscall continuation parking release the locks before running userspace. The wait uses the existing five-second VFS policy, with wrap-safe tick arithmetic.
+- Terminal outcomes distinguish retained receipt, correlated refusal, copied transport failure, timeout, cancellation, invalid acknowledgement and service retirement. A successful result is revalidated at consumption. The kernel leaves the receipt held in registration ownership and returns no ordinary spawn PID.
+
+## Resource ownership and backpressure
+
+The `Child` RAII owner still controls the sole private image in the scheduler's pending table. The continuation and registration carry identity only. Cancellation fences the request while the scheduler still serializes the private transaction. It destroys the inactive VM and canonical stdio outside the scheduler guard. The pending slot can then hold only the PID claim; it stays charged until the exact registration no longer needs the retain or the caller lifecycle row.
+
+Before a service pull, cancelling can discard the exact unsent frame and its unused registration entries. After a pull, the kernel keeps the original registration obligation even if the copy fails, the caller times out, the service retires, or the continuation is consumed. Late success routes to the existing retryable release path. Successful provisional receipt cancellation uses the same release path. The existing caller barriers retire the service's separate directory policy and file-owner records. Refusal, release acknowledgement and the lifecycle barriers have distinct effects. An epoch can also drain through the existing exact last-owner exit or successful-exec proof and local drain rules. No new KLC completion consumer or remote-obligation table was added.
+
+Eight private slots and eight continuation records bound the work, with at most one active continuation per exact parent image. The existing four registration rows, 64 caller-delivery reservations per row, 64 lease slots per row and single delivered retain per epoch still apply. Failure to reserve capacity leaves the child with its original local owner. An unresponsive service can indefinitely consume a remote lease and PID claim; endpoint withdrawal and timeout provide no settlement proof.
+
+The intentionally narrow interface accepts a live process owner, canonical private-child resources and a child whose recorded cwd agrees with the parent's. It leaves session/supervision ownership, general descriptor cloning, parent-lifecycle disposal of adapter-owned child handles, and final publication arbitration to the integration phase. ZRAM and memory reclaim have no added userspace dependency.
+
+## Validation and scope
+
+The registration host harness compiles production continuation, pending-slot and registration logic with modeled scheduling and process/VM state. Focused tests exercise both reply orders, request/epoch/incarnation and waiter rejection, refusal, failed copy, cancellation, timeout, retirement, a late reply after terminal consumption, capacity and single terminal consumption. The service-backed host case uses the actual VFS policy and retention implementation with a mounted tmpfs fixture and copied-channel adapter. The ordinary registration tests include the existing chdir and inheritance cases and both 100-cycle lifecycle regressions.
+
+At 2 GiB on **1, 2 and 4 vCPUs**, init parked while the child was private. A separate ordinary `/bin/true` observer ran and exited while init was parked. A debug-only gate held that one retain in the existing unsent queue until the observer ran; service scheduling and the actual copied VFS request and authenticated response remained in use. The fixture checked ordinary lookup and enumeration and watched real dispatch selections. Init resumed with one retained receipt for child 5, request 2, epoch 1. The fixture then reclaimed the private image through its normal local owner. The registration settled its lease and caller delivery rows, the PID claim cleared, init reaped the observer, and Service Manager registered. The first native matrix also completed the continuation on all three CPU counts, but observed incidental unrelated dispatch only on 2 vCPUs.
+
+The VFS-L1P regression in the same final image independently restored frame, heap and descriptor counts after 100 cycles per CPU configuration and its fault injection cases. Those counters measure local-only VFS-L1P teardown; the continuation fixture checks exact local reclaim and remote claim state, without attributing system-wide allocator deltas to the private child during concurrent service work.
+
+| vCPUs | Continuation | Free frames restored | Heap bytes restored | Descriptions / refs restored |
+| --- | --- | ---: | ---: | ---: |
+| 1 | PASS | 266329 | 176832 | 72 / 72 |
+| 2 | PASS | 266071 | 177856 | 72 / 72 |
+| 4 | PASS | 265559 | 179904 | 72 / 72 |
+
+The unchanged Phase 3.0 ordinary boot gate passed at 2 GiB and 2 vCPUs. The reduced candidate matched the production changes with its six pre-existing reductions; verification found no unexpected drift across 12,346 baseline paths. The unchanged guard reports the same four primary findings (71 references) and no candidate findings (68 references). The registration harness passed 103 tests; IPC, VFS service, descriptor, scheduler, kernel host, retirement, ZRAM, swap-slot and requested compile gates passed.
+
+See [machine-readable results](vfs-l1c-1-results.json) for exact gates, resource observations and evidence under `target/vfs-l1c-1/`.
+
+## VFS-L1C-2 interface
+
+An adapter must retain the non-cloneable local owner across syscall retry and arrange cancellation on caller exit, exec and abort. It should consume the exact terminal result using the captured caller and claim, then present the private owner and provisional receipt to a separate arbitration step. Under scheduler → broker → runtime serialization, that step must revalidate the creation, caller and grants, credentials, source authority, live registration and receipt, and reserve all process insertion, retirement and session/supervision capacity. Only it may install the namespace binding, transfer the sole private payload and PID into the ordinary table, and enqueue once. It must share serialization with cancellation and service retirement so a late or stale receipt can only settle or compensate. Apply and verify this independently for both ordinary spawn adapters, including actual first dispatch.

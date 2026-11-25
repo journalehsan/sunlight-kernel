@@ -1,0 +1,63 @@
+{
+  "r4": "PASS",
+  "vfs_l1c_2b": "PARTIAL",
+  "vfs_l1c_3": "BLOCKED",
+  "candidate_root": "/tmp/klc-q1/candidate",
+  "evidence_root": "target/vfs-l1c-2b-r4",
+  "why_previously_unexecuted": "Mode 1 cancelled before delivery; mode 2 consumed the retain before cancellation. Neither had a checkpoint after service lease acquisition and before reply processing.",
+  "native": {
+    "memory_mib": 2048,
+    "accelerator": "tcg",
+    "final_transactions": 24,
+    "pilot_transactions": 8,
+    "final_matrix": [
+      {"vcpus": 1, "transactions": 8, "status": "PASS", "serial": "stripped-1.serial.log", "console": "stripped-1.qemu.log"},
+      {"vcpus": 2, "transactions": 8, "status": "PASS", "serial": "stripped-2.serial.log", "console": "stripped-2.qemu.log"},
+      {"vcpus": 4, "transactions": 8, "status": "PASS", "serial": "stripped-4.serial.log", "console": "stripped-4.qemu.log"}
+    ],
+    "pilot": {"vcpus": 2, "status": "PASS", "serial": "initial-2.serial.log", "check": "initial-check.json"},
+    "final_check": "native-check.json",
+    "build_log": "final-build.log",
+    "iso_log": "stripped-iso.log",
+    "image_digest": "stripped-image.sha256",
+    "other_attempts": "Short unstripped attempts produced no serial within their budgets. The diagnostic boot display showed Limine loading the ELF; the longer diagnostic launch reached kernel initialization."
+  },
+  "ordering": [
+    "A: adapter empty before construction",
+    "B: original service receipt held after copied transport authentication",
+    "C: cancel terminal consumed, adapter disposed, local teardown complete, PID and delivered retain still charged",
+    "D: original receipt processed by normal reply handler, compensation queued with no continuation",
+    "E: registration releases remote lease and settles caller rows; pending identity is released"
+  ],
+  "per_child": {
+    "descriptors_released": 3,
+    "inherited_stream_references": 0,
+    "user_frames_reclaimed": 551,
+    "page_tables_reclaimed": 8,
+    "swap_blocks_reclaimed": 0,
+    "identified_heap_owners_dropped": ["process box", "descriptor table box"],
+    "heap_census_complete": false,
+    "adapter_disposals": 1,
+    "caller_terminal_results": 1,
+    "child_publications": 0,
+    "child_enqueues": 0,
+    "child_dispatches": 0,
+    "remote_settlements": 1
+  },
+  "regressions": {
+    "registration": {"status": "PASS", "tests": 104, "log": "registration.log"},
+    "host_ownership": {"status": "PASS", "cycles": 112, "test": "publication_mixed_cycles_and_boundary_failures", "log": "registration.log"},
+    "adapter_and_continuation": {"status": "PASS", "log": "registration.log"},
+    "focused_r4": {"status": "PASS", "checker": "tools/check_vfs_r4.py", "result": "native-check.json"},
+    "transaction_session_compile": {"status": "PASS", "log": "transaction-session.log"},
+    "mmap_compile": {"status": "PASS", "log": "mmap.log"},
+    "swap1": {"status": "PASS", "vcpus": 4, "log": "swap1.log", "serial": "swap1.serial.log"},
+    "ordinary_boot": {"status": "PASS", "vcpus": [1, 2, 4], "logs": ["ordinary-1.log", "ordinary-2.log", "ordinary-4.log"], "serial": ["ordinary-1.serial.log", "ordinary-2.serial.log", "ordinary-4.serial.log"]},
+    "candidate_ownership_guard": {"status": "PASS", "findings": 0, "log": "candidate-guard.log"},
+    "primary_ownership_guard": {"status": "UNCHANGED_FINDINGS", "findings": 4, "log": "primary-guard.log"},
+    "source_equivalence": {"status": "PASS", "baseline_paths": 12346, "unexpected_drift": 0, "result": "source-equivalence.json"}
+  },
+  "ordinary_spawn_activation": false,
+  "production_defect_reproduced": false,
+  "remaining": {"R1": "NOT_RUN", "R2": "NOT_RUN", "R3": "NOT_RUN", "R5": "NOT_RUN", "fault_driven_swap_in": "NOT_RUN", "populated_swap_teardown": "NOT_RUN", "btop_and_qalculate_interaction": "NOT_RUN"}
+}

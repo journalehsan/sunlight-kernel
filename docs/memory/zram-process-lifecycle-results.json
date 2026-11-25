@@ -1,0 +1,2840 @@
+{
+  "schema_version": 1,
+  "qualification": "normal_native_process_exit_with_populated_zram",
+  "status": "pass",
+  "scope": {
+    "guest_ram_mib": 2048,
+    "accelerator": "tcg",
+    "fresh_guest_per_run": true,
+    "primary_vcpus": 4,
+    "primary_pools": 2,
+    "backing": "ring_0_ram_only",
+    "workload": "one native /bin/freezram child at a time, spawned by init after swapd reap",
+    "anonymous_pages_per_child": 16,
+    "evicted_pages_per_child": 12,
+    "remaining_resident_anonymous_pages": 4,
+    "page_bytes": 4096,
+    "pattern": "(37 * page_index + 11 * floor(byte_index / 128)) mod 256",
+    "eviction": "existing authorized native diagnostic fill",
+    "completion": "ordinary SYS_EXIT(37), one consumed wait status, then physical scheduler reap",
+    "fault_driven_swap_in": "not_run",
+    "vfs_publication_transaction": "not_run",
+    "detached_publication": "disabled"
+  },
+  "guests": {
+    "4": {
+      "status": "pass",
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/final-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "image_sha256": "bbd120a4da670d583c9e4ecdd5ac2e855177da21d605bbd888f68639d0547d4a",
+      "serial_log": "target/zram-process-lifecycle/final-4.serial.log",
+      "serial_sha256": "1bda94d15bf74a21c82a9bbc6274dbfcf0919caccb2308d5c1b5a83453110289",
+      "cycles": 100,
+      "normal_exit_status": 37,
+      "scheduler_row_indices": [
+        3
+      ],
+      "warm_checkpoints": {
+        "1": {
+          "resident": {
+            "phase": "resident",
+            "pid": 6,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261238,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 0,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2630952
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 6,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261248,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 2,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 8192,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631720
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 6,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261814,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598664
+          },
+          "serial_lines": {
+            "resident": 458,
+            "populated": 461,
+            "settled": 472
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            },
+            {
+              "phase": "populated",
+              "pid": 6,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 6
+            },
+            {
+              "phase": "settled",
+              "pid": 6,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 6
+            }
+          ]
+        },
+        "10": {
+          "resident": {
+            "phase": "resident",
+            "pid": 15,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261238,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 108,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631720
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 15,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261248,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 2,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 8192,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 120,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631720
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 15,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261814,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 120,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598664
+          },
+          "serial_lines": {
+            "resident": 719,
+            "populated": 722,
+            "settled": 733
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 15,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 54
+            },
+            {
+              "phase": "populated",
+              "pid": 15,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 54
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 15,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 60
+            },
+            {
+              "phase": "settled",
+              "pid": 15,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 60
+            }
+          ]
+        },
+        "50": {
+          "resident": {
+            "phase": "resident",
+            "pid": 55,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261238,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 588,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631720
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 55,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261248,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 2,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 8192,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 600,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631720
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 55,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261814,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 600,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598664
+          },
+          "serial_lines": {
+            "resident": 1875,
+            "populated": 1878,
+            "settled": 1889
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 55,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 294
+            },
+            {
+              "phase": "populated",
+              "pid": 55,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 294
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 55,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 300
+            },
+            {
+              "phase": "settled",
+              "pid": 55,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 300
+            }
+          ]
+        },
+        "100": {
+          "resident": {
+            "phase": "resident",
+            "pid": 105,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261238,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 1188,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631720
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 105,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261248,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 2,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 8192,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631720
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 105,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261814,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598664
+          },
+          "serial_lines": {
+            "resident": 3321,
+            "populated": 3324,
+            "settled": 3335
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 594
+            },
+            {
+              "phase": "populated",
+              "pid": 105,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 594
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 600
+            },
+            {
+              "phase": "settled",
+              "pid": 105,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 600
+            }
+          ]
+        }
+      },
+      "baseline": {
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 4,
+        "pools": 2,
+        "frames": 261814,
+        "user": 28201,
+        "pt": 84,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2597512
+      },
+      "baseline_serial_line": 442,
+      "completion_serial_line": 3338,
+      "settled_heap_histogram_bytes": {
+        "2598664": 86,
+        "3902352": 1,
+        "2598680": 6,
+        "3501808": 1,
+        "4365056": 1,
+        "4113960": 1,
+        "3754208": 1,
+        "4365072": 1,
+        "2598696": 1,
+        "3753680": 1
+      },
+      "baseline_pools": [
+        {
+          "phase": "baseline",
+          "pid": 0,
+          "pool": 0,
+          "slots": 0,
+          "compressed": 0,
+          "backing": 0,
+          "entries": 0,
+          "slot_capacity": 0,
+          "free": 0,
+          "free_capacity": 0,
+          "storage_entries": 0,
+          "storage_capacity": 0,
+          "releases": 0
+        },
+        {
+          "phase": "baseline",
+          "pid": 0,
+          "pool": 1,
+          "slots": 0,
+          "compressed": 0,
+          "backing": 0,
+          "entries": 0,
+          "slot_capacity": 0,
+          "free": 0,
+          "free_capacity": 0,
+          "storage_entries": 0,
+          "storage_capacity": 0,
+          "releases": 0
+        }
+      ],
+      "phase_distinct_values": {
+        "resident": {
+          "frames": [
+            261238
+          ],
+          "user": [
+            28767
+          ],
+          "pt": [
+            94
+          ],
+          "compressed_frames": [
+            0
+          ],
+          "slots": [
+            0
+          ],
+          "compressed": [
+            0
+          ],
+          "backing": [
+            0
+          ],
+          "candidates": [
+            4114
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            566
+          ],
+          "regions": [
+            5
+          ],
+          "fds": [
+            3
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            1
+          ],
+          "heap": [
+            2630952,
+            2631488,
+            2631720,
+            3449712,
+            3501688,
+            3673552,
+            3678552,
+            3987792,
+            4211872,
+            4397880
+          ],
+          "owned_candidates": [
+            16
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        },
+        "populated": {
+          "frames": [
+            261248
+          ],
+          "user": [
+            28755
+          ],
+          "pt": [
+            94
+          ],
+          "compressed_frames": [
+            2
+          ],
+          "slots": [
+            12
+          ],
+          "compressed": [
+            2004
+          ],
+          "backing": [
+            8192
+          ],
+          "candidates": [
+            4102
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            554
+          ],
+          "regions": [
+            5
+          ],
+          "fds": [
+            3
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            1
+          ],
+          "heap": [
+            2631488,
+            2631504,
+            2631720,
+            3045600,
+            3371416,
+            3416552,
+            3438328,
+            3524680,
+            4306496,
+            4365792,
+            4397880,
+            4398112,
+            4428560
+          ],
+          "owned_candidates": [
+            4
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        },
+        "settled": {
+          "frames": [
+            261814
+          ],
+          "user": [
+            28201
+          ],
+          "pt": [
+            84
+          ],
+          "compressed_frames": [
+            0
+          ],
+          "slots": [
+            0
+          ],
+          "compressed": [
+            0
+          ],
+          "backing": [
+            0
+          ],
+          "candidates": [
+            4098
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            0
+          ],
+          "regions": [
+            0
+          ],
+          "fds": [
+            0
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            0
+          ],
+          "heap": [
+            2598664,
+            2598680,
+            2598696,
+            3501808,
+            3753680,
+            3754208,
+            3902352,
+            4113960,
+            4365056,
+            4365072
+          ],
+          "owned_candidates": [
+            0
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        }
+      },
+      "normal_reap_counts": [
+        {
+          "user_frames": 554,
+          "page_tables": 10,
+          "swap_blocks": 12,
+          "ipc_entries": 0,
+          "cycles": 100
+        }
+      ],
+      "free_list_capacity_changes_during_reap": []
+    },
+    "2": {
+      "status": "pass",
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/final-2.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "image_sha256": "bbd120a4da670d583c9e4ecdd5ac2e855177da21d605bbd888f68639d0547d4a",
+      "serial_log": "target/zram-process-lifecycle/final-2.serial.log",
+      "serial_sha256": "f4d3abe51fe3955b759446e35b8cc79c3b4049b7771756907b6047b70680a6ba",
+      "cycles": 100,
+      "normal_exit_status": 37,
+      "scheduler_row_indices": [
+        3
+      ],
+      "warm_checkpoints": {
+        "1": {
+          "resident": {
+            "phase": "resident",
+            "pid": 6,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261750,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 0,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2630952
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 6,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261761,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631624
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 6,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 262326,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598568
+          },
+          "serial_lines": {
+            "resident": 444,
+            "populated": 446,
+            "settled": 456
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            }
+          ]
+        },
+        "10": {
+          "resident": {
+            "phase": "resident",
+            "pid": 15,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261750,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 108,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631624
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 15,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261761,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 120,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631624
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 15,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 262326,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 120,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598568
+          },
+          "serial_lines": {
+            "resident": 677,
+            "populated": 679,
+            "settled": 689
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 15,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 108
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 15,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 120
+            }
+          ]
+        },
+        "50": {
+          "resident": {
+            "phase": "resident",
+            "pid": 55,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261750,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 588,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631624
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 55,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261761,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 600,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631624
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 55,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 262326,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 600,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598568
+          },
+          "serial_lines": {
+            "resident": 1717,
+            "populated": 1719,
+            "settled": 1729
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 55,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 588
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 55,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 600
+            }
+          ]
+        },
+        "100": {
+          "resident": {
+            "phase": "resident",
+            "pid": 105,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261750,
+            "user": 28767,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 1188,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631624
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 105,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 261761,
+            "user": 28755,
+            "pt": 94,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631624
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 105,
+            "cpus": 2,
+            "pools": 1,
+            "frames": 262326,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598568
+          },
+          "serial_lines": {
+            "resident": 3017,
+            "populated": 3019,
+            "settled": 3029
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1188
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1200
+            }
+          ]
+        }
+      },
+      "baseline": {
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 2,
+        "pools": 1,
+        "frames": 262326,
+        "user": 28201,
+        "pt": 84,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2597512
+      },
+      "baseline_serial_line": 429,
+      "completion_serial_line": 3031,
+      "settled_heap_histogram_bytes": {
+        "2598568": 100
+      },
+      "baseline_pools": [
+        {
+          "phase": "baseline",
+          "pid": 0,
+          "pool": 0,
+          "slots": 0,
+          "compressed": 0,
+          "backing": 0,
+          "entries": 0,
+          "slot_capacity": 0,
+          "free": 0,
+          "free_capacity": 0,
+          "storage_entries": 0,
+          "storage_capacity": 0,
+          "releases": 0
+        }
+      ],
+      "phase_distinct_values": {
+        "resident": {
+          "frames": [
+            261750
+          ],
+          "user": [
+            28767
+          ],
+          "pt": [
+            94
+          ],
+          "compressed_frames": [
+            0
+          ],
+          "slots": [
+            0
+          ],
+          "compressed": [
+            0
+          ],
+          "backing": [
+            0
+          ],
+          "candidates": [
+            4114
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            566
+          ],
+          "regions": [
+            5
+          ],
+          "fds": [
+            3
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            1
+          ],
+          "heap": [
+            2630952,
+            2631392,
+            2631624,
+            3776080
+          ],
+          "owned_candidates": [
+            16
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        },
+        "populated": {
+          "frames": [
+            261761
+          ],
+          "user": [
+            28755
+          ],
+          "pt": [
+            94
+          ],
+          "compressed_frames": [
+            1
+          ],
+          "slots": [
+            12
+          ],
+          "compressed": [
+            2004
+          ],
+          "backing": [
+            4096
+          ],
+          "candidates": [
+            4102
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            554
+          ],
+          "regions": [
+            5
+          ],
+          "fds": [
+            3
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            1
+          ],
+          "heap": [
+            2631624,
+            4161368,
+            4397560
+          ],
+          "owned_candidates": [
+            4
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        },
+        "settled": {
+          "frames": [
+            262326
+          ],
+          "user": [
+            28201
+          ],
+          "pt": [
+            84
+          ],
+          "compressed_frames": [
+            0
+          ],
+          "slots": [
+            0
+          ],
+          "compressed": [
+            0
+          ],
+          "backing": [
+            0
+          ],
+          "candidates": [
+            4098
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            0
+          ],
+          "regions": [
+            0
+          ],
+          "fds": [
+            0
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            0
+          ],
+          "heap": [
+            2598568
+          ],
+          "owned_candidates": [
+            0
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        }
+      },
+      "normal_reap_counts": [
+        {
+          "user_frames": 554,
+          "page_tables": 10,
+          "swap_blocks": 12,
+          "ipc_entries": 0,
+          "cycles": 100
+        }
+      ],
+      "free_list_capacity_changes_during_reap": []
+    },
+    "1": {
+      "status": "pass",
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/final-1.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "1",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "image_sha256": "bbd120a4da670d583c9e4ecdd5ac2e855177da21d605bbd888f68639d0547d4a",
+      "serial_log": "target/zram-process-lifecycle/final-1.serial.log",
+      "serial_sha256": "43d3fc6707b76d013673a0f309a69404ae9e7d43e85e79918871da694a8135e4",
+      "cycles": 100,
+      "normal_exit_status": 37,
+      "scheduler_row_indices": [
+        3
+      ],
+      "warm_checkpoints": {
+        "1": {
+          "resident": {
+            "phase": "resident",
+            "pid": 6,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262026,
+            "user": 28767,
+            "pt": 96,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 0,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2630624
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 6,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262037,
+            "user": 28755,
+            "pt": 96,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631296
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 6,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262602,
+            "user": 28201,
+            "pt": 86,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598472
+          },
+          "serial_lines": {
+            "resident": 438,
+            "populated": 440,
+            "settled": 450
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            }
+          ]
+        },
+        "10": {
+          "resident": {
+            "phase": "resident",
+            "pid": 15,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262026,
+            "user": 28767,
+            "pt": 96,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 108,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631296
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 15,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262037,
+            "user": 28755,
+            "pt": 96,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 120,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631296
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 15,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262602,
+            "user": 28201,
+            "pt": 86,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 120,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598472
+          },
+          "serial_lines": {
+            "resident": 665,
+            "populated": 667,
+            "settled": 677
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 15,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 108
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 15,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 120
+            }
+          ]
+        },
+        "50": {
+          "resident": {
+            "phase": "resident",
+            "pid": 55,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262026,
+            "user": 28767,
+            "pt": 96,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 588,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631528
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 55,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262037,
+            "user": 28755,
+            "pt": 96,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 600,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631528
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 55,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262602,
+            "user": 28201,
+            "pt": 86,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 600,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598472
+          },
+          "serial_lines": {
+            "resident": 1681,
+            "populated": 1683,
+            "settled": 1693
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 55,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 588
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 55,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 600
+            }
+          ]
+        },
+        "100": {
+          "resident": {
+            "phase": "resident",
+            "pid": 105,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262026,
+            "user": 28767,
+            "pt": 96,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "swapins": 0,
+            "swapouts": 1188,
+            "owned": 566,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631528
+          },
+          "populated": {
+            "phase": "populated",
+            "pid": 105,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262037,
+            "user": 28755,
+            "pt": 96,
+            "compressed_frames": 1,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 4096,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 554,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631528
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 105,
+            "cpus": 1,
+            "pools": 1,
+            "frames": 262602,
+            "user": 28201,
+            "pt": 86,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598472
+          },
+          "serial_lines": {
+            "resident": 2981,
+            "populated": 2983,
+            "settled": 2993
+          },
+          "populated_pools": [
+            {
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1188
+            }
+          ],
+          "settled_pools": [
+            {
+              "phase": "settled",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1200
+            }
+          ]
+        }
+      },
+      "baseline": {
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 1,
+        "pools": 1,
+        "frames": 262602,
+        "user": 28201,
+        "pt": 86,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2597416
+      },
+      "baseline_serial_line": 424,
+      "completion_serial_line": 2995,
+      "settled_heap_histogram_bytes": {
+        "2598472": 100
+      },
+      "baseline_pools": [
+        {
+          "phase": "baseline",
+          "pid": 0,
+          "pool": 0,
+          "slots": 0,
+          "compressed": 0,
+          "backing": 0,
+          "entries": 0,
+          "slot_capacity": 0,
+          "free": 0,
+          "free_capacity": 0,
+          "storage_entries": 0,
+          "storage_capacity": 0,
+          "releases": 0
+        }
+      ],
+      "phase_distinct_values": {
+        "resident": {
+          "frames": [
+            262026
+          ],
+          "user": [
+            28767
+          ],
+          "pt": [
+            96
+          ],
+          "compressed_frames": [
+            0
+          ],
+          "slots": [
+            0
+          ],
+          "compressed": [
+            0
+          ],
+          "backing": [
+            0
+          ],
+          "candidates": [
+            4114
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            566
+          ],
+          "regions": [
+            5
+          ],
+          "fds": [
+            3
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            1
+          ],
+          "heap": [
+            2630624,
+            2631296,
+            2631528
+          ],
+          "owned_candidates": [
+            16
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        },
+        "populated": {
+          "frames": [
+            262037
+          ],
+          "user": [
+            28755
+          ],
+          "pt": [
+            96
+          ],
+          "compressed_frames": [
+            1
+          ],
+          "slots": [
+            12
+          ],
+          "compressed": [
+            2004
+          ],
+          "backing": [
+            4096
+          ],
+          "candidates": [
+            4102
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            554
+          ],
+          "regions": [
+            5
+          ],
+          "fds": [
+            3
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            1
+          ],
+          "heap": [
+            2631296,
+            2631528
+          ],
+          "owned_candidates": [
+            4
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        },
+        "settled": {
+          "frames": [
+            262602
+          ],
+          "user": [
+            28201
+          ],
+          "pt": [
+            86
+          ],
+          "compressed_frames": [
+            0
+          ],
+          "slots": [
+            0
+          ],
+          "compressed": [
+            0
+          ],
+          "backing": [
+            0
+          ],
+          "candidates": [
+            4098
+          ],
+          "swapins": [
+            0
+          ],
+          "owned": [
+            0
+          ],
+          "regions": [
+            0
+          ],
+          "fds": [
+            0
+          ],
+          "ipc_bytes": [
+            0
+          ],
+          "stack": [
+            0
+          ],
+          "heap": [
+            2598472
+          ],
+          "owned_candidates": [
+            0
+          ],
+          "rows": [
+            4
+          ],
+          "row_capacity": [
+            512
+          ]
+        }
+      },
+      "normal_reap_counts": [
+        {
+          "user_frames": 554,
+          "page_tables": 10,
+          "swap_blocks": 12,
+          "ipc_entries": 0,
+          "cycles": 100
+        }
+      ],
+      "free_list_capacity_changes_during_reap": []
+    }
+  },
+  "repair": {
+    "description": "Reserve space for every issued slot index before publishing a new index.",
+    "unrepaired_witness": {
+      "cycles": 100,
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/unrepaired.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-process-lifecycle/unrepaired-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "image_sha256": "542fb4cb6efab4b1fa14a57850a44c20d4d8469ec92fb91feac1299d2428ede2",
+      "serial_log": "target/zram-process-lifecycle/unrepaired-4.serial.log",
+      "serial_sha256": "0471956c8d7edabae4bc7837da531da6522516de5ce7cecad8735ab86badc49e",
+      "baseline_serial_line": 440,
+      "free_list_capacity_changes_during_reap": [
+        {
+          "cycle": 1,
+          "populated": {
+            "phase": "populated",
+            "pid": 6,
+            "pool": 0,
+            "slots": 6,
+            "compressed": 1002,
+            "backing": 4096,
+            "entries": 6,
+            "free": 0,
+            "free_capacity": 4,
+            "releases": 0
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 6,
+            "pool": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "free": 6,
+            "free_capacity": 8,
+            "releases": 6
+          }
+        },
+        {
+          "cycle": 1,
+          "populated": {
+            "phase": "populated",
+            "pid": 6,
+            "pool": 1,
+            "slots": 6,
+            "compressed": 1002,
+            "backing": 4096,
+            "entries": 6,
+            "free": 0,
+            "free_capacity": 4,
+            "releases": 0
+          },
+          "settled": {
+            "phase": "settled",
+            "pid": 6,
+            "pool": 1,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "free": 6,
+            "free_capacity": 8,
+            "releases": 6
+          }
+        }
+      ]
+    },
+    "unrepaired_baseline_note": "This image took its initial sample after swapd wait but before swapd physical reap. Its 515 user frames and 8 page tables were returned before the first child settled.",
+    "growth_during_reap_after_repair": false
+  },
+  "regressions": {
+    "production_kernel_release": {
+      "exit_code": 0,
+      "status": "pass",
+      "log": {
+        "path": "target/zram-process-lifecycle/production-final.log",
+        "sha256": "ef5437cc630f72aec09730cd79f94667fcf1ad9dad2af3508ab8e2370d31b783"
+      }
+    },
+    "production_userspace_release": {
+      "exit_code": 0,
+      "status": "pass",
+      "log": {
+        "path": "target/zram-process-lifecycle/production-userspace.log",
+        "sha256": "b01e733e570c2147cb6f8a209526820651a28afdd53088e3f5511c6c80c36221"
+      }
+    },
+    "host": {
+      "ipc": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/ipc.log",
+          "sha256": "5597462d95c78462e0da4ce916632154c1a8d85be60b3c0303cced5aded55fc8"
+        },
+        "test_summaries": [
+          "test result: ok. 168 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+          "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "service": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/service.log",
+          "sha256": "7a1bfd98d0a7420427d22cafd83dd84c06dec2a79a357f6e79f4819434928af3"
+        },
+        "test_summaries": [
+          "test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        ]
+      },
+      "descriptor": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/descriptor.log",
+          "sha256": "629f98149b81c165ab4eb83c4d69c3970812dd96353910cbbe1d4e852e1ce1d6"
+        },
+        "test_summaries": [
+          "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "kernel-host": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/kernel-host.log",
+          "sha256": "28a6014606b38428daaf3060e9e88b07d94bc354b37afd9f98df278cd8f4264d"
+        },
+        "test_summaries": [
+          "test result: ok. 217 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s"
+        ]
+      },
+      "retirement": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/retirement.log",
+          "sha256": "d44eceeb8f30217ea3e2fe62d3fc242842f7f372c6b28165dd29ea07740fc895"
+        },
+        "test_summaries": [
+          "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 183 filtered out; finished in 0.01s"
+        ]
+      },
+      "registration": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/registration.log",
+          "sha256": "d22e905851c524143eb71f036d8f9094b44dee9bb9546788203f5c250ce5b4a4"
+        },
+        "test_summaries": [
+          "test result: ok. 107 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "scheduler": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/scheduler.log",
+          "sha256": "c802eee7840802a9fb1ef50086fe8302e7be4e37bd59f327bef227fc1c52ac64"
+        },
+        "test_summaries": []
+      },
+      "swap-slot": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/swap-slot.log",
+          "sha256": "b2666e0a6d1faac4545f9049557b9b9950daf1a4b5ca9978d075b0778a4470a8"
+        },
+        "test_summaries": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 216 filtered out; finished in 0.00s"
+        ]
+      },
+      "zram": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/zram.log",
+          "sha256": "19e5d7863c06ba6aaaa5b6cc32529a228b26b44bee0e3eaafb84d1078970e7c2"
+        },
+        "test_summaries": [
+          "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 213 filtered out; finished in 0.00s"
+        ]
+      }
+    },
+    "ownership_guard": {
+      "primary": {
+        "exit_code": 1,
+        "status": "blocked_by_four_pre_existing_findings",
+        "log": {
+          "path": "target/zram-process-lifecycle/guard-primary.log",
+          "sha256": "6ba31b1949191300240a981e7d670d8c913aa8c6f09cdbced321faf673c10580"
+        },
+        "findings": [
+          "NEW (1): kernel/src/arch/x86_64/syscall.rs: kernel-global namespace: let capacity = crate::KERNEL_VFS",
+          "NEW (1): kernel/src/linux_procfs.rs: kernel-global namespace: let vfs = crate::KERNEL_VFS.lock();",
+          "NEW (1): kernel/src/process/mmap.rs: kernel-global namespace: let mut guard = crate::KERNEL_VFS.lock();",
+          "NEW (1): kernel/src/storage.rs: filesystem backend construction: let mut fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))"
+        ]
+      },
+      "candidate": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/guard-candidate.log",
+          "sha256": "4d4462dfe6a7ed8467b12ee4f9da36c105c78f4c939a2b0623f5a222aaf9c610"
+        },
+        "root": "/tmp/klc-q1/candidate",
+        "new_findings": 0
+      }
+    },
+    "ordinary_boot": {
+      "primary": {
+        "exit_code": 1,
+        "status": "stopped_before_boot_at_guard",
+        "log": {
+          "path": "target/zram-process-lifecycle/ordinary-primary.log",
+          "sha256": "141fb0de807961d0c765ed99bad76b2730e3b2c7efa7d4528bd21927d9b76d70"
+        }
+      },
+      "candidate": {
+        "4": {
+          "exit_code": 0,
+          "status": "pass",
+          "log": {
+            "path": "target/zram-process-lifecycle/phase3.0-4.log",
+            "sha256": "752b47593853d25f6d864df4e09770512f30839f2ec0c98cac78af2d472b3be0"
+          },
+          "serial": {
+            "log": {
+              "path": "target/zram-process-lifecycle/phase3.0-4.serial.log",
+              "sha256": "e557ea3073004b274a02485a989c0dd23c86f4024947feb05ad30e9c6df60918"
+            },
+            "lines": [
+              {
+                "line": 550,
+                "text": "[SWAP-1] enabled pools=2 logical_mib=1437 physical_budget_kib=367872 admin_pid=10"
+              },
+              {
+                "line": 952,
+                "text": "[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK"
+              }
+            ]
+          }
+        },
+        "2": {
+          "exit_code": 0,
+          "status": "pass",
+          "log": {
+            "path": "target/zram-process-lifecycle/phase3.0-2.log",
+            "sha256": "9a53a5d8c7d42de16c3088d16d84282195f43703fec53f7724974da5a92a141c"
+          },
+          "serial": {
+            "log": {
+              "path": "target/zram-process-lifecycle/phase3.0-2.serial.log",
+              "sha256": "45b35f8c75d271a84a94dcd911e673ce2a2cd59b626475dd2285599831e1455e"
+            },
+            "lines": [
+              {
+                "line": 540,
+                "text": "[SWAP-1] enabled pools=1 logical_mib=1439 physical_budget_kib=368384 admin_pid=10"
+              },
+              {
+                "line": 1101,
+                "text": "[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK"
+              }
+            ]
+          }
+        },
+        "1": {
+          "exit_code": 0,
+          "status": "pass",
+          "log": {
+            "path": "target/zram-process-lifecycle/phase3.0-1.log",
+            "sha256": "a3c6d72cd112d92dd0764caab6f2aedbbb257c1ed66a6bbd0bf0b2c48630c486"
+          },
+          "serial": {
+            "log": {
+              "path": "target/zram-process-lifecycle/phase3.0-1.serial.log",
+              "sha256": "e0aae0eeb2666bdaa0e2aa74a91d66e19187b92ecc97c7f10ce2502b77bb85d1"
+            },
+            "lines": [
+              {
+                "line": 506,
+                "text": "[SWAP-1] enabled pools=1 logical_mib=1440 physical_budget_kib=368644 admin_pid=10"
+              },
+              {
+                "line": 1032,
+                "text": "[VFS-RPC] native StatPath service routing/ABI/errors/copy recovery OK"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "standard_swap1": {
+      "4": {
+        "exit_code": 0,
+        "status": "pass",
+        "log": {
+          "path": "target/zram-process-lifecycle/swap1-4.log",
+          "sha256": "5c5f12f34e7dc5c72790855df7481082d43cc5c61269116d1c54434c02970470"
+        },
+        "serial": {
+          "log": {
+            "path": "target/zram-process-lifecycle/swap1-4.serial.log",
+            "sha256": "07f3fab46bc6c83ee8213dab34f8cd81271cc73ff4e595c019a439dd85ca2bc0"
+          },
+          "lines": [
+            {
+              "line": 282,
+              "text": "[SWAP-1] configured 2 pools from 1436 MiB / 4 CPUs"
+            },
+            {
+              "line": 283,
+              "text": "[SWAP-1] sample requested=12 stored=12 logical_bytes=49152 compressed_bytes=324 physical_bytes=8192 pool0_pages=1 pool1_pages=11"
+            },
+            {
+              "line": 284,
+              "text": "[SWAP-1] pressure reclaimed 12 pages across pools; fallback bounded: OK"
+            },
+            {
+              "line": 285,
+              "text": "[SWAP-1] incompressible page rejected without ownership change: OK"
+            },
+            {
+              "line": 286,
+              "text": "[SWAP-1] restored=12 exact patterns and RW/NX metadata restored: OK"
+            },
+            {
+              "line": 287,
+              "text": "[SWAP-1] corrupted payload rejected before PTE publication: OK"
+            },
+            {
+              "line": 288,
+              "text": "[SWAP-1] munmap released swapped slot without swap-in: OK"
+            },
+            {
+              "line": 289,
+              "text": "[SWAP-1] stale slot generation rejected after reuse: OK"
+            },
+            {
+              "line": 290,
+              "text": "[SWAP-1] exit cleanup and PMM/slot accounting baseline: OK"
+            },
+            {
+              "line": 291,
+              "text": "[SWAP-1] focused pressure gate: OK"
+            }
+          ]
+        },
+        "image": {
+          "path": "target/zram-process-lifecycle/candidate-swap1.iso",
+          "sha256": "f90309c43a4139ac914d7d85ac30328cbfbaa17296d1b5b3a5735e38c04e1fe5"
+        },
+        "pools": 2,
+        "restore_path": "direct kernel swap_in_page calls"
+      },
+      "2": {
+        "status": "prerequisite_unmet",
+        "supported_pools": 1,
+        "required_pools": 2,
+        "detail": "The standard harness selects 4 vCPUs. The separate process-lifecycle image qualifies this one-pool topology."
+      },
+      "1": {
+        "status": "prerequisite_unmet",
+        "supported_pools": 1,
+        "required_pools": 2,
+        "detail": "The standard harness selects 4 vCPUs. The separate process-lifecycle image qualifies this one-pool topology."
+      }
+    }
+  },
+  "limitations": [
+    "The serial workload uses diagnostic eviction of a bounded range, with no reads of swapped data.",
+    "Coverage excludes page-fault swap-in, concurrent or large children, exhausted generations, memory-pressure races, exec, and remote termination.",
+    "Whole-kernel heap samples include asynchronous activity and retained pool and process capacity. The run does not attribute every allocation.",
+    "VFS-L1C-3 and VFS-D1 remain deferred."
+  ]
+}

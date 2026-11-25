@@ -482,6 +482,10 @@ pub(crate) fn drain_memfd_frames(pmm: &mut PhysicalMemoryManager) {
 }
 
 fn new_description(flags: u32) -> u32 {
+    try_new_description(flags).expect("open description allocation failed")
+}
+
+fn try_new_description(flags: u32) -> Result<u32, ()> {
     let mut pool = DESCRIPTIONS.lock();
     let item = OpenDescription {
         offset: 0,
@@ -492,11 +496,12 @@ fn new_description(flags: u32) -> u32 {
     };
     if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
         *slot = Some(item);
-        return idx as u32;
+        return Ok(idx as u32);
     }
-    let idx = pool.len();
+    let idx = u32::try_from(pool.len()).map_err(|_| ())?;
+    pool.try_reserve(1).map_err(|_| ())?;
     pool.push(Some(item));
-    idx as u32
+    Ok(idx)
 }
 
 fn retain_description(idx: u32) {
@@ -665,43 +670,63 @@ impl FdTable {
     }
 
     pub fn new_boxed() -> alloc::boxed::Box<Self> {
-        let mut table = alloc::boxed::Box::<Self>::new_uninit();
-        let ptr = table.as_mut_ptr();
-        unsafe {
+        Self::try_init_boxed(alloc::boxed::Box::<Self>::new_uninit(), || Ok(()))
+            .expect("initial descriptor allocation failed")
+    }
+
+    pub(crate) fn try_init_boxed(
+        mut storage: alloc::boxed::Box<core::mem::MaybeUninit<Self>>,
+        mut checkpoint: impl FnMut() -> Result<(), ()>,
+    ) -> Result<alloc::boxed::Box<Self>, ()> {
+        let ptr = storage.as_mut_ptr();
+        let mut table = unsafe {
             let entries = core::ptr::addr_of_mut!((*ptr).entries) as *mut Option<FileDescriptor>;
             for idx in 0..256 {
                 entries.add(idx).write(None);
             }
-            let mut table = table.assume_init();
-            table.entries[0] = Some(FileDescriptor {
-                fd: 0,
-                handle: FileHandle(0),
-                rights: CapRights::new(CapRights::READ | CapRights::FSTAT),
-                flags: 0,
+            storage.assume_init()
+        };
+        for fd in 0..3 {
+            let flags = u32::from(fd != 0);
+            let description = match checkpoint().and_then(|()| try_new_description(flags)) {
+                Ok(description) => description,
+                Err(()) => {
+                    for initialized in 0..fd {
+                        table.take(initialized).expect("initialized stdio");
+                    }
+                    return Err(());
+                }
+            };
+            let access = if fd == 0 { CapRights::READ } else { CapRights::WRITE };
+            table.entries[fd as usize] = Some(FileDescriptor {
+                fd,
+                handle: FileHandle(fd as u32),
+                rights: CapRights::new(access | CapRights::FSTAT),
+                flags,
                 offset: 0,
-                description: new_description(0),
+                description,
                 release_backend: true,
             });
-            table.entries[1] = Some(FileDescriptor {
-                fd: 1,
-                handle: FileHandle(1),
-                rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
-                flags: 1,
-                offset: 0,
-                description: new_description(1),
-                release_backend: true,
-            });
-            table.entries[2] = Some(FileDescriptor {
-                fd: 2,
-                handle: FileHandle(2),
-                rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
-                flags: 1,
-                offset: 0,
-                description: new_description(1),
-                release_backend: true,
-            });
-            table
         }
+        Ok(table)
+    }
+
+    /// Inherit only initial stream descriptions with no backend lease.
+    pub(crate) fn inherit_initial_stream(&mut self, fd: i32, mut source: FileDescriptor) {
+        assert!((0..3).contains(&fd) && source.handle.0 == fd as u32);
+        retain_description(source.description);
+        let old = self.take(fd).expect("initial stream");
+        assert_eq!(old.handle.0, fd as u32);
+        source.fd = fd;
+        source.flags &= !0x0008_0000;
+        source.offset = source.current_offset();
+        self.entries[fd as usize] = Some(source);
+    }
+
+    #[cfg(all(debug_assertions, feature = "vfs_l1p_test"))]
+    pub(crate) fn description_counts() -> (usize, usize) {
+        let pool = DESCRIPTIONS.lock();
+        (pool.iter().flatten().count(), pool.iter().flatten().map(|row| row.refs).sum())
     }
 
     /// Open a new file descriptor in the lowest unused slot, including 0–2.

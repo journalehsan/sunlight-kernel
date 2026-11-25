@@ -7,9 +7,10 @@ pub mod message;
 mod reply_identity;
 #[cfg(all(debug_assertions, feature = "ipc_reply_race_test"))]
 pub(crate) mod reply_race_test;
-mod vfs_registration;
+pub(crate) mod vfs_registration;
 mod vfs_resources;
 pub(crate) use vfs_registration::cleanup_abandoned as cleanup_vfs_abandoned;
+pub(crate) use vfs_registration::spawn::reap_owned as reap_vfs_spawn;
 pub(crate) use vfs_registration::control as vfs_retention_control;
 pub(crate) use vfs_registration::initial_cwd as vfs_initial_cwd;
 pub(crate) use vfs_registration::reconcile_namespaces as reconcile_vfs_namespaces;
@@ -38,6 +39,8 @@ pub(crate) use vfs_registration::{
     close_file_owner as close_vfs_file_owner,
 };
 pub(crate) use vfs_registration::{
+    complete_image_exit as complete_vfs_image_exit,
+    complete_private_exec as complete_vfs_private_exec,
     process_identity as vfs_process_identity, retire_endpoint as retire_vfs_endpoint,
     retire_process as retire_vfs_process,
 };
@@ -635,6 +638,13 @@ impl IpcBusShard {
         self.queues
             .get(&endpoint_id)
             .map_or(0, |q| q.messages.len())
+    }
+
+    #[cfg(all(debug_assertions, feature = "vfs_l1c_file_ipc_test"))]
+    pub(crate) fn file_ipc_queue(&self, endpoint_id: u32) -> Option<(usize, usize)> {
+        self.queues.get(&endpoint_id).map(|queue| {
+            (queue.messages.len(), queue.messages.capacity() * core::mem::size_of::<QueuedMessage>())
+        })
     }
 
     pub fn pending_callers_count(&self, endpoint_id: u32) -> usize {

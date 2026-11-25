@@ -1,0 +1,824 @@
+{
+  "scope": "Existing VFS-L1C private construction, publication and late-cancellation fixtures",
+  "qualification": "PASS_WITH_ACCOUNTING_GAPS",
+  "next_stage": "NOT_STARTED",
+  "production_lifecycle_changes": false,
+  "evidence_root": "target/vfs-l1c-resource-accounting",
+  "native": {
+    "source": "primary workspace",
+    "features": [
+      "vfs_l1p_test",
+      "vfs_l1c_r5_test"
+    ],
+    "accelerator": "TCG",
+    "memory_mib": 2048,
+    "sha256": {
+      "accounting.elf": "f4c2e15d9d8d70bc12fb48862e648fcaa8900b4986d3fdae83e40fa44e7c2c90",
+      "accounting.iso": "2d3e3a068827a1a63e5fc05fcbf6ffbdf21fea242751d35fdc827b07eac4d633"
+    },
+    "matrix": [
+      {
+        "vcpus": 1,
+        "status": "PASS",
+        "serial": "native-1.serial.log",
+        "r5_checker_result": "native-1-r5.json",
+        "isolated_private_baseline": {
+          "line": 1792,
+          "cpus": 1,
+          "cycles": 100,
+          "heap_faults": 12,
+          "ledger_faults": 2,
+          "pmm_faults": 523,
+          "frames": 266332,
+          "heap": 176832,
+          "descriptions": 72,
+          "refs": 72,
+          "swap_candidates": 0,
+          "published": 3,
+          "ready": 0,
+          "user_frames": 24100,
+          "page_tables": 71
+        },
+        "continuation_slot_reused": 0,
+        "cases": {
+          "published": {
+            "child": 5,
+            "request": 2,
+            "identity": {
+              "incarnation": 683,
+              "vm": 1351,
+              "service": 3,
+              "service_incarnation": 50,
+              "service_vm": 25
+            },
+            "lines": {
+              "parked": 1891,
+              "receipt": 1898,
+              "binding": 1902,
+              "committed": 1905,
+              "enqueue": 1906,
+              "rejected": 1907,
+              "disposed": 1908,
+              "dispatch": 1909,
+              "reap": 1959,
+              "wait": 1939,
+              "release": 1973
+            },
+            "resources": {
+              "frames": 550,
+              "tables": 8,
+              "swap": 0
+            },
+            "baseline": {
+              "line": 1880,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 262218,
+              "heap_used": 277800,
+              "heap_capacity": 16777216,
+              "process_slots": 3,
+              "process_capacity": 4
+            },
+            "constructed": {
+              "line": 1881,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 261660,
+              "heap_used": 324872,
+              "heap_capacity": 16777216,
+              "process_slots": 3,
+              "process_capacity": 4
+            },
+            "staged": {
+              "line": 1882,
+              "child": 5,
+              "retain": 2,
+              "epoch": 1,
+              "private_pid": 1,
+              "process_box": 1,
+              "fd_table_box": 1,
+              "descriptors": 3,
+              "mapped_user_pages": 550,
+              "adapter": 1,
+              "continuation": 1,
+              "vfs_claim": 1
+            },
+            "settled": {
+              "line": 1974,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 261660,
+              "heap_used": 2654760,
+              "heap_capacity": 16777216,
+              "process_slots": 5,
+              "process_capacity": 512
+            },
+            "ownership_at_settlement": {
+              "line": 1975,
+              "child": 5,
+              "retain": 2,
+              "epoch": 1,
+              "published": 1,
+              "reaped_slot": 1,
+              "fd_table_bytes": 10240,
+              "live_frames": 0,
+              "private_pid": 0,
+              "adapter": 0,
+              "continuation": 0,
+              "vfs_claim": 0,
+              "ipc_refs": 0,
+              "stat_bytes": 0,
+              "stat_requests": 0
+            }
+          },
+          "cancelled": {
+            "child": 6,
+            "request": 4,
+            "identity": {
+              "incarnation": 685,
+              "vm": 1355,
+              "service": 3,
+              "service_incarnation": 50,
+              "service_vm": 25
+            },
+            "lines": {
+              "parked": 1958,
+              "receipt": 1970,
+              "reused": 1971,
+              "held": 1972,
+              "teardown": 1976,
+              "heap_drop": 1977,
+              "disposed": 1979,
+              "reclaimed": 1980,
+              "rejected": 1981,
+              "compensation": 1982,
+              "release": 1984,
+              "settled": 1985
+            },
+            "resources": {
+              "descriptors": 3,
+              "frames": 550,
+              "tables": 8,
+              "swap": 0
+            },
+            "baseline": {
+              "line": 1947,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 261660,
+              "heap_used": 2630216,
+              "heap_capacity": 16777216,
+              "process_slots": 4,
+              "process_capacity": 512
+            },
+            "constructed": {
+              "line": 1948,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 261102,
+              "heap_used": 2677288,
+              "heap_capacity": 16777216,
+              "process_slots": 4,
+              "process_capacity": 512
+            },
+            "staged": {
+              "line": 1949,
+              "child": 6,
+              "retain": 4,
+              "epoch": 1,
+              "private_pid": 1,
+              "process_box": 1,
+              "fd_table_box": 1,
+              "descriptors": 3,
+              "mapped_user_pages": 550,
+              "adapter": 1,
+              "continuation": 1,
+              "vfs_claim": 1
+            },
+            "settled": {
+              "line": 1986,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 262218,
+              "heap_used": 2607656,
+              "heap_capacity": 16777216,
+              "process_slots": 5,
+              "process_capacity": 512
+            },
+            "ownership_at_settlement": {
+              "line": 1987,
+              "child": 6,
+              "retain": 4,
+              "epoch": 1,
+              "published": 0,
+              "reaped_slot": 0,
+              "fd_table_bytes": 10240,
+              "live_frames": 0,
+              "private_pid": 0,
+              "adapter": 0,
+              "continuation": 0,
+              "vfs_claim": 0,
+              "ipc_refs": 0,
+              "stat_bytes": 0,
+              "stat_requests": 0
+            }
+          }
+        },
+        "combined_global_delta": {
+          "frames_free": 0,
+          "heap_used": 2329856,
+          "heap_capacity": 0,
+          "process_slots": 2,
+          "process_capacity": 508
+        }
+      },
+      {
+        "vcpus": 2,
+        "status": "PASS",
+        "serial": "native-2.serial.log",
+        "r5_checker_result": "native-2-r5.json",
+        "isolated_private_baseline": {
+          "line": 1799,
+          "cpus": 2,
+          "cycles": 100,
+          "heap_faults": 12,
+          "ledger_faults": 2,
+          "pmm_faults": 523,
+          "frames": 266074,
+          "heap": 177856,
+          "descriptions": 72,
+          "refs": 72,
+          "swap_candidates": 0,
+          "published": 3,
+          "ready": 0,
+          "user_frames": 24100,
+          "page_tables": 71
+        },
+        "continuation_slot_reused": 0,
+        "cases": {
+          "published": {
+            "child": 5,
+            "request": 2,
+            "identity": {
+              "incarnation": 683,
+              "vm": 1351,
+              "service": 3,
+              "service_incarnation": 50,
+              "service_vm": 25
+            },
+            "lines": {
+              "parked": 1895,
+              "receipt": 1905,
+              "binding": 1906,
+              "committed": 1909,
+              "enqueue": 1910,
+              "rejected": 1911,
+              "disposed": 1913,
+              "dispatch": 1912,
+              "reap": 1963,
+              "wait": 1943,
+              "release": 1974
+            },
+            "resources": {
+              "frames": 550,
+              "tables": 8,
+              "swap": 0
+            },
+            "baseline": {
+              "line": 1884,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 261962,
+              "heap_used": 278920,
+              "heap_capacity": 16777216,
+              "process_slots": 3,
+              "process_capacity": 4
+            },
+            "constructed": {
+              "line": 1885,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 261404,
+              "heap_used": 325992,
+              "heap_capacity": 16777216,
+              "process_slots": 3,
+              "process_capacity": 4
+            },
+            "staged": {
+              "line": 1886,
+              "child": 5,
+              "retain": 2,
+              "epoch": 1,
+              "private_pid": 1,
+              "process_box": 1,
+              "fd_table_box": 1,
+              "descriptors": 3,
+              "mapped_user_pages": 550,
+              "adapter": 1,
+              "continuation": 1,
+              "vfs_claim": 1
+            },
+            "settled": {
+              "line": 1978,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 261404,
+              "heap_used": 2654856,
+              "heap_capacity": 16777216,
+              "process_slots": 5,
+              "process_capacity": 512
+            },
+            "ownership_at_settlement": {
+              "line": 1979,
+              "child": 5,
+              "retain": 2,
+              "epoch": 1,
+              "published": 1,
+              "reaped_slot": 1,
+              "fd_table_bytes": 10240,
+              "live_frames": 0,
+              "private_pid": 0,
+              "adapter": 0,
+              "continuation": 0,
+              "vfs_claim": 0,
+              "ipc_refs": 0,
+              "stat_bytes": 0,
+              "stat_requests": 0
+            }
+          },
+          "cancelled": {
+            "child": 6,
+            "request": 4,
+            "identity": {
+              "incarnation": 685,
+              "vm": 1355,
+              "service": 3,
+              "service_incarnation": 50,
+              "service_vm": 25
+            },
+            "lines": {
+              "parked": 1962,
+              "receipt": 1971,
+              "reused": 1972,
+              "held": 1973,
+              "teardown": 1980,
+              "heap_drop": 1981,
+              "disposed": 1983,
+              "reclaimed": 1984,
+              "rejected": 1985,
+              "compensation": 1986,
+              "release": 1988,
+              "settled": 1989
+            },
+            "resources": {
+              "descriptors": 3,
+              "frames": 550,
+              "tables": 8,
+              "swap": 0
+            },
+            "baseline": {
+              "line": 1951,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 261404,
+              "heap_used": 2630312,
+              "heap_capacity": 16777216,
+              "process_slots": 4,
+              "process_capacity": 512
+            },
+            "constructed": {
+              "line": 1952,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 260846,
+              "heap_used": 2677384,
+              "heap_capacity": 16777216,
+              "process_slots": 4,
+              "process_capacity": 512
+            },
+            "staged": {
+              "line": 1953,
+              "child": 6,
+              "retain": 4,
+              "epoch": 1,
+              "private_pid": 1,
+              "process_box": 1,
+              "fd_table_box": 1,
+              "descriptors": 3,
+              "mapped_user_pages": 550,
+              "adapter": 1,
+              "continuation": 1,
+              "vfs_claim": 1
+            },
+            "settled": {
+              "line": 1990,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 261962,
+              "heap_used": 2607752,
+              "heap_capacity": 16777216,
+              "process_slots": 5,
+              "process_capacity": 512
+            },
+            "ownership_at_settlement": {
+              "line": 1991,
+              "child": 6,
+              "retain": 4,
+              "epoch": 1,
+              "published": 0,
+              "reaped_slot": 0,
+              "fd_table_bytes": 10240,
+              "live_frames": 0,
+              "private_pid": 0,
+              "adapter": 0,
+              "continuation": 0,
+              "vfs_claim": 0,
+              "ipc_refs": 0,
+              "stat_bytes": 0,
+              "stat_requests": 0
+            }
+          }
+        },
+        "combined_global_delta": {
+          "frames_free": 0,
+          "heap_used": 2328832,
+          "heap_capacity": 0,
+          "process_slots": 2,
+          "process_capacity": 508
+        }
+      },
+      {
+        "vcpus": 4,
+        "status": "PASS",
+        "serial": "native-4.serial.log",
+        "r5_checker_result": "native-4-r5.json",
+        "isolated_private_baseline": {
+          "line": 1813,
+          "cpus": 4,
+          "cycles": 100,
+          "heap_faults": 12,
+          "ledger_faults": 2,
+          "pmm_faults": 523,
+          "frames": 265562,
+          "heap": 179904,
+          "descriptions": 72,
+          "refs": 72,
+          "swap_candidates": 0,
+          "published": 3,
+          "ready": 0,
+          "user_frames": 24100,
+          "page_tables": 71
+        },
+        "continuation_slot_reused": 0,
+        "cases": {
+          "published": {
+            "child": 5,
+            "request": 2,
+            "identity": {
+              "incarnation": 683,
+              "vm": 1351,
+              "service": 3,
+              "service_incarnation": 50,
+              "service_vm": 25
+            },
+            "lines": {
+              "parked": 1905,
+              "receipt": 1916,
+              "binding": 1920,
+              "committed": 1923,
+              "enqueue": 1924,
+              "rejected": 1925,
+              "disposed": 1927,
+              "dispatch": 1926,
+              "reap": 1994,
+              "wait": 1957,
+              "release": 1985
+            },
+            "resources": {
+              "frames": 550,
+              "tables": 8,
+              "swap": 0
+            },
+            "baseline": {
+              "line": 1894,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 261450,
+              "heap_used": 280808,
+              "heap_capacity": 16777216,
+              "process_slots": 3,
+              "process_capacity": 4
+            },
+            "constructed": {
+              "line": 1895,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 260892,
+              "heap_used": 327880,
+              "heap_capacity": 16777216,
+              "process_slots": 3,
+              "process_capacity": 4
+            },
+            "staged": {
+              "line": 1896,
+              "child": 5,
+              "retain": 2,
+              "epoch": 1,
+              "private_pid": 1,
+              "process_box": 1,
+              "fd_table_box": 1,
+              "descriptors": 3,
+              "mapped_user_pages": 550,
+              "adapter": 1,
+              "continuation": 1,
+              "vfs_claim": 1
+            },
+            "settled": {
+              "line": 2000,
+              "child": 5,
+              "retain": 2,
+              "frames_free": 261450,
+              "heap_used": 2607768,
+              "heap_capacity": 16777216,
+              "process_slots": 5,
+              "process_capacity": 512
+            },
+            "ownership_at_settlement": {
+              "line": 2001,
+              "child": 5,
+              "retain": 2,
+              "epoch": 1,
+              "published": 1,
+              "reaped_slot": 1,
+              "fd_table_bytes": 10240,
+              "live_frames": 0,
+              "private_pid": 0,
+              "adapter": 0,
+              "continuation": 0,
+              "vfs_claim": 0,
+              "ipc_refs": 0,
+              "stat_bytes": 0,
+              "stat_requests": 0
+            }
+          },
+          "cancelled": {
+            "child": 6,
+            "request": 4,
+            "identity": {
+              "incarnation": 685,
+              "vm": 1355,
+              "service": 3,
+              "service_incarnation": 50,
+              "service_vm": 25
+            },
+            "lines": {
+              "parked": 1976,
+              "receipt": 1982,
+              "reused": 1983,
+              "held": 1984,
+              "teardown": 1986,
+              "heap_drop": 1987,
+              "disposed": 1989,
+              "reclaimed": 1990,
+              "rejected": 1991,
+              "compensation": 1992,
+              "release": 2002,
+              "settled": 2003
+            },
+            "resources": {
+              "descriptors": 3,
+              "frames": 550,
+              "tables": 8,
+              "swap": 0
+            },
+            "baseline": {
+              "line": 1965,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 260892,
+              "heap_used": 2630312,
+              "heap_capacity": 16777216,
+              "process_slots": 4,
+              "process_capacity": 512
+            },
+            "constructed": {
+              "line": 1966,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 260334,
+              "heap_used": 2677384,
+              "heap_capacity": 16777216,
+              "process_slots": 4,
+              "process_capacity": 512
+            },
+            "staged": {
+              "line": 1967,
+              "child": 6,
+              "retain": 4,
+              "epoch": 1,
+              "private_pid": 1,
+              "process_box": 1,
+              "fd_table_box": 1,
+              "descriptors": 3,
+              "mapped_user_pages": 550,
+              "adapter": 1,
+              "continuation": 1,
+              "vfs_claim": 1
+            },
+            "settled": {
+              "line": 2004,
+              "child": 6,
+              "retain": 4,
+              "frames_free": 261450,
+              "heap_used": 2607752,
+              "heap_capacity": 16777216,
+              "process_slots": 5,
+              "process_capacity": 512
+            },
+            "ownership_at_settlement": {
+              "line": 2005,
+              "child": 6,
+              "retain": 4,
+              "epoch": 1,
+              "published": 0,
+              "reaped_slot": 0,
+              "fd_table_bytes": 10240,
+              "live_frames": 0,
+              "private_pid": 0,
+              "adapter": 0,
+              "continuation": 0,
+              "vfs_claim": 0,
+              "ipc_refs": 0,
+              "stat_bytes": 0,
+              "stat_requests": 0
+            }
+          }
+        },
+        "combined_global_delta": {
+          "frames_free": 0,
+          "heap_used": 2326944,
+          "heap_capacity": 0,
+          "process_slots": 2,
+          "process_capacity": 508
+        }
+      }
+    ]
+  },
+  "regressions": {
+    "production_release_compile": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "build.log",
+      "source": "primary workspace"
+    },
+    "vfs_registration": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "registration.log",
+      "tests": 105
+    },
+    "mixed_publication_ownership": {
+      "status": "PASS",
+      "cycles": 112,
+      "log": "registration.log"
+    },
+    "ipc": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "ipc.log",
+      "tests": 177
+    },
+    "vfs_service": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "service.log",
+      "tests": 47
+    },
+    "descriptor": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "descriptor.log",
+      "tests": 18
+    },
+    "kernel_host": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "kernel-host.log",
+      "tests": 217
+    },
+    "scheduler": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "scheduler.log"
+    },
+    "retirement": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "retirement.log",
+      "tests": 34
+    },
+    "zram": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "zram.log",
+      "tests": 4
+    },
+    "swap_slot": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "swap-slot.log",
+      "tests": 1
+    },
+    "guard_unit_tests": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "guard-tests.log"
+    },
+    "transaction_session_compile": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "transaction-session.log"
+    },
+    "mmap_compile": {
+      "status": "PASS",
+      "exit": 0,
+      "log": "mmap.log"
+    },
+    "ownership_guard": {
+      "candidate": {
+        "status": "PASS",
+        "exit": 0,
+        "log": "candidate-guard.log",
+        "new_findings": 0
+      },
+      "primary_workspace": {
+        "status": "FAIL",
+        "exit": 1,
+        "log": "guard-final.log",
+        "existing_findings": 4,
+        "accounting_change_findings": 0,
+        "before_after_diff": "guard-before-after.diff"
+      }
+    },
+    "candidate_gate_source": "/tmp/klc-q1/candidate",
+    "swap1_candidate": [
+      {
+        "status": "PASS",
+        "exit": 0,
+        "log": "swap1-1.log",
+        "vcpus": 1,
+        "serial": "swap1-1.serial.log"
+      },
+      {
+        "status": "PASS",
+        "exit": 0,
+        "log": "swap1-2.log",
+        "vcpus": 2,
+        "serial": "swap1-2.serial.log"
+      },
+      {
+        "status": "PASS",
+        "exit": 0,
+        "log": "swap1.log",
+        "vcpus": 4,
+        "serial": "swap1.serial.log"
+      }
+    ],
+    "phase3_candidate": [
+      {
+        "status": "PASS",
+        "exit": 0,
+        "log": "phase3.0-1.log",
+        "vcpus": 1,
+        "serial": "phase3.0-1.serial.log"
+      },
+      {
+        "status": "PASS",
+        "exit": 0,
+        "log": "phase3.0.log",
+        "vcpus": 2,
+        "serial": "phase3.0.serial.log"
+      },
+      {
+        "status": "PASS",
+        "exit": 0,
+        "log": "phase3.0-4.log",
+        "vcpus": 4,
+        "serial": "phase3.0-4.serial.log"
+      }
+    ],
+    "phase3_primary_gate": {
+      "status": "FAIL",
+      "exit": 1,
+      "log": "primary-phase3.0.log",
+      "vcpus": 2,
+      "outcome": "blocked before boot by existing ownership findings"
+    }
+  },
+  "remaining": [
+    "Exact runtime allocator byte attribution for the scheduler, its reusable records, IPC queue backing and the userspace service heap",
+    "Service-registration row reuse across distinct lifetimes and a full native allocator census on authority retirement and parent loss",
+    "Published children with populated swap, child-owned IPC endpoints and regular-file descriptors",
+    "Fault-driven swap-in in the creation transaction"
+  ]
+}

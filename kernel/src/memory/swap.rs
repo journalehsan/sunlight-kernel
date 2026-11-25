@@ -115,6 +115,15 @@ pub fn candidate_count() -> usize {
     CANDIDATES.lock().len()
 }
 
+#[cfg(feature = "zram_lifecycle_test")]
+pub(super) fn lifecycle_candidates(pid: usize) -> (usize, usize) {
+    let candidates = CANDIDATES.lock();
+    (
+        candidates.len(),
+        candidates.iter().filter(|candidate| candidate.pid == pid).count(),
+    )
+}
+
 pub fn diagnostics() -> ReclaimDiagnostics {
     ReclaimDiagnostics {
         candidate_scans: CANDIDATE_SCANS.load(Ordering::Relaxed),

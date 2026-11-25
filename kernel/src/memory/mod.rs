@@ -36,3 +36,5 @@ pub mod validate;
 pub mod vmm;
 pub mod zram;
 pub mod zram_codec;
+#[cfg(feature = "zram_lifecycle_test")]
+pub(crate) mod zram_lifecycle;

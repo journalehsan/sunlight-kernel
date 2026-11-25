@@ -13,6 +13,7 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
         })
         .unwrap();
     let sched = Scheduler {
+        pending_children: crate::process::pending_state::Pending::new(),
         global_tick: 0,
         processes: alloc::vec![Process {
             pid: 3,
@@ -20,12 +21,13 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             vfs_root_metadata: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
+            vfs_stat_routed: false,
             vfs_file_routed: false,
             cwd: alloc::string::String::from("/"),
             exiting: false,
             uid: 0,
             gid: 0,
-            foreground: Foreground { incarnation: 4 },
+            foreground: Foreground { incarnation: 4, ..Default::default() },
             address_space: AddressSpace { generation: 5 },
             state: ProcessState::BlockedOnIpc,
             pending_call: None,

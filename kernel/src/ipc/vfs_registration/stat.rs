@@ -272,10 +272,13 @@ pub(crate) fn complete_stat(
 }
 
 pub(super) fn wake_stat_callers(sched: &mut Scheduler, now_tick: u64) {
+    #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r1_test"))]
+    super::spawn::fixture::retire_checkpoint_service(sched);
     let mut runtime = RUNTIME.lock();
     runtime.expire_stats(now_tick);
     runtime.wake_stat_callers(sched);
     runtime.poll_chdirs(sched, now_tick);
+    runtime.poll_spawns(sched, now_tick);
 }
 
 #[cfg(test)]

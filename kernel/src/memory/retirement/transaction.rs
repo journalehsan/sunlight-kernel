@@ -1,4 +1,7 @@
+extern crate alloc;
+
 use super::{Backing, Entry, State, Table, Token};
+use alloc::vec::Vec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MappingDisposition {
@@ -18,18 +21,17 @@ pub struct MappingPage {
     pub replacement: u64,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct MappingTransaction<const P: usize> {
+#[derive(Clone, Debug)]
+pub struct MappingTransaction {
     pub start: u64,
     pub end: u64,
     pub disposition: MappingDisposition,
-    pub pages: [Option<MappingPage>; P],
+    pub pages: Vec<MappingPage>,
+    entries: Vec<(Entry, bool)>,
     pub count: usize,
     pub prepared: usize,
     pub installed: usize,
     pub capacity: usize,
-    pub used: usize,
-    pub transferred: u64,
     pub flags: u64,
 }
 
@@ -41,7 +43,18 @@ impl<const N: usize, const P: usize> Table<N, P> {
         pages: &[MappingPage],
         flags: u64,
     ) -> Option<Token> {
-        if pages.is_empty() || pages.len() > P || P > 64 {
+        self.reserve_mapping_with_capacity(root, vm, pages, flags, P)
+    }
+
+    pub fn reserve_mapping_with_capacity(
+        &mut self,
+        root: u64,
+        vm: u64,
+        pages: &[MappingPage],
+        flags: u64,
+        max_entries: usize,
+    ) -> Option<Token> {
+        if pages.is_empty() || pages.len() > max_entries {
             return None;
         }
         let start = pages[0].address;
@@ -50,29 +63,29 @@ impl<const N: usize, const P: usize> Table<N, P> {
             .len()
             .checked_add(pages.iter().filter(|page| page.original.is_some()).count())?;
         if start & 4095 != 0
-            || capacity > P
+            || capacity > max_entries
             || pages.iter().enumerate().any(|(index, page)| {
                 page.address != start + index as u64 * 4096 || page.replacement != 0
             })
         {
             return None;
         }
+        let mut stored = Vec::new();
+        stored.try_reserve_exact(pages.len()).ok()?;
+        stored.extend_from_slice(pages);
+        let mut entries = Vec::new();
+        entries.try_reserve_exact(capacity).ok()?;
         let token = self.reserve(root, vm)?;
-        let mut stored = [None; P];
-        for (target, page) in stored.iter_mut().zip(pages) {
-            *target = Some(*page);
-        }
         self.get_mut(&token)?.transaction = Some(MappingTransaction {
             start,
             end,
             disposition: MappingDisposition::Preparing,
             pages: stored,
+            entries,
             count: pages.len(),
             prepared: 0,
             installed: 0,
             capacity,
-            used: 0,
-            transferred: 0,
             flags,
         });
         Some(token)
@@ -91,28 +104,32 @@ impl<const N: usize, const P: usize> Table<N, P> {
             || index >= transaction.count
             || frame == 0
             || frame & 4095 != 0
-            || transaction.pages.iter().flatten().any(|page| {
+            || transaction.pages.iter().any(|page| {
                 page.replacement == frame || page.original == Some(Backing::Frame(frame))
             })
         {
             return false;
         }
-        let page = transaction.pages[index].as_mut().unwrap();
+        let page = &mut transaction.pages[index];
         page.replacement = frame;
         if let Some(backing) = page.original {
-            record.entries[transaction.used] = Some(Entry {
-                address: page.address,
-                backing,
-                released: false,
-            });
-            transaction.used += 1;
+            transaction.entries.push((
+                Entry {
+                    address: page.address,
+                    backing,
+                    released: false,
+                },
+                false,
+            ));
         }
-        record.entries[transaction.used] = Some(Entry {
-            address: page.address,
-            backing: Backing::Frame(frame),
-            released: false,
-        });
-        transaction.used += 1;
+        transaction.entries.push((
+            Entry {
+                address: page.address,
+                backing: Backing::Frame(frame),
+                released: false,
+            },
+            false,
+        ));
         transaction.prepared += 1;
         true
     }
@@ -124,7 +141,6 @@ impl<const N: usize, const P: usize> Table<N, P> {
             .pages
             .get(index)
             .copied()
-            .flatten()
     }
 
     pub fn mapping_target(
@@ -151,7 +167,7 @@ impl<const N: usize, const P: usize> Table<N, P> {
         {
             return None;
         }
-        let page = transaction.pages.get(index).copied().flatten()?;
+        let page = transaction.pages.get(index).copied()?;
         if page.address < transaction.start
             || page.address >= transaction.end
             || page.replacement == 0
@@ -171,7 +187,7 @@ impl<const N: usize, const P: usize> Table<N, P> {
         if record.state != State::Prepared
             || transaction.disposition != MappingDisposition::Preparing
             || transaction.prepared != transaction.count
-            || transaction.used != transaction.capacity
+            || transaction.entries.len() != transaction.capacity
         {
             return false;
         }
@@ -260,6 +276,11 @@ impl<const N: usize, const P: usize> Table<N, P> {
         true
     }
 
+    #[cfg(not(test))]
+    pub fn mapping_entry_count(&mut self, token: &Token) -> Option<usize> {
+        Some(self.get_mut(token)?.transaction.as_ref()?.entries.len())
+    }
+
     pub fn mapping_release(&mut self, token: &Token, index: usize) -> Option<(Entry, bool)> {
         let record = self.get_mut(token)?;
         let transaction = record.transaction.as_ref()?;
@@ -271,15 +292,12 @@ impl<const N: usize, const P: usize> Table<N, P> {
         {
             return None;
         }
-        let entry = record.entries.get(index).copied().flatten()?;
-        if entry.released || transaction.transferred & (1 << index) != 0 {
+        let (entry, transferred) = *transaction.entries.get(index)?;
+        if entry.released || transferred {
             return None;
         }
-        let page = transaction
-            .pages
-            .iter()
-            .flatten()
-            .find(|page| page.address == entry.address)?;
+        let page_index = usize::try_from((entry.address - transaction.start) / 4096).ok()?;
+        let page = transaction.pages.get(page_index)?;
         let replacement = entry.backing == Backing::Frame(page.replacement);
         let release = replacement == (transaction.disposition == MappingDisposition::RolledBack);
         Some((entry, release))
@@ -293,11 +311,9 @@ impl<const N: usize, const P: usize> Table<N, P> {
             return false;
         }
         let record = self.get_mut(token).unwrap();
-        if released {
-            record.entries[index].as_mut().unwrap().released = true;
-        } else {
-            record.transaction.as_mut().unwrap().transferred |= 1 << index;
-        }
+        let (entry, transferred) = &mut record.transaction.as_mut().unwrap().entries[index];
+        entry.released = released;
+        *transferred = !released;
         true
     }
 
@@ -313,11 +329,10 @@ impl<const N: usize, const P: usize> Table<N, P> {
                 transaction.disposition,
                 MappingDisposition::Committed | MappingDisposition::RolledBack
             )
-            || record.entries.iter().enumerate().any(|(index, entry)| {
-                entry.is_some_and(|entry| {
-                    !entry.released && transaction.transferred & (1 << index) == 0
-                })
-            })
+            || transaction
+                .entries
+                .iter()
+                .any(|(entry, transferred)| !entry.released && !transferred)
         {
             return false;
         }
@@ -346,28 +361,24 @@ pub(crate) fn receipt(token: &Token, phase: &str, track: bool) {
             backing: Backing::Frame(0),
             released: false,
         }; 32];
-        let mut count = 0;
-        for entry in record.entries.iter().flatten() {
-            entries[count] = *entry;
-            count += 1;
+        let count = transaction.entries.len().min(entries.len());
+        for (slot, (entry, _)) in entries.iter_mut().zip(&transaction.entries) {
+            *slot = *entry;
         }
-        unsafe {
-            crate::memory::pmm::retirement_track(&entries[..count]);
-        }
+        unsafe { crate::memory::pmm::retirement_track(&entries[..count]) };
     }
     crate::serial_println!("[MT-OWNER] phase={} slot={} generation={} root={} vm={} start={} end={} disposition={:?} installed={} prepared={} capacity={} sequence={} targets={} received={} state={:?}",
         phase, token.index, token.generation, record.root, record.vm, transaction.start, transaction.end,
         transaction.disposition, transaction.installed, transaction.prepared, transaction.capacity,
         record.sequence, record.targets, record.received, record.state);
-    for (index, entry) in record.entries.iter().enumerate() {
-        let Some(entry) = entry else { continue };
+    for (index, (entry, transferred)) in transaction.entries.iter().enumerate() {
         let observation = match entry.backing {
             Backing::Frame(frame) => unsafe { crate::memory::pmm::retirement_allocation(frame) },
             Backing::Swap(block) => (crate::memory::zram::block_exists(block), 0, 0, 0),
         };
         crate::serial_println!("[MT-RESOURCE] phase={} slot={} generation={} root={} vm={} index={} va={} backing={:?} released={} transferred={} allocated={} pmm_owner={} releases={} reuses={}",
             phase, token.index, token.generation, record.root, record.vm, index, entry.address, entry.backing,
-            entry.released, u8::from(transaction.transferred & (1 << index) != 0),
+            entry.released, u8::from(*transferred),
             observation.0, observation.1, observation.2, observation.3);
     }
 }
@@ -423,6 +434,31 @@ mod tests {
         assert!(table.finish_mapping(&token));
         assert!(!table.finish_mapping(&token));
     }
+    #[test]
+    fn large_mapping_resolves_entries_past_the_inline_retirement_limit() {
+        let mut table = Table::<1, 32>::new();
+        let pages: Vec<_> = (1..=40)
+            .map(|index| page(index * 4096, Some(Backing::Frame(index * 4096))))
+            .collect();
+        let token = table
+            .reserve_mapping_with_capacity(4096, 1, &pages, 3, 80)
+            .unwrap();
+        for index in 0..pages.len() {
+            assert!(table.prepare_mapping_frame(&token, index, (64 + index as u64) * 4096));
+        }
+        assert!(table.begin_mapping(&token));
+        for index in 0..pages.len() {
+            assert!(table.mapping_installed(&token, index));
+        }
+        assert!(table.bind(&token, 1, 0));
+        assert!(table.complete(&token, 1, 0));
+        assert!(table.mapping_decide(&token, true));
+        for index in 0..80 {
+            assert!(table.mapping_resolved(&token, index, index % 2 == 0));
+        }
+        assert!(table.finish_mapping(&token));
+    }
+
     #[test]
     fn commit_separates_release_from_transfer() {
         let (mut table, token) = prepared();
@@ -508,13 +544,7 @@ mod tests {
         assert!(table.mapping_installed(&token, 0));
         assert!(table.mapping_installed(&token, 1));
         assert!(table.bind(&token, 19, 6));
-        assert!(table.quarantine(
-            &token,
-            19,
-            2,
-            super::super::Failure::MissingAck,
-            Some(2)
-        ));
+        assert!(table.quarantine(&token, 19, 2, super::super::Failure::MissingAck, Some(2)));
         assert!(!table.complete(&token, 19, 6));
         assert!(!table.mapping_decide(&token, true));
         assert!(!table.mapping_resolved(&token, 0, true));

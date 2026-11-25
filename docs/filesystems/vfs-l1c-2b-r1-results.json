@@ -1,0 +1,84 @@
+{
+  "r1_post_acquisition": "PASS",
+  "vfs_l1c_2b": "PARTIAL",
+  "vfs_l1c_3": "BLOCKED",
+  "candidate_root": "/tmp/klc-q1/candidate",
+  "evidence_root": "target/vfs-l1c-2b-r1",
+  "native": {
+    "memory_mib": 2048,
+    "accelerator": "tcg",
+    "fresh_guest_per_run": true,
+    "run_order": [2, 1, 4],
+    "matrix": [
+      {"vcpus": 1, "status": "PASS", "transactions": 1, "serial": "r1-1.serial.log"},
+      {"vcpus": 2, "status": "PASS", "transactions": 1, "serial": "r1-2.serial.log"},
+      {"vcpus": 4, "status": "PASS", "transactions": 1, "serial": "r1-4.serial.log"}
+    ],
+    "build": "build.log",
+    "image_digest": "images.sha256",
+    "line_index": "native-check.json",
+    "pilot": {
+      "vcpus": 2,
+      "status": "FAIL_UNSETTLED",
+      "serial": "pilot-2.serial.log",
+      "image_digest": "pilot-images.sha256",
+      "observed": "Exact KLC proof and local child teardown succeeded; registration row remained charged and no PID settlement was observed."
+    }
+  },
+  "ordering": [
+    "Stage private child and park the caller",
+    "Hold the authenticated receipt after the boot service acquires the directory lease",
+    "Retire the service via the existing termination and reaping paths",
+    "Observe KLC proof after service root reclamation and endpoint revocation; collect the exact retired row",
+    "Consume the retirement terminal and discard the held fixture copy",
+    "Reclaim private resources and dispose the adapter once",
+    "Remove the pending PID claim via normal remote settlement polling"
+  ],
+  "resources": {
+    "child_pid": 5,
+    "registration_epoch": 1,
+    "retain_request": 2,
+    "service_pid": 3,
+    "service_incarnation": 50,
+    "service_vm_generation": 25,
+    "reservation_and_identity": "Private pending table; released after local reclamation and remote settlement.",
+    "adapter_disposals": 1,
+    "terminal_consumptions": 1,
+    "registration_rows_collected": 1,
+    "directory_reference": "Retired service private image reclaimed; no child binding installed.",
+    "descriptors_released": 3,
+    "inherited_stream_references": 0,
+    "heap_owners_dropped": ["process box", "descriptor table box"],
+    "heap_census_complete": false,
+    "child_user_frames_reclaimed": 551,
+    "child_page_tables_reclaimed": 8,
+    "service_user_frames_reclaimed": 22264,
+    "service_page_tables_reclaimed": 53,
+    "populated_swap_blocks": 0,
+    "child_publications": 0,
+    "child_enqueues": 0,
+    "child_dispatches": 0,
+    "observer_wait_status": 0,
+    "retention_condition": "Independent binding references continue to pin the retired row until the final local user drains and collection runs."
+  },
+  "regressions": {
+    "registration": {"status": "PASS", "existing": 104, "focused": 1, "log": "registration-final.log"},
+    "ownership_cycles": {"status": "PASS", "cycles": 112, "log": "registration-final.log"},
+    "transaction_session_compile": {"status": "PASS", "log": "transaction-session.log"},
+    "mmap_compile": {"status": "PASS", "log": "mmap.log"},
+    "candidate_ownership_guard": {"status": "PASS", "new_findings": 0, "log": "candidate-guard.log"},
+    "swap1": {"status": "PASS", "vcpus": 4, "log": "swap1.log", "serial": "swap1.serial.log"},
+    "ordinary_boot": {"status": "PASS", "vcpus": 2, "log": "phase3.0.log", "serial": "phase3.0.serial.log"},
+    "r4_rerun": {"status": "PASS", "vcpus": [1, 2, 4], "transactions_per_guest": 8, "check": "r4-check.json", "image_digest": "r4-images.sha256", "original_report": "vfs-l1c-2b-r4-results.json"}
+  },
+  "remaining": {
+    "r1_before_acquisition": "NOT_RUN",
+    "r2": "NOT_RUN",
+    "r3": "NOT_RUN",
+    "r5": "NOT_RUN",
+    "service_replacement": "OUT_OF_SCOPE",
+    "btop_and_qalculate_interaction": "NOT_RUN",
+    "populated_swap_teardown": "NOT_RUN",
+    "fault_driven_swap_in": "NOT_RUN"
+  }
+}

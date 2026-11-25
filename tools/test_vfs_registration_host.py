@@ -33,6 +33,8 @@ fn mounted_cwd_namespace(uid: u32, gid: u32) -> sunlight_vfs_server::directory::
 }
 pub mod timekeeping { pub const TICK_HZ: u64 = 100; }
 pub mod capability {
+    #[path = "DELIVERY_PATH"]
+    pub mod delivery;
     pub struct CapabilityBroker { pub endpoints: Vec<(u32, usize)> }
     impl CapabilityBroker {
         pub fn endpoint_owner(&self, id: u32) -> Option<usize> {
@@ -41,15 +43,33 @@ pub mod capability {
     }
 }
 pub mod sched {
+    #[path = "RETIREMENT_PATH"]
+    pub mod image_retirement;
+    #[cfg(test)]
+    pub(crate) use self::image_retirement::PrivateImageRetired;
+    #[cfg(test)]
+    pub(crate) fn exit_proof(
+        image: crate::capability::delivery::RecipientIdentity,
+        last_owner: bool,
+        reclaimed: bool,
+        fenced: bool,
+    ) -> Option<PrivateImageRetired> {
+        PrivateImageRetired::after_exit_cleanup(image, last_owner, reclaimed, fenced)
+    }
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum ProcessState { Ready, Running, BlockedOnIpc }
-    pub struct Foreground { pub incarnation: u64 }
+    #[derive(Default)]
+    pub struct Foreground {
+        pub incarnation: u64, pub session_broker: u64, pub session: u64,
+        pub generation: u64, pub member: u64, pub cancel: u8, pub forced_exit: Option<i32>,
+    }
+    impl Foreground { pub fn execution(&self) -> u64 { self.member } }
     pub struct AddressSpace { pub generation: u64 }
     impl AddressSpace { pub fn identity(&self) -> &Self { self } }
     pub struct Process {
         pub pid: usize, pub trusted_vfs_service: bool, pub exiting: bool,
         pub vfs_root_metadata: bool, pub vfs_boot_root: bool, pub vfs_file_routed: bool,
-        pub vfs_root_rebased: bool,
+        pub vfs_root_rebased: bool, pub vfs_stat_routed: bool,
         pub cwd: String,
         pub uid: u32, pub gid: u32,
         pub state: ProcessState, pub pending_call: Option<()>,
@@ -57,11 +77,27 @@ pub mod sched {
         pub foreground: Foreground, pub address_space: AddressSpace,
     }
     impl Process { pub fn is_exiting(&self) -> bool { self.exiting } }
-    pub struct Scheduler { pub global_tick: u64, pub processes: Vec<Process> }
+    pub struct Scheduler {
+        pub global_tick: u64, pub processes: Vec<Process>,
+        pub(crate) pending_children: crate::process::pending_state::Pending<Box<Process>, 8>,
+    }
     impl Scheduler { pub fn shared_process_index(&self, idx: usize) -> usize { idx } }
 }
 pub mod process {
     pub use crate::sched::{Process, ProcessState};
+    #[path = "PENDING_STATE_PATH"]
+    pub(crate) mod pending_state;
+    #[path = "EXEC_RETIREMENT_PATH"]
+    pub(crate) mod exec_retirement;
+    pub(crate) fn exec_proof(
+        image: crate::capability::delivery::RecipientIdentity,
+        was_trusted: bool,
+        still_trusted: bool,
+        reclaimed: bool,
+    ) -> Option<exec_retirement::PrivateVfsExecRetired> {
+        exec_retirement::FencedVfsExec::after_withdrawal(image, was_trusted, still_trusted)?
+            .after_reclaim(reclaimed)
+    }
 }
 #[cfg(test)]
 mod ipc {
@@ -79,12 +115,12 @@ mod ipc {
     fn production_adapter_authenticates_registration_and_admission_identity() {
         use crate::capability::CapabilityBroker;
         use crate::sched::{AddressSpace, Foreground, Process, Scheduler};
-        let mut sched = Scheduler { global_tick: 0, processes: vec![Process {
+        let mut sched = Scheduler { global_tick: 0, pending_children: crate::process::pending_state::Pending::new(), processes: vec![Process {
             pid: 3, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
-            vfs_root_rebased: false,
+            vfs_root_rebased: false, vfs_stat_routed: false,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
-            foreground: Foreground { incarnation: 5 }, address_space: AddressSpace { generation: 7 },
+            foreground: Foreground { incarnation: 5, ..Default::default() }, address_space: AddressSpace { generation: 7 },
         }] };
         let mut caps = CapabilityBroker { endpoints: vec![(0, 3), (8, 3), (9, 4)] };
         let denied = Err(IpcError::InvalidCapability);
@@ -108,10 +144,10 @@ mod ipc {
         assert_eq!(vfs_registration::register(3, 8, &sched, &caps), Ok(()));
         sched.processes.push(Process {
             pid: 4, trusted_vfs_service: true, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
-            vfs_root_rebased: false,
+            vfs_root_rebased: false, vfs_stat_routed: false,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
-            foreground: Foreground { incarnation: 6 }, address_space: AddressSpace { generation: 8 },
+            foreground: Foreground { incarnation: 6, ..Default::default() }, address_space: AddressSpace { generation: 8 },
         });
         assert_eq!(vfs_registration::register(4, 9, &sched, &caps), denied);
         // Exiting the incumbent permits explicit replacement, never coexistence.
@@ -132,10 +168,10 @@ mod ipc {
         // from process records, independently of the service's credentials.
         sched.processes.push(Process {
             pid: 10, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
-            vfs_root_rebased: false,
+            vfs_root_rebased: false, vfs_stat_routed: false,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 1001, gid: 1002,
-            foreground: Foreground { incarnation: 11 }, address_space: AddressSpace { generation: 12 },
+            foreground: Foreground { incarnation: 11, ..Default::default() }, address_space: AddressSpace { generation: 12 },
         });
         let snapshot = vfs_registration::capture(10, &sched, &caps).unwrap();
         assert_eq!(snapshot.caller.pid, 10);
@@ -257,7 +293,11 @@ def main():
             f'sunlight-vfs-server = {{ path = "{ROOT / "services/vfs_server"}" }}\n')
         (work / 'src/lib.rs').write_text(SOURCE.replace(
             'ADAPTER_PATH', str(ROOT / 'kernel/src/ipc/vfs_registration.rs')).replace(
-            'RESOURCES_PATH', str(ROOT / 'kernel/src/ipc/vfs_resources.rs')))
+            'RESOURCES_PATH', str(ROOT / 'kernel/src/ipc/vfs_resources.rs')).replace(
+            'DELIVERY_PATH', str(ROOT / 'kernel/src/capability/delivery.rs')).replace(
+            'PENDING_STATE_PATH', str(ROOT / 'kernel/src/process/pending_state.rs')).replace(
+            'EXEC_RETIREMENT_PATH', str(ROOT / 'kernel/src/process/exec_retirement.rs')).replace(
+            'RETIREMENT_PATH', str(ROOT / 'kernel/src/sched/image_retirement.rs')))
         subprocess.run([
             'cargo', 'test', '--manifest-path', str(work / 'Cargo.toml'),
             '--target', 'x86_64-unknown-linux-gnu', '--target-dir', str(target), '--offline',

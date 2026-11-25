@@ -1,0 +1,299 @@
+{
+  "readiness": "L1C-3 BLOCKED",
+  "ordinary_spawn_activation": false,
+  "detached_publication": false,
+  "runtime_vfs_replacement": false,
+  "vfs_d1": "DEFERRED",
+  "registration_tests": 107,
+  "gates": {
+    "registration": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/registration.log"
+    },
+    "ipc": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/ipc.log"
+    },
+    "service": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/service.log"
+    },
+    "descriptor": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/descriptor.log"
+    },
+    "scheduler": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/scheduler.log"
+    },
+    "kernel-host": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/kernel-host.log"
+    },
+    "retirement": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/retirement.log"
+    },
+    "zram": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/zram.log"
+    },
+    "swap-slot": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/swap-slot.log"
+    },
+    "production": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/production.log"
+    },
+    "guard-primary": {
+      "status": "FAIL",
+      "exit_code": 1,
+      "log": "target/vfs-l1c-production-launch-attribution/guard-primary.log",
+      "preexisting_findings": [
+        "NEW (1): kernel/src/arch/x86_64/syscall.rs: kernel-global namespace: let capacity = crate::KERNEL_VFS",
+        "NEW (1): kernel/src/linux_procfs.rs: kernel-global namespace: let vfs = crate::KERNEL_VFS.lock();",
+        "NEW (1): kernel/src/process/mmap.rs: kernel-global namespace: let mut guard = crate::KERNEL_VFS.lock();",
+        "NEW (1): kernel/src/storage.rs: filesystem backend construction: let mut fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))"
+      ]
+    },
+    "guard-candidate": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/guard-candidate.log"
+    },
+    "phase3.0-2": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/phase3.0-2.log"
+    },
+    "phase3.0-1": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/phase3.0-1.log"
+    },
+    "phase3.0-4": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/phase3.0-4.log"
+    },
+    "swap1-4": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-launch-attribution/swap1-4.log"
+    }
+  },
+  "candidate_scope": "Existing isolated no-growth candidate; attribution production code is the same as primary. Last two fixture-only fixes are excluded by ordinary and SWAP-1 configurations.",
+  "swap1": {
+    "pools": 2,
+    "vcpus": 4,
+    "memory_mib": 2048,
+    "serial": "target/vfs-l1c-production-launch-attribution/swap1-4.serial.log",
+    "zram_independence": "Swap/ZRAM sources unchanged; host tests and independent two-pool native workload passed."
+  },
+  "native": {
+    "feature": "vfs_l1c_parent_lifecycle_test",
+    "elf_sha256": "61688e3ed6c36262d5035a1ffc01c63389717e3e5d98217e9a0c3ccacdbed94c",
+    "iso_sha256": "5f7b58cb624b830e5aac712b55233632ccada700a4c13d048d002233cc75d1df",
+    "runs": [
+      {
+        "vcpus": 2,
+        "memory_mib": 2048,
+        "status": "PASS",
+        "exit_code": 0,
+        "serial": "target/vfs-l1c-production-launch-attribution/final-2.serial.log",
+        "argv_file": "target/vfs-l1c-production-launch-attribution/final-2.args",
+        "evidence": [
+          {
+            "line": 1910,
+            "text": "[VFS-PARENT] detached parent=5 child=6 retain=3 epoch=1 source_pinned=1 launch=Parent { pid: 5, incarnation: 683, image_generation: 1351 }"
+          },
+          {
+            "line": 1911,
+            "text": "[VFS-R4] teardown child=6 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1918,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1954,
+            "text": "[VFS-PARENT] detached parent=6 child=7 retain=5 epoch=1 source_pinned=1 launch=Parent { pid: 6, incarnation: 685, image_generation: 1355 }"
+          },
+          {
+            "line": 1955,
+            "text": "[VFS-R4] teardown child=7 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1963,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1990,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 7, incarnation: 687, image_generation: 1359 } child=Identity { ticket: Ticket { pid: 8, serial: 652 }, incarnation: 688, image_generation: 1361 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2029,
+            "text": "[SCHED] process_reaped pid=8 name='vfs-l1c-private' user_frames=550 page_tables=8 swap_blocks=0 ipc_cleared=0"
+          },
+          {
+            "line": 2035,
+            "text": "[VFS-ACCT] PASS child=8 retain=7 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2036,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      },
+      {
+        "vcpus": 1,
+        "memory_mib": 2048,
+        "status": "PASS",
+        "exit_code": 0,
+        "serial": "target/vfs-l1c-production-launch-attribution/final-1.serial.log",
+        "argv_file": "target/vfs-l1c-production-launch-attribution/final-1.args",
+        "evidence": [
+          {
+            "line": 1902,
+            "text": "[VFS-PARENT] detached parent=5 child=6 retain=3 epoch=1 source_pinned=1 launch=Parent { pid: 5, incarnation: 683, image_generation: 1351 }"
+          },
+          {
+            "line": 1903,
+            "text": "[VFS-R4] teardown child=6 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1914,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1950,
+            "text": "[VFS-PARENT] detached parent=6 child=7 retain=5 epoch=1 source_pinned=1 launch=Parent { pid: 6, incarnation: 685, image_generation: 1355 }"
+          },
+          {
+            "line": 1951,
+            "text": "[VFS-R4] teardown child=7 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1959,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1986,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 7, incarnation: 687, image_generation: 1359 } child=Identity { ticket: Ticket { pid: 8, serial: 652 }, incarnation: 688, image_generation: 1361 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2025,
+            "text": "[SCHED] process_reaped pid=8 name='vfs-l1c-private' user_frames=550 page_tables=8 swap_blocks=0 ipc_cleared=0"
+          },
+          {
+            "line": 2031,
+            "text": "[VFS-ACCT] PASS child=8 retain=7 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2032,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      },
+      {
+        "vcpus": 4,
+        "memory_mib": 2048,
+        "status": "PASS",
+        "exit_code": 0,
+        "serial": "target/vfs-l1c-production-launch-attribution/final-4.serial.log",
+        "argv_file": "target/vfs-l1c-production-launch-attribution/final-4.args",
+        "evidence": [
+          {
+            "line": 1920,
+            "text": "[VFS-PARENT] detached parent=5 child=6 retain=3 epoch=1 source_pinned=1 launch=Parent { pid: 5, incarnation: 683, image_generation: 1351 }"
+          },
+          {
+            "line": 1922,
+            "text": "[VFS-R4] teardown child=6 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1932,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1968,
+            "text": "[VFS-PARENT] detached parent=6 child=7 retain=5 epoch=1 source_pinned=1 launch=Parent { pid: 6, incarnation: 685, image_generation: 1355 }"
+          },
+          {
+            "line": 1969,
+            "text": "[VFS-R4] teardown child=7 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1977,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2004,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 7, incarnation: 687, image_generation: 1359 } child=Identity { ticket: Ticket { pid: 8, serial: 652 }, incarnation: 688, image_generation: 1361 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2043,
+            "text": "[SCHED] process_reaped pid=8 name='vfs-l1c-private' user_frames=550 page_tables=8 swap_blocks=0 ipc_cleared=0"
+          },
+          {
+            "line": 2049,
+            "text": "[VFS-ACCT] PASS child=8 retain=7 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2050,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      }
+    ],
+    "earlier_attempts": [
+      {
+        "status": "FAIL",
+        "exit_code": 1,
+        "serial": "target/vfs-l1c-production-launch-attribution/first-2.serial.log",
+        "reason": "Fixture held retain dispatch awaiting an observer which mode 14 does not launch."
+      },
+      {
+        "status": "STOPPED",
+        "exit_code": 2,
+        "serial": "target/vfs-l1c-production-launch-attribution/second-2.serial.log",
+        "reason": "After enqueue, fixture attempted to reacquire its request lock; stopped the stalled guest."
+      }
+    ]
+  },
+  "accounting": {
+    "snapshot_bytes": 64,
+    "continuation_slots": 8,
+    "per_snapshot_heap_allocations": 0,
+    "child_user_frames_returned": 550,
+    "child_page_tables_returned": 8,
+    "child_descriptors_closed": 3,
+    "child_fd_table_bytes": 10240,
+    "populated_swap_blocks": 0,
+    "final_dispositions": {
+      "rollback": "Private process and descriptor boxes dropped; PID claim and continuation retired after settlement.",
+      "publication": "Private process moved to scheduler, private box released and descriptor box transferred; reap clears descriptors and scheduler may retain reusable backing."
+    }
+  },
+  "remaining": [
+    "Detached publication with orphan handling and independent launch authority revocation",
+    "Native parent exit with acknowledgement in flight or racing service retirement",
+    "Native remote kill and exec",
+    "Trusted registration reuse across service lifetimes",
+    "Production adapter launch reservations; live regular files, child IPC endpoints and queued payloads",
+    "Transaction populated swap and fault-driven swap-in",
+    "Full kernel and service heap attribution",
+    "Primary ownership guard and interactive Btop and Qalculate"
+  ]
+}

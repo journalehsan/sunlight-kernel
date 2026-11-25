@@ -201,10 +201,10 @@ impl PoolState {
         self.slots
             .try_reserve(1)
             .map_err(|_| ZramError::AllocationFailure)?;
-        // Reserve the future discard push before publishing this index. Once a
-        // slot exists, release can therefore never require a heap allocation.
+        // The free list is empty here. Reserve for all slot indices so a
+        // discard never needs to allocate, even when every slot is in use.
         self.free
-            .try_reserve(1)
+            .try_reserve(self.slots.len() + 1)
             .map_err(|_| ZramError::AllocationFailure)?;
         let index = self.slots.len();
         self.slots.push(Slot::vacant(1));
@@ -803,4 +803,19 @@ pub fn corrupt_payload_for_test(id: SlotId, hhdm_offset: VirtAddr) -> Result<(),
         *byte ^= 0x5a;
     }
     Ok(())
+}
+
+#[cfg(feature = "zram_lifecycle_test")]
+pub(super) fn log_lifecycle_pools(phase: &str, pid: usize) {
+    let count = policy().map_or(0, |policy| policy.pool_count);
+    for (index, pool) in POOLS.iter().take(count).enumerate() {
+        let pool = pool.lock();
+        crate::serial_println!(
+            "[ZRAM-POOL] phase={} pid={} pool={} slots={} compressed={} backing={} entries={} slot_capacity={} free={} free_capacity={} storage_entries={} storage_capacity={} releases={}",
+            phase, pid, index, pool.stats.used_logical_pages, pool.stats.used_compressed_bytes,
+            pool.stats.allocator_consumed_bytes, pool.slots.len(), pool.slots.capacity(),
+            pool.free.len(), pool.free.capacity(), pool.storage_pages.len(),
+            pool.storage_pages.capacity(), pool.stats.slot_releases,
+        );
+    }
 }

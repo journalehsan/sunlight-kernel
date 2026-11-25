@@ -1,0 +1,326 @@
+{
+  "verdict": "PARTIAL",
+  "production_changes": [
+    "Exact retain request ID returned at staging and used by bootstrap root, inheritance and chdir continuations"
+  ],
+  "production_spawn_paths": {
+    "sys_spawn": {
+      "private_binding_integration": "NOT_IMPLEMENTED",
+      "transactional_native": "NOT_RUN"
+    },
+    "handle_spawn_call / spawn_with_session_attachment": {
+      "private_binding_integration": "NOT_IMPLEMENTED",
+      "transactional_native": "NOT_RUN"
+    }
+  },
+  "invariants": {
+    "binding_before_visibility_or_first_dispatch": "NOT_MET by the existing ordinary publication order",
+    "cancellation": "PASS for VFS-L1P local-only ownership, integrated remote settlement NOT_IMPLEMENTED",
+    "forward_progress": "Observed after local fixtures, actual spawn wait NOT_IMPLEMENTED"
+  },
+  "host_gates": {
+    "registration": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/registration.log",
+      "exit_log": "target/vfs-l1c/registration.exit",
+      "result": "94 passed, including both existing 100-cycle retirement suites"
+    },
+    "ipc": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/ipc.log",
+      "exit_log": "target/vfs-l1c/ipc.exit",
+      "result": "168 unit and 9 integration tests passed"
+    },
+    "service": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/service.log",
+      "exit_log": "target/vfs-l1c/service.exit",
+      "result": "47 passed"
+    },
+    "descriptor": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/descriptor.log",
+      "exit_log": "target/vfs-l1c/descriptor.exit",
+      "result": "18 passed"
+    },
+    "scheduler": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/scheduler.log",
+      "exit_log": "target/vfs-l1c/scheduler.exit",
+      "result": "focused production state/lifecycle/accounting/policy gate passed"
+    },
+    "kernel-host": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/kernel-host.log",
+      "exit_log": "target/vfs-l1c/kernel-host.exit",
+      "result": "217 passed, including eight-slot local PID reservation test"
+    },
+    "retirement": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/retirement.log",
+      "exit_log": "target/vfs-l1c/retirement.exit",
+      "result": "34 passed"
+    },
+    "zram": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/zram.log",
+      "exit_log": "target/vfs-l1c/zram.exit",
+      "result": "4 passed"
+    },
+    "swap-slot": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/swap-slot.log",
+      "exit_log": "target/vfs-l1c/swap-slot.exit",
+      "result": "1 passed"
+    },
+    "primary-compile": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/primary-compile.log",
+      "exit_log": "target/vfs-l1c/primary-compile.exit",
+      "result": "production binary"
+    },
+    "mmap": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/mmap.log",
+      "exit_log": "target/vfs-l1c/mmap.exit",
+      "result": "reduced candidate, Helios runtime mmap feature"
+    },
+    "transaction-session": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/transaction-session.log",
+      "exit_log": "target/vfs-l1c/transaction-session.exit",
+      "result": "reduced candidate, transaction and session fixtures"
+    },
+    "guard-after": {
+      "status": "FAIL",
+      "exit_code": 1,
+      "log": "target/vfs-l1c/guard-after.log",
+      "exit_log": "target/vfs-l1c/guard-after.exit",
+      "result": "71 references and the same 4 findings as VFS-L1P"
+    },
+    "candidate-guard": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/candidate-guard.log",
+      "exit_log": "target/vfs-l1c/candidate-guard.exit",
+      "result": "68 references and 0 findings"
+    },
+    "ordinary": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/ordinary.log",
+      "exit_log": "target/vfs-l1c/ordinary.exit",
+      "result": "unchanged Phase 3.0 gate, 2048 MiB, 2 vCPUs",
+      "serial": "target/vfs-l1c/ordinary.serial.log"
+    },
+    "source-equivalence": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c/source-equivalence.log",
+      "exit_log": "target/vfs-l1c/source-equivalence.exit",
+      "result": "12346 baseline paths, zero unexpected drift",
+      "manifest": "target/vfs-l1c/source-equivalence.json"
+    }
+  },
+  "native_vfs_l1p_regression": {
+    "status": "PASS",
+    "scope": "Private constructor and local cancellation with native VM, PMM and descriptor accounting",
+    "matrix": "target/vfs-l1c/native/matrix.json",
+    "image_hashes": "target/vfs-l1c/native/final-images.sha256",
+    "cases": [
+      {
+        "status": "PASS",
+        "cpus": 1,
+        "memory_mib": 2048,
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/vfs-l1p.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-1.serial.log",
+          "-display",
+          "none",
+          "-m",
+          "2048",
+          "-smp",
+          "1",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "qemu_exit": 0,
+        "expected": [
+          "[VFS-L1P] PASS cpus=1 cycles=100 heap_faults=12",
+          "[init] VFS namespace ready before service spawn",
+          "[SM] Registered as 'sm'",
+          "[SunlightOS] Foundation Complete"
+        ],
+        "fixture": "[VFS-L1P] PASS cpus=1 cycles=100 heap_faults=12 ledger_faults=2 pmm_faults=523 frames=266468 heap=176832 descriptions=72 refs=72 swap_candidates=0 published=3 ready=0",
+        "serial": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-1.serial.log",
+        "console": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-1.qemu.log",
+        "counters": {
+          "cpus": 1,
+          "cycles": 100,
+          "heap_faults": 12,
+          "ledger_faults": 2,
+          "pmm_faults": 523,
+          "frames": 266468,
+          "heap": 176832,
+          "descriptions": 72,
+          "refs": 72,
+          "swap_candidates": 0,
+          "published": 3,
+          "ready": 0
+        }
+      },
+      {
+        "status": "PASS",
+        "cpus": 2,
+        "memory_mib": 2048,
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/vfs-l1p.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-2.serial.log",
+          "-display",
+          "none",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "qemu_exit": 0,
+        "expected": [
+          "[VFS-L1P] PASS cpus=2 cycles=100 heap_faults=12",
+          "[init] VFS namespace ready before service spawn",
+          "[SM] Registered as 'sm'",
+          "[SunlightOS] Foundation Complete"
+        ],
+        "fixture": "[VFS-L1P] PASS cpus=2 cycles=100 heap_faults=12 ledger_faults=2 pmm_faults=523 frames=266210 heap=177856 descriptions=72 refs=72 swap_candidates=0 published=3 ready=0",
+        "serial": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-2.serial.log",
+        "console": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-2.qemu.log",
+        "counters": {
+          "cpus": 2,
+          "cycles": 100,
+          "heap_faults": 12,
+          "ledger_faults": 2,
+          "pmm_faults": 523,
+          "frames": 266210,
+          "heap": 177856,
+          "descriptions": 72,
+          "refs": 72,
+          "swap_candidates": 0,
+          "published": 3,
+          "ready": 0
+        }
+      },
+      {
+        "status": "PASS",
+        "cpus": 4,
+        "memory_mib": 2048,
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/vfs-l1p.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-4.serial.log",
+          "-display",
+          "none",
+          "-m",
+          "2048",
+          "-smp",
+          "4",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "qemu_exit": 0,
+        "expected": [
+          "[VFS-L1P] PASS cpus=4 cycles=100 heap_faults=12",
+          "[init] VFS namespace ready before service spawn",
+          "[SM] Registered as 'sm'",
+          "[SunlightOS] Foundation Complete"
+        ],
+        "fixture": "[VFS-L1P] PASS cpus=4 cycles=100 heap_faults=12 ledger_faults=2 pmm_faults=523 frames=265698 heap=179904 descriptions=72 refs=72 swap_candidates=0 published=3 ready=0",
+        "serial": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-4.serial.log",
+        "console": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c/native/pending-4.qemu.log",
+        "counters": {
+          "cpus": 4,
+          "cycles": 100,
+          "heap_faults": 12,
+          "ledger_faults": 2,
+          "pmm_faults": 523,
+          "frames": 265698,
+          "heap": 179904,
+          "descriptions": 72,
+          "refs": 72,
+          "swap_candidates": 0,
+          "published": 3,
+          "ready": 0
+        }
+      }
+    ]
+  },
+  "integrated_ack_cancellation_retirement_matrix": "NOT_RUN",
+  "integrated_100_cycle_matrix": "NOT_RUN",
+  "first_dispatch_evidence_for_authenticated_ordinary_children": "NOT_RUN",
+  "remote_obligations": {
+    "pending_child_owner": "NOT_IMPLEMENTED",
+    "remote_registration_rows": 4,
+    "leases_per_registration": 64,
+    "private_child_slots": 8,
+    "terminal_conditions": "Exact authenticated refusal, exact acknowledged release, or qualifying KLC private backing retirement with local binding drain",
+    "liveness_limit": "A delivered retain may stall later retains in the same epoch. Timeout, endpoint withdrawal and replacement do not prove settlement.",
+    "pid_release": "Local teardown releases a local-only reservation. No pending-child remote PID dependency integration exists."
+  },
+  "bootstrap": "Existing boot-only provenance. Native trusted replacement NOT_RUN.",
+  "zram": {
+    "reclaim_code": "unchanged",
+    "private_loader_anonymous_reclaim_enrollment": false,
+    "native_fault_driven_swap_in": "NOT_RUN",
+    "exit_exec_with_swapped_backing": "NOT_RUN"
+  },
+  "one_gib_boot": "Historical independent failure remains open",
+  "prior_klc_q1_evidence": "target/vfs-l1p/klc-q1/",
+  "primary_platform_qualification": "BLOCKED",
+  "vfs_l1": "BLOCKED",
+  "vfs_d1": "BLOCKED",
+  "vfs_l1q_readiness": "NOT_READY"
+}

@@ -3,6 +3,7 @@
 //! resolution or parent credentials are used to derive the child's objects.
 use super::*;
 
+#[derive(Clone)]
 pub(crate) struct Inheritance {
     binding: Arc<NamespaceBinding>,
 }
@@ -18,7 +19,7 @@ impl Runtime {
     // The strong binding reference fences reclamation of this exact Bound row.
     // Keep only the reference in Preparing rather than duplicating the receipt
     // in every inline lease slot (registration construction uses a kernel stack).
-    fn source_receipt(&self, source: &Inheritance) -> Option<Receipt> {
+    pub(super) fn source_receipt(&self, source: &Inheritance) -> Option<Receipt> {
         self.remote
             .iter()
             .flatten()
@@ -37,6 +38,15 @@ impl Runtime {
         identity: AdmissionIdentity,
         cwd: &str,
     ) -> Result<(), NamespaceRetentionError> {
+        self.stage_inheritance(source, identity, cwd).map(|_| ())
+    }
+
+    pub(super) fn stage_inheritance(
+        &mut self,
+        source: Inheritance,
+        identity: AdmissionIdentity,
+        cwd: &str,
+    ) -> Result<u64, NamespaceRetentionError> {
         let receipt = self
             .source_receipt(&source)
             .ok_or(NamespaceRetentionError::Ownership(OwnershipError::State))?;
@@ -52,8 +62,9 @@ impl Runtime {
             .try_reserve_exact(cwd.len())
             .map_err(|_| NamespaceRetentionError::Ownership(OwnershipError::Capacity))?;
         directory.push_str(cwd);
-        self.queue_namespace_inner(identity, source.binding.grants(), Some(receipt.scope()))?;
-        let latest = self
+        let id =
+            self.queue_namespace_inner(identity, source.binding.grants(), Some(receipt.scope()))?;
+        let staged = self
             .remote
             .iter_mut()
             .flatten()
@@ -62,19 +73,19 @@ impl Runtime {
             .local
             .iter_mut()
             .flatten()
-            .max_by_key(|l| l.id())
+            .find(|lease| lease.id() == id)
             .unwrap();
         let LocalLease::Preparing {
             derivation,
             initial_cwd,
             ..
-        } = latest
+        } = staged
         else {
             unreachable!()
         };
         *derivation = Some(source);
         *initial_cwd = Some(directory);
-        Ok(())
+        Ok(id)
     }
 
     pub(super) fn authorize_derivation(
@@ -82,6 +93,16 @@ impl Runtime {
         registration: Registration,
         bytes: &[u8],
         sched: &Scheduler,
+    ) -> Result<Receipt, IpcError> {
+        self.validate_derivation(registration, bytes, sched, false)
+    }
+
+    pub(super) fn validate_derivation(
+        &self,
+        registration: Registration,
+        bytes: &[u8],
+        sched: &Scheduler,
+        detached_reply: bool,
     ) -> Result<Receipt, IpcError> {
         let Frame::Retain {
             registration: claimed,
@@ -101,8 +122,12 @@ impl Runtime {
             .find(|r| r.registration == registration && !r.retired)
             .ok_or(IpcError::InvalidCapability)?;
         if remote.delivered != Some(request_id)
-            || remote.callers.iter().flatten().any(CallerDelivery::pending)
+            || (!detached_reply && remote.callers.iter().flatten().any(CallerDelivery::pending))
         {
+            return Err(IpcError::InvalidCapability);
+        }
+        let spawn = self.spawn_request(registration, request_id);
+        if spawn.is_some_and(|call| !self.spawn_live(call, sched)) {
             return Err(IpcError::InvalidCapability);
         }
         remote
@@ -119,14 +144,14 @@ impl Runtime {
                     ..
                 } if *id == request_id
                     && *expected == scope
-                    && sched.processes.iter().enumerate().any(|(idx, p)| {
+                    && (spawn.is_some() || sched.processes.iter().enumerate().any(|(idx, p)| {
                         process_identity(p) == identity.caller
                             && !p.is_exiting()
                             && p.vfs_root_metadata
                             && p.uid == identity.uid
                             && p.gid == identity.gid
                             && sched.processes[sched.shared_process_index(idx)].cwd == *cwd
-                    }) =>
+                    })) =>
                 {
                     self.source_receipt(source)
                 }

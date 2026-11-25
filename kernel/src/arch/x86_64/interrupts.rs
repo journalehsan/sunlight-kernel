@@ -1258,6 +1258,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         }
     } // Phase 1 lock released here — other cores can now proceed.
 
+    if cpu_id == 0 {
+        crate::ipc::reap_vfs_spawn();
+    }
+
     let sched_lock_end = now_ns();
     #[cfg(feature = "scheduler_perf_diag")]
     if sched_lock_clock_valid && crate::sched::perf::observe_clock(cpu_id, sched_lock_end) {

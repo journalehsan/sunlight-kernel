@@ -61,7 +61,7 @@ impl Runtime {
         identity: AdmissionIdentity,
         grants: u64,
     ) -> Result<(), NamespaceRetentionError> {
-        self.queue_namespace_inner(identity, grants, None)
+        self.queue_namespace_inner(identity, grants, None).map(|_| ())
     }
 
     pub(super) fn queue_namespace_inner(
@@ -69,7 +69,7 @@ impl Runtime {
         identity: AdmissionIdentity,
         grants: u64,
         previous: Option<Scope>,
-    ) -> Result<(), NamespaceRetentionError> {
+    ) -> Result<u64, NamespaceRetentionError> {
         let index = self
             .remote
             .iter()
@@ -86,8 +86,11 @@ impl Runtime {
             .position(Option::is_none)
             .ok_or(NamespaceRetentionError::Ownership(OwnershipError::Capacity))?;
         let frame = self.prepare_namespace_inner(identity, grants, previous)?;
+        let Frame::Retain { request_id, .. } = frame else {
+            unreachable!("namespace preparation always returns a retain frame");
+        };
         self.remote[index].as_mut().unwrap().unsent[slot] = Some(frame);
-        Ok(())
+        Ok(request_id)
     }
 
     /// Root-cwd component fixture. Production snapshots the selected caller's
@@ -114,25 +117,24 @@ impl Runtime {
             .try_reserve_exact(cwd.len())
             .map_err(|_| NamespaceRetentionError::Ownership(OwnershipError::Capacity))?;
         directory.push_str(cwd);
-        self.queue_namespace(identity, grants)?;
+        let id = self.queue_namespace_inner(identity, grants, None)?;
         let remote = self
             .remote
             .iter_mut()
             .flatten()
             .find(|r| r.registration == identity.registration)
             .unwrap();
-        // The latest allocation is the one just staged, even after slot reuse.
-        let latest = remote
+        let staged = remote
             .local
             .iter_mut()
             .flatten()
-            .max_by_key(|l| l.id())
+            .find(|lease| lease.id() == id)
             .unwrap();
         let LocalLease::Preparing {
             root_policy,
             initial_cwd,
             ..
-        } = latest
+        } = staged
         else {
             unreachable!()
         };
@@ -273,6 +275,10 @@ impl Runtime {
             })
             .min_by_key(|(_, id)| *id)
         {
+            #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_1_test"))]
+            if spawn::fixture::awaiting_observer(registration, id) {
+                return Ok(None);
+            }
             // Reserve delivery bookkeeping before consuming the single-send
             // record. Copy failure does not authorize retain retransmission.
             remote.delivered = Some(id);
@@ -281,7 +287,7 @@ impl Runtime {
         Ok(remote.ownership.releases().next())
     }
 
-    fn control_reply(
+    pub(super) fn control_reply(
         &mut self,
         authenticated: Registration,
         bytes: &[u8],
@@ -360,6 +366,9 @@ impl Runtime {
             })
         {
             return Err(IpcError::InvalidCapability);
+        }
+        if self.spawn_request(authenticated, id).is_some() {
+            return self.reply_spawn(authenticated, id, decoded, bytes, sched);
         }
         let live = remote
             .local
@@ -611,6 +620,10 @@ fn control_runtime(
             .map(|f| f.encode().map_err(|_| IpcError::InvalidCapability))
             .transpose(),
         api::DERIVE_SOURCE => {
+            #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_adapter_accounting_test"))]
+            if spawn::fixture::withhold_source(registration, input) {
+                return Err(IpcError::InvalidCapability);
+            }
             Frame::Retained(runtime.authorize_derivation(registration, input, sched)?)
                 .encode()
                 .map(Some)
@@ -623,7 +636,15 @@ fn control_runtime(
             Ok(None)
         }
         api::REPLY => {
+            #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r5_test"))]
+            spawn::fixture::observe_reply(runtime, registration, input, sched);
+            #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r4_test"))]
+            if spawn::fixture::hold_reply(registration, input) {
+                return Ok(None);
+            }
             runtime.control_reply(registration, input, sched)?;
+            #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r5_test"))]
+            spawn::fixture::observe_release(registration, input);
             Ok(None)
         }
         _ => Err(IpcError::InvalidCapability),

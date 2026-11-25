@@ -155,6 +155,155 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         }
         // Native spawn stamps storagectl with its existing root-only StorageAdmin grant.
         // Complete the bounded pass before launching ordinary boot services.
+        #[cfg(feature = "vfs-l1c-1-test")]
+        {
+            #[cfg(feature = "vfs-l1c-r3-test")]
+            {
+                let pid = unsafe { sunlight_libc::sys::syscall2(0xf1c1, 8, 0) };
+                assert!(pid != 0 && pid != u64::MAX);
+                loop {
+                    match unsafe { sunlight_libc::sys::syscall2(0xf1c1, 8, 0) } {
+                        0 => sunlight_libc::yield_now(),
+                        1 => break,
+                        _ => panic!("unexpected R3 checkpoint result"),
+                    }
+                }
+                assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
+                assert!(sunlight_libc::waitpid(pid).is_err());
+                debug_log("[VFS-R3] init consumed child status=0 once");
+                let observer = loop {
+                    match unsafe { sunlight_libc::sys::syscall2(0xf1c1, 10, 0) } {
+                        0 => sunlight_libc::yield_now(),
+                        1 | u64::MAX => panic!("unexpected R3 cleanup result"),
+                        observer => break observer,
+                    }
+                };
+                assert_eq!(sunlight_libc::waitpid(observer), Ok(0));
+                debug_log("[VFS-R3] init reaped observer status=0");
+                #[cfg(feature = "vfs-l1c-adapter-accounting-test")]
+                {
+                    await_adapter_accounting();
+                    debug_log("[VFS-ADAPTER] complete");
+                }
+                loop {
+                    sunlight_libc::yield_now();
+                }
+            }
+            #[cfg(all(feature = "vfs-l1c-r2-test", not(feature = "vfs-l1c-r3-test")))]
+            {
+                let observer = unsafe { sunlight_libc::sys::syscall2(0xf1c1, 7, 0) };
+                assert!(observer != 0 && observer != u64::MAX);
+                loop {
+                    match unsafe { sunlight_libc::sys::syscall2(0xf1c1, 7, 0) } {
+                        0 => sunlight_libc::yield_now(),
+                        u64::MAX => break,
+                        _ => panic!("unexpected R2 publication result"),
+                    };
+                }
+                assert_eq!(sunlight_libc::waitpid(observer), Ok(0));
+                debug_log("[VFS-R2] init observed creation failure and reaped observer status=0");
+                #[cfg(feature = "vfs-l1c-adapter-accounting-test")]
+                {
+                    await_adapter_accounting();
+                    debug_log("[VFS-ADAPTER] complete");
+                }
+                loop {
+                    sunlight_libc::yield_now();
+                }
+            }
+            #[cfg(all(feature = "vfs-l1c-r1-test", not(any(feature = "vfs-l1c-r2-test", feature = "vfs-l1c-r3-test"))))]
+            {
+                let mode = if cfg!(feature = "vfs-l1c-r1b-test") { 6 } else { 5 };
+                let pid = unsafe { sunlight_libc::sys::syscall2(0xf1c1, mode, 0) };
+                assert!(pid != u64::MAX && sunlight_libc::waitpid(pid) == Ok(0));
+                debug_log("[VFS-R1] init reaped observer status=0");
+                #[cfg(feature = "vfs-l1c-adapter-accounting-test")]
+                {
+                    await_adapter_accounting();
+                    debug_log("[VFS-ADAPTER] complete");
+                }
+                loop {
+                    sunlight_libc::yield_now();
+                }
+            }
+            #[cfg(feature = "vfs-l1c-file-ipc-test")]
+            run_file_ipc_accounting();
+            #[cfg(all(feature = "vfs-l1c-parent-lifecycle-test", not(feature = "vfs-l1c-file-ipc-test")))]
+            run_parent_lifecycle();
+            #[cfg(all(feature = "vfs-l1c-r5-test", not(any(feature = "vfs-l1c-r1-test", feature = "vfs-l1c-parent-lifecycle-test"))))]
+            {
+                for mode in [0, 4] {
+                    let pid = unsafe { sunlight_libc::sys::syscall2(0xf1c1, mode, 0) };
+                    assert!(pid != u64::MAX && sunlight_libc::waitpid(pid) == Ok(0));
+                    assert!(sunlight_libc::waitpid(pid).is_err());
+                    debug_log(if mode == 0 {
+                        "[VFS-R5] init consumed published status once"
+                    } else {
+                        "[VFS-R5] init consumed observer status once"
+                    });
+                }
+                #[cfg(feature = "vfs-l1c-adapter-accounting-test")]
+                for mode in [1, 2, 3, 11] {
+                    await_adapter_accounting();
+                    let observer = unsafe { sunlight_libc::sys::syscall2(0xf1c1, mode, 0) };
+                    assert!(observer != 0 && observer != u64::MAX);
+                    assert_eq!(sunlight_libc::waitpid(observer), Ok(0));
+                    assert!(sunlight_libc::waitpid(observer).is_err());
+                    await_adapter_accounting();
+                }
+                #[cfg(feature = "vfs-l1c-adapter-accounting-test")]
+                debug_log("[VFS-ADAPTER] complete");
+                for cycle in 0..=1000 {
+                    let pid = if cycle == 0 {
+                        0
+                    } else {
+                        let pid = sunlight_libc::spawn(b"/bin/true", &[], None)
+                            .expect("ordinary heap-accounting spawn");
+                        assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
+                        pid
+                    };
+                    loop {
+                        match unsafe { sunlight_libc::sys::syscall2(0xf1c2, cycle, pid) } {
+                            0 => sunlight_libc::yield_now(),
+                            1 => break,
+                            _ => panic!("heap-accounting checkpoint rejected"),
+                        };
+                    }
+                }
+                loop {
+                    sunlight_libc::yield_now();
+                }
+            }
+            #[cfg(all(feature = "vfs-l1c-r4-test", not(any(feature = "vfs-l1c-r1-test", feature = "vfs-l1c-r5-test"))))]
+            for _ in 0..8 {
+                let pid = unsafe { sunlight_libc::sys::syscall2(0xf1c1, 4, 0) };
+                assert!(pid != u64::MAX && sunlight_libc::waitpid(pid) == Ok(0));
+            }
+            #[cfg(all(feature = "vfs-l1c-2-test", not(feature = "vfs-l1c-r4-test")))]
+            for _ in 0..34 {
+                for mode in [1, 2, 0] {
+                    let pid = unsafe { sunlight_libc::sys::syscall2(0xf1c1, mode, 0) };
+                    assert!(pid != u64::MAX && sunlight_libc::waitpid(pid) == Ok(0));
+                }
+            }
+            #[cfg(all(feature = "vfs-l1c-r4-test", not(any(feature = "vfs-l1c-r1-test", feature = "vfs-l1c-r5-test"))))]
+            debug_log("[VFS-R4] init completed cycles=8");
+            #[cfg(all(feature = "vfs-l1c-2-test", not(feature = "vfs-l1c-r4-test")))]
+            debug_log("[VFS-L1C-2] mixed transactions complete cycles=102");
+            #[cfg(not(feature = "vfs-l1c-2-test"))]
+            {
+            let result = unsafe { sunlight_libc::sys::syscall2(0xf1c1, 0, 0) };
+            if result != u64::MAX && sunlight_libc::waitpid(result) == Ok(0) {
+                debug_log("[VFS-L1C-1] init observed result");
+            } else {
+                debug_log("[VFS-L1C-1] init observed failure");
+            }
+            }
+            #[cfg(feature = "vfs-l1c-2-test")]
+            debug_log("[VFS-L1C-1] init observed result");
+        }
+        #[cfg(feature = "zram-lifecycle-test")]
+        run_zram_lifecycle();
         match sunlight_libc::spawn(b"/bin/storagectl", &[b"storagectl", b"fstab"], None)
             .and_then(sunlight_libc::waitpid)
         {
@@ -165,6 +314,10 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         }
 
         for path in INIT_SERVICES.iter() {
+            #[cfg(feature = "zram-lifecycle-test")]
+            if *path == "/sbin/sunlight-swapd" {
+                continue;
+            }
             if spawn_service(spawn_cap, path) {
                 debug_log("[init] launched base service");
             } else {
@@ -871,4 +1024,91 @@ fn verify_file_caller(cap: CapabilityToken) {
     )
     .expect("native file caller");
     assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
+}
+
+#[cfg(feature = "vfs-l1c-file-ipc-test")]
+fn run_file_ipc_accounting() -> ! {
+    for cycle in 1..=10 {
+        assert_eq!(unsafe { sunlight_libc::sys::syscall2(0xf1c3, cycle, 0) }, 1);
+        let pid = sunlight_libc::spawn_with_stdio(
+            b"/bin/vfs-lifecycle-parent",
+            &[b"vfs-lifecycle-parent", b"file-ipc", b"run"],
+            Some(sunlight_libc::Fd(0)),
+            Some(sunlight_libc::Fd(1)),
+            Some(sunlight_libc::Fd(2)),
+        )
+        .expect("ordinary file/IPC spawn");
+        assert_eq!(sunlight_libc::waitpid(pid), Ok(37));
+        assert!(sunlight_libc::waitpid(pid).is_err());
+        let start = sunlight_ipc::monotonic_millis();
+        loop {
+            match unsafe { sunlight_libc::sys::syscall2(0xf1c3, cycle, pid) } {
+                1 => break,
+                0 => assert!(sunlight_ipc::monotonic_millis() - start < 5000),
+                _ => panic!("file/IPC settlement rejected"),
+            }
+            sunlight_libc::yield_now();
+        }
+    }
+    debug_log("[VFS-FILE-IPC] complete");
+    loop {
+        sunlight_libc::yield_now();
+    }
+}
+
+#[cfg(all(feature = "vfs-l1c-parent-lifecycle-test", not(feature = "vfs-l1c-file-ipc-test")))]
+fn run_parent_lifecycle() -> ! {
+    for mode in [b"12", b"13", b"14", b"15", b"16"] {
+        let pid = sunlight_libc::spawn(
+            b"/bin/vfs-lifecycle-parent",
+            &[b"vfs-lifecycle-parent", b"parent-lifecycle", mode],
+            None,
+        )
+        .expect("spawn disposable lifecycle parent");
+        assert_eq!(sunlight_libc::waitpid(pid), Ok(37));
+        assert!(sunlight_libc::waitpid(pid).is_err());
+        debug_log("[VFS-PARENT] init collected exit 37 exactly once");
+        await_adapter_accounting();
+    }
+    debug_log("[VFS-PARENT] complete");
+    loop {
+        sunlight_libc::yield_now();
+    }
+}
+
+#[cfg(feature = "vfs-l1c-adapter-accounting-test")]
+fn await_adapter_accounting() {
+    loop {
+        match unsafe { sunlight_libc::sys::syscall2(0xf1c2, 2, 0) } {
+            0 => sunlight_libc::yield_now(),
+            1 => return,
+            _ => panic!("adapter accounting checkpoint rejected"),
+        }
+    }
+}
+
+#[cfg(feature = "zram-lifecycle-test")]
+fn run_zram_lifecycle() {
+    let swapd = sunlight_libc::spawn(b"/sbin/sunlight-swapd", &[], None).expect("spawn swapd");
+    assert_eq!(sunlight_libc::waitpid(swapd), Ok(0));
+    wait_zram_reap(swapd);
+    for _ in 0..100 {
+        let pid = sunlight_libc::spawn(b"/bin/freezram", &[b"freezram", b"lifecycle-test"], None)
+            .expect("spawn freezram");
+        assert_eq!(sunlight_libc::waitpid(pid), Ok(37));
+        assert!(sunlight_libc::waitpid(pid).is_err());
+        wait_zram_reap(pid);
+    }
+    debug_log("[ZRAM-LIFE] completed cycles=100 status=37 collected_once=1");
+}
+
+#[cfg(feature = "zram-lifecycle-test")]
+fn wait_zram_reap(pid: u64) {
+    loop {
+        match unsafe { sunlight_libc::sys::syscall2(0xf1c4, 0, pid) } {
+            0 => sunlight_libc::yield_now(),
+            1 => return,
+            _ => panic!("reap checkpoint rejected"),
+        }
+    }
 }

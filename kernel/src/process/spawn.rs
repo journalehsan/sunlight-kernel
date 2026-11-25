@@ -159,6 +159,30 @@ pub fn exec_into_process(
         argv,
         envp,
         activate_on_success,
+        &mut || Ok(()),
+        #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
+        None,
+    )
+}
+
+pub(super) fn load_pending_image(
+    bytes: &[u8],
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm: VirtAddr,
+    argv: &[&[u8]],
+    envp: &[&[u8]],
+    checkpoint: &mut impl FnMut() -> Result<(), SpawnError>,
+) -> Result<u64, SpawnError> {
+    exec_into_process_inner(
+        bytes,
+        process,
+        pmm,
+        hhdm,
+        argv,
+        envp,
+        false,
+        checkpoint,
         #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
         None,
     )
@@ -172,6 +196,7 @@ fn exec_into_process_inner(
     argv: &[&[u8]],
     envp: &[&[u8]],
     activate_on_success: bool,
+    checkpoint: &mut impl FnMut() -> Result<(), SpawnError>,
     #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))] fault: Option<
         super::elf_loader::handoff::Fault,
     >,
@@ -227,7 +252,7 @@ fn exec_into_process_inner(
     let result = if activate_on_success && bytes == super::elf_loader::handoff::tls::APP {
         Err(SpawnError::ElfLoadFailed)
     } else {
-        build_exec_image(bytes, process, pmm, hhdm_offset, argv, envp, fault)
+        build_exec_image(bytes, process, pmm, hhdm_offset, argv, envp, checkpoint, fault)
     };
     #[cfg(not(all(debug_assertions, feature = "helios_dynamic_elf_tls_fixture")))]
     let result = build_exec_image(
@@ -237,6 +262,7 @@ fn exec_into_process_inner(
         hhdm_offset,
         argv,
         envp,
+        checkpoint,
         #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))]
         fault,
     );
@@ -285,6 +311,7 @@ fn exec_into_process_inner(
     // preserves them along with the original VM.
     process.clear_futex_wait();
 
+    let mut fenced_vfs_exec = None;
     if activate_on_success {
         // The only live-image caller is sys_exec, holding SCHEDULER -> PMM
         // without CAP_BROKER. Unpublished spawn uses false and may already
@@ -296,6 +323,7 @@ fn exec_into_process_inner(
             incarnation: process.foreground.incarnation,
             address_space_generation: old_address_space.identity().generation,
         };
+        let was_trusted_vfs = process.trusted_vfs_service;
         // Hold the file-owner barrier until sys_exec has published transfers
         // for every surviving non-CLOEXEC service descriptor.
         crate::ipc::expect_vfs_file_transfer(old_caller);
@@ -304,6 +332,15 @@ fn exec_into_process_inner(
         let old_grants = broker.recipient_grant_count(process.pid);
         broker.retire_recipient_grants(process.pid);
         process.withdraw_exec_image_roles();
+        fenced_vfs_exec = super::exec_retirement::FencedVfsExec::after_withdrawal(
+            crate::capability::delivery::RecipientIdentity {
+                pid: process.pid,
+                incarnation: old_caller.incarnation,
+                vm_generation: old_caller.address_space_generation,
+            },
+            was_trusted_vfs,
+            process.trusted_vfs_service,
+        );
         process.pending_call = None;
         process.ipc_reply_target = None;
         #[cfg(feature = "production_grant_test")]
@@ -381,6 +418,12 @@ fn exec_into_process_inner(
         old_address_space.reclaim_user_space(pmm, hhdm_offset, true);
     }
 
+    if let Some(proof) =
+        fenced_vfs_exec.and_then(|fence| fence.after_reclaim(old_address_space.is_reclaimed()))
+    {
+        crate::ipc::complete_vfs_private_exec(proof);
+    }
+
     // Bind this one publication to the actual embedded image. Do not reclassify
     // net_server for general service credentials or trust a path/name supplied
     // by a caller. A successful replacement also withdraws the marker.
@@ -396,6 +439,7 @@ fn build_exec_image(
     hhdm_offset: VirtAddr,
     argv: &[&[u8]],
     envp: &[&[u8]],
+    checkpoint: &mut impl FnMut() -> Result<(), SpawnError>,
     #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_handoff"))] fault: Option<
         super::elf_loader::handoff::Fault,
     >,
@@ -530,7 +574,7 @@ fn build_exec_image(
     } else {
         stack_floor
     };
-    let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset, stack_floor)
+    let stack = setup_exec_stack(argv, envp, &auxv, process, hhdm_offset, stack_floor, checkpoint)
         .inspect_err(|_error| {
             if dynamic_entry.is_some() {
                 crate::serial_println!(
@@ -549,10 +593,14 @@ fn build_exec_image(
         stack
     };
 
-    if dynamic_entry.is_some() {
+    let args_len = argv.iter().fold(0usize, |len, arg| {
+        len.saturating_add(arg.len().saturating_add(1)).min(1024)
+    });
+    if args_len > process.proc_args.capacity() {
+        checkpoint()?;
         process
             .proc_args
-            .try_reserve(1024)
+            .try_reserve_exact(args_len - process.proc_args.len())
             .map_err(|_| SpawnError::NoMemory)?;
     }
     process.proc_args.clear();
@@ -604,7 +652,7 @@ pub(crate) fn test_handoff_rollback() {
     let mut pmm = crate::PMM.lock();
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
     let task_count = scheduler.processes.len();
-    let pid = super::pid::next_pid(scheduler.processes.iter().map(|task| task.pid))
+    let pid = scheduler.next_process_pid()
         .expect("rollback test pid");
     let cases = [
         (
@@ -868,6 +916,7 @@ pub(crate) fn test_handoff_rollback() {
                     argv,
                     envp,
                     false,
+                    &mut || Ok(()),
                     Some(fault),
                 ),
                 Err(expected),
@@ -1090,6 +1139,7 @@ fn setup_exec_stack(
     process: &mut Process,
     hhdm_offset: VirtAddr,
     stack_floor: u64,
+    checkpoint: &mut impl FnMut() -> Result<(), SpawnError>,
 ) -> Result<ExecStack, SpawnError> {
     let stack_top = super::layout::USER_STACK_TOP;
     let mut cursor = stack_top;
@@ -1119,6 +1169,7 @@ fn setup_exec_stack(
     // Align cursor down to 8 bytes before the string data.
     cursor &= !0x7;
 
+    checkpoint()?;
     let mut argv_addrs = alloc::vec::Vec::new();
     argv_addrs
         .try_reserve_exact(argv.len())
@@ -1126,6 +1177,7 @@ fn setup_exec_stack(
     for arg in argv {
         argv_addrs.push(copy_string(&mut cursor, arg)?);
     }
+    checkpoint()?;
     let mut envp_addrs = alloc::vec::Vec::new();
     envp_addrs
         .try_reserve_exact(envp.len())
@@ -1149,6 +1201,7 @@ fn setup_exec_stack(
         return Err(SpawnError::NoMemory);
     }
 
+    checkpoint()?;
     let mut table = alloc::vec::Vec::new();
     table
         .try_reserve_exact(table_words * 8)
@@ -1308,6 +1361,23 @@ pub fn spawn_from_path_with_restrictions(
     )
 }
 
+pub(crate) unsafe fn rollback_initial_image(
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm: VirtAddr,
+) {
+    for fd in 0..3 {
+        let entry = process.fd_table.take(fd).expect("initial spawn descriptor");
+        assert_eq!(entry.handle.0, fd as u32);
+    }
+    let _reclaimed = process.address_space.reclaim_user_space(pmm, hhdm, true);
+    #[cfg(all(debug_assertions, feature = "vfs_l1c_r4_test"))]
+    if crate::ipc::vfs_registration::spawn::fixture::tracks_child(process.pid) {
+        crate::serial_println!("[VFS-R4] teardown child={} descriptors=3 frames={} tables={} swap={}",
+            process.pid, _reclaimed.user_frames, _reclaimed.page_tables, _reclaimed.swap_blocks);
+    }
+}
+
 #[cfg(all(debug_assertions, feature = "session_launch_test"))]
 fn rollback_launch_fault(
     process: &mut Process,
@@ -1321,7 +1391,7 @@ fn rollback_launch_fault(
         return false;
     }
     unsafe {
-        process.address_space.reclaim_user_space(pmm, hhdm, true);
+        rollback_initial_image(process, pmm, hhdm);
     }
     crate::serial_println!("[SL41] event=rollback stage={} pid={} incarnation={} free_before={} free_after={} published=0 runnable=0",
         stage, process.pid, process.foreground.incarnation, free_before, pmm.free_page_count());
@@ -1361,7 +1431,7 @@ pub(crate) fn spawn_with_session_attachment(
     // len()+1 can alias an existing pid — duplicate pids then break every
     // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
     // process, leaving the real one blocked forever).
-    let pid = super::pid::next_pid(sched.processes.iter().map(|p| p.pid))
+    let pid = sched.next_process_pid()
         .ok_or(SpawnError::PidExhausted)?;
     // net_server is no longer spawned at a fixed pid (init launches it after
     // timer_server), so the kernel frame-proxy syscalls (net_tx/net_rx) can no
@@ -1410,9 +1480,7 @@ pub(crate) fn spawn_with_session_attachment(
     if let Err(error) = exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)
     {
         unsafe {
-            process
-                .address_space
-                .reclaim_user_space(pmm, hhdm_offset, true);
+            rollback_initial_image(&mut process, pmm, hhdm_offset);
         }
         return Err(error);
     }
@@ -1504,9 +1572,7 @@ pub(crate) fn spawn_with_session_attachment(
             }
             Err(_) => {
                 unsafe {
-                    process
-                        .address_space
-                        .reclaim_user_space(pmm, hhdm_offset, true);
+                    rollback_initial_image(&mut process, pmm, hhdm_offset);
                 }
                 return Err(SpawnError::SessionRejected);
             }
@@ -1652,6 +1718,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/traceroute"
         | "/usr/bin/arp"
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
+        #[cfg(all(debug_assertions, feature = "vfs_l1c_parent_lifecycle_test"))]
+        "/bin/vfs-lifecycle-parent" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/vfs-stat-caller"))),
         #[cfg(feature = "vfs_stat_failure_test")]
         "/bin/vfs-stat-caller" => Ok(include_bytes!(
             "../../../target/x86_64-unknown-none/release/vfs-stat-caller"

@@ -28,6 +28,7 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
         .install(identity, 9, 10, LOOKUP_METADATA)
         .unwrap();
     let sched = Scheduler {
+        pending_children: crate::process::pending_state::Pending::new(),
         global_tick: 0,
         processes: alloc::vec![Process {
             pid: 10,
@@ -35,12 +36,13 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             vfs_root_metadata: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
+            vfs_stat_routed: false,
             vfs_file_routed: false,
             cwd: alloc::string::String::from("/"),
             exiting: false,
             uid: 1000,
             gid: 100,
-            foreground: Foreground { incarnation: 11 },
+            foreground: Foreground { incarnation: 11, ..Default::default() },
             address_space: AddressSpace { generation: 12 },
             state: ProcessState::Running,
             pending_call: None,

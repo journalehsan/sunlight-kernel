@@ -1,0 +1,5399 @@
+{
+  "qualification": "SCOPED_ADAPTER_ACCOUNTING",
+  "guest_memory_mib": 2048,
+  "accelerator": "TCG",
+  "vcpu_execution_order": [
+    2,
+    1,
+    4
+  ],
+  "branches": {
+    "successful_publication_and_reap": {
+      "mode": 0,
+      "guest_profile": "final",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-2.serial.log",
+          "serial_sha256": "ed5e6dd7947796bb3aefe168dbf7f50f58e553097369d64368ac40b66970fc1e",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 1885,
+            "mode": 0,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1886,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261930,
+            "heap_used": 278920,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1887,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261372,
+            "heap_used": 325992,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1888,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1909,
+            "child": 5,
+            "retain": 2,
+            "slot": 0,
+            "rejected": 1
+          },
+          "settled": {
+            "line": 1971,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 260850,
+            "heap_used": 2688248,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1973,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 1,
+            "reaped_slot": 1,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1910,
+            "child": 5,
+            "retain": 2,
+            "owner": "scheduler"
+          },
+          "destruction": {
+            "line": 1968,
+            "pid": 5,
+            "name": "'vfs-l1c-private'",
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "private_boxes_dropped": null,
+          "release_ack": {
+            "line": 1953,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 10240,
+          "heap_before": {
+            "line": 1878,
+            "phase": "r5-baseline",
+            "cycle": 0,
+            "pid": 0,
+            "heap": 278920,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 2048,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1972,
+            "phase": "r5-settled",
+            "cycle": 1,
+            "pid": 5,
+            "heap": 2688248,
+            "frames": 260850,
+            "user_frames": 29262,
+            "page_tables": 100,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2409328,
+            "observed_reusable_capacity_bytes": 2318592,
+            "settled_minus_capacity_delta_bytes": 90736,
+            "settled_free_frames": -1080
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2115,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/final/native-2-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-1.serial.log",
+          "serial_sha256": "fabdec45037c3b4cdd0f4b29a1e90c48c81bef2db968ca2b7f24d279dd768613",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 1881,
+            "mode": 0,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1882,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 262186,
+            "heap_used": 277256,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1883,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261628,
+            "heap_used": 324328,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1884,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1909,
+            "child": 5,
+            "retain": 2,
+            "slot": 0,
+            "rejected": 1
+          },
+          "settled": {
+            "line": 1978,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261628,
+            "heap_used": 2654216,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1980,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 1,
+            "reaped_slot": 1,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1910,
+            "child": 5,
+            "retain": 2,
+            "owner": "scheduler"
+          },
+          "destruction": {
+            "line": 1963,
+            "pid": 5,
+            "name": "'vfs-l1c-private'",
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "private_boxes_dropped": null,
+          "release_ack": {
+            "line": 1974,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 10240,
+          "heap_before": {
+            "line": 1874,
+            "phase": "r5-baseline",
+            "cycle": 0,
+            "pid": 0,
+            "heap": 277256,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 1024,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1979,
+            "phase": "r5-settled",
+            "cycle": 1,
+            "pid": 5,
+            "heap": 2654216,
+            "frames": 261628,
+            "user_frames": 28748,
+            "page_tables": 94,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2376960,
+            "observed_reusable_capacity_bytes": 2329856,
+            "settled_minus_capacity_delta_bytes": 47104,
+            "settled_free_frames": -558
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2111,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/final/native-1-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-4.serial.log",
+          "serial_sha256": "c9f0a2ff421293dd4e5f0f4dc58464dbe6e2f83386b1a3ce5b4126f8104b1a5d",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 1902,
+            "mode": 0,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1903,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261416,
+            "heap_used": 280872,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1904,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 260858,
+            "heap_used": 327944,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1905,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1926,
+            "child": 5,
+            "retain": 2,
+            "slot": 0,
+            "rejected": 1
+          },
+          "settled": {
+            "line": 1988,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 260336,
+            "heap_used": 2688152,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1990,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 1,
+            "reaped_slot": 1,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1929,
+            "child": 5,
+            "retain": 2,
+            "owner": "scheduler"
+          },
+          "destruction": {
+            "line": 1961,
+            "pid": 5,
+            "name": "'vfs-l1c-private'",
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "private_boxes_dropped": null,
+          "release_ack": {
+            "line": 1971,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 10240,
+          "heap_before": {
+            "line": 1895,
+            "phase": "r5-baseline",
+            "cycle": 0,
+            "pid": 0,
+            "heap": 280872,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 4096,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1989,
+            "phase": "r5-settled",
+            "cycle": 1,
+            "pid": 5,
+            "heap": 2688152,
+            "frames": 260336,
+            "user_frames": 29262,
+            "page_tables": 102,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2407280,
+            "observed_reusable_capacity_bytes": 2316544,
+            "settled_minus_capacity_delta_bytes": 90736,
+            "settled_free_frames": -1080
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2132,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/final/native-4-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        }
+      }
+    },
+    "cancel_with_authenticated_late_reply_and_compensation": {
+      "mode": 4,
+      "guest_profile": "final",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-2.serial.log",
+          "serial_sha256": "ed5e6dd7947796bb3aefe168dbf7f50f58e553097369d64368ac40b66970fc1e",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 1954,
+            "mode": 4,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1955,
+            "child": 7,
+            "retain": 4,
+            "frames_free": 261372,
+            "heap_used": 2640552,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 1956,
+            "child": 7,
+            "retain": 4,
+            "frames_free": 260814,
+            "heap_used": 2687624,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 1957,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1991,
+            "child": 7,
+            "retain": 4,
+            "slot": 0,
+            "compensation": 1,
+            "continuation": 0
+          },
+          "settled": {
+            "line": 1995,
+            "child": 7,
+            "retain": 4,
+            "frames_free": 261930,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1997,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1988,
+            "child": 7,
+            "retain": 4,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1985,
+            "child": 7,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1986,
+            "child": 7,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 1993,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1946,
+            "phase": "r5-baseline",
+            "cycle": 4,
+            "pid": 0,
+            "heap": 2640552,
+            "frames": 261372,
+            "user_frames": 28748,
+            "page_tables": 92,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1996,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 7,
+            "heap": 2607752,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": -32800,
+            "observed_reusable_capacity_bytes": 10240,
+            "settled_minus_capacity_delta_bytes": -43040,
+            "settled_free_frames": 558
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2115,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/final/native-2-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-1.serial.log",
+          "serial_sha256": "fabdec45037c3b4cdd0f4b29a1e90c48c81bef2db968ca2b7f24d279dd768613",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 1950,
+            "mode": 4,
+            "child": 6,
+            "retain": 4,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1951,
+            "child": 6,
+            "retain": 4,
+            "frames_free": 261628,
+            "heap_used": 2629672,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 1952,
+            "child": 6,
+            "retain": 4,
+            "frames_free": 261070,
+            "heap_used": 2676744,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 1953,
+            "child": 6,
+            "retain": 4,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1987,
+            "child": 6,
+            "retain": 4,
+            "slot": 0,
+            "compensation": 1,
+            "continuation": 0
+          },
+          "settled": {
+            "line": 1991,
+            "child": 6,
+            "retain": 4,
+            "frames_free": 262186,
+            "heap_used": 2607112,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1993,
+            "child": 6,
+            "retain": 4,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1984,
+            "child": 6,
+            "retain": 4,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1981,
+            "child": 6,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1982,
+            "child": 6,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 1989,
+            "child": 6,
+            "retain": 4,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1943,
+            "phase": "r5-baseline",
+            "cycle": 4,
+            "pid": 0,
+            "heap": 2629672,
+            "frames": 261628,
+            "user_frames": 28748,
+            "page_tables": 94,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1992,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 6,
+            "heap": 2607112,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": -22560,
+            "observed_reusable_capacity_bytes": 20480,
+            "settled_minus_capacity_delta_bytes": -43040,
+            "settled_free_frames": 558
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2111,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/final/native-1-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-4.serial.log",
+          "serial_sha256": "c9f0a2ff421293dd4e5f0f4dc58464dbe6e2f83386b1a3ce5b4126f8104b1a5d",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 1974,
+            "mode": 4,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1975,
+            "child": 7,
+            "retain": 4,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 1976,
+            "child": 7,
+            "retain": 4,
+            "frames_free": 260858,
+            "heap_used": 2654728,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 1977,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2005,
+            "child": 7,
+            "retain": 4,
+            "slot": 0,
+            "compensation": 1,
+            "continuation": 0
+          },
+          "settled": {
+            "line": 2012,
+            "child": 7,
+            "retain": 4,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2014,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2002,
+            "child": 7,
+            "retain": 4,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1999,
+            "child": 7,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2000,
+            "child": 7,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 2010,
+            "child": 7,
+            "retain": 4,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1966,
+            "phase": "r5-baseline",
+            "cycle": 4,
+            "pid": 0,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2013,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 7,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2132,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/final/native-4-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        }
+      }
+    },
+    "unsent_cancel": {
+      "mode": 1,
+      "guest_profile": "final",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-2.serial.log",
+          "serial_sha256": "ed5e6dd7947796bb3aefe168dbf7f50f58e553097369d64368ac40b66970fc1e",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 2005,
+            "mode": 1,
+            "child": 9,
+            "retain": 6,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2006,
+            "child": 9,
+            "retain": 6,
+            "frames_free": 261930,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2007,
+            "child": 9,
+            "retain": 6,
+            "frames_free": 261372,
+            "heap_used": 2654824,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2008,
+            "child": 9,
+            "retain": 6,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2024,
+            "child": 9,
+            "retain": 6,
+            "queued": 1,
+            "delivered": 0
+          },
+          "settled": {
+            "line": 2033,
+            "child": 9,
+            "retain": 6,
+            "frames_free": 261930,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2035,
+            "child": 9,
+            "retain": 6,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2028,
+            "child": 9,
+            "retain": 6,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2025,
+            "child": 9,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2026,
+            "child": 9,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1998,
+            "phase": "r5-baseline",
+            "cycle": 1,
+            "pid": 0,
+            "heap": 2607752,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2034,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 9,
+            "heap": 2607752,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2115,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-2-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-1.serial.log",
+          "serial_sha256": "fabdec45037c3b4cdd0f4b29a1e90c48c81bef2db968ca2b7f24d279dd768613",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 2001,
+            "mode": 1,
+            "child": 8,
+            "retain": 6,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2002,
+            "child": 8,
+            "retain": 6,
+            "frames_free": 262186,
+            "heap_used": 2607112,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2003,
+            "child": 8,
+            "retain": 6,
+            "frames_free": 261628,
+            "heap_used": 2654184,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2004,
+            "child": 8,
+            "retain": 6,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2020,
+            "child": 8,
+            "retain": 6,
+            "queued": 1,
+            "delivered": 0
+          },
+          "settled": {
+            "line": 2029,
+            "child": 8,
+            "retain": 6,
+            "frames_free": 262186,
+            "heap_used": 2607112,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2031,
+            "child": 8,
+            "retain": 6,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2027,
+            "child": 8,
+            "retain": 6,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2024,
+            "child": 8,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2025,
+            "child": 8,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1994,
+            "phase": "r5-baseline",
+            "cycle": 1,
+            "pid": 0,
+            "heap": 2607112,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2030,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 8,
+            "heap": 2607112,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2111,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-1-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-4.serial.log",
+          "serial_sha256": "c9f0a2ff421293dd4e5f0f4dc58464dbe6e2f83386b1a3ce5b4126f8104b1a5d",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 2022,
+            "mode": 1,
+            "child": 9,
+            "retain": 6,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2023,
+            "child": 9,
+            "retain": 6,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2024,
+            "child": 9,
+            "retain": 6,
+            "frames_free": 260858,
+            "heap_used": 2654728,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2025,
+            "child": 9,
+            "retain": 6,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2041,
+            "child": 9,
+            "retain": 6,
+            "queued": 1,
+            "delivered": 0
+          },
+          "settled": {
+            "line": 2050,
+            "child": 9,
+            "retain": 6,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2052,
+            "child": 9,
+            "retain": 6,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2045,
+            "child": 9,
+            "retain": 6,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2042,
+            "child": 9,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2043,
+            "child": 9,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2015,
+            "phase": "r5-baseline",
+            "cycle": 1,
+            "pid": 0,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2051,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 9,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2132,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-4-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        }
+      }
+    },
+    "cancel_after_consumed_retain": {
+      "mode": 2,
+      "guest_profile": "final",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-2.serial.log",
+          "serial_sha256": "ed5e6dd7947796bb3aefe168dbf7f50f58e553097369d64368ac40b66970fc1e",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 2043,
+            "mode": 2,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2044,
+            "child": 11,
+            "retain": 8,
+            "frames_free": 261930,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2045,
+            "child": 11,
+            "retain": 8,
+            "frames_free": 261372,
+            "heap_used": 2654824,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2046,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2066,
+            "child": 11,
+            "retain": 8,
+            "held": 1,
+            "delivered": 0
+          },
+          "settled": {
+            "line": 2073,
+            "child": 11,
+            "retain": 8,
+            "frames_free": 261930,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2075,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2070,
+            "child": 11,
+            "retain": 8,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2067,
+            "child": 11,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2068,
+            "child": 11,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 2071,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2036,
+            "phase": "r5-baseline",
+            "cycle": 2,
+            "pid": 0,
+            "heap": 2607752,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2074,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 11,
+            "heap": 2607752,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2115,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-2-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-1.serial.log",
+          "serial_sha256": "fabdec45037c3b4cdd0f4b29a1e90c48c81bef2db968ca2b7f24d279dd768613",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 2039,
+            "mode": 2,
+            "child": 10,
+            "retain": 8,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2040,
+            "child": 10,
+            "retain": 8,
+            "frames_free": 262186,
+            "heap_used": 2607112,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2041,
+            "child": 10,
+            "retain": 8,
+            "frames_free": 261628,
+            "heap_used": 2654184,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2042,
+            "child": 10,
+            "retain": 8,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2059,
+            "child": 10,
+            "retain": 8,
+            "held": 1,
+            "delivered": 0
+          },
+          "settled": {
+            "line": 2069,
+            "child": 10,
+            "retain": 8,
+            "frames_free": 262186,
+            "heap_used": 2607112,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2071,
+            "child": 10,
+            "retain": 8,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2063,
+            "child": 10,
+            "retain": 8,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2060,
+            "child": 10,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2061,
+            "child": 10,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 2067,
+            "child": 10,
+            "retain": 8,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2032,
+            "phase": "r5-baseline",
+            "cycle": 2,
+            "pid": 0,
+            "heap": 2607112,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2070,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 10,
+            "heap": 2607112,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2111,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-1-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-4.serial.log",
+          "serial_sha256": "c9f0a2ff421293dd4e5f0f4dc58464dbe6e2f83386b1a3ce5b4126f8104b1a5d",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 2060,
+            "mode": 2,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2061,
+            "child": 11,
+            "retain": 8,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2062,
+            "child": 11,
+            "retain": 8,
+            "frames_free": 260858,
+            "heap_used": 2654728,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2063,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2080,
+            "child": 11,
+            "retain": 8,
+            "held": 1,
+            "delivered": 0
+          },
+          "settled": {
+            "line": 2090,
+            "child": 11,
+            "retain": 8,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2092,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2084,
+            "child": 11,
+            "retain": 8,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2081,
+            "child": 11,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2082,
+            "child": 11,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 2088,
+            "child": 11,
+            "retain": 8,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2053,
+            "phase": "r5-baseline",
+            "cycle": 2,
+            "pid": 0,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2091,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 11,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2132,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-4-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        }
+      }
+    },
+    "live_authority_preparation_failure": {
+      "mode": 3,
+      "guest_profile": "final",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-2.serial.log",
+          "serial_sha256": "ed5e6dd7947796bb3aefe168dbf7f50f58e553097369d64368ac40b66970fc1e",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 2083,
+            "mode": 3,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2084,
+            "child": 13,
+            "retain": 10,
+            "frames_free": 261930,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2085,
+            "child": 13,
+            "retain": 10,
+            "frames_free": 261372,
+            "heap_used": 2654824,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2086,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2106,
+            "child": 13,
+            "retain": 10,
+            "authority": "live"
+          },
+          "settled": {
+            "line": 2112,
+            "child": 13,
+            "retain": 10,
+            "frames_free": 261930,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2114,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2109,
+            "child": 13,
+            "retain": 10,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2107,
+            "child": 13,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2108,
+            "child": 13,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 2110,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2076,
+            "phase": "r5-baseline",
+            "cycle": 3,
+            "pid": 0,
+            "heap": 2607752,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2113,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 13,
+            "heap": 2607752,
+            "frames": 261930,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2115,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-2-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-1.serial.log",
+          "serial_sha256": "fabdec45037c3b4cdd0f4b29a1e90c48c81bef2db968ca2b7f24d279dd768613",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 2079,
+            "mode": 3,
+            "child": 12,
+            "retain": 10,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2080,
+            "child": 12,
+            "retain": 10,
+            "frames_free": 262186,
+            "heap_used": 2607112,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2081,
+            "child": 12,
+            "retain": 10,
+            "frames_free": 261628,
+            "heap_used": 2654184,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2082,
+            "child": 12,
+            "retain": 10,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2099,
+            "child": 12,
+            "retain": 10,
+            "authority": "live"
+          },
+          "settled": {
+            "line": 2108,
+            "child": 12,
+            "retain": 10,
+            "frames_free": 262186,
+            "heap_used": 2607112,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2110,
+            "child": 12,
+            "retain": 10,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2102,
+            "child": 12,
+            "retain": 10,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2100,
+            "child": 12,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2101,
+            "child": 12,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 2106,
+            "child": 12,
+            "retain": 10,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2072,
+            "phase": "r5-baseline",
+            "cycle": 3,
+            "pid": 0,
+            "heap": 2607112,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2109,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 12,
+            "heap": 2607112,
+            "frames": 262186,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2111,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-1-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/final/native-4.serial.log",
+          "serial_sha256": "c9f0a2ff421293dd4e5f0f4dc58464dbe6e2f83386b1a3ce5b4126f8104b1a5d",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 2100,
+            "mode": 3,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2101,
+            "child": 13,
+            "retain": 10,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2102,
+            "child": 13,
+            "retain": 10,
+            "frames_free": 260858,
+            "heap_used": 2654728,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2103,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2120,
+            "child": 13,
+            "retain": 10,
+            "authority": "live"
+          },
+          "settled": {
+            "line": 2129,
+            "child": 13,
+            "retain": 10,
+            "frames_free": 261416,
+            "heap_used": 2607656,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2131,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2123,
+            "child": 13,
+            "retain": 10,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2121,
+            "child": 13,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2122,
+            "child": 13,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": {
+            "line": 2127,
+            "child": 13,
+            "retain": 10,
+            "epoch": 1
+          },
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2093,
+            "phase": "r5-baseline",
+            "cycle": 3,
+            "pid": 0,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2130,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 13,
+            "heap": 2607656,
+            "frames": 261416,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2132,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/final/native-4-r5.json",
+          "image_sha256": "24d17d4f4b9a5f2772baf4f2edc3100b8ee3fdcb2015226ddcdf56bede8ccf78"
+        }
+      }
+    },
+    "authentic_service_refusal": {
+      "mode": 11,
+      "guest_profile": "refusal",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/refusal/native-2.serial.log",
+          "serial_sha256": "a6b18962a2e87da4a53330ad0bf2965c00e3fab73233c316fe795837e107e7f3",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 2123,
+            "mode": 11,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2124,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 261929,
+            "heap_used": 2597512,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2125,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 261371,
+            "heap_used": 2644584,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2126,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2145,
+            "child": 14,
+            "retain": 12,
+            "reason": "Resolve"
+          },
+          "settled": {
+            "line": 2151,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 261929,
+            "heap_used": 2597512,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2153,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2149,
+            "child": 14,
+            "retain": 12,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2146,
+            "child": 14,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2147,
+            "child": 14,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2116,
+            "phase": "r5-baseline",
+            "cycle": 11,
+            "pid": 0,
+            "heap": 2597512,
+            "frames": 261929,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2152,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 14,
+            "heap": 2597512,
+            "frames": 261929,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2154,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/refusal/native-2-r5.json",
+          "image_sha256": "3f9fe09efc7037e8f57dd354e037e1439f0633b3ec9dbfb68564dfdebdc225b4"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/refusal/native-1.serial.log",
+          "serial_sha256": "cc6d0520bc7c3466cabe40ca1c60e3713cb366d913eee6856d8dc7375a04a249",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 2119,
+            "mode": 11,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2120,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 262185,
+            "heap_used": 2597416,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2121,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 261627,
+            "heap_used": 2644488,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2122,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2141,
+            "child": 14,
+            "retain": 12,
+            "reason": "Resolve"
+          },
+          "settled": {
+            "line": 2147,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 262185,
+            "heap_used": 2597416,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2149,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2145,
+            "child": 14,
+            "retain": 12,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2142,
+            "child": 14,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2143,
+            "child": 14,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2112,
+            "phase": "r5-baseline",
+            "cycle": 11,
+            "pid": 0,
+            "heap": 2597416,
+            "frames": 262185,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2148,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 14,
+            "heap": 2597416,
+            "frames": 262185,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2150,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/refusal/native-1-r5.json",
+          "image_sha256": "3f9fe09efc7037e8f57dd354e037e1439f0633b3ec9dbfb68564dfdebdc225b4"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/refusal/native-4.serial.log",
+          "serial_sha256": "48670e3e9175f5de13eb72b5729b1daffa808c565d5554cf8efaac40bafd9dbf",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 2136,
+            "mode": 11,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 2137,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 261437,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "constructed": {
+            "line": 2138,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 260879,
+            "heap_used": 2654824,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "staged": {
+            "line": 2139,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 2155,
+            "child": 14,
+            "retain": 12,
+            "reason": "Resolve"
+          },
+          "settled": {
+            "line": 2164,
+            "child": 14,
+            "retain": 12,
+            "frames_free": 261437,
+            "heap_used": 2607752,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 2166,
+            "child": 14,
+            "retain": 12,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 2159,
+            "child": 14,
+            "retain": 12,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 2156,
+            "child": 14,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 2157,
+            "child": 14,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": null,
+          "retirement_profile_observer_reap": null,
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 2129,
+            "phase": "r5-baseline",
+            "cycle": 11,
+            "pid": 0,
+            "heap": 2607752,
+            "frames": 261437,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 2165,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 14,
+            "heap": 2607752,
+            "frames": 261437,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 0,
+            "observed_reusable_capacity_bytes": 0,
+            "settled_minus_capacity_delta_bytes": 0,
+            "settled_free_frames": 0
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 2167,
+          "profile_r5_control_checker": "target/vfs-l1c-adapter-accounting/refusal/native-4-r5.json",
+          "image_sha256": "3f9fe09efc7037e8f57dd354e037e1439f0633b3ec9dbfb68564dfdebdc225b4"
+        }
+      }
+    },
+    "retire_before_acquisition": {
+      "mode": 6,
+      "guest_profile": "r1b",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r1b/native-2.serial.log",
+          "serial_sha256": "554d6fe8fc891fbcffe85d760d5007f86d712ca345f908e2ad655fe6dcdd43ce",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 1885,
+            "mode": 6,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1886,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261908,
+            "heap_used": 278920,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1887,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261350,
+            "heap_used": 325992,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1888,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1904,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "unsent": 1,
+            "delivered": 0,
+            "preparing": 1,
+            "caller_reserved": 1
+          },
+          "settled": {
+            "line": 1923,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284222,
+            "heap_used": 2564464,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1925,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1921,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1918,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1919,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1914,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1910,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1878,
+            "phase": "r5-baseline",
+            "cycle": 6,
+            "pid": 0,
+            "heap": 278920,
+            "frames": 261908,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 2048,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1924,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2564464,
+            "frames": 284222,
+            "user_frames": 5940,
+            "page_tables": 29,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2285544,
+            "observed_reusable_capacity_bytes": 2328832,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1927,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r1b/native-2.check.json",
+          "image_sha256": "0feed07a9bc7001c4ff3c8fb847c137672e2ca4822d9ca03b17433cefb03496c"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r1b/native-1.serial.log",
+          "serial_sha256": "470c65b392a4d8019a8c072cefe30ecb39f2ed12bea4c421225e9b8a1edae322",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 1881,
+            "mode": 6,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1882,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 262164,
+            "heap_used": 277800,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1883,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261606,
+            "heap_used": 324872,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1884,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1900,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "unsent": 1,
+            "delivered": 0,
+            "preparing": 1,
+            "caller_reserved": 1
+          },
+          "settled": {
+            "line": 1919,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284478,
+            "heap_used": 2564368,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1921,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1917,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1914,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1915,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1910,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1906,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1874,
+            "phase": "r5-baseline",
+            "cycle": 6,
+            "pid": 0,
+            "heap": 277800,
+            "frames": 262164,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 1024,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1920,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2564368,
+            "frames": 284478,
+            "user_frames": 5940,
+            "page_tables": 31,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2286568,
+            "observed_reusable_capacity_bytes": 2329856,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1923,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r1b/native-1.check.json",
+          "image_sha256": "0feed07a9bc7001c4ff3c8fb847c137672e2ca4822d9ca03b17433cefb03496c"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r1b/native-4.serial.log",
+          "serial_sha256": "2852dffbfd5647a3dde3e95322dd7578ac3d4e6cbaea1a3fdb52387045009520",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 1886,
+            "mode": 6,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1887,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261396,
+            "heap_used": 280808,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1888,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 260838,
+            "heap_used": 327880,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1889,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1907,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "unsent": 1,
+            "delivered": 0,
+            "preparing": 1,
+            "caller_reserved": 1
+          },
+          "settled": {
+            "line": 1933,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 283710,
+            "heap_used": 2564304,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1935,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1931,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1928,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1929,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1914,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1920,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1879,
+            "phase": "r5-baseline",
+            "cycle": 6,
+            "pid": 0,
+            "heap": 280808,
+            "frames": 261396,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 4096,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1934,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2564304,
+            "frames": 283710,
+            "user_frames": 5940,
+            "page_tables": 29,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2283496,
+            "observed_reusable_capacity_bytes": 2326784,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1937,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r1b/native-4.check.json",
+          "image_sha256": "0feed07a9bc7001c4ff3c8fb847c137672e2ca4822d9ca03b17433cefb03496c"
+        }
+      }
+    },
+    "retire_after_acquisition_held_reply": {
+      "mode": 5,
+      "guest_profile": "r1",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r1/native-2.serial.log",
+          "serial_sha256": "27b53d5726e9d1cabb28c3768e9afcc31814470775d87146941a00fe79c29bb4",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 1885,
+            "mode": 5,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1886,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261913,
+            "heap_used": 278920,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1887,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261355,
+            "heap_used": 325992,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1888,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1904,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "settled": {
+            "line": 1923,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284227,
+            "heap_used": 2564464,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1925,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1921,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1918,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1919,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1914,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1905,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1878,
+            "phase": "r5-baseline",
+            "cycle": 5,
+            "pid": 0,
+            "heap": 278920,
+            "frames": 261913,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 2048,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1924,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2564464,
+            "frames": 284227,
+            "user_frames": 5940,
+            "page_tables": 29,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2285544,
+            "observed_reusable_capacity_bytes": 2328832,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1927,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r1/native-2.check.json",
+          "image_sha256": "e0be004d8e2bf6a3e2e5567d93c3f9d4b8d7c09714aa02ba0422c4ccc8b46f82"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r1/native-1.serial.log",
+          "serial_sha256": "6457cc78642d3d819c82f1bf18941b1ac989bf44939d1aa5e2a49a992aee5a39",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 1881,
+            "mode": 5,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1882,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 262169,
+            "heap_used": 277800,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1883,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261611,
+            "heap_used": 324872,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1884,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1900,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "settled": {
+            "line": 1919,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284483,
+            "heap_used": 2564368,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1921,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1917,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1914,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1915,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1910,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1901,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1874,
+            "phase": "r5-baseline",
+            "cycle": 5,
+            "pid": 0,
+            "heap": 277800,
+            "frames": 262169,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 1024,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1920,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2564368,
+            "frames": 284483,
+            "user_frames": 5940,
+            "page_tables": 31,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2286568,
+            "observed_reusable_capacity_bytes": 2329856,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1923,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r1/native-1.check.json",
+          "image_sha256": "e0be004d8e2bf6a3e2e5567d93c3f9d4b8d7c09714aa02ba0422c4ccc8b46f82"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r1/native-4.serial.log",
+          "serial_sha256": "990a4015dec69c0d1bb2d4737b6c2d85f7c86ff2bebe65bc741b8c4ea19f1d67",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 1902,
+            "mode": 5,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1903,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261399,
+            "heap_used": 280872,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1904,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 260841,
+            "heap_used": 327944,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1905,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1921,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "settled": {
+            "line": 1937,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 283191,
+            "heap_used": 2597760,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1939,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1935,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1932,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1933,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1928,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1940,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1895,
+            "phase": "r5-baseline",
+            "cycle": 5,
+            "pid": 0,
+            "heap": 280872,
+            "frames": 261399,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 4096,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1938,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2597760,
+            "frames": 283191,
+            "user_frames": 6454,
+            "page_tables": 39,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2316888,
+            "observed_reusable_capacity_bytes": 2316544,
+            "settled_minus_capacity_delta_bytes": 344,
+            "settled_free_frames": 21792
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1944,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r1/native-4.check.json",
+          "image_sha256": "e0be004d8e2bf6a3e2e5567d93c3f9d4b8d7c09714aa02ba0422c4ccc8b46f82"
+        }
+      }
+    },
+    "retire_after_retain_consumption": {
+      "mode": 7,
+      "guest_profile": "r2",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r2/native-2.serial.log",
+          "serial_sha256": "64520d5e8e836fed5190d0a2cecaa34cf43b37619def474a4e547eea513ad2b4",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 1885,
+            "mode": 7,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1886,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261890,
+            "heap_used": 278920,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1887,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261332,
+            "heap_used": 325992,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1888,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1908,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "observer": 6,
+            "held_receipt": 1,
+            "binding": 0,
+            "private": 1
+          },
+          "settled": {
+            "line": 1925,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284204,
+            "heap_used": 2564464,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1927,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1923,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1921,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1922,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1916,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1905,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1878,
+            "phase": "r5-baseline",
+            "cycle": 7,
+            "pid": 0,
+            "heap": 278920,
+            "frames": 261890,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 2048,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1926,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2564464,
+            "frames": 284204,
+            "user_frames": 5940,
+            "page_tables": 29,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2285544,
+            "observed_reusable_capacity_bytes": 2328832,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1929,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r2/native-2.check.json",
+          "image_sha256": "0ee098d9788ff587ec2cb3b50895b8478c2b85f8bbf4cd121c6f08edfe54531b"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r2/native-1.serial.log",
+          "serial_sha256": "7e11f6e4f799b8405e38d1cb8c1651998d82f523fd81e2d96ecd8dac4fcb625d",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 1881,
+            "mode": 7,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1882,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 262146,
+            "heap_used": 277800,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1883,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261588,
+            "heap_used": 324872,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1884,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1904,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "observer": 6,
+            "held_receipt": 1,
+            "binding": 0,
+            "private": 1
+          },
+          "settled": {
+            "line": 1922,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284460,
+            "heap_used": 2564368,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1924,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1919,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1917,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1918,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1912,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1901,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1874,
+            "phase": "r5-baseline",
+            "cycle": 7,
+            "pid": 0,
+            "heap": 277800,
+            "frames": 262146,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 1024,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1923,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2564368,
+            "frames": 284460,
+            "user_frames": 5940,
+            "page_tables": 31,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 2,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2286568,
+            "observed_reusable_capacity_bytes": 2329856,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1925,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r2/native-1.check.json",
+          "image_sha256": "0ee098d9788ff587ec2cb3b50895b8478c2b85f8bbf4cd121c6f08edfe54531b"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r2/native-4.serial.log",
+          "serial_sha256": "3fa946cfe26f7d159d6cdc149404a56b12325855e94d69d0dc339ec5f684f970",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 1899,
+            "mode": 7,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1900,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261378,
+            "heap_used": 280968,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1901,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 260820,
+            "heap_used": 328040,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1902,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1919,
+            "service": 3,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "observer": 6,
+            "held_receipt": 1,
+            "binding": 0,
+            "private": 1
+          },
+          "settled": {
+            "line": 1936,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 283170,
+            "heap_used": 2597856,
+            "heap_capacity": 16777216,
+            "process_slots": 4,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1938,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 0,
+            "reaped_slot": 0,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1934,
+            "child": 5,
+            "retain": 2,
+            "owner": "reclaimed"
+          },
+          "destruction": {
+            "line": 1932,
+            "child": 5,
+            "descriptors": 3,
+            "frames": 550,
+            "tables": 8,
+            "swap": 0
+          },
+          "private_boxes_dropped": {
+            "line": 1933,
+            "child": 5,
+            "process_box": 1,
+            "fd_table_box": 1
+          },
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1927,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1941,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 0,
+          "heap_before": {
+            "line": 1892,
+            "phase": "r5-baseline",
+            "cycle": 7,
+            "pid": 0,
+            "heap": 280968,
+            "frames": 261378,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 4096,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1937,
+            "phase": "r5-settled",
+            "cycle": 0,
+            "pid": 5,
+            "heap": 2597856,
+            "frames": 283170,
+            "user_frames": 6454,
+            "page_tables": 37,
+            "rows": 4,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 1,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47072,
+            "settled_heap_bytes": 2316888,
+            "observed_reusable_capacity_bytes": 2316544,
+            "settled_minus_capacity_delta_bytes": 344,
+            "settled_free_frames": 21792
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1940,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r2/native-4.check.json",
+          "image_sha256": "0ee098d9788ff587ec2cb3b50895b8478c2b85f8bbf4cd121c6f08edfe54531b"
+        }
+      }
+    },
+    "retire_after_publication": {
+      "mode": 8,
+      "guest_profile": "r3",
+      "status": "QUALIFIED",
+      "guests": {
+        "2": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r3/native-2.serial.log",
+          "serial_sha256": "19d637bb4899241a6e38872cc30a17d68e75e62194e5249d34825ca6b93f4fe5",
+          "observed_vcpus": 2,
+          "topology_line": 128,
+          "identity": {
+            "line": 1885,
+            "mode": 8,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1886,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261748,
+            "heap_used": 278920,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1887,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261190,
+            "heap_used": 326000,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1888,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1949,
+            "child": 5,
+            "retain": 2,
+            "continuation": 0,
+            "private": 0,
+            "scheduler": 1,
+            "replay": "Identity"
+          },
+          "settled": {
+            "line": 1963,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284062,
+            "heap_used": 2574704,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1965,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 1,
+            "reaped_slot": 1,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1962,
+            "child": 5,
+            "retain": 2,
+            "owner": "scheduler",
+            "cancel": "Stale"
+          },
+          "destruction": {
+            "line": 1958,
+            "pid": 5,
+            "name": "'vfs-l1c-private'",
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "private_boxes_dropped": null,
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1946,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1904,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 10240,
+          "heap_before": {
+            "line": 1878,
+            "phase": "r5-baseline",
+            "cycle": 8,
+            "pid": 0,
+            "heap": 278920,
+            "frames": 261748,
+            "user_frames": 28198,
+            "page_tables": 84,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 2048,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1964,
+            "phase": "r5-settled",
+            "cycle": 1,
+            "pid": 5,
+            "heap": 2574704,
+            "frames": 284062,
+            "user_frames": 5940,
+            "page_tables": 29,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 3,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47080,
+            "settled_heap_bytes": 2295784,
+            "observed_reusable_capacity_bytes": 2339072,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1967,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r3/native-2.check.json",
+          "image_sha256": "971babd43fa921fa8eb3122410e34b7d5cec8eb4c32e130e5966a6b623897a6e"
+        },
+        "1": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r3/native-1.serial.log",
+          "serial_sha256": "d954188f3b1c6c59761423e7d960f6258d8c80e5410388fb9625d75a77f63efc",
+          "observed_vcpus": 1,
+          "topology_line": 126,
+          "identity": {
+            "line": 1881,
+            "mode": 8,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1882,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 262004,
+            "heap_used": 277800,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1883,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261446,
+            "heap_used": 324880,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1884,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1945,
+            "child": 5,
+            "retain": 2,
+            "continuation": 0,
+            "private": 0,
+            "scheduler": 1,
+            "replay": "Identity"
+          },
+          "settled": {
+            "line": 1959,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 284318,
+            "heap_used": 2574608,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1961,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 1,
+            "reaped_slot": 1,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1958,
+            "child": 5,
+            "retain": 2,
+            "owner": "scheduler",
+            "cancel": "Stale"
+          },
+          "destruction": {
+            "line": 1954,
+            "pid": 5,
+            "name": "'vfs-l1c-private'",
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "private_boxes_dropped": null,
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1942,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1900,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 10240,
+          "heap_before": {
+            "line": 1874,
+            "phase": "r5-baseline",
+            "cycle": 8,
+            "pid": 0,
+            "heap": 277800,
+            "frames": 262004,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 1024,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1960,
+            "phase": "r5-settled",
+            "cycle": 1,
+            "pid": 5,
+            "heap": 2574608,
+            "frames": 284318,
+            "user_frames": 5940,
+            "page_tables": 31,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 3,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47080,
+            "settled_heap_bytes": 2296808,
+            "observed_reusable_capacity_bytes": 2340096,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1963,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r3/native-1.check.json",
+          "image_sha256": "971babd43fa921fa8eb3122410e34b7d5cec8eb4c32e130e5966a6b623897a6e"
+        },
+        "4": {
+          "status": "PASS",
+          "serial": "target/vfs-l1c-adapter-accounting/r3/native-4.serial.log",
+          "serial_sha256": "ba62d4d56f54f8adec9f17e6c623b35450dc46ff08a961c7dc13ca2e76e00a3f",
+          "observed_vcpus": 4,
+          "topology_line": 132,
+          "identity": {
+            "line": 1902,
+            "mode": 8,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1
+          },
+          "baseline": {
+            "line": 1903,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 261234,
+            "heap_used": 280872,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "constructed": {
+            "line": 1904,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 260676,
+            "heap_used": 327952,
+            "heap_capacity": 16777216,
+            "process_slots": 3,
+            "process_capacity": 4
+          },
+          "staged": {
+            "line": 1905,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "private_pid": 1,
+            "process_box": 1,
+            "fd_table_box": 1,
+            "descriptors": 3,
+            "mapped_user_pages": 550,
+            "adapter": 1,
+            "continuation": 1,
+            "vfs_claim": 1
+          },
+          "branch_checkpoint": {
+            "line": 1966,
+            "child": 5,
+            "retain": 2,
+            "continuation": 0,
+            "private": 0,
+            "scheduler": 1,
+            "replay": "Identity"
+          },
+          "settled": {
+            "line": 1980,
+            "child": 5,
+            "retain": 2,
+            "frames_free": 283548,
+            "heap_used": 2574608,
+            "heap_capacity": 16777216,
+            "process_slots": 5,
+            "process_capacity": 512
+          },
+          "census": {
+            "line": 1982,
+            "child": 5,
+            "retain": 2,
+            "epoch": 1,
+            "published": 1,
+            "reaped_slot": 1,
+            "fd_table_bytes": 10240,
+            "live_frames": 0,
+            "private_pid": 0,
+            "adapter": 0,
+            "continuation": 0,
+            "vfs_claim": 0,
+            "ipc_refs": 0,
+            "stat_bytes": 0,
+            "stat_requests": 0
+          },
+          "disposal": {
+            "line": 1979,
+            "child": 5,
+            "retain": 2,
+            "owner": "scheduler",
+            "cancel": "Stale"
+          },
+          "destruction": {
+            "line": 1975,
+            "pid": 5,
+            "name": "'vfs-l1c-private'",
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "private_boxes_dropped": null,
+          "release_ack": null,
+          "retired_service_reap": {
+            "line": 1963,
+            "pid": 3,
+            "name": "'vfs_server'",
+            "user_frames": 22258,
+            "page_tables": 53,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retirement_profile_observer_reap": {
+            "line": 1928,
+            "pid": 6,
+            "name": "'true'",
+            "user_frames": 514,
+            "page_tables": 8,
+            "swap_blocks": 0,
+            "ipc_cleared": 0
+          },
+          "retained_child_fd_table_bytes": 10240,
+          "heap_before": {
+            "line": 1895,
+            "phase": "r5-baseline",
+            "cycle": 8,
+            "pid": 0,
+            "heap": 280872,
+            "frames": 261234,
+            "user_frames": 28198,
+            "page_tables": 86,
+            "rows": 3,
+            "row_bytes": 4032,
+            "slots": 4,
+            "table_bytes": 16128,
+            "reaped": 0,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 4096,
+            "tier_bytes": 0
+          },
+          "heap_after": {
+            "line": 1981,
+            "phase": "r5-settled",
+            "cycle": 1,
+            "pid": 5,
+            "heap": 2574608,
+            "frames": 283548,
+            "user_frames": 5940,
+            "page_tables": 31,
+            "rows": 5,
+            "row_bytes": 4032,
+            "slots": 512,
+            "table_bytes": 2064384,
+            "reaped": 3,
+            "fd_box_bytes": 10240,
+            "reaped_ipc": 0,
+            "live_ipc": 0,
+            "rr_bytes": 262144,
+            "tier_bytes": 0
+          },
+          "deltas": {
+            "construction_heap_bytes": 47080,
+            "settled_heap_bytes": 2293736,
+            "observed_reusable_capacity_bytes": 2337024,
+            "settled_minus_capacity_delta_bytes": -43288,
+            "settled_free_frames": 22314
+          },
+          "reclaimed": {
+            "user_frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "fixture_completed_line": 1984,
+          "independent_lifecycle_checker": "target/vfs-l1c-adapter-accounting/r3/native-4.check.json",
+          "image_sha256": "971babd43fa921fa8eb3122410e34b7d5cec8eb4c32e130e5966a6b623897a6e"
+        }
+      }
+    },
+    "parent_loss": {
+      "status": "NOT_RUN_UNQUALIFIED",
+      "scope": "PID 1 is the parent in the selected fixtures. Adapter disposal after parent loss and autonomous progress without a later qualifying syscall return remain unqualified."
+    }
+  },
+  "evidence_directory": "target/vfs-l1c-adapter-accounting",
+  "regression_exit_codes": {
+    "production": 0,
+    "registration": 0,
+    "ipc": 0,
+    "service": 0,
+    "descriptor": 0,
+    "kernel-host": 0,
+    "scheduler": 0,
+    "retirement": 0,
+    "zram": 0,
+    "swap-slot": 0,
+    "guard-primary": 1,
+    "guard-candidate": 0
+  },
+  "candidate_exit_codes": {
+    "phase3.0": {
+      "2": 0,
+      "1": 0,
+      "4": 0
+    },
+    "swap1": {
+      "2": 1,
+      "1": 1,
+      "4": 0
+    }
+  },
+  "candidate_attempts": {
+    "phase3.0": {
+      "2": {
+        "initial": {
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "observed_vcpus": null,
+          "serial": "target/vfs-l1c-adapter-accounting/phase3.0-2.serial.log",
+          "serial_bytes": 0,
+          "log": "target/vfs-l1c-adapter-accounting/phase3.0-2.log",
+          "qemu_args": null
+        },
+        "retry": {
+          "exit_code": 0,
+          "outcome": "PASS",
+          "observed_vcpus": 2,
+          "serial": "target/vfs-l1c-adapter-accounting/phase3.0-2.retry.serial.log",
+          "serial_bytes": 68565,
+          "log": "target/vfs-l1c-adapter-accounting/phase3.0-2.retry.log",
+          "qemu_args": null
+        },
+        "explicit_topology": null
+      },
+      "1": {
+        "initial": {
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "observed_vcpus": null,
+          "serial": "target/vfs-l1c-adapter-accounting/phase3.0-1.serial.log",
+          "serial_bytes": 0,
+          "log": "target/vfs-l1c-adapter-accounting/phase3.0-1.log",
+          "qemu_args": null
+        },
+        "retry": {
+          "exit_code": 0,
+          "outcome": "PASS",
+          "observed_vcpus": 1,
+          "serial": "target/vfs-l1c-adapter-accounting/phase3.0-1.retry.serial.log",
+          "serial_bytes": 67614,
+          "log": "target/vfs-l1c-adapter-accounting/phase3.0-1.retry.log",
+          "qemu_args": null
+        },
+        "explicit_topology": null
+      },
+      "4": {
+        "initial": {
+          "exit_code": 1,
+          "outcome": "FAIL",
+          "observed_vcpus": null,
+          "serial": "target/vfs-l1c-adapter-accounting/phase3.0-4.serial.log",
+          "serial_bytes": 0,
+          "log": "target/vfs-l1c-adapter-accounting/phase3.0-4.log",
+          "qemu_args": null
+        },
+        "retry": {
+          "exit_code": 0,
+          "outcome": "PASS",
+          "observed_vcpus": 4,
+          "serial": "target/vfs-l1c-adapter-accounting/phase3.0-4.retry.serial.log",
+          "serial_bytes": 69457,
+          "log": "target/vfs-l1c-adapter-accounting/phase3.0-4.retry.log",
+          "qemu_args": null
+        },
+        "explicit_topology": null
+      }
+    },
+    "swap1": {
+      "2": {
+        "initial": {
+          "exit_code": 0,
+          "outcome": "PASS",
+          "observed_vcpus": 4,
+          "serial": "target/vfs-l1c-adapter-accounting/swap1-2.serial.log",
+          "serial_bytes": 70104,
+          "log": "target/vfs-l1c-adapter-accounting/swap1-2.log",
+          "qemu_args": null
+        },
+        "retry": null,
+        "explicit_topology": {
+          "exit_code": 1,
+          "outcome": "TWO_POOL_PRECONDITION",
+          "observed_vcpus": 2,
+          "serial": "target/vfs-l1c-adapter-accounting/swap1-2.exact.serial.log",
+          "serial_bytes": 17414,
+          "log": "target/vfs-l1c-adapter-accounting/swap1-2.exact.log",
+          "qemu_args": "target/vfs-l1c-adapter-accounting/swap1-2.exact-qemu-args.log"
+        }
+      },
+      "1": {
+        "initial": {
+          "exit_code": 0,
+          "outcome": "PASS",
+          "observed_vcpus": 4,
+          "serial": "target/vfs-l1c-adapter-accounting/swap1-1.serial.log",
+          "serial_bytes": 70104,
+          "log": "target/vfs-l1c-adapter-accounting/swap1-1.log",
+          "qemu_args": null
+        },
+        "retry": null,
+        "explicit_topology": {
+          "exit_code": 1,
+          "outcome": "TWO_POOL_PRECONDITION",
+          "observed_vcpus": 1,
+          "serial": "target/vfs-l1c-adapter-accounting/swap1-1.exact.serial.log",
+          "serial_bytes": 16963,
+          "log": "target/vfs-l1c-adapter-accounting/swap1-1.exact.log",
+          "qemu_args": "target/vfs-l1c-adapter-accounting/swap1-1.exact-qemu-args.log"
+        }
+      },
+      "4": {
+        "initial": {
+          "exit_code": 0,
+          "outcome": "PASS",
+          "observed_vcpus": 4,
+          "serial": "target/vfs-l1c-adapter-accounting/swap1-4.serial.log",
+          "serial_bytes": 70104,
+          "log": "target/vfs-l1c-adapter-accounting/swap1-4.log",
+          "qemu_args": null
+        },
+        "retry": null,
+        "explicit_topology": null
+      }
+    }
+  },
+  "swap1_gate_scope": {
+    "minimum_pools": 2,
+    "default_harness_vcpus": 4,
+    "diagnostic_vcpus": [
+      2,
+      1
+    ],
+    "policy_cpu_pool_limit": "max(1, floor(online_vcpus / 2))"
+  },
+  "primary_guard": {
+    "preexisting_findings": 4,
+    "accounting_change_findings": 0
+  },
+  "fixture_injections": {
+    "live_authority_preparation_failure": "Return Error::Preparation from the validated publication prepare callback for the exact private child.",
+    "authentic_service_refusal": "Withhold DERIVE_SOURCE for the exact staged request from the authenticated service. The ordinary VFS service sends the refusal."
+  },
+  "preserved_qualification": {
+    "previously_qualified_routes": [
+      "successful_publication_and_reap",
+      "cancel_with_authenticated_late_reply_and_compensation"
+    ],
+    "original_primary_4_vcpu_residual_bytes": 160,
+    "original_residual_attribution": "UNATTRIBUTED",
+    "inherited": {
+      "evidence": "inherited",
+      "production_release": "PASS",
+      "host_regressions": "PASS",
+      "transaction_session_and_mmap_builds": "PASS",
+      "candidate": {
+        "ownership_guard": "PASS",
+        "swap1_pass_vcpus": [
+          1,
+          2,
+          4
+        ],
+        "ordinary_boot_pass_vcpus": [
+          1,
+          2,
+          4
+        ]
+      },
+      "primary": {
+        "ownership_guard": "FAIL",
+        "preexisting_findings": 4,
+        "accounting_change_findings": 0,
+        "ordinary_boot": "BLOCKED_BEFORE_BOOT"
+      }
+    },
+    "inherited_swap_topology_note": "The saved heap-accounting SWAP-1 serials labeled 1, 2, and 4 all report four vCPUs. Current topology-specific evidence is under candidate_attempts."
+  },
+  "next_stage": {
+    "id": "VFS-L1C-3",
+    "status": "BLOCKED"
+  },
+  "vfs_d1": "DEFERRED",
+  "inherited_prerequisites": [
+    "full census across remaining disposal routes and authority retirement",
+    "trusted cross-lifetime registration row reuse",
+    "transaction census with regular-file descriptions, owned IPC endpoints and queued payloads",
+    "populated swap and fault-driven swap-in in the transaction",
+    "interactive Btop and Qalculate"
+  ],
+  "other_unknowns": [
+    "exact 160-byte owner in primary 4-vCPU run",
+    "full userspace VFS service heap attribution"
+  ],
+  "remaining_disposal_gap": "Parent loss, including progress without a later qualifying syscall return.",
+  "scope_limits": [
+    "Userspace VFS heap",
+    "Cross-lifetime registration row reuse",
+    "Regular-file descriptions, child-owned IPC endpoints and queued payloads",
+    "Populated swap and fault-driven swap-in in the transaction"
+  ]
+}

@@ -4,6 +4,8 @@ use crate::vfs::mode;
 pub const RAMFS_MAX_HANDLES: usize = 32;
 // Allow for the full DOS Navigator bundle in the existing boot namespace.
 pub const RAMFS_MAX_ENTRIES: usize = 640
+    + 4 * cfg!(all(debug_assertions, feature = "helios-qalculate-probe")) as usize
+    + 2 * cfg!(all(debug_assertions, feature = "helios-qalculate-dso-probe")) as usize
     + 6 * cfg!(all(debug_assertions, feature = "helios-dynamic-elf-shared-fixture")) as usize
     + cfg!(all(debug_assertions, feature = "helios-dynamic-elf-orphan-fixture")) as usize
     + 13 * cfg!(all(debug_assertions, feature = "helios-dynamic-elf-tls-fixture")) as usize
@@ -357,6 +359,13 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file(
         "/Applications/Qalculate.sunapp/Program/qalculate-qt", 0, 0, mode::FILE_755,
         include_bytes!(env!("SUNLIGHT_QALCULATE_ELF")),
+    ),
+    #[cfg(all(debug_assertions, feature = "helios-qalculate-dso-probe"))]
+    RamEntry::dir("/usr/lib", 0, 0, mode::DIR_755),
+    #[cfg(all(debug_assertions, feature = "helios-qalculate-dso-probe"))]
+    RamEntry::file(
+        "/usr/lib/libQt6Widgets.so.6", 0, 0, mode::FILE_644,
+        include_bytes!(env!("SUNLIGHT_QALCULATE_QT_WIDGETS")),
     ),
     #[cfg(all(debug_assertions, feature = "helios-wayland-sunapp-test"))]
     RamEntry::dir("/Applications/SunlightCanvas.sunapp", 0, 0, mode::DIR_755),

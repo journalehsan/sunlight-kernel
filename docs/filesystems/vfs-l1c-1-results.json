@@ -1,0 +1,71 @@
+{
+  "verdict": "HOST_AND_ISOLATED_NATIVE_CANDIDATE_VALIDATED",
+  "vfs_l1c": "PARTIAL",
+  "ordinary_spawn_integration": {
+    "sys_spawn": "NOT_ACTIVATED",
+    "handle_spawn_call": "NOT_ACTIVATED",
+    "first_dispatch_ordering": "NOT_RUN"
+  },
+  "authentication": "Exact scheduler creation ticket, PID, incarnation and VM generation; exact parent image, credentials and source namespace scope; independently authenticated VFS registration and exact delivered retain request/receipt.",
+  "terminal_outcomes": ["retained", "refused", "transport", "timeout", "cancelled", "invalid_acknowledgement", "authority_retired"],
+  "capacities": {
+    "private_children": 8,
+    "continuations": 8,
+    "continuations_per_exact_parent": 1,
+    "registration_rows": 4,
+    "leases_and_caller_deliveries_per_registration": 64,
+    "delivered_retains_per_registration": 1
+  },
+  "ownership": {
+    "local_owner": "Scheduler pending reservation and Child RAII handle",
+    "remote_owner": "Existing registration ownership and caller delivery rows",
+    "unknown_delivery": "Preserve registration obligation and keep the PID charged after local teardown",
+    "settlement": "Exact refusal or release acknowledgement plus required caller lifecycle acknowledgements, or established KLC retirement proof with drain conditions",
+    "complete_remote_settlement": "NOT_CLAIMED"
+  },
+  "host_gates": {
+    "registration_and_spawn": {
+      "status": "PASS",
+      "tests": 103,
+      "breakdown": "94 existing registration tests, 5 new continuation tests, 4 production pending-slot tests imported into the registration harness",
+      "lifecycle_cycles": [100, 100],
+      "includes": ["chdir", "namespace inheritance", "private-child ownership", "service-backed drain"],
+      "evidence": "target/vfs-l1c-1/registration-final.log"
+    },
+    "ipc": {"status": "PASS", "unit": 168, "integration": 9, "evidence": "target/vfs-l1c-1/ipc.log"},
+    "vfs_service": {"status": "PASS", "tests": 47, "evidence": "target/vfs-l1c-1/service.log"},
+    "descriptor": {"status": "PASS", "tests": 18, "evidence": "target/vfs-l1c-1/descriptor.log"},
+    "scheduler": {"status": "PASS", "evidence": "target/vfs-l1c-1/scheduler.log"},
+    "kernel": {"status": "PASS", "tests": 217, "evidence": "target/vfs-l1c-1/kernel-host.log"},
+    "retirement": {"status": "PASS", "tests": 34, "evidence": "target/vfs-l1c-1/retirement.log"},
+    "zram": {"status": "PASS", "tests": 4, "evidence": "target/vfs-l1c-1/zram.log"},
+    "swap_slots": {"status": "PASS", "tests": 1, "evidence": "target/vfs-l1c-1/swap-slot.log"},
+    "primary_compile": {"status": "PASS", "evidence": "target/vfs-l1c-1/primary-compile.log"},
+    "transaction_session_compile": {"status": "PASS", "evidence": "target/vfs-l1c-1/transaction-session.log"},
+    "mmap_compile": {"status": "PASS", "evidence": "target/vfs-l1c-1/mmap.log"}
+  },
+  "ownership_guard": {
+    "primary": {"status": "BASELINE_FAIL", "references": 71, "findings": 4, "evidence": "target/vfs-l1c-1/guard-after.log"},
+    "candidate": {"status": "PASS", "references": 68, "findings": 0, "evidence": "target/vfs-l1c-1/candidate-guard.log"}
+  },
+  "candidate_source_equivalence": {"status": "PASS", "baseline_paths": 12346, "unexpected_drift": 0, "evidence": "target/vfs-l1c-1/source-equivalence.json"},
+  "native_candidate": {
+    "status": "PASS",
+    "memory_mib": 2048,
+    "cpu_matrix": [1, 2, 4],
+    "matrix_evidence": "target/vfs-l1c-1/native/matrix.json",
+    "first_matrix": "target/vfs-l1c-1/native/first/matrix.json",
+    "image_hashes": "target/vfs-l1c-1/native/images.sha256",
+    "scope": "Actual init park, fixture-only delivery gate for independent observer, real copied VFS retain, exact receipt consumption, private throughout, local teardown and exact remote acknowledgement drain. Ordinary spawn is outside the fixture qualification.",
+    "cases": [
+      {"cpus": 1, "status": "PASS", "other_dispatch_pid": 6, "private_reclaimed": true, "claim_settled": true, "serial": "target/vfs-l1c-1/native/continuation-1.serial.log", "l1p_cycles": 100, "free_frames_restored": 266329, "heap_bytes_restored": 176832, "descriptions_and_refs_restored": [72, 72]},
+      {"cpus": 2, "status": "PASS", "other_dispatch_pid": 6, "private_reclaimed": true, "claim_settled": true, "serial": "target/vfs-l1c-1/native/continuation-2.serial.log", "l1p_cycles": 100, "free_frames_restored": 266071, "heap_bytes_restored": 177856, "descriptions_and_refs_restored": [72, 72]},
+      {"cpus": 4, "status": "PASS", "other_dispatch_pid": 6, "private_reclaimed": true, "claim_settled": true, "serial": "target/vfs-l1c-1/native/continuation-4.serial.log", "l1p_cycles": 100, "free_frames_restored": 265559, "heap_bytes_restored": 179904, "descriptions_and_refs_restored": [72, 72]}
+    ],
+    "allocator_counter_scope": "The restored allocator counts are from the native pre-dispatch VFS-L1P regressions. The continuation fixture verifies exact reclaim and settlement while concurrent service work runs.",
+    "ordinary_boot": {"status": "PASS", "cpus": 2, "evidence": "target/vfs-l1c-1/ordinary-final.log", "serial": "target/vfs-l1c-1/ordinary-final.serial.log"}
+  },
+  "vfs_l1q": "BLOCKED",
+  "vfs_d1": "BLOCKED",
+  "production_spawn_qualified": false
+}

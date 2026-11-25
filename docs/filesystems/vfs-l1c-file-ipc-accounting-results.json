@@ -1,0 +1,358 @@
+{
+  "image_sha256": "2a687b01adf069a2c3ff3f5a26f4656aabb0667c81237118973296c62d42c37d",
+  "elf_sha256": "e576725d900ddf6408af6ea68f588ed3feac591cb565e27677f8207e3432ddda",
+  "native": [
+    {
+      "vcpus": 2,
+      "memory_mib": 2048,
+      "exit": 0,
+      "serial": "target/vfs-l1c-file-ipc-accounting/qualified-2.serial.log",
+      "samples": {
+        "VFS-FILE-IPC:baseline": [
+          {"line": 1878, "cycle": 1, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1906, "cycle": 2, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1936, "cycle": 3, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1965, "cycle": 4, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1992, "cycle": 5, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2019, "cycle": 6, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2046, "cycle": 7, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2073, "cycle": 8, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2100, "cycle": 9, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2127, "cycle": 10, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1}
+        ],
+        "VFS-HEAP:baseline": [
+          {"line": 1879, "cycle": 1, "pid": 0, "heap": 278920, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 3, "row_bytes": 4032, "slots": 4, "table_bytes": 16128, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 2048, "tier_bytes": 0},
+          {"line": 1907, "cycle": 2, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1937, "cycle": 3, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1966, "cycle": 4, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1993, "cycle": 5, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2020, "cycle": 6, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2047, "cycle": 7, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2074, "cycle": 8, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2101, "cycle": 9, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2128, "cycle": 10, "pid": 0, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "VFS-FILE-IPC:live": [
+          {"line": 1893, "pid": 5, "incarnation": 683, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1923, "pid": 6, "incarnation": 684, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1952, "pid": 7, "incarnation": 685, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1979, "pid": 8, "incarnation": 686, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2006, "pid": 9, "incarnation": 687, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2033, "pid": 10, "incarnation": 688, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2060, "pid": 11, "incarnation": 689, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2087, "pid": 12, "incarnation": 690, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2114, "pid": 13, "incarnation": 691, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2141, "pid": 14, "incarnation": 692, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537}
+        ],
+        "VFS-HEAP:file-ipc-live": [
+          {"line": 1894, "cycle": 0, "pid": 5, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1924, "cycle": 0, "pid": 6, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1953, "cycle": 0, "pid": 7, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1980, "cycle": 0, "pid": 8, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2007, "cycle": 0, "pid": 9, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2034, "cycle": 0, "pid": 10, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2061, "cycle": 0, "pid": 11, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2088, "cycle": 0, "pid": 12, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2115, "cycle": 0, "pid": 13, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2142, "cycle": 0, "pid": 14, "heap": 2630872, "frames": 261207, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "SCHED:process_reaped": [
+          {"line": 1900, "pid": 5, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1930, "pid": 6, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1959, "pid": 7, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1986, "pid": 8, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2013, "pid": 9, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2040, "pid": 10, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2067, "pid": 11, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2094, "pid": 12, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2121, "pid": 13, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2148, "pid": 14, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0}
+        ],
+        "VFS-PARENT:reaped": [
+          {"line": 1903, "parent": 5, "incarnation": 683, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1933, "parent": 6, "incarnation": 684, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1962, "parent": 7, "incarnation": 685, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1989, "parent": 8, "incarnation": 686, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2016, "parent": 9, "incarnation": 687, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2043, "parent": 10, "incarnation": 688, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2070, "parent": 11, "incarnation": 689, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2097, "parent": 12, "incarnation": 690, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2124, "parent": 13, "incarnation": 691, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2151, "parent": 14, "incarnation": 692, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0}
+        ],
+        "VFS-FILE-IPC:settled": [
+          {"line": 1904, "cycle": 1, "pid": 5, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1934, "cycle": 2, "pid": 6, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1963, "cycle": 3, "pid": 7, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1990, "cycle": 4, "pid": 8, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2017, "cycle": 5, "pid": 9, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2044, "cycle": 6, "pid": 10, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2071, "cycle": 7, "pid": 11, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2098, "cycle": 8, "pid": 12, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2125, "cycle": 9, "pid": 13, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2152, "cycle": 10, "pid": 14, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1}
+        ],
+        "VFS-HEAP:settled": [
+          {"line": 1905, "cycle": 1, "pid": 5, "heap": 2602040, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1935, "cycle": 2, "pid": 6, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1964, "cycle": 3, "pid": 7, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1991, "cycle": 4, "pid": 8, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2018, "cycle": 5, "pid": 9, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2045, "cycle": 6, "pid": 10, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2072, "cycle": 7, "pid": 11, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2099, "cycle": 8, "pid": 12, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2126, "cycle": 9, "pid": 13, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2153, "cycle": 10, "pid": 14, "heap": 2597768, "frames": 261754, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "VFS-FILE-IPC:complete": [
+          {"line": 2154}
+        ]
+      }
+    },
+    {
+      "vcpus": 1,
+      "memory_mib": 2048,
+      "exit": 0,
+      "serial": "target/vfs-l1c-file-ipc-accounting/qualified-1.serial.log",
+      "samples": {
+        "VFS-FILE-IPC:baseline": [
+          {"line": 1874, "cycle": 1, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1902, "cycle": 2, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1932, "cycle": 3, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1961, "cycle": 4, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1988, "cycle": 5, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2015, "cycle": 6, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2042, "cycle": 7, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2069, "cycle": 8, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2096, "cycle": 9, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2123, "cycle": 10, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1}
+        ],
+        "VFS-HEAP:baseline": [
+          {"line": 1875, "cycle": 1, "pid": 0, "heap": 277800, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 3, "row_bytes": 4032, "slots": 4, "table_bytes": 16128, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 1024, "tier_bytes": 0},
+          {"line": 1903, "cycle": 2, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1933, "cycle": 3, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1962, "cycle": 4, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1989, "cycle": 5, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2016, "cycle": 6, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2043, "cycle": 7, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2070, "cycle": 8, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2097, "cycle": 9, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2124, "cycle": 10, "pid": 0, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "VFS-FILE-IPC:live": [
+          {"line": 1889, "pid": 5, "incarnation": 683, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1919, "pid": 6, "incarnation": 684, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1948, "pid": 7, "incarnation": 685, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1975, "pid": 8, "incarnation": 686, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2002, "pid": 9, "incarnation": 687, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2029, "pid": 10, "incarnation": 688, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2056, "pid": 11, "incarnation": 689, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2083, "pid": 12, "incarnation": 690, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2110, "pid": 13, "incarnation": 691, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2137, "pid": 14, "incarnation": 692, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537}
+        ],
+        "VFS-HEAP:file-ipc-live": [
+          {"line": 1890, "cycle": 0, "pid": 5, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1920, "cycle": 0, "pid": 6, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1949, "cycle": 0, "pid": 7, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1976, "cycle": 0, "pid": 8, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2003, "cycle": 0, "pid": 9, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2030, "cycle": 0, "pid": 10, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2057, "cycle": 0, "pid": 11, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2084, "cycle": 0, "pid": 12, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2111, "cycle": 0, "pid": 13, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2138, "cycle": 0, "pid": 14, "heap": 2630776, "frames": 261463, "user_frames": 28732, "page_tables": 96, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "SCHED:process_reaped": [
+          {"line": 1896, "pid": 5, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1926, "pid": 6, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1955, "pid": 7, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1982, "pid": 8, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2009, "pid": 9, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2036, "pid": 10, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2063, "pid": 11, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2090, "pid": 12, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2117, "pid": 13, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2144, "pid": 14, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0}
+        ],
+        "VFS-PARENT:reaped": [
+          {"line": 1899, "parent": 5, "incarnation": 683, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1929, "parent": 6, "incarnation": 684, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1958, "parent": 7, "incarnation": 685, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1985, "parent": 8, "incarnation": 686, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2012, "parent": 9, "incarnation": 687, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2039, "parent": 10, "incarnation": 688, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2066, "parent": 11, "incarnation": 689, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2093, "parent": 12, "incarnation": 690, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2120, "parent": 13, "incarnation": 691, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2147, "parent": 14, "incarnation": 692, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0}
+        ],
+        "VFS-FILE-IPC:settled": [
+          {"line": 1900, "cycle": 1, "pid": 5, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1930, "cycle": 2, "pid": 6, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1959, "cycle": 3, "pid": 7, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1986, "cycle": 4, "pid": 8, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2013, "cycle": 5, "pid": 9, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2040, "cycle": 6, "pid": 10, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2067, "cycle": 7, "pid": 11, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2094, "cycle": 8, "pid": 12, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2121, "cycle": 9, "pid": 13, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2148, "cycle": 10, "pid": 14, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1}
+        ],
+        "VFS-HEAP:settled": [
+          {"line": 1901, "cycle": 1, "pid": 5, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1931, "cycle": 2, "pid": 6, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1960, "cycle": 3, "pid": 7, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1987, "cycle": 4, "pid": 8, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2014, "cycle": 5, "pid": 9, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2041, "cycle": 6, "pid": 10, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2068, "cycle": 7, "pid": 11, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2095, "cycle": 8, "pid": 12, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2122, "cycle": 9, "pid": 13, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2149, "cycle": 10, "pid": 14, "heap": 2597672, "frames": 262010, "user_frames": 28198, "page_tables": 86, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "VFS-FILE-IPC:complete": [
+          {"line": 2150}
+        ]
+      }
+    },
+    {
+      "vcpus": 4,
+      "memory_mib": 2048,
+      "exit": 0,
+      "serial": "target/vfs-l1c-file-ipc-accounting/qualified-4.serial.log",
+      "samples": {
+        "VFS-FILE-IPC:baseline": [
+          {"line": 1888, "cycle": 1, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1920, "cycle": 2, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1950, "cycle": 3, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1979, "cycle": 4, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2006, "cycle": 5, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2033, "cycle": 6, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2060, "cycle": 7, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2087, "cycle": 8, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2114, "cycle": 9, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2141, "cycle": 10, "pid": 0, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1}
+        ],
+        "VFS-HEAP:baseline": [
+          {"line": 1889, "cycle": 1, "pid": 0, "heap": 280808, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 3, "row_bytes": 4032, "slots": 4, "table_bytes": 16128, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 4096, "tier_bytes": 0},
+          {"line": 1921, "cycle": 2, "pid": 0, "heap": 2597704, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1951, "cycle": 3, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1980, "cycle": 4, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2007, "cycle": 5, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2034, "cycle": 6, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2061, "cycle": 7, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2088, "cycle": 8, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2115, "cycle": 9, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2142, "cycle": 10, "pid": 0, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "VFS-FILE-IPC:live": [
+          {"line": 1903, "pid": 5, "incarnation": 683, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1937, "pid": 6, "incarnation": 684, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1966, "pid": 7, "incarnation": 685, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 1993, "pid": 8, "incarnation": 686, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2020, "pid": 9, "incarnation": 687, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2047, "pid": 10, "incarnation": 688, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2074, "pid": 11, "incarnation": 689, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2101, "pid": 12, "incarnation": 690, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2128, "pid": 13, "incarnation": 691, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537},
+          {"line": 2155, "pid": 14, "incarnation": 692, "epoch": 1, "descriptors": 6, "descriptions": 74, "references": 78, "endpoints": 2, "queued": 0, "queue_bytes": 0, "shm_objects": 2, "shm_maps": 2, "shm_bytes": 12288, "mapped_pages": 537, "owned_frames": 537}
+        ],
+        "VFS-HEAP:file-ipc-live": [
+          {"line": 1904, "cycle": 0, "pid": 5, "heap": 2630712, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1938, "cycle": 0, "pid": 6, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1967, "cycle": 0, "pid": 7, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1994, "cycle": 0, "pid": 8, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2021, "cycle": 0, "pid": 9, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2048, "cycle": 0, "pid": 10, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2075, "cycle": 0, "pid": 11, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2102, "cycle": 0, "pid": 12, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2129, "cycle": 0, "pid": 13, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2156, "cycle": 0, "pid": 14, "heap": 2630872, "frames": 260695, "user_frames": 28732, "page_tables": 94, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 0, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "SCHED:process_reaped": [
+          {"line": 1914, "pid": 5, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1944, "pid": 6, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 1973, "pid": 7, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2000, "pid": 8, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2027, "pid": 9, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2054, "pid": 10, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2081, "pid": 11, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2108, "pid": 12, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2135, "pid": 13, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0},
+          {"line": 2162, "pid": 14, "user_frames": 534, "page_tables": 8, "swap_blocks": 0, "ipc_cleared": 0}
+        ],
+        "VFS-PARENT:reaped": [
+          {"line": 1917, "parent": 5, "incarnation": 683, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1947, "parent": 6, "incarnation": 684, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 1976, "parent": 7, "incarnation": 685, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2003, "parent": 8, "incarnation": 686, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2030, "parent": 9, "incarnation": 687, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2057, "parent": 10, "incarnation": 688, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2084, "parent": 11, "incarnation": 689, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2111, "parent": 12, "incarnation": 690, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2138, "parent": 13, "incarnation": 691, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0},
+          {"line": 2165, "parent": 14, "incarnation": 692, "status": 37, "descriptors": 0, "live_frames": 0, "stack": 0, "ipc_refs": 0, "namespace": 0, "vfs_caller": 0}
+        ],
+        "VFS-FILE-IPC:settled": [
+          {"line": 1918, "cycle": 1, "pid": 5, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1948, "cycle": 2, "pid": 6, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 1977, "cycle": 3, "pid": 7, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2004, "cycle": 4, "pid": 8, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2031, "cycle": 5, "pid": 9, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2058, "cycle": 6, "pid": 10, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2085, "cycle": 7, "pid": 11, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2112, "cycle": 8, "pid": 12, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2139, "cycle": 9, "pid": 13, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1},
+          {"line": 2166, "cycle": 10, "pid": 14, "epoch": 1, "descriptions": 72, "references": 72, "broker_shm": 1}
+        ],
+        "VFS-HEAP:settled": [
+          {"line": 1919, "cycle": 1, "pid": 5, "heap": 2601976, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1949, "cycle": 2, "pid": 6, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 1978, "cycle": 3, "pid": 7, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2005, "cycle": 4, "pid": 8, "heap": 2602040, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2032, "cycle": 5, "pid": 9, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2059, "cycle": 6, "pid": 10, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2086, "cycle": 7, "pid": 11, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2113, "cycle": 8, "pid": 12, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2140, "cycle": 9, "pid": 13, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0},
+          {"line": 2167, "cycle": 10, "pid": 14, "heap": 2597768, "frames": 261242, "user_frames": 28198, "page_tables": 84, "rows": 4, "row_bytes": 4032, "slots": 512, "table_bytes": 2064384, "reaped": 1, "fd_box_bytes": 10240, "reaped_ipc": 0, "live_ipc": 0, "rr_bytes": 262144, "tier_bytes": 0}
+        ],
+        "VFS-FILE-IPC:complete": [
+          {"line": 2168}
+        ]
+      }
+    }
+  ],
+  "initial_attempt": {
+    "vcpus": 2,
+    "completed_cycles": 4,
+    "status": "fixture assertion: namespace admission still pending",
+    "serial": "target/vfs-l1c-file-ipc-accounting/native-2.serial.log",
+    "image_sha256": "37b133997ddb9546b12211e4d4058db5f61842bff101fd47021a76b228b7c9c8"
+  },
+  "gates": {
+    "descriptor": 0,
+    "ipc": 0,
+    "kernel-host": 0,
+    "phase3.0-1": 0,
+    "phase3.0-2": 0,
+    "phase3.0-4": 0,
+    "production": 0,
+    "registration": 0,
+    "retirement": 0,
+    "scheduler": 0,
+    "service": 0,
+    "swap-slot": 0,
+    "swap1-4": 0,
+    "zram": 0
+  },
+  "ownership_guard_new_findings": {
+    "primary": 4,
+    "candidate": 0
+  },
+  "production_lifecycle_changes": [],
+  "detached_publication": false,
+  "l1c_3": "blocked",
+  "vfs_d1": "deferred"
+}

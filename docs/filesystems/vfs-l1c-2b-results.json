@@ -1,0 +1,204 @@
+{
+  "verdict": "PARTIAL",
+  "l1c3": "BLOCKED",
+  "ordinary_spawn_activation": false,
+  "production_behavior_changes": [],
+  "fixture_changes": [
+    "services/init/src/main.rs",
+    "kernel/src/ipc/vfs_registration/spawn.rs"
+  ],
+  "candidate_root": "/tmp/klc-q1/candidate",
+  "native": [
+    {
+      "cpus": 1,
+      "memory_mib": 2048,
+      "ordinary": {
+        "status": "PASS",
+        "log": "target/vfs-l1c-2b/ordinary-1.log",
+        "serial": "target/vfs-l1c-2b/ordinary-1.serial.log"
+      },
+      "fixture": {
+        "status": "PASS",
+        "serial": "target/vfs-l1c-2b/native/continuation-1.serial.log",
+        "launch": "target/vfs-l1c-2b/native/continuation-1.launch.json",
+        "mixed_cycles": 102,
+        "published": 34,
+        "cancelled_unsent": 34,
+        "cancelled_retained": 34,
+        "adapter_acquisitions": 102,
+        "adapter_disposals": 102,
+        "cancelled_claim_settlements": 68,
+        "published_reaps": 34,
+        "l1p_cycles": 100,
+        "destructive_retirement_guests": 0
+      }
+    },
+    {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "ordinary": {
+        "status": "PASS",
+        "log": "target/vfs-l1c-2b/ordinary-2.log",
+        "serial": "target/vfs-l1c-2b/ordinary-2.serial.log"
+      },
+      "fixture": {
+        "status": "PASS",
+        "serial": "target/vfs-l1c-2b/native/continuation-2.serial.log",
+        "launch": "target/vfs-l1c-2b/native/continuation-2.launch.json",
+        "mixed_cycles": 102,
+        "published": 34,
+        "cancelled_unsent": 34,
+        "cancelled_retained": 34,
+        "adapter_acquisitions": 102,
+        "adapter_disposals": 102,
+        "cancelled_claim_settlements": 68,
+        "published_reaps": 34,
+        "l1p_cycles": 100,
+        "destructive_retirement_guests": 0
+      }
+    },
+    {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "ordinary": {
+        "status": "PASS",
+        "log": "target/vfs-l1c-2b/ordinary-4.log",
+        "serial": "target/vfs-l1c-2b/ordinary-4.serial.log"
+      },
+      "fixture": {
+        "status": "PASS",
+        "serial": "target/vfs-l1c-2b/native/continuation-4.serial.log",
+        "launch": "target/vfs-l1c-2b/native/continuation-4.launch.json",
+        "mixed_cycles": 102,
+        "published": 34,
+        "cancelled_unsent": 34,
+        "cancelled_retained": 34,
+        "adapter_acquisitions": 102,
+        "adapter_disposals": 102,
+        "cancelled_claim_settlements": 68,
+        "published_reaps": 34,
+        "l1p_cycles": 100,
+        "destructive_retirement_guests": 0
+      }
+    }
+  ],
+  "fixture_image_sha256": "273982bc01d6c16a31cfa7b15ad6e084cd680582e907c4e9f3ebabb45d34dd21",
+  "per_request_evidence": "target/vfs-l1c-2b/native/per-request.log",
+  "adapter": {
+    "success": "PASS",
+    "cancel_unsent": "PASS",
+    "cancel_retained": "PASS",
+    "failed_preparation": "NOT_RUN",
+    "service_refusal": "NOT_RUN",
+    "parent_termination": "NOT_RUN",
+    "retirement": "NOT_RUN",
+    "late_acknowledgement": "NOT_RUN",
+    "duplicate_local_cancel": "PASS",
+    "duplicate_transport_terminal": "NOT_RUN"
+  },
+  "retirement": {
+    "R1": "NOT_RUN",
+    "R2": "NOT_RUN",
+    "R3": "NOT_RUN",
+    "R4": "NOT_RUN",
+    "R5": "NOT_RUN",
+    "trusted_runtime_replacement": "BLOCKED",
+    "historical_klc_evidence": "/tmp/klc-q1/evidence/klc-q1.md"
+  },
+  "accounting": {
+    "status": "PARTIAL",
+    "host_mixed_cycles": 112,
+    "native_mixed_cycles_total": 306,
+    "ledger": "docs/filesystems/vfs-l1c-2b.md",
+    "published_child_reap": {
+      "frames": 551,
+      "page_tables": 8,
+      "swap_blocks": 0
+    }
+  },
+  "regressions": {
+    "registration": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/registration.log",
+      "tests": 104,
+      "mixed_cycles": 112,
+      "klc_cycles": [
+        100,
+        100
+      ]
+    },
+    "ipc": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/ipc.log"
+    },
+    "service": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/service.log"
+    },
+    "descriptor": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/descriptor.log"
+    },
+    "scheduler": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/scheduler.log"
+    },
+    "kernel-host": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/kernel-host.log"
+    },
+    "retirement": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/retirement.log"
+    },
+    "zram": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/zram.log"
+    },
+    "swap-slot": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/swap-slot.log"
+    },
+    "primary-compile": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/primary-compile.log"
+    },
+    "transaction-session": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/transaction-session.log"
+    },
+    "mmap": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/mmap.log"
+    },
+    "swap1": {
+      "status": "PASS",
+      "log": "target/vfs-l1c-2b/swap1.log",
+      "cpus": 2,
+      "memory_mib": 2048,
+      "serial": "target/vfs-l1c-2b/swap1.serial.log"
+    }
+  },
+  "fault_driven_swap_in": "NOT_RUN",
+  "ownership_guard": {
+    "primary": {
+      "status": "FAIL",
+      "references": 71,
+      "existing_findings": 4,
+      "findings_outside_baseline": 0,
+      "log": "target/vfs-l1c-2b/guard-after.log"
+    },
+    "candidate": {
+      "status": "PASS",
+      "references": 68,
+      "findings": 0,
+      "log": "target/vfs-l1c-2b/candidate-guard.log"
+    }
+  },
+  "source_equivalence": {
+    "status": "PASS",
+    "baseline_paths": 12346,
+    "unexpected_drift": [],
+    "log": "target/vfs-l1c-2b/source-equivalence.json"
+  }
+}

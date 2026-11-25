@@ -18,6 +18,10 @@ mod reply_identity;
 #[path = "process/pid.rs"]
 mod pid;
 
+#[cfg(test)]
+#[path = "process/pending_state.rs"]
+mod pending_state;
+
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
 #[path = "sched/doorbell_state.rs"]
 pub mod doorbell_state;

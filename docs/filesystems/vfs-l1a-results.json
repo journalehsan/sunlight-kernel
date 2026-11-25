@@ -1,0 +1,79 @@
+{
+  "verdict": "BLOCKED",
+  "production_settlement_implemented": true,
+  "ready_for_pending_child_integration": false,
+  "ready_for_vfs_d1": false,
+  "historical_exhaustion": {
+    "observed": true,
+    "evidence": "target/vfs-l1/namespace-final.log",
+    "current_run": "PASS",
+    "current_evidence": "target/klc-1/baseline.log"
+  },
+  "corrected_slot_recovery": "PASS",
+  "hundred_cycles": "PASS",
+  "destruction_proof_race_matrix": "NOT_RUN",
+  "destruction_path_exactly_once_accounting": "NOT_RUN",
+  "evidence_directory": "target/vfs-l1a",
+  "ipc": [
+    "PASS",
+    168,
+    "ipc.log"
+  ],
+  "registration_selected": [
+    "PASS",
+    88,
+    "registration.log"
+  ],
+  "registration_filtered": 1,
+  "vfs_service": [
+    "PASS",
+    47,
+    "service.log"
+  ],
+  "scheduler": [
+    "PASS",
+    "scheduler.log"
+  ],
+  "descriptor_library": [
+    "PASS",
+    18,
+    "descriptor.log"
+  ],
+  "kernel_feature_checks": [
+    "PASS",
+    "kernel-final.log",
+    "kfp2a5_transaction_test,helios_runtime_mmap,session_launch_test"
+  ],
+  "compile_attempts_missing_fixture_environment": [
+    "kernel.log",
+    "kernel-configured.log"
+  ],
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "outside_baseline": 4,
+    "l1a_delta": 0,
+    "log": "guard.log"
+  },
+  "ordinary_boot": [
+    "FAIL",
+    "boot.log",
+    "ownership guard before QEMU"
+  ],
+  "native": {
+    "up": "NOT_RUN",
+    "smp": "NOT_RUN"
+  },
+  "klc_1": {
+    "verdict": "PARTIAL",
+    "result": "docs/kernel/klc-1-results.json",
+    "host_slot_recovery": "PASS",
+    "host_replacement_cycles": 100,
+    "qualification": "BLOCKED",
+    "native": {
+      "up": "NOT_RUN",
+      "smp": "NOT_RUN"
+    }
+  },
+  "production_settlement_scope": "Embedded service private backing after last-owner exit and local binding drain"
+}

@@ -506,6 +506,102 @@ fn main() {
         "--cfg curve25519_dalek_backend=\"serial\""
     );
 
+    if env::var_os("CARGO_FEATURE_VFS_L1C_1_TEST").is_some() {
+        let feature = if env::var_os("CARGO_FEATURE_VFS_L1C_FILE_IPC_TEST").is_some() {
+            "vfs-l1c-file-ipc-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_PARENT_LIFECYCLE_TEST").is_some() {
+            "vfs-l1c-parent-lifecycle-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_R3_TEST").is_some() {
+            "vfs-l1c-r3-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_R2_TEST").is_some() {
+            "vfs-l1c-r2-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_R1B_TEST").is_some() {
+            "vfs-l1c-r1b-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_R1_TEST").is_some() {
+            "vfs-l1c-r1-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_ADAPTER_ACCOUNTING_TEST").is_some() {
+            "vfs-l1c-adapter-accounting-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_R5_TEST").is_some() {
+            "vfs-l1c-r5-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_R4_TEST").is_some() {
+            "vfs-l1c-r4-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_L1C_2_TEST").is_some() {
+            "vfs-l1c-2-test"
+        } else {
+            "vfs-l1c-1-test"
+        };
+        let feature = if env::var_os("CARGO_FEATURE_VFS_L1C_ADAPTER_ACCOUNTING_TEST").is_some()
+            && !matches!(feature, "vfs-l1c-adapter-accounting-test" | "vfs-l1c-parent-lifecycle-test" | "vfs-l1c-file-ipc-test")
+        {
+            format!("{feature},vfs-l1c-adapter-accounting-test")
+        } else {
+            feature.to_owned()
+        };
+        println!("cargo:rerun-if-changed=../services/init");
+        let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+        if matches!(feature.as_str(), "vfs-l1c-parent-lifecycle-test" | "vfs-l1c-file-ipc-test") {
+            build_package(
+                workspace_root,
+                &scratch_target_dir.join(&feature),
+                &out,
+                EmbeddedBinary {
+                    package: "sunlight-init",
+                    output: "vfs-stat-caller",
+                    rustflags: service_rustflags,
+                    args: &["--release", "--bin", "vfs-stat-caller", "--features", &format!("{feature},stat-failure-test")],
+                },
+            );
+        }
+        build_package(
+            workspace_root,
+            &scratch_target_dir.join(&feature),
+            &out,
+            EmbeddedBinary {
+                package: "sunlight-init",
+                output: "sunlight-init",
+                rustflags: service_rustflags,
+                args: &["--release", "--features", &feature],
+            },
+        );
+    }
+
+    if env::var_os("CARGO_FEATURE_VFS_L1C_R3_TEST").is_some() {
+        println!("cargo:rerun-if-changed=../sunlight-utils");
+        let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+        build_package(
+            workspace_root,
+            &scratch_target_dir.join("vfs-l1c-r3-test"),
+            &out,
+            EmbeddedBinary {
+                package: "sunlight-utils",
+                output: "sunlight-utils",
+                rustflags: service_rustflags,
+                args: &["--release", "--bin", "sunlight-utils", "--features", "vfs-l1c-r3-test"],
+            },
+        );
+    }
+
+    if env::var_os("CARGO_FEATURE_ZRAM_LIFECYCLE_TEST").is_some() {
+        let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+        for (package, source) in [
+            ("sunlight-init", "../services/init"),
+            ("sunlight-utils", "../sunlight-utils"),
+        ] {
+            println!("cargo:rerun-if-changed={source}");
+            build_package(
+                workspace_root,
+                &scratch_target_dir.join("zram-lifecycle-test"),
+                &out,
+                EmbeddedBinary {
+                    package,
+                    output: package,
+                    rustflags: service_rustflags,
+                    args: &["--release", "--bin", package, "--features", "zram-lifecycle-test"],
+                },
+            );
+        }
+    }
+
     let binaries = [
         EmbeddedBinary {
             package: "sunlight-init",

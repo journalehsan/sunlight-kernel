@@ -87,6 +87,8 @@
 //! - pick_next_* only returns Ready tasks (or falls back safely).
 
 pub mod accounting;
+pub(crate) mod image_retirement;
+use image_retirement::PrivateImageRetired;
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
 mod doorbell_native;
 #[cfg(all(debug_assertions, any(feature = "native_doorbell_test", feature = "fastlane_doorbell_test")))]
@@ -428,6 +430,7 @@ pub struct Scheduler {
     #[cfg(feature = "cpu_accounting_diag")]
     pub cpu_events: [[u64; 3]; MAX_CORES],
     pub processes: Vec<Process>,
+    pub(crate) pending_children: crate::process::pending_state::Pending<alloc::boxed::Box<Process>, 8>,
 
     /// Per-core scheduling state. Only indices 0..online_cores are active.
     pub cores: [CoreState; MAX_CORES],
@@ -462,6 +465,7 @@ impl Scheduler {
             cpu_events: [[0; 3]; MAX_CORES],
             supervision: sunlight_ipc::supervision::Supervisor::new(),
             processes: Vec::new(),
+            pending_children: crate::process::pending_state::Pending::new(),
             cores: [const { CoreState::new() }; MAX_CORES],
             online_cores: 1,
             global_tick: 0,
@@ -482,6 +486,10 @@ impl Scheduler {
 
     #[inline]
     fn set_core_current_task(&mut self, cpu_id: usize, task: Option<usize>) {
+        #[cfg(all(debug_assertions, feature = "vfs_l1c_1_test"))]
+        if let Some(idx) = task {
+            crate::ipc::vfs_registration::spawn::fixture::observe_dispatch(self, idx);
+        }
         #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
         let previous;
         match SCHEDULER_MODE {
@@ -626,6 +634,27 @@ impl Scheduler {
         );
     }
 
+    pub(crate) fn next_process_pid(&self) -> Option<usize> {
+        crate::process::pid::next_pid(
+            self.processes.iter().map(|p| p.pid).chain(self.pending_children.pids()),
+        )
+    }
+
+    pub(crate) fn reserve_private_publication(&mut self) -> Result<(), ()> {
+        self.processes.try_reserve(1).map_err(|_| ())?;
+        for cpu in 0..self.online_cores.min(MAX_CORES) {
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                CORE_STATES[cpu].lock().rr_queue.try_reserve(1).map_err(|_| ())?;
+            } else {
+                let core = &mut self.cores[cpu];
+                core.run_queue_high.try_reserve(1).map_err(|_| ())?;
+                core.run_queue_medium.try_reserve(1).map_err(|_| ())?;
+                core.run_queue_low.try_reserve(1).map_err(|_| ())?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn add_process_after_reaping(&mut self, mut process: Process) -> usize {
         // Process construction reserves identity before resource setup.
         // Publication must not transfer those resources to another incarnation.
@@ -653,6 +682,14 @@ impl Scheduler {
         if process.foreground.incarnation == 0 {
             process.foreground.forced_exit = Some(129);
         }
+        self.insert_attributed_process(process)
+    }
+
+    pub(crate) fn insert_attributed_process(&mut self, process: Process) -> usize {
+        assert!(
+            !self.pending_children.pids().any(|pid| pid == process.pid),
+            "insertion collided with a private PID reservation"
+        );
         let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
         let online = self.online_cores;
 
@@ -932,6 +969,13 @@ impl Scheduler {
                     .filter(|&&queued| queued == idx)
                     .count()
             })
+            .sum()
+    }
+
+    #[cfg(all(debug_assertions, feature = "vfs_l1p_test"))]
+    pub(crate) fn pending_test_ready_count(&self) -> usize {
+        (0..self.online_cores.min(MAX_CORES))
+            .map(|cpu| CORE_STATES[cpu].lock().rr_queue.len() + self.cores[cpu].total_ready())
             .sum()
     }
 
@@ -3017,7 +3061,7 @@ impl Scheduler {
             }
         }
 
-        {
+        let endpoints_revoked = {
             let mut pmm = crate::PMM.lock();
             let mut caps = crate::capability::CAP_BROKER.lock();
             caps.revoke_endpoints_owned_by(pid);
@@ -3028,11 +3072,19 @@ impl Scheduler {
                 &mut *pmm,
                 &mut *caps,
             );
-        }
+            !caps.has_owned_endpoints(pid)
+        };
 
         #[cfg(feature = "scheduler_timer_trace")]
         crate::scheduler_timer_trace::checkpoint(self, 21, pid);
         let reaped_generation = self.processes[idx].address_space.identity().generation;
+        let retiring_owner = self.processes[idx].state == ProcessState::Finished
+            && self.processes[idx].owns_address_space;
+        let retired_image = crate::capability::delivery::RecipientIdentity {
+            pid,
+            incarnation: self.processes[idx].foreground.incarnation,
+            vm_generation: reaped_generation,
+        };
         let reclaim = if self.processes[idx].owns_address_space {
             let mut pmm = crate::PMM.lock();
             unsafe {
@@ -3160,6 +3212,14 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        if let Some(proof) = PrivateImageRetired::after_exit_cleanup(
+            retired_image,
+            retiring_owner,
+            self.processes[idx].address_space.is_reclaimed(),
+            endpoints_revoked,
+        ) {
+            crate::ipc::complete_vfs_image_exit(proof);
+        }
         #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_orphan_fixture"))]
         if matches!(name, "probe" | "helios-orphan-parent")
             || (cfg!(feature = "helios_runtime_mmap") && name == "mmap-probe")
@@ -4733,10 +4793,9 @@ fn finish_current_process_scoped(code: i32, reason: &str, group_exit: bool) -> u
     #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
     crate::capability::bell_race::finished(bell_exit_actor, 0);
     #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
-    {
-        drop(sched);
-        crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::EXIT_GUARD_RELEASED,0,0,0);
-    }
+    drop(sched);
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::EXIT_GUARD_RELEASED,0,0,0);
     idle_top
 }
 

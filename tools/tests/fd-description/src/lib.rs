@@ -1,6 +1,30 @@
 //! Host harness for shared open descriptions. Pipe/eventfd backends are inert;
 //! their live behavior is covered by the native pipeline gate.
 extern crate alloc;
+mod linux_procfs {
+    pub enum OpenFile {}
+}
+mod inet_socket {
+    pub fn retain(_: u32) { unreachable!("host fixture has no network sockets") }
+    pub fn release(_: u32) { unreachable!("host fixture has no network sockets") }
+}
+use inet_socket as route_netlink;
+mod memory {
+    pub mod accounting {
+        pub enum PhysicalMemoryClass { SharedMemory }
+    }
+    pub mod pmm {
+        use x86_64::PhysAddr;
+        pub enum PhysicalMemoryManager {}
+        impl PhysicalMemoryManager {
+            pub fn alloc_frame_class(&mut self, _: super::accounting::PhysicalMemoryClass) -> Option<PhysAddr> { match *self {} }
+            pub fn free_frame(&mut self, _: PhysAddr) { match *self {} }
+        }
+    }
+    pub mod security {
+        pub fn sanitize_user_frame(_: x86_64::PhysAddr, _: x86_64::VirtAddr) -> bool { unreachable!("host fixture has no PMM") }
+    }
+}
 mod pipe {
     pub fn socket_retain(_: u32, _: usize) {}
     pub fn pipe_retain_end(_: u32, _: bool) {}

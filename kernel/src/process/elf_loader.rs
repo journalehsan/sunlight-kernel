@@ -138,6 +138,10 @@ pub(super) mod handoff {
 
     pub(in crate::process) const INTERPRETER: &[u8] = b"/lib/helios/ld-handoff.so.1";
     const RESOURCE: &[u8] = include_bytes!(env!("SUNLIGHT_HELIOS_HANDOFF_INTERPRETER"));
+    #[cfg(feature = "helios_gnu_interpreter_probe")]
+    const GNU_INTERPRETER: &[u8] = b"/lib64/ld-linux-x86-64.so.2";
+    #[cfg(feature = "helios_gnu_interpreter_probe")]
+    const GNU_RESOURCE: &[u8] = include_bytes!(env!("SUNLIGHT_HELIOS_GNU_INTERPRETER"));
     const PIE_BASE: u64 = 0x2000_0000;
     const INTERP_BASE: u64 = 0x8000_0000;
     const INTERP_LIMIT: u64 = 0x8100_0000;
@@ -311,9 +315,12 @@ pub(super) mod handoff {
                 Err("PT_INTERP policy")
             };
         };
-        if path != INTERPRETER {
-            return Err("PT_INTERP policy");
-        }
+        let (resource, gnu) = match path {
+            INTERPRETER => (RESOURCE, false),
+            #[cfg(feature = "helios_gnu_interpreter_probe")]
+            GNU_INTERPRETER if fault.is_none() => (GNU_RESOURCE, true),
+            _ => return Err("PT_INTERP policy"),
+        };
         let mut mutated_header = [0; 64];
         let resource = match fault {
             Some(Fault::Missing) => None,
@@ -323,11 +330,16 @@ pub(super) mod handoff {
                 Some(mutated_header.as_slice())
             }
             Some(Fault::Malformed) => Some(&RESOURCE[..RESOURCE.len().min(63)]),
-            _ if RESOURCE.is_empty() => None,
-            _ => Some(RESOURCE),
+            _ if resource.is_empty() => None,
+            _ => Some(resource),
         }
         .ok_or("interpreter lookup")?;
-        let ld = DynamicImage::parse(resource).map_err(|error| {
+        let ld = if gnu {
+            DynamicImage::parse_bundle_image(resource)
+        } else {
+            DynamicImage::parse(resource)
+        }
+        .map_err(|error| {
             crate::serial_println!("[HELIOS-HANDOFF] interpreter validation: {:?}", error);
             "interpreter validation"
         })?;
@@ -356,7 +368,8 @@ pub(super) mod handoff {
             .program_headers(&app_plans)
             .map_err(|_| "program-header handoff")?;
         crate::serial_println!(
-            "[HELIOS-HANDOFF] interpreter=/lib/helios/ld-handoff.so.1 source=kernel pid={}",
+            "[HELIOS-HANDOFF] interpreter={} source=kernel pid={}",
+            if gnu { "/lib64/ld-linux-x86-64.so.2" } else { "/lib/helios/ld-handoff.so.1" },
             process.pid
         );
         if let Some(budget) = match fault {
@@ -402,6 +415,17 @@ pub(super) mod handoff {
             pmm.clear_test_allocation_failure();
         }
         mapped.ok_or("interpreter mapping")?;
+        if gnu {
+            return Ok(Some(Handoff {
+                header: app.header,
+                phdr,
+                base: INTERP_BASE,
+                app_entry: app.header.entry + bias,
+                entry: ld.header.entry + INTERP_BASE,
+                #[cfg(feature = "helios_dynamic_elf_tls_fixture")]
+                thread_pointer: 0,
+            }));
+        }
         #[cfg(feature = "helios_dynamic_elf_shared_fixture")]
         if let Some(shared) = shared {
             if bytes == GRAPH_APP {

@@ -1,0 +1,70 @@
+{
+  "verdict": "PARTIAL",
+  "implementation": {
+    "last_owner_exit_private_image_completion": "PASS",
+    "vfs_private_backing_settlement": "PASS",
+    "completion_domain": "Owned endpoint and task-local IPC teardown plus last-owner private VM reclamation",
+    "image_identity": ["pid", "incarnation", "vm_generation"],
+    "consumer_identity": ["endpoint", "owner_image", "registration_epoch"],
+    "registration_capacity": 4,
+    "completion_history_capacity": 0,
+    "embedded_replacement_provenance_path": "BLOCKED",
+    "exec_and_endpoint_only_completion": "BLOCKED"
+  },
+  "historical_exhaustion": {
+    "status": "PASS",
+    "test": "lost_retain_reply_at_service_exit_exhausts_epoch_slots",
+    "evidence": "target/klc-1/baseline.log",
+    "simulation": "Production kernel registration runtime and service lease table with a unit payload"
+  },
+  "corrected_recovery": {
+    "status": "PASS",
+    "full_capacity_test": "exact_exit_completion_recovers_one_slot_at_full_capacity",
+    "sustained_test": "last_owner_exit_recovers_unanswered_retains_for_100_replacements",
+    "delayed_binding_test": "exit_completion_stays_with_epoch_until_installed_binding_drains",
+    "cycles": 100,
+    "rows_after_each_cycle": 1,
+    "retired_completion_markers_after_each_cycle": 0,
+    "evidence": "target/klc-1/registration.log",
+    "simulation": "Scheduler and broker transitions, VM teardown, copy boundary and proof inputs"
+  },
+  "races_and_accounting": {
+    "withdrawal_with_surviving_authority": "PASS",
+    "incomplete_proof_retains_ownership": "PASS",
+    "queued_control_and_delivered_acquired_retain": "PASS",
+    "ack_first_and_withdrawal_first_serial_orders": "PASS",
+    "actual_ack_retirement_race": "NOT_RUN",
+    "wrong_incarnation_generation_and_stale_epoch": "PASS",
+    "duplicate_completion_and_late_ack": "PASS",
+    "simulated_pid_endpoint_and_registration_slot_reuse": "PASS",
+    "replacement_before_completion_and_independent_retirements": "PASS",
+    "delayed_local_binding_drain": "PASS",
+    "actual_shared_resource_transfer_and_failure_injection": "NOT_RUN",
+    "kernel_ipc_and_retirement_unit_controls": "PASS",
+    "whole_system_resource_census": "NOT_RUN"
+  },
+  "host": {
+    "ipc": ["PASS", 168, 9, "target/klc-1/ipc.log"],
+    "registration": ["PASS", 92, "target/klc-1/registration.log"],
+    "service": ["PASS", 47, "target/klc-1/service.log"],
+    "descriptor": ["PASS", 18, "target/klc-1/descriptor.log"],
+    "scheduler": ["PASS", "target/klc-1/scheduler.log", "target/scheduler-b-evidence/focused-host.log"],
+    "kernel_library": ["PASS", 213, "target/klc-1/kernel_host.log"],
+    "retirement": ["PASS", 21, "target/klc-1/retirement.log"]
+  },
+  "compile_only": {
+    "transaction_and_session": ["PASS", "target/klc-1/kernel.log"],
+    "mmap": ["PASS", "target/klc-1/mmap_final.log"],
+    "mmap_incorrect_fixture_path_attempt": ["FAIL", "target/klc-1/mmap.log"]
+  },
+  "ownership_guard": {"status": "FAIL", "references": 71, "outside_baseline": 4, "klc_delta": 0, "evidence": "target/klc-1/guard_final.log"},
+  "ordinary_boot": {"status": "FAIL", "boundary": "ownership guard before QEMU", "evidence": "target/klc-1/boot_final.log"},
+  "native": {"up": "NOT_RUN", "smp": "NOT_RUN"},
+  "readiness": {
+    "vfs_l1a_host_review": "PASS",
+    "vfs_l1a_qualification": "BLOCKED",
+    "vfs_l1_pending_child_integration": "BLOCKED",
+    "vfs_d1": "BLOCKED",
+    "provisional_integration_qualification_exception": "BLOCKED"
+  }
+}

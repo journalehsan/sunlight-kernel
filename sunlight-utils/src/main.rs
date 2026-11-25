@@ -101,6 +101,8 @@ fn run(args: &[&str]) -> i32 {
         "nice" => cmd_nice(rest),
         "renice" => cmd_renice(rest),
         "stat" => cmd_stat(rest),
+        #[cfg(feature = "vfs-l1c-r3-test")]
+        "vfs-r3-stat" => vfs_r3_stat(rest),
         "file" => cmd_file(rest),
         "head" => cmd_head(rest),
         "wc" => cmd_wc(rest),
@@ -1181,6 +1183,28 @@ fn cmd_renice(args: &[&str]) -> i32 {
     }
 }
 
+#[cfg(feature = "vfs-l1c-r3-test")]
+fn vfs_r3_stat(args: &[&str]) -> i32 {
+    assert_eq!(cmd_stat(args), 0);
+    let mut before = [0; libc::MAX_PATH];
+    let cwd_len = libc::getcwd(&mut before).unwrap();
+    debug_log_static("[VFS-R3] userspace stat /tmp succeeded");
+    loop {
+        match unsafe { libc::sys::syscall2(0xf1c1, 9, 0) } {
+            0 => libc::yield_now(),
+            1 => break,
+            _ => panic!("unexpected R3 child checkpoint result"),
+        }
+    }
+    assert!(matches!(libc::stat(b"/tmp"), Err(Errno::Again)));
+    assert_eq!(libc::chdir(b"/tmp"), Err(Errno::Again));
+    let mut after = [0; libc::MAX_PATH];
+    assert_eq!(libc::getcwd(&mut after), Ok(cwd_len));
+    assert_eq!(&before[..cwd_len], &after[..cwd_len]);
+    debug_log_static("[VFS-R3] userspace stat=Again chdir=Again getcwd=unchanged");
+    0
+}
+
 fn cmd_stat(args: &[&str]) -> i32 {
     let Some(path) = args.first() else {
         let _ = write_all(b"stat: missing operand\n");
@@ -1603,6 +1627,17 @@ const FREEZRAM_MAX_PAGES: u64 = 4096;
 /// Bounded round-trip diagnostic for the real anonymous-page swap pipeline.
 fn cmd_freezram(args: &[&str]) -> i32 {
     match args {
+        #[cfg(feature = "zram-lifecycle-test")]
+        ["lifecycle-test"] => {
+            let mapping = allocate_freezram_pattern(16 * 4096).expect("lifecycle mmap");
+            assert_eq!(unsafe { libc::sys::syscall2(0xf1c4, 1, mapping as u64) }, 1);
+            let fill = libc::freezram_fill(mapping, 12).expect("lifecycle fill");
+            assert_eq!(fill.error, FillError::None as u64);
+            assert_eq!(fill.stored_pages, 12);
+            assert_eq!(unsafe { libc::sys::syscall2(0xf1c4, 2, mapping as u64) }, 1);
+            // Leave 12 swapped and four resident anonymous pages for SYS_EXIT.
+            37
+        }
         ["status"] => print_zram_devices(),
         [] | [_] => {
             let requested_pages = match args {
@@ -1639,6 +1674,24 @@ fn freezram_pattern(page_index: u64, byte_index: usize) -> u8 {
         .wrapping_add(stripe.wrapping_mul(11)) as u8
 }
 
+fn allocate_freezram_pattern(length_bytes: usize) -> Result<*mut u8, Errno> {
+    let mapping = libc::mman::mmap(
+        core::ptr::null_mut(),
+        length_bytes,
+        libc::mman::PROT_READ | libc::mman::PROT_WRITE,
+        libc::mman::MAP_PRIVATE | libc::mman::MAP_ANONYMOUS,
+        -1,
+        0,
+    )?;
+    let bytes = unsafe { core::slice::from_raw_parts_mut(mapping, length_bytes) };
+    for (page_index, page) in bytes.chunks_exact_mut(4096).enumerate() {
+        for (byte_index, byte) in page.iter_mut().enumerate() {
+            *byte = freezram_pattern(page_index as u64, byte_index);
+        }
+    }
+    Ok(mapping)
+}
+
 fn run_freezram_round_trip(requested_pages: u64) -> i32 {
     let Some(length_bytes) = requested_pages
         .checked_mul(4096)
@@ -1647,28 +1700,14 @@ fn run_freezram_round_trip(requested_pages: u64) -> i32 {
         let _ = write_all(b"freezram: requested range overflows address space\n");
         return 2;
     };
-    let mapping = match libc::mman::mmap(
-        core::ptr::null_mut(),
-        length_bytes,
-        libc::mman::PROT_READ | libc::mman::PROT_WRITE,
-        libc::mman::MAP_PRIVATE | libc::mman::MAP_ANONYMOUS,
-        -1,
-        0,
-    ) {
+    let mapping = match allocate_freezram_pattern(length_bytes) {
         Ok(mapping) => mapping,
         Err(_) => {
             let _ = write_all(b"freezram: anonymous allocation failed\n");
             return 1;
         }
     };
-
     let bytes = unsafe { core::slice::from_raw_parts_mut(mapping, length_bytes) };
-    for page_index in 0..requested_pages {
-        let page_start = page_index as usize * 4096;
-        for byte_index in 0..4096 {
-            bytes[page_start + byte_index] = freezram_pattern(page_index, byte_index);
-        }
-    }
 
     print_swap_used("before fill: ");
     let fill = match libc::freezram_fill(mapping, requested_pages) {

@@ -217,6 +217,32 @@ impl<const N: usize> Ownership<N> {
         self.entries.iter().flatten().count()
     }
 
+    pub fn contains(&self, id: u64) -> bool {
+        self.slot(id).is_ok()
+    }
+
+    pub fn holds(&self, receipt: Receipt) -> bool {
+        self.entries.iter().flatten().any(|entry| {
+            matches!(entry, Lease::Held(held) if *held == receipt)
+        })
+    }
+
+    /// The transport may discard a request only while it still owns the
+    /// single-send frame. No caller can use this operation after a pull.
+    pub fn discard_unsent(&mut self, frame: Frame) -> Result<(), Error> {
+        let Frame::Retain { request_id, .. } = frame else {
+            return Err(Error::State);
+        };
+        let slot = self.slot(request_id)?;
+        match self.entries[slot] {
+            Some(Lease::Pending { request, .. }) if request.request() == frame => {
+                self.entries[slot] = None;
+                Ok(())
+            }
+            _ => Err(Error::State),
+        }
+    }
+
     /// Bounded retry inventory; enumeration never transfers or frees ownership.
     /// Only releases are retryable. Pending retains must not be retransmitted.
     pub fn releases(&self) -> impl Iterator<Item = Frame> + '_ {

@@ -1,0 +1,224 @@
+{
+  "qualification": "PARTIAL",
+  "vfs_l1c_3": "BLOCKED",
+  "candidate_root": "/tmp/klc-q1/candidate",
+  "evidence_root": "target/vfs-l1c-2b-r5",
+  "native": {
+    "memory_mib": 2048,
+    "accelerator": "tcg",
+    "run_order": [
+      2,
+      1,
+      4
+    ],
+    "image_hashes": "final/r5-images.sha256",
+    "serial_directory": "final",
+    "cases": {
+      "published_child": [
+        "PASS",
+        "PASS",
+        "UNQUALIFIED"
+      ],
+      "cancelled_child": [
+        "PASS",
+        "PASS",
+        "UNQUALIFIED"
+      ],
+      "reused_continuation_slot": [
+        "PASS",
+        "PASS",
+        "UNQUALIFIED"
+      ],
+      "reused_service_registration_row": "NOT_RUN"
+    },
+    "matrix": [
+      {
+        "vcpus": 2,
+        "status": "PASS",
+        "serial": "r5-2.serial.log",
+        "slot": 0,
+        "epoch": 1,
+        "published": {
+          "child": 5,
+          "request": 2,
+          "identity": {
+            "incarnation": 683,
+            "vm": 1351,
+            "service": 3,
+            "service_incarnation": 50,
+            "service_vm": 25
+          },
+          "lines": {
+            "parked": 1891,
+            "receipt": 1901,
+            "binding": 1902,
+            "committed": 1905,
+            "enqueue": 1906,
+            "rejected": 1907,
+            "disposed": 1908,
+            "dispatch": 1909,
+            "reap": 1965,
+            "wait": 1939,
+            "release": 1964
+          },
+          "resources": {
+            "frames": 551,
+            "tables": 8,
+            "swap": 0
+          }
+        },
+        "cancelled": {
+          "child": 6,
+          "request": 4,
+          "identity": {
+            "incarnation": 685,
+            "vm": 1355,
+            "service": 3,
+            "service_incarnation": 50,
+            "service_vm": 25
+          },
+          "lines": {
+            "parked": 1955,
+            "receipt": 1961,
+            "reused": 1962,
+            "held": 1963,
+            "teardown": 1971,
+            "heap_drop": 1972,
+            "disposed": 1974,
+            "reclaimed": 1975,
+            "rejected": 1976,
+            "compensation": 1977,
+            "release": 1979,
+            "settled": 1980
+          },
+          "resources": {
+            "descriptors": 3,
+            "frames": 551,
+            "tables": 8,
+            "swap": 0
+          }
+        }
+      },
+      {
+        "vcpus": 1,
+        "status": "PASS",
+        "serial": "r5-1.serial.log",
+        "slot": 0,
+        "epoch": 1,
+        "published": {
+          "child": 5,
+          "request": 2,
+          "identity": {
+            "incarnation": 683,
+            "vm": 1351,
+            "service": 3,
+            "service_incarnation": 50,
+            "service_vm": 25
+          },
+          "lines": {
+            "parked": 1887,
+            "receipt": 1897,
+            "binding": 1898,
+            "committed": 1901,
+            "enqueue": 1902,
+            "rejected": 1903,
+            "disposed": 1904,
+            "dispatch": 1905,
+            "reap": 1952,
+            "wait": 1935,
+            "release": 1963
+          },
+          "resources": {
+            "frames": 551,
+            "tables": 8,
+            "swap": 0
+          }
+        },
+        "cancelled": {
+          "child": 6,
+          "request": 4,
+          "identity": {
+            "incarnation": 685,
+            "vm": 1355,
+            "service": 3,
+            "service_incarnation": 50,
+            "service_vm": 25
+          },
+          "lines": {
+            "parked": 1951,
+            "receipt": 1960,
+            "reused": 1961,
+            "held": 1962,
+            "teardown": 1964,
+            "heap_drop": 1965,
+            "disposed": 1967,
+            "reclaimed": 1968,
+            "rejected": 1969,
+            "compensation": 1970,
+            "release": 1975,
+            "settled": 1976
+          },
+          "resources": {
+            "descriptors": 3,
+            "frames": 551,
+            "tables": 8,
+            "swap": 0
+          }
+        }
+      },
+      {
+        "vcpus": 4,
+        "status": "STOPPED",
+        "serial": "r5-4.serial.log"
+      }
+    ]
+  },
+  "pilot": {
+    "serial": "pilot/r5-2.serial.log",
+    "status": "CHECKER_IDENTITY_WINDOW_ERROR"
+  },
+  "regressions": {
+    "registration": {
+      "status": "PASS",
+      "tests": 105,
+      "log": "registration.log"
+    },
+    "ownership": {
+      "status": "PASS",
+      "cycles": 112,
+      "test": "publication_mixed_cycles_and_boundary_failures",
+      "log": "registration.log"
+    },
+    "transaction_session_compile": {
+      "status": "PASS",
+      "log": "transaction-session.log"
+    },
+    "mmap_compile": {
+      "status": "PASS",
+      "log": "mmap.log"
+    },
+    "candidate_ownership_guard": {
+      "status": "PASS",
+      "new_findings": 0,
+      "log": "candidate-guard.log"
+    },
+    "swap1": {
+      "status": "PASS",
+      "vcpus": 4,
+      "log": "swap1.log"
+    },
+    "ordinary_boot": {
+      "status": "PASS",
+      "vcpus": 2,
+      "log": "phase3.0.log"
+    }
+  },
+  "production_repair": false,
+  "remaining": {
+    "full_resource_census": "OPEN",
+    "populated_swap_teardown": "NOT_RUN",
+    "fault_driven_swap_in": "NOT_RUN",
+    "interactive_btop_and_qalculate": "NOT_RUN",
+    "vfs_d1": "DEFERRED"
+  }
+}

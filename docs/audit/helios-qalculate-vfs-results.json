@@ -1,0 +1,41 @@
+{
+  "verdict": "BLOCKED",
+  "ownership_guard": {
+    "status": "FAIL",
+    "total_references": 71,
+    "remaining_additions": 4,
+    "findings": [
+      {"site": "kernel/src/process/mmap.rs:272", "origin": "working tree", "classification": "new legacy file consumer"},
+      {"site": "kernel/src/arch/x86_64/syscall.rs:6259", "origin": "ca178af0c", "classification": "new legacy FAT capacity consumer"},
+      {"site": "kernel/src/linux_procfs.rs:173", "origin": "ca178af0c", "classification": "new legacy topology observer"},
+      {"site": "kernel/src/storage.rs:123", "origin": "ca178af0c", "classification": "constructor comparison artifact; new legacy capacity sampling"}
+    ]
+  },
+  "ordinary_boot": {"status": "FAIL", "command": "./tools/test.sh", "exit_code": 1, "qemu": "NOT_RUN"},
+  "guard_unit_tests": {"status": "PASS", "passed": 2},
+  "transaction_and_mmap_feature_check": {"status": "PASS", "scope": "compile only"},
+  "guest_mmap_regressions": "NOT_RUN",
+  "failure_injection_lifecycle_and_resource_accounting": "NOT_RUN",
+  "static_closure": {"status": "PASS", "scope": "previous candidate evidence, preserved", "resolved": 78, "unresolved": 0},
+  "redistribution_review": "NOT_RUN",
+  "runtime_binding": "NOT_RUN",
+  "native_replay_1vcpu": "NOT_RUN",
+  "native_replay_2vcpu": "NOT_RUN",
+  "guest_qt_gui_discovery": "NOT_RUN",
+  "dynamic_linker": "NOT_RUN",
+  "last_confirmed_candidate_milestone": null,
+  "application_entry": "NOT_RUN",
+  "visible_gui": "NOT_RUN",
+  "calculations_and_cleanup": "NOT_RUN",
+  "known_mmap_limit": "Whole file-backed pages beyond EOF zero-fill instead of raising SIGBUS.",
+  "next_phase": "Qualify production service descriptor routing and retained positional reads on a service-owned mount; establish authoritative FAT mount, capacity and topology interfaces.",
+  "evidence": {
+    "path_base": "repository root",
+    "audit": "docs/filesystems/helios-vfs-authority-audit.md",
+    "ordinary_boot_and_guard": "target/helios-qalculate/vfs-authority/ordinary-boot.log",
+    "guard_unit_tests": "target/helios-qalculate/vfs-authority/guard-tests.log",
+    "feature_check": "target/helios-qalculate/vfs-authority/feature-check-configured.log",
+    "dependency_graph": "target/helios-qalculate/closure/candidate/dependency-graph.json",
+    "candidate_milestones_and_historical_comparison": "target/helios-qalculate/closure/execution-milestones.json"
+  }
+}

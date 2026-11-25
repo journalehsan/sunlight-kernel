@@ -1,6 +1,6 @@
 # SunlightOS Kernel — Multicore Scheduler: Plan & Implementation Record
 
-This document describes the original design goals for the SMP scheduler refactor and documents what was actually implemented. Divergences from the original plan are noted explicitly so future contributors know the current state of the code.
+This document records the original SMP scheduler plan and its early implementation. See the [SMP work-stealing audit](kernel/scheduler-smp-stealing.md) for current Round Robin selection, remote wakeups, and open findings.
 
 ---
 
@@ -233,38 +233,14 @@ fn target_core_for_process(&self, idx: usize) -> usize {
 
 ### Work Stealing: `steal_work(thief_id) -> Option<usize>`
 
-**This replaces the plan's push-based `balance_load()`** with a pull-based work-stealing approach. When a core's local queues are empty, it steals from the tail of another core's lowest-priority tier:
+The initial refactor used pull-based stealing in place of the planned
+`balance_load()`. Active Round Robin now scans peer FIFOs after local selection
+fails and takes a bounded batch from the victim's tail. Victim queue acquisition
+uses `try_lock()` while dispatch still holds the global scheduler lock. The
+inactive BORE path searches tiered queues and takes one affinity-eligible task.
 
-```rust
-pub fn steal_work(&mut self, thief_id: usize) -> Option<usize> {
-    for victim_id in 0..self.online_cores {
-        if victim_id == thief_id { continue; }
-        // Skip victims with <= 1 task (leave them something to do)
-        // Search victim's run_queue_low → medium → high (back-to-front)
-        // Check cpu_mask before stealing
-        // Return stolen process index
-    }
-    None
-}
-```
-
-Stealing is called from `pick_next_bore(cpu_id)` and `pick_next_round_robin(cpu_id)` when local queues are empty.
-
-**Divergence from plan:** The plan proposed a separate `balance_load()` push method. Work-stealing (pull on empty queue) was chosen instead because:
-- It has lower overhead (only fires when a core is actually idle).
-- It does not require a separate periodic invocation.
-- It naturally respects `cpu_mask` affinity.
-
-The two-phase find/steal pattern avoids Rust borrow-checker conflicts between `cores[victim_id]` and `processes`:
-
-```rust
-// Phase 1: immutable borrows of cores[victim] and processes simultaneously
-let candidate = { let core = &self.cores[victim_id]; Self::find_stealable(&core.run_queue_low, &self.processes, thief_id) };
-// Phase 2: mutable borrow of cores[victim] to remove the entry
-if let Some((tier, pos)) = candidate { self.cores[victim_id].run_queue_low.remove(pos); }
-```
-
-**TODO (Phase 1):** When each `CoreState` gets its own `spin::Mutex`, change `steal_work` to use `try_lock()` on the victim's mutex so the thief's timer handler never blocks on a busy victim.
+See the [current audit](kernel/scheduler-smp-stealing.md) for the algorithm and
+its affinity and admission edge cases.
 
 ---
 
@@ -415,9 +391,11 @@ When a high-priority or latency-sensitive task is enqueued on a remote CPU, send
 
 ---
 
-## SMP Phase Roadmap
+## Original SMP Phase Roadmap
 
-### Phase 0 (Current — Shipped)
+The checkboxes record the early implementation status.
+
+### Phase 0 (Shipped at the time)
 - [x] Per-core `CoreState` with tiered run queues
 - [x] `schedule_tick(cpu_id, saved_rsp)` dispatch
 - [x] Work-stealing (`steal_work`) with cpu_mask affinity
@@ -425,7 +403,7 @@ When a high-priority or latency-sensitive task is enqueued on a remote CPU, send
 - [x] `init_cores(n)` called from main after SMP bring-up
 - [x] BSP-only operation; APs still parked
 
-### Phase 1 (Next — Not Yet Implemented)
+### Phase 1 (Planned at the time)
 - [ ] Per-core LAPIC timer initialization
 - [ ] Each AP calls `schedule_tick(current_cpu_id(), saved_rsp)` from its own timer IRQ
 - [ ] Per-core TSS (currently BSP TSS only)

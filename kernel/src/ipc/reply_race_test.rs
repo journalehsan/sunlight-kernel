@@ -95,7 +95,7 @@ pub(crate) fn run(hhdm: VirtAddr) {
     {
         let mut sched = SCHEDULER.lock();
         assert!(sched.online_cores >= 2);
-        let pid = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)).unwrap();
+        let pid = sched.next_process_pid().unwrap();
         let mut pmm = crate::PMM.lock();
         let mut process = unsafe { Process::new(pid, 0, name, &mut pmm, hhdm) };
         drop(pmm);

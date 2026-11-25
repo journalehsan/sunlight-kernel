@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.8896-alpha.2"
+version = "0.2.9090-alpha.2"
+
 
 
 
@@ -709,6 +710,7 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+zram_lifecycle_test = []
 # Native stat caller fixtures; absent from ordinary images.
 vfs_stat_failure_test = []
 # Opt-in disposable-device qualification; halts before FAT/VFS probing.
@@ -721,6 +723,18 @@ sfs5b4-test = ["sfs5a-test"]
 tmpfs_test = []
 # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
 session_launch_test = []
+vfs_l1p_test = ["mm2a_test_injection"]
+vfs_l1c_1_test = ["vfs_l1p_test"]
+vfs_l1c_2_test = ["vfs_l1c_1_test"]
+vfs_l1c_r4_test = ["vfs_l1c_2_test"]
+vfs_l1c_r1_test = ["vfs_l1c_r4_test"]
+vfs_l1c_r1b_test = ["vfs_l1c_r1_test"]
+vfs_l1c_r2_test = ["vfs_l1c_r1_test"]
+vfs_l1c_r3_test = ["vfs_l1c_r1_test"]
+vfs_l1c_r5_test = ["vfs_l1c_r4_test"]
+vfs_l1c_adapter_accounting_test = ["vfs_l1c_r5_test"]
+vfs_l1c_parent_lifecycle_test = ["vfs_l1c_adapter_accounting_test"]
+vfs_l1c_file_ipc_test = ["vfs_l1c_parent_lifecycle_test"]
 # Native authenticated lifecycle receipts; never admitted in release.
 quota_lifecycle_test = ["session_launch_test"]
 restricted_remote_test = ["quota_lifecycle_test", "fastlane_mapping_test"]
@@ -731,6 +745,8 @@ fd_shared_mmap_test = []
 helios_wayland_test = []
 helios_dynamic_elf_probe = ["sunlight-fs/helios-dynamic-elf-probe"]
 helios_dynamic_elf_handoff = ["helios_dynamic_elf_probe", "mm2a_test_injection"]
+helios_gnu_interpreter_probe = ["helios_dynamic_elf_handoff"]
+helios_qalculate_dso_probe = ["helios_qalculate_probe", "helios_gnu_interpreter_probe", "sunlight-fs/helios-qalculate-dso-probe"]
 helios_dynamic_elf_relocation_fixture = ["helios_dynamic_elf_handoff", "sunlight-fs/helios-dynamic-elf-relocation-fixture"]
 helios_dynamic_elf_shared_fixture = ["helios_dynamic_elf_relocation_fixture", "sunlight-fs/helios-dynamic-elf-shared-fixture", "dep:sha2"]
 helios_dynamic_elf_orphan_fixture = ["helios_dynamic_elf_shared_fixture", "sunlight-fs/helios-dynamic-elf-orphan-fixture"]

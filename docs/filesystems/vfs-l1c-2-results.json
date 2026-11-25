@@ -1,0 +1,62 @@
+{
+  "verdict": "PARTIAL",
+  "ordinary_spawn_activation": false,
+  "primary_platform_qualified": false,
+  "l1c3_ready_to_activate": false,
+  "linearization": {
+    "cancel": "Scheduler pending payload moves to Reclaiming",
+    "publish": "Ordinary scheduler table insertion under the scheduler, broker and runtime guards",
+    "native_order": ["binding", "committed", "enqueue", "first dispatch selected", "metadata completed", "normal exit", "reaped"]
+  },
+  "native_candidate": {
+    "memory_mib": 2048,
+    "status": "PASS",
+    "matrix": "target/vfs-l1c-2/native/wake-fenced/matrix.json",
+    "image_hashes": "target/vfs-l1c-2/native/wake-fenced/images.sha256",
+    "cases": [
+      {"vcpus": 1, "status": "PASS", "serial": "target/vfs-l1c-2/native/wake-fenced/continuation-1.serial.log", "l1p_restored_frames": 266279, "l1p_restored_heap_bytes": 176832},
+      {"vcpus": 2, "status": "PASS", "serial": "target/vfs-l1c-2/native/wake-fenced/continuation-2.serial.log", "l1p_restored_frames": 266021, "l1p_restored_heap_bytes": 177856},
+      {"vcpus": 4, "status": "PASS", "serial": "target/vfs-l1c-2/native/wake-fenced/continuation-4.serial.log", "l1p_restored_frames": 265509, "l1p_restored_heap_bytes": 179904}
+    ],
+    "l1p_restored_descriptions_and_refs": [72, 72],
+    "l1p_swap_candidates": 0,
+    "published_child": {"pid": 9, "metadata": "stat /tmp", "exit_code": 0, "user_frames_reaped": 551, "page_tables_reaped": 8, "swap_blocks_reaped": 0},
+    "cancel_unsent": "PASS",
+    "cancel_after_valid_receipt": "PASS",
+    "live_service_retirement_contention": "NOT_RUN",
+    "late_acknowledgement_after_cancel": "NOT_RUN",
+    "replacement": "NOT_RUN",
+    "transaction_specific_global_allocator_baseline": "NOT_RUN",
+    "fault_driven_swap_in": "NOT_RUN",
+    "preserved_earlier_runs": [
+      "target/vfs-l1c-2/native/matrix.json",
+      "target/vfs-l1c-2/native/diagnostic/matrix.json",
+      "target/vfs-l1c-2/native/final/matrix.json"
+    ]
+  },
+  "host": {
+    "registration": {"status": "PASS", "existing_tests": 103, "total_tests": 104, "evidence": "target/vfs-l1c-2/registration-wake-fenced.log"},
+    "mixed_cycles": 112,
+    "existing_lifecycle_cycles": [100, 100],
+    "ipc": {"status": "PASS", "evidence": "target/vfs-l1c-2/ipc.log"},
+    "vfs_service": {"status": "PASS", "evidence": "target/vfs-l1c-2/service.log"},
+    "descriptor": {"status": "PASS", "evidence": "target/vfs-l1c-2/descriptor.log"},
+    "scheduler": {"status": "PASS", "evidence": "target/vfs-l1c-2/scheduler.log"},
+    "kernel": {"status": "PASS", "evidence": "target/vfs-l1c-2/kernel-host.log"},
+    "retirement": {"status": "PASS", "evidence": "target/vfs-l1c-2/retirement.log"},
+    "zram": {"status": "PASS", "evidence": "target/vfs-l1c-2/zram.log"},
+    "swap_slot": {"status": "PASS", "evidence": "target/vfs-l1c-2/swap-slot.log"}
+  },
+  "compile": {
+    "primary": {"status": "PASS", "evidence": "target/vfs-l1c-2/primary-compile.log"},
+    "transaction_and_session": {"status": "PASS", "evidence": "target/vfs-l1c-2/transaction-session.log"},
+    "mmap": {"status": "PASS", "evidence": "target/vfs-l1c-2/mmap.log"}
+  },
+  "ordinary_boot": {"status": "FAIL", "memory_mib": 2048, "vcpus": 2, "evidence": "target/vfs-l1c-2/ordinary.log"},
+  "source_equivalence": {"status": "PASS", "baseline_paths": 12346, "unexpected_drift": [], "evidence": "target/vfs-l1c-2/source-equivalence.json"},
+  "ownership_guard": {
+    "primary": {"status": "BASELINE_FAIL", "findings": 4, "references": 71, "evidence": "target/vfs-l1c-2/guard-after.log"},
+    "candidate": {"status": "PASS", "findings": 0, "references": 68, "evidence": "target/vfs-l1c-2/candidate-guard.log"}
+  },
+  "remaining": ["Adapter lifecycle disposal", "Session, account and general descriptor integration", "Native service retirement and late acknowledgement witnesses", "Transaction-specific allocator baseline"]
+}

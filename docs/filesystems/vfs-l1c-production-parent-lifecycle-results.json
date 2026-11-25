@@ -1,0 +1,493 @@
+{
+  "readiness": "BLOCKED",
+  "parent_requirement": "PARTIAL",
+  "ordinary_spawn_activation": false,
+  "vfs_d1": "DEFERRED",
+  "evidence_root": "target/vfs-l1c-production-parent-lifecycle",
+  "production_release": {
+    "status": "PASS",
+    "exit_code": 0
+  },
+  "host": {
+    "registration": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "ipc": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "service": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "descriptor": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "scheduler": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "kernel-host": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "retirement": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "zram": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "swap-slot": {
+      "status": "PASS",
+      "exit_code": 0
+    }
+  },
+  "registration_tests": 107,
+  "registration_initial_failure": "target/vfs-l1c-production-parent-lifecycle/registration-first-failure.log",
+  "isolated_candidate": {
+    "guard-candidate": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "phase3.0-2": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "phase3.0-1": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "phase3.0-4": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "swap1-4": {
+      "status": "PASS",
+      "exit_code": 0
+    }
+  },
+  "isolated_candidate_before_reply_validation_fix": {
+    "guard-candidate": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "phase3.0-2": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "phase3.0-1": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "phase3.0-4": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "swap1-4": {
+      "status": "PASS",
+      "exit_code": 0
+    }
+  },
+  "primary_ownership_guard": {
+    "status": "FAIL",
+    "exit_code": 1,
+    "findings": [
+      "NEW (1): kernel/src/arch/x86_64/syscall.rs: kernel-global namespace: let capacity = crate::KERNEL_VFS",
+      "NEW (1): kernel/src/linux_procfs.rs: kernel-global namespace: let vfs = crate::KERNEL_VFS.lock();",
+      "NEW (1): kernel/src/process/mmap.rs: kernel-global namespace: let mut guard = crate::KERNEL_VFS.lock();",
+      "NEW (1): kernel/src/storage.rs: filesystem backend construction: let mut fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))"
+    ],
+    "new_findings_from_this_change": 0
+  },
+  "native": {
+    "feature": "vfs_l1c_parent_lifecycle_test",
+    "image": {
+      "elf": {
+        "path": "target/vfs-l1c-production-parent-lifecycle/final.elf",
+        "sha256": "af34c69c322c855707f65cd8211bbe7911b992e3c0145313706a18264ec927fd"
+      },
+      "iso": {
+        "path": "target/vfs-l1c-production-parent-lifecycle/final.iso",
+        "sha256": "4589c2b59d7382eb89f86757c9d1f44e6076b3d340bc9e722f8e2578c82ff706"
+      }
+    },
+    "cases": [
+      "normal_exit_unsent_then_explicit_cancel",
+      "normal_exit_consumed_retain_then_explicit_cancel"
+    ],
+    "runs": [
+      {
+        "status": "PASS",
+        "exit_code": 0,
+        "vcpus": 2,
+        "memory_mib": 2048,
+        "serial": "target/vfs-l1c-production-parent-lifecycle/final-2.serial.log",
+        "argv": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-parent-lifecycle/final.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-parent-lifecycle/final-2.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "evidence": [
+          {
+            "line": 1874,
+            "text": "[VFS-PARENT] live parent=5 incarnation=683 vm=1351 descriptors=3 frames=534"
+          },
+          {
+            "line": 1887,
+            "text": "[VFS-PARENT] exit ready mode=12 parent=5 child=6 retain=3 epoch=1"
+          },
+          {
+            "line": 1893,
+            "text": "[VFS-PARENT] detached parent=5 child=6 retain=3 epoch=1 source_pinned=1"
+          },
+          {
+            "line": 1894,
+            "text": "[VFS-R4] teardown child=6 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1895,
+            "text": "[VFS-R4] dropped child=6 process_box=1 fd_table_box=1"
+          },
+          {
+            "line": 1896,
+            "text": "[VFS-PARENT] production disposed parent=5 child=6 retain=3 epoch=1"
+          },
+          {
+            "line": 1901,
+            "text": "[VFS-PARENT] init collected exit 37 exactly once"
+          },
+          {
+            "line": 1902,
+            "text": "[VFS-PARENT] reaped parent=5 incarnation=683 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0"
+          },
+          {
+            "line": 1903,
+            "text": "[VFS-ACCT] settled child=6 retain=3 frames_free=261794 heap_used=2596808 heap_capacity=16777216 process_slots=4 process_capacity=512"
+          },
+          {
+            "line": 1905,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1917,
+            "text": "[VFS-PARENT] live parent=6 incarnation=685 vm=1355 descriptors=3 frames=534"
+          },
+          {
+            "line": 1944,
+            "text": "[VFS-PARENT] exit ready mode=13 parent=6 child=7 retain=5 epoch=1"
+          },
+          {
+            "line": 1950,
+            "text": "[VFS-PARENT] detached parent=6 child=7 retain=5 epoch=1 source_pinned=1"
+          },
+          {
+            "line": 1951,
+            "text": "[VFS-R4] teardown child=7 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1952,
+            "text": "[VFS-R4] dropped child=7 process_box=1 fd_table_box=1"
+          },
+          {
+            "line": 1953,
+            "text": "[VFS-PARENT] production disposed parent=6 child=7 retain=5 epoch=1"
+          },
+          {
+            "line": 1959,
+            "text": "[VFS-PARENT] init collected exit 37 exactly once"
+          },
+          {
+            "line": 1960,
+            "text": "[VFS-PARENT] reaped parent=6 incarnation=685 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0"
+          },
+          {
+            "line": 1961,
+            "text": "[VFS-ACCT] settled child=7 retain=5 frames_free=261794 heap_used=2597512 heap_capacity=16777216 process_slots=4 process_capacity=512"
+          },
+          {
+            "line": 1963,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1964,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      },
+      {
+        "status": "PASS",
+        "exit_code": 0,
+        "vcpus": 1,
+        "memory_mib": 2048,
+        "serial": "target/vfs-l1c-production-parent-lifecycle/final-1.serial.log",
+        "argv": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-parent-lifecycle/final.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-parent-lifecycle/final-1.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "1",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "evidence": [
+          {
+            "line": 1883,
+            "text": "[VFS-PARENT] live parent=5 incarnation=683 vm=1351 descriptors=3 frames=534"
+          },
+          {
+            "line": 1896,
+            "text": "[VFS-PARENT] exit ready mode=12 parent=5 child=6 retain=3 epoch=1"
+          },
+          {
+            "line": 1902,
+            "text": "[VFS-PARENT] detached parent=5 child=6 retain=3 epoch=1 source_pinned=1"
+          },
+          {
+            "line": 1903,
+            "text": "[VFS-R4] teardown child=6 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1904,
+            "text": "[VFS-R4] dropped child=6 process_box=1 fd_table_box=1"
+          },
+          {
+            "line": 1905,
+            "text": "[VFS-PARENT] production disposed parent=5 child=6 retain=3 epoch=1"
+          },
+          {
+            "line": 1909,
+            "text": "[VFS-PARENT] init collected exit 37 exactly once"
+          },
+          {
+            "line": 1911,
+            "text": "[VFS-PARENT] reaped parent=5 incarnation=683 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0"
+          },
+          {
+            "line": 1912,
+            "text": "[VFS-ACCT] settled child=6 retain=3 frames_free=262050 heap_used=2597416 heap_capacity=16777216 process_slots=4 process_capacity=512"
+          },
+          {
+            "line": 1914,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1926,
+            "text": "[VFS-PARENT] live parent=6 incarnation=685 vm=1355 descriptors=3 frames=534"
+          },
+          {
+            "line": 1940,
+            "text": "[VFS-PARENT] exit ready mode=13 parent=6 child=7 retain=5 epoch=1"
+          },
+          {
+            "line": 1949,
+            "text": "[VFS-PARENT] init collected exit 37 exactly once"
+          },
+          {
+            "line": 1950,
+            "text": "[VFS-PARENT] detached parent=6 child=7 retain=5 epoch=1 source_pinned=1"
+          },
+          {
+            "line": 1951,
+            "text": "[VFS-R4] teardown child=7 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1952,
+            "text": "[VFS-R4] dropped child=7 process_box=1 fd_table_box=1"
+          },
+          {
+            "line": 1953,
+            "text": "[VFS-PARENT] production disposed parent=6 child=7 retain=5 epoch=1"
+          },
+          {
+            "line": 1956,
+            "text": "[VFS-PARENT] reaped parent=6 incarnation=685 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0"
+          },
+          {
+            "line": 1957,
+            "text": "[VFS-ACCT] settled child=7 retain=5 frames_free=262050 heap_used=2597416 heap_capacity=16777216 process_slots=4 process_capacity=512"
+          },
+          {
+            "line": 1959,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1960,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      },
+      {
+        "status": "PASS",
+        "exit_code": 0,
+        "vcpus": 4,
+        "memory_mib": 2048,
+        "serial": "target/vfs-l1c-production-parent-lifecycle/final-4.serial.log",
+        "argv": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-parent-lifecycle/final.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-parent-lifecycle/final-4.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "4",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "evidence": [
+          {
+            "line": 1897,
+            "text": "[VFS-PARENT] live parent=5 incarnation=683 vm=1351 descriptors=3 frames=534"
+          },
+          {
+            "line": 1914,
+            "text": "[VFS-PARENT] exit ready mode=12 parent=5 child=6 retain=3 epoch=1"
+          },
+          {
+            "line": 1920,
+            "text": "[VFS-PARENT] detached parent=5 child=6 retain=3 epoch=1 source_pinned=1"
+          },
+          {
+            "line": 1921,
+            "text": "[VFS-PARENT] init collected exit 37 exactly once"
+          },
+          {
+            "line": 1922,
+            "text": "[VFS-R4] teardown child=6 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1926,
+            "text": "[VFS-R4] dropped child=6 process_box=1 fd_table_box=1"
+          },
+          {
+            "line": 1927,
+            "text": "[VFS-PARENT] production disposed parent=5 child=6 retain=3 epoch=1"
+          },
+          {
+            "line": 1929,
+            "text": "[VFS-PARENT] reaped parent=5 incarnation=683 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0"
+          },
+          {
+            "line": 1930,
+            "text": "[VFS-ACCT] settled child=6 retain=3 frames_free=261282 heap_used=2597512 heap_capacity=16777216 process_slots=4 process_capacity=512"
+          },
+          {
+            "line": 1932,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1944,
+            "text": "[VFS-PARENT] live parent=6 incarnation=685 vm=1355 descriptors=3 frames=534"
+          },
+          {
+            "line": 1958,
+            "text": "[VFS-PARENT] exit ready mode=13 parent=6 child=7 retain=5 epoch=1"
+          },
+          {
+            "line": 1967,
+            "text": "[VFS-PARENT] init collected exit 37 exactly once"
+          },
+          {
+            "line": 1968,
+            "text": "[VFS-PARENT] detached parent=6 child=7 retain=5 epoch=1 source_pinned=1"
+          },
+          {
+            "line": 1969,
+            "text": "[VFS-R4] teardown child=7 descriptors=3 frames=550 tables=8 swap=0"
+          },
+          {
+            "line": 1970,
+            "text": "[VFS-R4] dropped child=7 process_box=1 fd_table_box=1"
+          },
+          {
+            "line": 1971,
+            "text": "[VFS-PARENT] production disposed parent=6 child=7 retain=5 epoch=1"
+          },
+          {
+            "line": 1974,
+            "text": "[VFS-PARENT] reaped parent=6 incarnation=685 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0"
+          },
+          {
+            "line": 1975,
+            "text": "[VFS-ACCT] settled child=7 retain=5 frames_free=261282 heap_used=2597512 heap_capacity=16777216 process_slots=4 process_capacity=512"
+          },
+          {
+            "line": 1977,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1978,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      }
+    ]
+  },
+  "not_qualified": [
+    "detached_publication_and_captured_launch_attribution",
+    "native_parent_exit_with_ack_in_flight",
+    "native_parent_exit_racing_service_retirement",
+    "native_remote_kill",
+    "native_exec",
+    "trusted_cross_lifetime_registration_reuse",
+    "production_launch_reservation_census",
+    "regular_files_ipc_endpoints_and_payload_census",
+    "transaction_populated_swap_and_fault_driven_swap_in",
+    "full_heap_attribution",
+    "primary_ownership_and_ordinary_boot",
+    "interactive_btop_and_qalculate"
+  ]
+}

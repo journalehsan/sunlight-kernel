@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-init"
-version = "0.2.8896-alpha.2"
+version = "0.2.9090-alpha.2"
+
 
 
 
@@ -690,7 +691,19 @@ sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ipc = { path = "../../ipc" }
 
 [features]
+zram-lifecycle-test = []
 recovery-test = []
+vfs-l1c-1-test = []
+vfs-l1c-2-test = ["vfs-l1c-1-test"]
+vfs-l1c-r4-test = ["vfs-l1c-2-test"]
+vfs-l1c-r1-test = ["vfs-l1c-r4-test"]
+vfs-l1c-r1b-test = ["vfs-l1c-r1-test"]
+vfs-l1c-r2-test = ["vfs-l1c-r1-test"]
+vfs-l1c-r3-test = ["vfs-l1c-r1-test"]
+vfs-l1c-r5-test = ["vfs-l1c-r4-test"]
+vfs-l1c-adapter-accounting-test = ["vfs-l1c-r5-test"]
+vfs-l1c-parent-lifecycle-test = ["vfs-l1c-adapter-accounting-test"]
+vfs-l1c-file-ipc-test = ["vfs-l1c-parent-lifecycle-test"]
 
 # Fault injection only in the dedicated native stat failure gate.
 stat-failure-test = ["sunlight-ipc/stat-failure-test"]

@@ -25,6 +25,7 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
         registration,
     };
     let sched = Scheduler {
+        pending_children: crate::process::pending_state::Pending::new(),
         global_tick: 0,
         processes: alloc::vec![
             Process {
@@ -33,6 +34,7 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 vfs_root_metadata: false,
                 vfs_boot_root: false,
                 vfs_root_rebased: false,
+                vfs_stat_routed: false,
                 vfs_file_routed: false,
                 cwd: alloc::string::String::from("/"),
                 exiting: false,
@@ -42,7 +44,7 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 ipc_endpoint: None,
                 uid: 0,
                 gid: 0,
-                foreground: Foreground { incarnation: 4 },
+                foreground: Foreground { incarnation: 4, ..Default::default() },
                 address_space: AddressSpace { generation: 5 }
             },
             Process {
@@ -51,6 +53,7 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 vfs_root_metadata: false,
                 vfs_boot_root: false,
                 vfs_root_rebased: false,
+                vfs_stat_routed: false,
                 vfs_file_routed: false,
                 cwd: alloc::string::String::from("/"),
                 exiting: false,
@@ -60,7 +63,7 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 ipc_endpoint: None,
                 uid: 1000,
                 gid: 100,
-                foreground: Foreground { incarnation: 11 },
+                foreground: Foreground { incarnation: 11, ..Default::default() },
                 address_space: AddressSpace { generation: 12 }
             },
         ],
@@ -85,6 +88,370 @@ fn call(
     bytes: &[u8],
 ) -> Result<Option<[u8; FRAME_BYTES]>, IpcError> {
     control_runtime(runtime, pid, op, epoch, bytes, sched, caps)
+}
+
+fn retirement_identity(
+    registration: Registration,
+) -> crate::capability::delivery::RecipientIdentity {
+    crate::capability::delivery::RecipientIdentity {
+        pid: registration.owner.pid as usize,
+        incarnation: registration.owner.incarnation,
+        vm_generation: registration.owner.address_space_generation,
+    }
+}
+
+#[path = "spawn_tests.rs"]
+mod spawn_tests;
+
+#[test]
+fn last_owner_exit_recovers_unanswered_retains_for_100_replacements() {
+    let (mut runtime, mut sched, mut caps, mut identity) = setup();
+    let namespace = crate::mounted_namespace();
+    let denied = Err(IpcError::InvalidCapability);
+    let mut previous_reply: Option<[u8; FRAME_BYTES]> = None;
+    for _ in 0..100 {
+        let old = identity.registration;
+        let image = retirement_identity(old);
+        let mut service = Service::<4, 4, 1>::new();
+        service.bind(old).unwrap();
+        runtime.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+        let bytes = call(
+            &mut runtime,
+            &sched,
+            &caps,
+            image.pid,
+            api::NEXT,
+            old.epoch,
+            &[],
+        )
+        .unwrap()
+        .unwrap();
+        if let Some(previous) = previous_reply {
+            // Even with a matching new request number already delivered,
+            // the previous image's reply cannot acquire a new binding.
+            assert_eq!(
+                call(
+                    &mut runtime,
+                    &sched,
+                    &caps,
+                    image.pid,
+                    api::REPLY,
+                    old.epoch,
+                    &previous
+                ),
+                denied
+            );
+        }
+        let Frame::Retain { scope, .. } = Frame::decode(&bytes).unwrap() else {
+            panic!("expected retain");
+        };
+        service.install(old, scope, &namespace, "/", "/").unwrap();
+        let reply = service.request(old, &bytes).unwrap().encode().unwrap();
+        runtime.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+        runtime.retire_registration(old);
+        assert_eq!(runtime.remote_owner(old).unwrap().outstanding(), 2);
+        for conditions in [
+            (false, true, true),
+            (true, false, true),
+            (true, true, false),
+        ] {
+            assert!(
+                crate::sched::exit_proof(image, conditions.0, conditions.1, conditions.2).is_none()
+            );
+            runtime.collect_remote();
+            assert_eq!(runtime.remote_owner(old).unwrap().outstanding(), 2);
+        }
+        sched.processes[0].exiting = true;
+        caps.endpoints.clear();
+        assert_eq!(
+            call(
+                &mut runtime,
+                &sched,
+                &caps,
+                image.pid,
+                api::REPLY,
+                old.epoch,
+                &reply
+            ),
+            denied
+        );
+        drop(service);
+
+        // Reuse numeric PID and endpoint in the host records. The new image
+        // can publish before the old completion is delivered.
+        sched.processes[0].exiting = false;
+        sched.processes[0].foreground.incarnation += 1;
+        sched.processes[0].address_space.generation += 1;
+        caps.endpoints.push((old.owner.endpoint as u32, image.pid));
+        register_service(
+            &mut runtime,
+            image.pid,
+            old.owner.endpoint as u32,
+            &sched,
+            &caps,
+        )
+        .unwrap();
+        identity.registration = runtime.registry.active().unwrap();
+        let snapshot = call(
+            &mut runtime,
+            &sched,
+            &caps,
+            image.pid,
+            api::SNAPSHOT,
+            0,
+            &[],
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            api::decode_registration(&snapshot[..api::REGISTRATION_BYTES]),
+            Ok(identity.registration),
+        );
+        for wrong in [
+            crate::capability::delivery::RecipientIdentity {
+                incarnation: image.incarnation + 1,
+                ..image
+            },
+            crate::capability::delivery::RecipientIdentity {
+                vm_generation: image.vm_generation + 1,
+                ..image
+            },
+        ] {
+            runtime.complete_image_exit(crate::sched::exit_proof(wrong, true, true, true).unwrap());
+            assert_eq!(runtime.remote_owner(old).unwrap().outstanding(), 2);
+        }
+        let completion = crate::sched::exit_proof(image, true, true, true).unwrap();
+        runtime.complete_image_exit(completion);
+        runtime.complete_image_exit(completion);
+        assert!(runtime.remote_owner(old).is_err());
+        assert_eq!(runtime.remote.iter().flatten().count(), 1);
+        assert_eq!(runtime.registry.active(), Some(identity.registration));
+        assert_eq!(
+            call(
+                &mut runtime,
+                &sched,
+                &caps,
+                image.pid,
+                api::REPLY,
+                old.epoch,
+                &reply
+            ),
+            denied
+        );
+        previous_reply = Some(reply);
+    }
+}
+
+#[test]
+fn mixed_exec_withdrawal_and_exit_recover_private_backing_for_100_replacements() {
+    let (mut runtime, mut sched, mut caps, mut identity) = setup();
+    let namespace = crate::mounted_namespace();
+    let denied = Err(IpcError::InvalidCapability);
+    let mut next_endpoint = 1;
+    for cycle in 0..100 {
+        let old = identity.registration;
+        let image = retirement_identity(old);
+        let mut service = Service::<4, 4, 1>::new();
+        service.bind(old).unwrap();
+        runtime.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+        let bytes = call(&mut runtime, &sched, &caps, 3, api::NEXT, old.epoch, &[])
+            .unwrap()
+            .unwrap();
+        let Frame::Retain { scope, .. } = Frame::decode(&bytes).unwrap() else {
+            panic!("expected retain");
+        };
+        service.install(old, scope, &namespace, "/", "/").unwrap();
+        let reply = service.request(old, &bytes).unwrap().encode().unwrap();
+        let hold_binding = cycle % 4 < 2;
+        let binding = if hold_binding {
+            call(&mut runtime, &sched, &caps, 3, api::REPLY, old.epoch, &reply).unwrap();
+            Some(runtime.namespaces.lookup(identity).unwrap())
+        } else {
+            None
+        };
+
+        assert!(crate::process::exec_proof(image, true, true, false).is_none());
+        assert_eq!(runtime.registry.active(), Some(old));
+        assert_eq!(runtime.remote_owner(old).unwrap().outstanding(), 1);
+
+        if cycle % 4 != 0 {
+            caps.endpoints.clear();
+            runtime.retire_endpoint(old.owner.endpoint as u32, process_identity(&sched.processes[0]));
+            runtime.collect_remote();
+            assert_eq!(runtime.registry.active(), None);
+            assert_eq!(runtime.remote_owner(old).unwrap().outstanding(), 1);
+            assert_eq!(
+                call(&mut runtime, &sched, &caps, 3, api::REPLY, old.epoch, &reply),
+                denied
+            );
+        }
+
+        runtime.retire_process(process_identity(&sched.processes[0]));
+        if cycle % 4 == 3 {
+            sched.processes[0].exiting = true;
+            assert!(crate::sched::exit_proof(image, false, true, true).is_none());
+            assert!(crate::sched::exit_proof(image, true, false, true).is_none());
+        } else {
+            sched.processes[0].trusted_vfs_service = false;
+            sched.processes[0].address_space.generation += 1;
+            assert!(crate::process::exec_proof(image, true, false, false).is_none());
+            assert_eq!(
+                register_service(&mut runtime, 3, old.owner.endpoint as u32, &sched, &caps),
+                Err(IpcError::InvalidCapability)
+            );
+            assert_eq!(
+                call(&mut runtime, &sched, &caps, 3, api::REPLY, old.epoch, &reply),
+                denied
+            );
+        }
+        runtime.collect_remote();
+        assert_eq!(runtime.remote_owner(old).unwrap().outstanding(), 1);
+        drop(service);
+
+        sched.processes[0].exiting = false;
+        sched.processes[0].trusted_vfs_service = true;
+        sched.processes[0].foreground.incarnation += 1;
+        sched.processes[0].address_space.generation += 1;
+        caps.endpoints.clear();
+        caps.endpoints.push((next_endpoint, 3));
+        register_service(&mut runtime, 3, next_endpoint, &sched, &caps).unwrap();
+        next_endpoint += 1;
+        identity.registration = runtime.registry.active().unwrap();
+        runtime.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+        assert_eq!(
+            call(&mut runtime, &sched, &caps, 3, api::REPLY, identity.registration.epoch, &reply),
+            denied
+        );
+        assert_eq!(runtime.remote_owner(identity.registration).unwrap().outstanding(), 1);
+
+        if cycle % 4 == 3 {
+            runtime.complete_image_exit(crate::sched::exit_proof(image, true, true, true).unwrap());
+        } else {
+            for _ in 0..2 {
+                runtime.complete_private_exec(crate::process::exec_proof(image, true, false, true).unwrap());
+            }
+        }
+        assert_eq!(runtime.remote_owner(old).is_ok(), hold_binding);
+        drop(binding);
+        runtime.collect_remote();
+        assert!(runtime.remote_owner(old).is_err());
+        assert_eq!(runtime.remote.iter().flatten().count(), 1);
+        assert_eq!(runtime.remote_owner(identity.registration).unwrap().outstanding(), 1);
+        let request = call(&mut runtime, &sched, &caps, 3, api::NEXT, identity.registration.epoch, &[])
+            .unwrap()
+            .unwrap();
+        let mut replacement = Service::<4, 4, 1>::new();
+        replacement.bind(identity.registration).unwrap();
+        let refused = replacement.request(identity.registration, &request).unwrap().encode().unwrap();
+        call(&mut runtime, &sched, &caps, 3, api::REPLY, identity.registration.epoch, &refused).unwrap();
+        assert_eq!(runtime.remote_owner(identity.registration).unwrap().outstanding(), 0);
+    }
+}
+
+#[test]
+fn exec_proof_settles_only_retired_epochs_of_the_exact_old_image() {
+    let (mut runtime, mut sched, mut caps, identity) = setup();
+    let first = identity.registration;
+    let image = retirement_identity(first);
+    let second_owner = EndpointOwner { endpoint: 1, ..first.owner };
+    runtime.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+    caps.endpoints.clear();
+    runtime.retire_endpoint(0, process_identity(&sched.processes[0]));
+    caps.endpoints.push((1, image.pid));
+    let second = runtime.register(second_owner).unwrap();
+    runtime.queue_namespace(AdmissionIdentity { registration: second, ..identity }, LOOKUP_METADATA).unwrap();
+    runtime.retire_process(process_identity(&sched.processes[0]));
+    sched.processes[0].trusted_vfs_service = false;
+    sched.processes[0].address_space.generation += 1;
+
+    let replacement = runtime.register(EndpointOwner {
+        address_space_generation: first.owner.address_space_generation + 1,
+        ..second_owner
+    }).unwrap();
+    runtime.queue_namespace(AdmissionIdentity { registration: replacement, ..identity }, LOOKUP_METADATA).unwrap();
+    runtime.retire_registration(replacement);
+    for wrong in [
+        crate::capability::delivery::RecipientIdentity { incarnation: image.incarnation + 1, ..image },
+        crate::capability::delivery::RecipientIdentity { vm_generation: image.vm_generation + 2, ..image },
+    ] {
+        runtime.complete_private_exec(crate::process::exec_proof(wrong, true, false, true).unwrap());
+        assert_eq!(runtime.remote.iter().flatten().count(), 3);
+    }
+    assert!(crate::process::exec_proof(image, false, false, true).is_none());
+    assert!(crate::process::exec_proof(image, true, true, true).is_none());
+    assert!(crate::process::exec_proof(image, true, false, false).is_none());
+    runtime.complete_private_exec(crate::process::exec_proof(image, true, false, true).unwrap());
+    assert!(runtime.remote_owner(first).is_err());
+    assert!(runtime.remote_owner(second).is_err());
+    assert_eq!(runtime.remote_owner(replacement).unwrap().outstanding(), 1);
+    assert_eq!(runtime.remote.iter().flatten().count(), 1);
+    assert_eq!(caps.endpoint_owner(1), Some(image.pid));
+    assert_eq!(
+        call(&mut runtime, &sched, &caps, image.pid, api::STATUS, second.epoch, &[]),
+        Err(IpcError::InvalidCapability)
+    );
+}
+
+#[test]
+fn exit_completion_stays_with_epoch_until_installed_binding_drains() {
+    let (mut runtime, sched, caps, identity) = setup();
+    let old = identity.registration;
+    let namespace = crate::mounted_namespace();
+    let mut service = Service::<4, 4, 1>::new();
+    service.bind(old).unwrap();
+    runtime.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+    let bytes = call(&mut runtime, &sched, &caps, 3, api::NEXT, old.epoch, &[])
+        .unwrap()
+        .unwrap();
+    let Frame::Retain { scope, .. } = Frame::decode(&bytes).unwrap() else {
+        panic!("expected retain");
+    };
+    service.install(old, scope, &namespace, "/", "/").unwrap();
+    let reply = service.request(old, &bytes).unwrap().encode().unwrap();
+    call(
+        &mut runtime,
+        &sched,
+        &caps,
+        3,
+        api::REPLY,
+        old.epoch,
+        &reply,
+    )
+    .unwrap();
+    let user = runtime.namespaces.lookup(identity).unwrap();
+
+    runtime.retire_registration(old);
+    drop(service);
+    runtime.complete_image_exit(
+        crate::sched::exit_proof(retirement_identity(old), true, true, true).unwrap(),
+    );
+    assert_eq!(runtime.remote_owner(old).unwrap().outstanding(), 1);
+    // Independent retirement consumes its own evidence while the prior row
+    // remains pinned. Observation of the first completion need not recur.
+    let second = runtime
+        .register(EndpointOwner {
+            pid: 4,
+            ..old.owner
+        })
+        .unwrap();
+    runtime
+        .queue_namespace(
+            AdmissionIdentity {
+                registration: second,
+                ..identity
+            },
+            LOOKUP_METADATA,
+        )
+        .unwrap();
+    runtime.retire_registration(second);
+    runtime.complete_image_exit(
+        crate::sched::exit_proof(retirement_identity(second), true, true, true).unwrap(),
+    );
+    assert!(runtime.remote_owner(second).is_err());
+    assert!(runtime.remote_owner(old).is_ok());
+    drop(user);
+    runtime.collect_remote();
+    assert!(runtime.remote_owner(old).is_err());
 }
 
 #[test]
@@ -378,8 +745,12 @@ fn copied_control_installs_once_and_releases_only_after_local_drain() {
 fn retain_delivery_keeps_allocation_order_after_slot_reuse_and_rejects_unsent_replies() {
     let (mut kernel, sched, caps, identity) = setup();
     let reg = identity.registration;
-    kernel.queue_namespace(identity, LOOKUP_METADATA).unwrap();
-    kernel.queue_namespace(identity, LOOKUP_METADATA).unwrap();
+    let first_id = kernel
+        .queue_namespace_inner(identity, LOOKUP_METADATA, None)
+        .unwrap();
+    let second_id = kernel
+        .queue_namespace_inner(identity, LOOKUP_METADATA, None)
+        .unwrap();
     let first = kernel.remote[0].as_ref().unwrap().unsent[0].unwrap();
     let Frame::Retain {
         scope, request_id, ..
@@ -387,6 +758,7 @@ fn retain_delivery_keeps_allocation_order_after_slot_reuse_and_rejects_unsent_re
     else {
         panic!()
     };
+    assert_eq!(request_id, first_id);
     let refused = Frame::Refused {
         request: sunlight_ipc::vfs_rpc::retention::wire::PendingRetain::new(reg, scope, request_id)
             .unwrap(),
@@ -420,8 +792,11 @@ fn retain_delivery_keeps_allocation_order_after_slot_reuse_and_rejects_unsent_re
         ),
         Ok(None)
     );
-    kernel.queue_namespace(identity, LOOKUP_METADATA).unwrap();
-    for expected in [2, 3] {
+    let third_id = kernel
+        .queue_namespace_inner(identity, LOOKUP_METADATA, None)
+        .unwrap();
+    assert!(first_id < second_id && second_id < third_id);
+    for expected in [second_id, third_id] {
         let bytes = call(&mut kernel, &sched, &caps, 3, api::NEXT, reg.epoch, &[])
             .unwrap()
             .unwrap();

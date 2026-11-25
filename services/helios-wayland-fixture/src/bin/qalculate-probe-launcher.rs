@@ -39,6 +39,10 @@ pub extern "C" fn _start() -> ! {
         BUNDLE,
     )) {
         Ok(child) => {
+            debug_log(&format!(
+                "[QALCULATE-PROBE] child started pid={}\n",
+                child.pid
+            ));
             let status = sunlight_libc::waitpid(child.pid);
             debug_log(&format!("[QALCULATE-PROBE] child status={status:?}\n"));
             ProcessExit::exit(i32::from(status != Ok(0)))

@@ -1,0 +1,176 @@
+{
+  "qualification": "SCOPED_RESOURCE_ACCOUNTING",
+  "next_stage": {
+    "id": "VFS-L1C-3",
+    "status": "BLOCKED"
+  },
+  "vfs_d1": "DEFERRED",
+  "production_changes": false,
+  "new_runtime_runs": false,
+  "sources": [
+    {
+      "path": "vfs-l1c-resource-accounting-results.json",
+      "sha256": "c2b7dba3e03b20f48a484054aff0e6a516f41b10ec3bce1d4649742f77908ca8"
+    },
+    {
+      "path": "vfs-l1c-heap-accounting-results.json",
+      "sha256": "532fc3401a1d89d8d06efe579f823cf13173585faa39d851ec903e95eb2e9210"
+    }
+  ],
+  "heap": {
+    "unit": "bytes",
+    "mapped_capacity": 16777216,
+    "process_vector_net": 2048256,
+    "empty_descriptor_tables_net": 20480,
+    "samples": [
+      {
+        "vcpus": 1,
+        "profile": "primary",
+        "before": 277800,
+        "warmed": 2607656,
+        "rr_net": 261120,
+        "residual": 0
+      },
+      {
+        "vcpus": 2,
+        "profile": "primary",
+        "before": 278920,
+        "warmed": 2607752,
+        "rr_net": 260096,
+        "residual": 0
+      },
+      {
+        "vcpus": 4,
+        "profile": "primary",
+        "before": 280808,
+        "warmed": 2607752,
+        "rr_net": 258048,
+        "residual": 160
+      },
+      {
+        "vcpus": 4,
+        "profile": "trace",
+        "before": 280872,
+        "warmed": 2607656,
+        "rr_net": 258048,
+        "residual": 0
+      }
+    ],
+    "primary_4_residual": {
+      "status": "OWNER_UNVERIFIED",
+      "stable_at_ordinary_checkpoints": true,
+      "trace_minus_primary_before": 64,
+      "trace_minus_primary_warmed": -96,
+      "trace_rounding_before": 72,
+      "trace_rounding_warmed": 72,
+      "reply_waiter_candidate_bytes": 96,
+      "owner_match": false
+    },
+    "ordinary": {
+      "cycles_per_guest": 1000,
+      "checkpoints": [
+        0,
+        1,
+        10,
+        100,
+        1000
+      ],
+      "heap_by_vcpu": {
+        "1": [
+          2607656,
+          2607656,
+          2607656,
+          2607656,
+          2607656
+        ],
+        "2": [
+          2607752,
+          2612024,
+          2607752,
+          2612024,
+          2607752
+        ],
+        "4": [
+          2607752,
+          2607752,
+          2607752,
+          2607752,
+          2607752
+        ]
+      },
+      "persistent_growth_observed": false,
+      "user_frames_returned_per_reap": 514,
+      "page_tables_returned_per_reap": 8
+    }
+  },
+  "adapter": {
+    "vcpus": [
+      1,
+      2,
+      4
+    ],
+    "guest_memory_mib": 2048,
+    "private_create_cancel_cycles_per_guest": 100,
+    "construction_checkpoints_per_guest": 12,
+    "ledger_exhaustion_cases_per_guest": 2,
+    "pmm_failures_per_guest": 523,
+    "accounted_routes": [
+      "successful_publication_and_reap",
+      "cancel_with_authenticated_late_reply_and_compensation"
+    ],
+    "user_frames_returned_per_route": 550,
+    "page_tables_returned_per_route": 8,
+    "populated_swap_slots_per_route": 0,
+    "ownership_witness_only": [
+      "unsent_cancel",
+      "cancel_after_consumed_retain",
+      "R1",
+      "R1B",
+      "R2",
+      "R3"
+    ],
+    "native_disposal_not_run": [
+      "live_authority_preparation_failure",
+      "authentic_service_refusal",
+      "parent_loss"
+    ],
+    "same_registration_continuation_reuse": "PASS",
+    "cross_lifetime_registration_row_reuse": "NOT_RUN"
+  },
+  "remaining_prerequisites": [
+    "full census across remaining disposal routes and authority retirement",
+    "trusted cross-lifetime registration row reuse",
+    "transaction census with regular-file descriptions, owned IPC endpoints and queued payloads",
+    "populated swap and fault-driven swap-in in the transaction",
+    "interactive Btop and Qalculate"
+  ],
+  "other_unknowns": [
+    "exact 160-byte owner in primary 4-vCPU run",
+    "full userspace VFS service heap attribution"
+  ],
+  "regressions": {
+    "evidence": "inherited",
+    "production_release": "PASS",
+    "host_regressions": "PASS",
+    "transaction_session_and_mmap_builds": "PASS",
+    "candidate": {
+      "ownership_guard": "PASS",
+      "swap1_pass_vcpus": [
+        1,
+        2,
+        4
+      ],
+      "ordinary_boot_pass_vcpus": [
+        1,
+        2,
+        4
+      ]
+    },
+    "primary": {
+      "ownership_guard": "FAIL",
+      "preexisting_findings": 4,
+      "accounting_change_findings": 0,
+      "ordinary_boot": "BLOCKED_BEFORE_BOOT"
+    }
+  }
+}

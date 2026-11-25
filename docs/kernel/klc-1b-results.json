@@ -1,0 +1,89 @@
+{
+  "verdict": "PARTIAL",
+  "readiness": {
+    "implemented": true,
+    "host_validated": true,
+    "integration_ready": "BLOCKED",
+    "integration_dependencies": ["owner decision for provisional host-only integration", "private child reservation, commit/cancel and reclamation"],
+    "native_qualified": { "up": "NOT_RUN", "smp": "NOT_RUN" },
+    "vfs_d1": "BLOCKED"
+  },
+  "lifecycle": {
+    "borrower_exit": "NO_IMAGE_PROOF",
+    "last_owner_exit": "UNCHANGED_EXACT_IMAGE_PROOF",
+    "successful_exec": "EXACT_EMBEDDED_PRIVATE_VFS_BACKING_PROOF",
+    "failed_exec": "PRESERVES_OLD_VFS_AUTHORITY_NO_PROOF",
+    "endpoint_only_withdrawal": "FENCED_NO_PROOF",
+    "replacement_publication": "DISTINCT_EPOCH_NO_PROOF",
+    "native_service_restart": "UNSUPPORTED_NO_PRODUCTION_PROVENANCE_PATH",
+    "forced_exit": "NORMAL_REAPER_PROOF_ONLY",
+    "deferred_or_incomplete_reclaim": "NO_PROOF_UNTIL_QUALIFYING_RECLAIM"
+  },
+  "domain": {
+    "image_key": ["pid", "incarnation", "vm_generation"],
+    "registration_key": ["owned_endpoint", "image_key", "epoch"],
+    "registration_capacity": 4,
+    "retain_and_caller_limit_per_registration_each": 64,
+    "proof_marker_limit": 4,
+    "replay_history_limit": 0,
+    "collection": "retired row, then authenticated drain or matching trusted backing proof plus local binding drain",
+    "numeric_pid_reservation_by_vfs": false,
+    "new_pid_reuse_guarantee": false,
+    "live_endpoint_loss_liveness_owner": "VFS service lifecycle owner",
+    "bounded_recovery_after_live_endpoint_loss": false
+  },
+  "regression": {
+    "existing_last_owner_exit_replacements": { "status": "PASS", "cycles": 100 },
+    "mixed_replacements": {
+      "status": "PASS",
+      "cycles": 100,
+      "modeled_successful_exec": 75,
+      "modeled_failed_exec_control": 100,
+      "endpoint_withdrawal": 75,
+      "endpoint_withdrawal_then_exit": 25,
+      "delayed_binding_release": 50
+    },
+    "rows_after_each_cycle": 1,
+    "retired_markers_after_each_cycle": 0,
+    "exact_old_image_multiple_epochs_and_unrelated_retirement": "PASS",
+    "host_fixture_boundaries": ["scheduler and broker inventory", "copy boundary", "VM load, rollback and reclamation", "PID and endpoint reuse", "serialization and proof delivery order"],
+    "native_lifecycle_races_and_resource_census": "NOT_RUN"
+  },
+  "host": {
+    "registration": ["PASS", 94, "target/klc-1b/registration.log"],
+    "ipc": ["PASS", 168, 9, "target/klc-1b/ipc.log"],
+    "vfs_service": ["PASS", 47, "target/klc-1b/service.log"],
+    "descriptor": ["PASS", 18, "target/klc-1b/descriptor.log"],
+    "scheduler": ["PASS", "target/klc-1b/scheduler.log", "target/scheduler-b-evidence/focused-host.log"],
+    "kernel_library": ["PASS", 213, "target/klc-1b/kernel_host.log"],
+    "resource_retirement": ["PASS", 21, "target/klc-1b/retirement.log"]
+  },
+  "compile_only": {
+    "transaction_and_session": ["PASS", "target/klc-1b/transaction_session.log"],
+    "mmap": ["PASS", "target/klc-1b/mmap_final.log"],
+    "mmap_missing_interpreter_env_attempt": ["FAIL", "target/klc-1b/mmap.log"]
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "outside_reviewed_baseline": 4,
+    "klc_1b_delta": 0,
+    "evidence": "target/klc-1b/guard.log"
+  },
+  "ordinary_boot": {
+    "status": "FAIL",
+    "boundary": "ownership guard before build or QEMU",
+    "evidence": "target/klc-1b/boot.log"
+  },
+  "pending_child_cases": {
+    "success": "SAFE_AWAITING_INTEGRATION",
+    "refusal": "SAFE_AWAITING_INTEGRATION",
+    "timeout_live": "SAFE_CANCELLATION_RETAINED_OBLIGATION",
+    "last_owner_exit": "SAFE_AWAITING_INTEGRATION_NATIVE_PENDING",
+    "endpoint_withdrawal": "SAFE_CANCELLATION_RETAINED_OBLIGATION",
+    "service_exec": "SAFE_AWAITING_INTEGRATION_NATIVE_PENDING",
+    "replacement": "EPOCH_ISOLATION_IMPLEMENTED_NATIVE_RESTART_BLOCKED",
+    "late_ack": "SAFE_AWAITING_INTEGRATION",
+    "parent_exit": "ARCHITECTURAL_DEPENDENCY"
+  }
+}

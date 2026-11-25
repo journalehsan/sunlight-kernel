@@ -1,0 +1,80 @@
+{
+  "verdict": "BLOCKED",
+  "ready_for_vfs_d1": false,
+  "publication_invariant_implemented": false,
+  "evidence_directory": "target/vfs-l1",
+  "tests": {
+    "ipc": [
+      "PASS",
+      168,
+      "ipc.log"
+    ],
+    "registration": [
+      "PASS",
+      89,
+      "namespace-final.log"
+    ],
+    "service": [
+      "PASS",
+      47,
+      "service.log"
+    ],
+    "scheduler": [
+      "PASS",
+      "scheduler.log"
+    ],
+    "transaction_mmap_session_compile": [
+      "PASS",
+      "kernel-session-final.log"
+    ],
+    "descriptor_host_harness": [
+      "FAIL",
+      "descriptor-lib.log"
+    ],
+    "ownership_guard": [
+      "FAIL",
+      71,
+      {
+        "outside_baseline": 4,
+        "l1_delta": 0
+      },
+      "guard.log"
+    ],
+    "ordinary_boot": [
+      "FAIL",
+      "boot.log"
+    ]
+  },
+  "native": {
+    "qemu": "NOT_RUN",
+    "up": "NOT_RUN",
+    "smp": "NOT_RUN",
+    "first_dispatch": "NOT_RUN",
+    "cancellation": "NOT_RUN",
+    "vm_reaper": "NOT_RUN",
+    "resource_accounting": "NOT_RUN",
+    "forward_progress": "NOT_RUN"
+  },
+  "production": {
+    "sys_spawn": "BLOCKED",
+    "session_attachment": "BLOCKED",
+    "publication_cancel_races": "NOT_RUN",
+    "exactly_once_cleanup": "NOT_RUN"
+  },
+  "klc_1": {
+    "verdict": "PARTIAL",
+    "result": "docs/kernel/klc-1-results.json",
+    "host_slot_recovery": "PASS",
+    "host_replacement_cycles": 100,
+    "qualification": "BLOCKED",
+    "native": {
+      "up": "NOT_RUN",
+      "smp": "NOT_RUN"
+    }
+  },
+  "descriptor_host_harness_latest": [
+    "PASS",
+    18,
+    "target/klc-1/descriptor.log"
+  ]
+}

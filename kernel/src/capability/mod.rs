@@ -1213,6 +1213,10 @@ impl CapabilityBroker {
             .collect()
     }
 
+    pub(crate) fn has_owned_endpoints(&self, owner_pid: usize) -> bool {
+        self.endpoints.iter().any(|endpoint| endpoint.owner_pid == owner_pid)
+    }
+
     pub fn revoke_endpoints_owned_by(&mut self, owner_pid: usize) {
         let endpoint_ids = self.endpoints_owned_by(owner_pid);
         self.endpoints

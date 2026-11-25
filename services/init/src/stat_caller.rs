@@ -39,6 +39,82 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 32) },
         3
     );
+    #[cfg(feature = "vfs-l1c-file-ipc-test")]
+    if args[1] == "file-ipc" {
+        let start = sunlight_ipc::monotonic_millis();
+        loop {
+            match unsafe { sunlight_libc::sys::syscall2(0xf1c3, 0, 1) } {
+                1 => break,
+                0 => assert!(sunlight_ipc::monotonic_millis() - start < 5000),
+                _ => panic!("file/IPC admission rejected"),
+            }
+            sunlight_ipc::process_yield();
+        }
+        let first = sunlight_libc::open(b"/etc/motd").unwrap();
+        let second = sunlight_libc::open(b"/tests/cat-hello").unwrap();
+        let duplicate = sunlight_libc::dup(second).unwrap();
+        let mut bytes = [0; 5];
+        assert!(sunlight_libc::read(first, &mut bytes).unwrap() > 0);
+        bytes.fill(0);
+        assert_eq!(sunlight_libc::read(second, &mut bytes[..2]), Ok(2));
+        assert_eq!(sunlight_libc::read(duplicate, &mut bytes[..3]), Ok(3));
+        assert_eq!(&bytes, b"llo\0\0");
+        for _ in 0..2 {
+            let endpoint = sunlight_ipc::endpoint_create();
+            assert_ne!(endpoint.0, 0);
+            assert!(sunlight_ipc::ipc_try_recv(endpoint).is_none());
+        }
+        for size in [4096, 8192] {
+            let (memory, _) = sunlight_ipc::shm_create(size, 0).unwrap();
+            unsafe {
+                memory.write_volatile(42);
+                memory.add(size - 1).write_volatile(17);
+            }
+        }
+        assert_eq!(unsafe { sunlight_libc::sys::syscall2(0xf1c3, 0, 0) }, 1);
+        sunlight_libc::exit(37);
+    }
+    #[cfg(feature = "vfs-l1c-parent-lifecycle-test")]
+    if args[1] == "parent-lifecycle" {
+        let mode = args[2].parse::<u64>().unwrap();
+        let start = sunlight_ipc::monotonic_millis();
+        loop {
+            match unsafe { sunlight_libc::sys::syscall2(0xf1c1, mode, 0) } {
+                0 => assert!(sunlight_ipc::monotonic_millis() - start < 5000),
+                1 if mode == 15 => {
+                    assert!(sunlight_libc::exec(b"/etc/motd", &[b"motd"]).is_err());
+                    let result = unsafe { sunlight_libc::sys::syscall2(0xf1c1, 17, 0) };
+                    assert!((2..u64::MAX).contains(&result));
+                    assert_eq!(sunlight_libc::waitpid(result - 2), Ok(0));
+                    sunlight_libc::exit(37);
+                }
+                1 if mode == 16 => {
+                    let _ = sunlight_libc::exec(
+                        b"/bin/vfs-lifecycle-parent",
+                        &[b"vfs-lifecycle-parent", b"exec-replacement", b"16"],
+                    );
+                    panic!("exec returned to retired image");
+                }
+                1 => sunlight_libc::exit(37),
+                result if mode == 14 && result != u64::MAX => {
+                    assert_eq!(sunlight_libc::waitpid(result - 2), Ok(0));
+                    sunlight_libc::exit(37);
+                }
+                result => panic!("parent lifecycle stage returned {}", result),
+            }
+            sunlight_libc::yield_now();
+        }
+    }
+    #[cfg(feature = "vfs-l1c-parent-lifecycle-test")]
+    if args[1] == "exec-replacement" {
+        let start = sunlight_ipc::monotonic_millis();
+        while unsafe { sunlight_libc::sys::syscall2(0xf1c1, 18, 0) } == 0 {
+            assert!(sunlight_ipc::monotonic_millis() - start < 5000);
+            sunlight_libc::yield_now();
+        }
+        sunlight_ipc::debug_log("[VFS-EXEC] replacement image executed");
+        sunlight_libc::exit(37);
+    }
     let cap = CapabilityToken(args[2].parse::<u64>().unwrap());
     let control = |mode| {
         let reply = ipc_call(cap, IpcMsg::with_label(0x53544641).word(0, mode));

@@ -1,4 +1,4 @@
-//! Persistent anonymous-munmap ownership. No allocation and no Drop reclamation.
+//! Persistent mapping retirement ownership. No Drop reclamation.
 //! The token is only a locator; the table remains authoritative if it is lost.
 #[path = "retirement/transaction.rs"]
 mod transaction;
@@ -31,7 +31,7 @@ pub enum Failure {
     NmiDelivery,
     MissingAck,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Record<const P: usize> {
     pub root: u64,
     pub vm: u64,
@@ -42,7 +42,7 @@ pub struct Record<const P: usize> {
     pub failure: Option<Failure>,
     pub failed_cpu: Option<usize>,
     pub entries: [Option<Entry>; P],
-    pub transaction: Option<transaction::MappingTransaction<P>>,
+    pub transaction: Option<transaction::MappingTransaction>,
 }
 #[derive(Debug)]
 pub struct Token {
@@ -59,7 +59,7 @@ impl<const N: usize, const P: usize> Table<N, P> {
         Self {
             next: 1,
             generations: [0; N],
-            records: [None; N],
+            records: [const { None }; N],
         }
     }
     pub fn reserve(&mut self, root: u64, vm: u64) -> Option<Token> {
@@ -91,7 +91,7 @@ impl<const N: usize, const P: usize> Table<N, P> {
     #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
     pub fn snapshot(&self, token: &Token) -> Record<P> {
         assert_eq!(self.generations[token.index], token.generation);
-        self.records[token.index].expect("lost retirement owner")
+        self.records[token.index].as_ref().expect("lost retirement owner").clone()
     }
     fn get_mut(&mut self, token: &Token) -> Option<&mut Record<P>> {
         if self.generations.get(token.index) != Some(&token.generation) {
@@ -249,8 +249,8 @@ mod tests {
         let a = t.reserve(4096, 1).unwrap();
         let second = Entry { address: 8192, backing: Backing::Swap(17), released: false };
         assert!(!t.stage(&a, &[entry(), second, entry()]));
-        assert_eq!(t.records[0].unwrap().state, State::Prepared);
-        assert!(t.records[0].unwrap().entries.iter().all(Option::is_none));
+        assert_eq!(t.records[0].as_ref().unwrap().state, State::Prepared);
+        assert!(t.records[0].as_ref().unwrap().entries.iter().all(Option::is_none));
         assert!(t.stage(&a, &[entry(), second]));
         assert!(t.withdrawn(&a));
         assert!(t.bind(&a, 91, 0));
@@ -287,7 +287,7 @@ mod tests {
             assert!(!t.finish(&a));
             assert!(!t.released(&a, 0));
             assert!(t.owns_vm(4096, 1));
-            assert_eq!(t.records[0].unwrap().entries[0], Some(entry()));
+            assert_eq!(t.records[0].as_ref().unwrap().entries[0], Some(entry()));
         }
         // The actual process-exit guard must still be validated in a guest.
     }
@@ -337,7 +337,7 @@ mod tests {
             assert!(!t.released(&a, 0));
             assert!(!t.finish(&a));
         }
-        assert_eq!(t.records[0].unwrap().entries[0], Some(entry()));
+        assert_eq!(t.records[0].as_ref().unwrap().entries[0], Some(entry()));
         assert!(t.owns_vm(4096, 1));
         assert!(t.reserve(4096, 1).is_none());
     }
@@ -460,7 +460,7 @@ mod tests {
         assert!(!t.finish(&a));
         assert!(!t.next_chunk(&a));
         assert!(t.reserve(4096, 1).is_none());
-        let r = t.records[0].unwrap();
+        let r = t.records[0].as_ref().unwrap();
         assert_eq!(r.received, 2);
         assert_eq!(r.failure, Some(Failure::MissingAck));
         // Delivery errors use the same permanent no-reclamation state.
@@ -477,7 +477,7 @@ mod tests {
         };
         assert!(t.stage(&a, &[e]));
         assert!(!t.stage(&a, &[entry()]));
-        assert_eq!(t.records[0].unwrap().entries[0], Some(e));
+        assert_eq!(t.records[0].as_ref().unwrap().entries[0], Some(e));
     }
 }
 

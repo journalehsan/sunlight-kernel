@@ -32,6 +32,7 @@ pub const PROT_EXEC: u32 = 0x4;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MmapError {
     BadFd,
+    FileIo,
     InvalidAddress,
     NoMemory,
     InvalidFlags,
@@ -225,7 +226,7 @@ fn normalize_protection(prot: u32) -> Result<RegionProtection, MmapError> {
     .map_err(|_| MmapError::PermissionDenied)
 }
 
-/// Map anonymous memory in the current process.
+/// Map memory in the current process.
 pub fn sys_mmap(
     addr: u64,
     length: u64,
@@ -241,6 +242,76 @@ pub fn sys_mmap(
     }
     if flags == MAP_SHARED {
         return map_shared_fd(addr, length, prot, fd, offset, pmm, sched);
+    }
+    if flags & MAP_ANONYMOUS == 0 && sched.current_process().is_linux_compat() {
+        if flags & MAP_PRIVATE == 0
+            || flags & !(MAP_PRIVATE | MAP_FIXED | MAP_FIXED_NOREPLACE) != 0
+        {
+            return Err(MmapError::InvalidFlags);
+        }
+        let (_, span) = checked_page_layout(length).map_err(|_| MmapError::InvalidAddress)?;
+        if offset & 4095 != 0
+            || offset.checked_add(span).is_none_or(|end| end > i64::MAX as u64)
+        {
+            return Err(MmapError::InvalidAddress);
+        }
+        let descriptor = sched
+            .current_shared_process()
+            .fd_table
+            .get(fd)
+            .ok_or(MmapError::BadFd)?;
+        if !descriptor.handle.is_vfs() {
+            return Err(MmapError::Unsupported);
+        }
+        if !descriptor.rights.contains(CapRights::new(CapRights::READ)) {
+            return Err(MmapError::PermissionDenied);
+        }
+        let handle = sunlight_fs::vfs::FileHandle(descriptor.handle.vfs_handle());
+        // Keep the descriptor live under the scheduler lock and serialize
+        // reads against VFS writers for the duration of the copy.
+        let mut guard = crate::KERNEL_VFS.lock();
+        let vfs = guard.as_mut().ok_or(MmapError::FileIo)?;
+        let stat = vfs.fstat_handle(handle).map_err(|_| MmapError::FileIo)?;
+        if stat.file_type != sunlight_fs::vfs::FileType::File {
+            return Err(MmapError::Unsupported);
+        }
+        let mut populate = |index: u64, frame: PhysAddr, hhdm: VirtAddr| {
+            let file_offset = (offset + index * 4096) as usize;
+            let count = stat.size.saturating_sub(file_offset).min(4096);
+            if count == 0 {
+                return Ok(());
+            }
+            // The frame is sanitized, exclusively owned, and still unpublished.
+            let bytes = unsafe {
+                core::slice::from_raw_parts_mut((hhdm + frame.as_u64()).as_mut_ptr::<u8>(), count)
+            };
+            let mut done = 0;
+            while done < count {
+                let read = vfs.read(handle, file_offset + done, &mut bytes[done..])
+                    .map_err(|_| MmapError::FileIo)?;
+                if read == 0 {
+                    return Err(MmapError::FileIo);
+                }
+                done += read;
+            }
+            Ok(())
+        };
+        let addr = if flags & (MAP_FIXED | MAP_FIXED_NOREPLACE) == 0 {
+            0
+        } else {
+            addr
+        };
+        return map_private_kind(
+            addr,
+            length,
+            prot,
+            flags,
+            pmm,
+            sched,
+            MappingKind::Anonymous,
+            false,
+            Some(&mut populate),
+        );
     }
     if fd != -1 || offset != 0 {
         return Err(MmapError::InvalidFlags);
@@ -262,8 +333,8 @@ pub fn sys_mmap(
              owner.address_space.region_count(), owner.mmap_next)
         };
         let before = counts(sched, pmm);
-        let result = map_anonymous_kind(
-            addr, length, prot, flags, pmm, sched, MappingKind::Anonymous, false,
+        let result = map_private_kind(
+            addr, length, prot, flags, pmm, sched, MappingKind::Anonymous, false, None,
         );
         assert!(result.is_err());
         assert_eq!(before, counts(sched, pmm));
@@ -273,7 +344,7 @@ pub fn sys_mmap(
         );
         return result;
     }
-    map_anonymous_kind(
+    map_private_kind(
         addr,
         length,
         prot,
@@ -282,6 +353,7 @@ pub fn sys_mmap(
         sched,
         MappingKind::Anonymous,
         demand_backed,
+        None,
     )
 }
 
@@ -408,7 +480,7 @@ pub fn map_brk(
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
 ) -> Result<u64, MmapError> {
-    map_anonymous_kind(
+    map_private_kind(
         addr,
         length,
         PROT_READ | PROT_WRITE,
@@ -417,10 +489,13 @@ pub fn map_brk(
         sched,
         MappingKind::Brk,
         false,
+        None,
     )
 }
 
-fn map_anonymous_kind(
+type PagePopulator<'a> = dyn FnMut(u64, PhysAddr, VirtAddr) -> Result<(), MmapError> + 'a;
+
+fn map_private_kind(
     addr: u64,
     length: u64,
     prot: u32,
@@ -429,6 +504,7 @@ fn map_anonymous_kind(
     sched: &mut Scheduler,
     kind: MappingKind,
     demand_backed: bool,
+    mut populate: Option<&mut PagePopulator<'_>>,
 ) -> Result<u64, MmapError> {
     let protection = match normalize_protection(prot) {
         Err(MmapError::PermissionDenied) => {
@@ -452,10 +528,7 @@ fn map_anonymous_kind(
         return Err(MmapError::InvalidFlags);
     }
 
-    // The current native surface is deliberately limited to private,
-    // anonymous mappings.  Require both bits instead of accepting an
-    // incomplete request as private anonymous memory.
-    if flags & (MAP_PRIVATE | MAP_ANONYMOUS) != (MAP_PRIVATE | MAP_ANONYMOUS) {
+    if flags & MAP_PRIVATE == 0 || (flags & MAP_ANONYMOUS == 0 && populate.is_none()) {
         return Err(MmapError::InvalidFlags);
     }
 
@@ -565,7 +638,9 @@ fn map_anonymous_kind(
     if replace_fixed {
         let plan = sched.current_process().address_space.preflight_replace(region)
             .map_err(mapping_error)?;
-        return map_fixed_transaction(map_addr, page_count, page_flags, plan, pid, pmm, sched, hhdm_offset);
+        return map_fixed_transaction(
+            map_addr, page_count, page_flags, plan, pid, pmm, sched, hhdm_offset, populate,
+        );
     }
     let reservation = Some(sched.current_process().address_space.preflight_region(region)
         .map_err(mapping_error)?);
@@ -674,6 +749,16 @@ fn map_anonymous_kind(
                     .cancel_region(reservation);
             }
             return Err(MmapError::NoMemory);
+        }
+        if let Some(populate) = populate.as_deref_mut() {
+            if let Err(error) = populate(i, frame_addr, hhdm_offset) {
+                pmm.free_frame(frame_addr);
+                rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+                if let Some(reservation) = reservation {
+                    sched.current_process().address_space.cancel_region(reservation);
+                }
+                return Err(error);
+            }
         }
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
 
@@ -924,13 +1009,21 @@ fn map_fixed_transaction(
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
     hhdm: VirtAddr,
+    mut populate: Option<&mut PagePopulator<'_>>,
 ) -> Result<u64, MmapError> {
     use crate::memory::retirement::{Backing, MappingPage, OWNERS};
     let count = usize::try_from(count).map_err(|_| MmapError::NoMemory)?;
-    if count > 32 { return Err(MmapError::NoMemory); }
-    let mut pages = [MappingPage { address: 0, original: None, original_flags: 0, replacement: 0 }; 32];
+    if populate.is_none() && count > 32 {
+        return Err(MmapError::NoMemory);
+    }
+    let mut pages = Vec::new();
+    pages.try_reserve_exact(count).map_err(|_| MmapError::NoMemory)?;
+    pages.resize(
+        count,
+        MappingPage { address: 0, original: None, original_flags: 0, replacement: 0 },
+    );
     let identity = sched.current_process().address_space.identity();
-    for (index, mapping) in pages[..count].iter_mut().enumerate() {
+    for (index, mapping) in pages.iter_mut().enumerate() {
         mapping.address = start + index as u64 * 4096;
         let process = sched.process_mut_by_pid(pid).ok_or(MmapError::InternalInvariant)?;
         let page = Page::from_start_address(VirtAddr::new(mapping.address)).map_err(|_| MmapError::InvalidAddress)?;
@@ -948,17 +1041,28 @@ fn map_fixed_transaction(
             None => {}
         }
     }
-    let token = OWNERS.lock().reserve_mapping(identity.pml4_phys, identity.generation, &pages[..count], flags.bits())
-        .ok_or(MmapError::NoMemory)?;
+    let token = {
+        let mut owners = OWNERS.lock();
+        if populate.is_some() {
+            owners.reserve_mapping_with_capacity(
+                identity.pml4_phys, identity.generation, &pages, flags.bits(), usize::MAX,
+            )
+        } else {
+            owners.reserve_mapping(identity.pml4_phys, identity.generation, &pages, flags.bits())
+        }
+    }.ok_or(MmapError::NoMemory)?;
     let preparation = (|| {
         crate::memory::swap::reserve_candidates(count).map_err(|_| MmapError::NoMemory)?;
-        for (index, mapping) in pages[..count].iter().enumerate() {
+        for (index, mapping) in pages.iter().enumerate() {
             let page = Page::from_start_address(VirtAddr::new(mapping.address)).map_err(|_| MmapError::InvalidAddress)?;
             unsafe { sched.process_mut_by_pid(pid).ok_or(MmapError::InternalInvariant)?
                 .address_space.prepare_transaction_tables(page, pmm, hhdm).map_err(mapping_error)?; }
             let frame = pmm.alloc_frame_owned(pid as u32).ok_or(MmapError::NoMemory)?;
             assert!(OWNERS.lock().prepare_mapping_frame(&token, index, frame.as_u64()));
             if !crate::memory::security::sanitize_user_frame(frame, hhdm) { return Err(MmapError::NoMemory); }
+            if let Some(populate) = populate.as_deref_mut() {
+                populate(index as u64, frame, hhdm)?;
+            }
         }
         Ok(())
     })();
@@ -1040,7 +1144,8 @@ fn resolve_fixed_transaction(
     hhdm: VirtAddr,
 ) {
     use crate::memory::retirement::{Backing, OWNERS};
-    for index in 0..32 {
+    let count = OWNERS.lock().mapping_entry_count(token).expect("mapping owner lost");
+    for index in 0..count {
         let resolution = OWNERS.lock().mapping_release(token, index);
         let Some((entry, release)) = resolution else { continue };
         if release {

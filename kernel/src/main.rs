@@ -82,8 +82,23 @@ const BOOT_INITRAMFS: &[sunlight_fs::RamEntry] = sunlight_fs::INITRAMFS;
 const BOOT_INITRAMFS: &[sunlight_fs::RamEntry] = native_c_guest::INITRAMFS;
 
 // Embedded service binaries (must be built before kernel)
+#[cfg(not(all(
+    any(
+        all(debug_assertions, feature = "vfs_l1c_1_test"),
+        feature = "zram_lifecycle_test"
+    ),
+    not(feature = "native_c_guest")
+)))]
 static INIT_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-init");
+#[cfg(all(
+    any(
+        all(debug_assertions, feature = "vfs_l1c_1_test"),
+        feature = "zram_lifecycle_test"
+    ),
+    not(feature = "native_c_guest")
+))]
+static INIT_ELF_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight-init"));
 static TIMER_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
 static SUNLIGHT_SWAPD_ELF_BYTES: &[u8] =
@@ -118,8 +133,11 @@ static SUNSHELL_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-
 // Phase 6.5 Step 3: busybox-style multi-call userland binaries. PATH entries
 // under /sunlight-utils and /sunlight-net-utils all exec one of these; the
 // applet is selected by argv[0].
+#[cfg(not(all(feature = "zram_lifecycle_test", not(feature = "native_c_guest"))))]
 static SUNLIGHT_UTILS_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
+#[cfg(all(feature = "zram_lifecycle_test", not(feature = "native_c_guest")))]
+static SUNLIGHT_UTILS_ELF_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight-utils"));
 static LSBLK_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/lsblk");
 static STORAGECTL_ELF_BYTES: &[u8] =
@@ -130,7 +148,7 @@ static SUNLIGHT_CAT_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/cat");
 static SUNLIGHT_PWD_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/pwd");
-static SUNLIGHT_TRUE_ELF_BYTES: &[u8] =
+pub(crate) static SUNLIGHT_TRUE_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/true");
 static SUNLIGHT_FALSE_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/false");
@@ -1951,6 +1969,9 @@ pub extern "C" fn _start() -> ! {
             serial_println!("[SunlightOS] Post-Phase Stabilization OK");
         }
     }
+
+    #[cfg(all(debug_assertions, feature = "vfs_l1p_test"))]
+    process::pending::native_fixture(hhdm_offset);
 
     serial_println!("[PROC] Entering scheduler — dropping to Ring 3");
     serial_println!("══════════════════════════════════════");

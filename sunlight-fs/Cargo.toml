@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-fs"
-version = "0.2.8896-alpha.2"
+version = "0.2.9090-alpha.2"
+
 
 
 
@@ -688,6 +689,7 @@ helios-runtime-c-dso = ["helios-runtime-c-startup"]
 helios-dynamic-elf-relocation-fixture = []
 helios-dynamic-elf-shared-fixture = []
 helios-qalculate-probe = []
+helios-qalculate-dso-probe = ["helios-qalculate-probe"]
 
 [dependencies]
 sunlight-mm = { path = "../sunlight-mm" }

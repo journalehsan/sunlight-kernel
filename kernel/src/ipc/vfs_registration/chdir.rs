@@ -349,21 +349,9 @@ pub(super) fn transition_call_runtime(
     api::encode_transition(old, identity.uid, identity.gid, &path, kind)
         .map_err(|_| stat::Error::Protocol)?;
     let cwd = string(&sched.processes[owner].cwd)?;
-    runtime
+    let id = runtime
         .queue_namespace_inner(identity, LOOKUP_METADATA, Some(old))
         .map_err(|_| stat::Error::Capacity)?;
-    let id = runtime
-        .remote
-        .iter()
-        .flatten()
-        .find(|r| r.registration == identity.registration)
-        .unwrap()
-        .local
-        .iter()
-        .flatten()
-        .map(LocalLease::id)
-        .max()
-        .unwrap();
     runtime.chdirs[slot] = Some(Call {
         id,
         identity,

@@ -1,0 +1,491 @@
+{
+  "r3_service_retirement_after_publication": "PASS",
+  "vfs_l1c_2b": "PARTIAL",
+  "vfs_l1c_3": "BLOCKED",
+  "candidate_root": "/tmp/klc-q1/candidate",
+  "evidence_root": "target/vfs-l1c-2b-r3",
+  "fixture_source_digest": "fixture-source.sha256",
+  "checker": "python3 tools/check_vfs_r3.py",
+  "runners": {
+    "native": "run-native.sh",
+    "lifecycle_regressions": "run-lifecycle-regressions.sh",
+    "compile_checks": "compile-checks.sh",
+    "boot": "run-boot-gates.sh"
+  },
+  "native": {
+    "status": "PASS",
+    "memory_mib": 2048,
+    "accelerator": "tcg",
+    "fresh_guest_per_run": true,
+    "run_order": [
+      2,
+      1,
+      4
+    ],
+    "matrix": [
+      {
+        "vcpus": 2,
+        "status": "PASS",
+        "transactions": 1,
+        "serial": "r3-2.serial.log",
+        "console": "r3-2.qemu.log",
+        "check": "r3-2-check.json",
+        "evidence": {
+          "serial": "r3-2.serial.log",
+          "vcpus": 2,
+          "service": 3,
+          "child": 5,
+          "retain": 2,
+          "epoch": 1,
+          "service_incarnation": 50,
+          "service_vm_generation": 25,
+          "child_incarnation": 683,
+          "child_vm_generation": 1351,
+          "service_resources": {
+            "frames": 22264,
+            "page_tables": 53,
+            "swap_blocks": 0
+          },
+          "child_resources": {
+            "frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "lines": {
+            "staged": 1890,
+            "parked": 1891,
+            "retained": 1898,
+            "binding": 1899,
+            "committed": 1901,
+            "enqueue": 1902,
+            "first dispatch selected": 1903,
+            "metadata completed": 1910,
+            "stat": 1931,
+            "checkpoint": 1932,
+            "termination": 1933,
+            "withdrawal": 1934,
+            "proof": 1939,
+            "service_reap": 1940,
+            "continued": 1943,
+            "namespace": 1945,
+            "child_exit": 1949,
+            "wait": 1951,
+            "child_reap": 1952,
+            "checked": 1955,
+            "disposed": 1956,
+            "observer_wait": 1957
+          }
+        }
+      },
+      {
+        "vcpus": 1,
+        "status": "PASS",
+        "transactions": 1,
+        "serial": "r3-1.serial.log",
+        "console": "r3-1.qemu.log",
+        "check": "r3-1-check.json",
+        "evidence": {
+          "serial": "r3-1.serial.log",
+          "vcpus": 1,
+          "service": 3,
+          "child": 5,
+          "retain": 2,
+          "epoch": 1,
+          "service_incarnation": 50,
+          "service_vm_generation": 25,
+          "child_incarnation": 683,
+          "child_vm_generation": 1351,
+          "service_resources": {
+            "frames": 22264,
+            "page_tables": 53,
+            "swap_blocks": 0
+          },
+          "child_resources": {
+            "frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "lines": {
+            "staged": 1886,
+            "parked": 1887,
+            "retained": 1897,
+            "binding": 1898,
+            "committed": 1900,
+            "enqueue": 1901,
+            "first dispatch selected": 1902,
+            "metadata completed": 1906,
+            "stat": 1927,
+            "checkpoint": 1928,
+            "termination": 1929,
+            "withdrawal": 1930,
+            "proof": 1935,
+            "service_reap": 1936,
+            "continued": 1939,
+            "namespace": 1941,
+            "child_exit": 1945,
+            "wait": 1947,
+            "child_reap": 1948,
+            "checked": 1951,
+            "disposed": 1952,
+            "observer_wait": 1953
+          }
+        }
+      },
+      {
+        "vcpus": 4,
+        "status": "PASS",
+        "transactions": 1,
+        "serial": "r3-4.serial.log",
+        "console": "r3-4.qemu.log",
+        "check": "r3-4-check.json",
+        "evidence": {
+          "serial": "r3-4.serial.log",
+          "vcpus": 4,
+          "service": 3,
+          "child": 5,
+          "retain": 2,
+          "epoch": 1,
+          "service_incarnation": 50,
+          "service_vm_generation": 25,
+          "child_incarnation": 683,
+          "child_vm_generation": 1351,
+          "service_resources": {
+            "frames": 22264,
+            "page_tables": 53,
+            "swap_blocks": 0
+          },
+          "child_resources": {
+            "frames": 550,
+            "page_tables": 8,
+            "swap_blocks": 0
+          },
+          "lines": {
+            "staged": 1907,
+            "parked": 1908,
+            "retained": 1915,
+            "binding": 1916,
+            "committed": 1918,
+            "enqueue": 1919,
+            "first dispatch selected": 1920,
+            "metadata completed": 1927,
+            "stat": 1948,
+            "checkpoint": 1949,
+            "termination": 1950,
+            "withdrawal": 1951,
+            "proof": 1956,
+            "service_reap": 1957,
+            "continued": 1960,
+            "namespace": 1962,
+            "child_exit": 1966,
+            "wait": 1968,
+            "child_reap": 1969,
+            "checked": 1972,
+            "disposed": 1973,
+            "observer_wait": 1974
+          }
+        }
+      }
+    ],
+    "build": "r3-build.log",
+    "iso_log": "r3-iso.log",
+    "check": "r3-check.json",
+    "sha256": {
+      "elf": "e9e28db56f7703cf2e4e2e6017c5354f84bccd46248c3f2b4f0fcdbeceb9e804",
+      "iso": "56c1717ba8086b8401b0fa7f17315967ff4c31ad22b39a6b66eccc9406581321"
+    }
+  },
+  "ordering": [
+    "Construct the private child, stage the copied retain, and park init.",
+    "Consume the authenticated Retained result, install the root/cwd binding, commit scheduler ownership, and enqueue once.",
+    "Observe first dispatch, successful stat /tmp, and the child checkpoint.",
+    "Terminate the boot VFS service through the scheduler and withdraw its registration. The child's drained binding leaves a release obligation.",
+    "Observe matching KLC service image-exit proof, retired row collection, and service reaper accounting.",
+    "Verify the surviving scheduler child and reject both publication replays; release the checkpoint.",
+    "Observe stat and chdir fail with Again and getcwd return the same path. Child exits normally.",
+    "Consume status zero once and observe normal reaping, no remaining private PID reservation, no owned child frames or open descriptors, and adapter disposal."
+  ],
+  "resources": {
+    "completed_creation_continuations_remaining": 0,
+    "private_child_payloads_after_publication": 0,
+    "private_pid_claims_after_publication": 0,
+    "child_scheduler_publications": 1,
+    "child_enqueues": 1,
+    "child_root_cwd_pairs_bound": 1,
+    "child_receipt_releases_pending_at_withdrawal": 1,
+    "release_settlement": "Matching KLC private service image proof collected the retired row.",
+    "registration_rows_collected": 1,
+    "publication_replay_error": "Identity",
+    "wait_for_publication_replay_error": "Identity",
+    "namespace_after_proof": {
+      "stat /tmp": "Again",
+      "chdir /tmp": "Again",
+      "getcwd": "unchanged"
+    },
+    "child_fd_slots_before_and_after_retirement": 3,
+    "child_fd_slots_after_reap": 0,
+    "child_user_frames_reclaimed": 550,
+    "child_page_tables_reclaimed": 8,
+    "child_swap_blocks": 0,
+    "child_owned_frames_after_reap": 0,
+    "child_vm_root_reclaimed": true,
+    "child_kernel_stack_reclaimed": true,
+    "child_exit_status": 0,
+    "child_wait_consumptions": 1,
+    "service_user_frames_reclaimed": 22264,
+    "service_page_tables_reclaimed": 53,
+    "service_swap_blocks": 0,
+    "adapter_disposals": 1,
+    "adapter_lookup_and_cancel_after_reap": "Stale",
+    "observer_wait_status": 0,
+    "heap_census_complete": false
+  },
+  "regressions": {
+    "registration": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "registration.log",
+      "tests": 105
+    },
+    "ownership": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "registration.log",
+      "cycles": 112,
+      "test": "publication_mixed_cycles_and_boundary_failures"
+    },
+    "r1": {
+      "status": "PASS",
+      "memory_mib": 2048,
+      "accelerator": "tcg",
+      "fresh_guest_per_run": true,
+      "run_order": [
+        2,
+        1,
+        4
+      ],
+      "matrix": [
+        {
+          "vcpus": 2,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r1-2.serial.log",
+          "console": "r1-2.qemu.log",
+          "check": "r1-2-check.json"
+        },
+        {
+          "vcpus": 1,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r1-1.serial.log",
+          "console": "r1-1.qemu.log",
+          "check": "r1-1-check.json"
+        },
+        {
+          "vcpus": 4,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r1-4.serial.log",
+          "console": "r1-4.qemu.log",
+          "check": "r1-4-check.json"
+        }
+      ],
+      "build": "r1-build.log",
+      "iso_log": "r1-iso.log",
+      "check": "r1-check.json",
+      "sha256": {
+        "elf": "4ff98eb2d1bc36656d878157a8795d1673795d2b9fddd393b56f7e71267b3745",
+        "iso": "d7e05aa222e94104330cbde75be1190a838a7e82d697c8991b5af6627ac242eb"
+      }
+    },
+    "r1b": {
+      "status": "PASS",
+      "memory_mib": 2048,
+      "accelerator": "tcg",
+      "fresh_guest_per_run": true,
+      "run_order": [
+        2,
+        1,
+        4
+      ],
+      "matrix": [
+        {
+          "vcpus": 2,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r1b-2.serial.log",
+          "console": "r1b-2.qemu.log",
+          "check": "r1b-2-check.json"
+        },
+        {
+          "vcpus": 1,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r1b-1.serial.log",
+          "console": "r1b-1.qemu.log",
+          "check": "r1b-1-check.json"
+        },
+        {
+          "vcpus": 4,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r1b-4.serial.log",
+          "console": "r1b-4.qemu.log",
+          "check": "r1b-4-check.json"
+        }
+      ],
+      "build": "r1b-build.log",
+      "iso_log": "r1b-iso.log",
+      "check": "r1b-check.json",
+      "sha256": {
+        "elf": "5f7b49f332e5d8afb8248eef0d98ada3524b57015ec8b6b8a58d555db75ce4a5",
+        "iso": "58a76dcfd1adc935fbfbd9df8ae3a5c79a7f06912531dc565033bacb10e71b33"
+      }
+    },
+    "r2": {
+      "status": "PASS",
+      "memory_mib": 2048,
+      "accelerator": "tcg",
+      "fresh_guest_per_run": true,
+      "run_order": [
+        2,
+        1,
+        4
+      ],
+      "matrix": [
+        {
+          "vcpus": 2,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r2-2.serial.log",
+          "console": "r2-2.qemu.log",
+          "check": "r2-2-check.json"
+        },
+        {
+          "vcpus": 1,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r2-1.serial.log",
+          "console": "r2-1.qemu.log",
+          "check": "r2-1-check.json"
+        },
+        {
+          "vcpus": 4,
+          "status": "PASS",
+          "transactions": 1,
+          "serial": "r2-4.serial.log",
+          "console": "r2-4.qemu.log",
+          "check": "r2-4-check.json"
+        }
+      ],
+      "build": "r2-build.log",
+      "iso_log": "r2-iso.log",
+      "check": "r2-check.json",
+      "sha256": {
+        "elf": "c10a487cb78f2b7eebb2e0f3077fe6e24b559f0556a0ad8853d9588639da2232",
+        "iso": "1df9d72df0641bc52fcd297537f93abe5250322908aa06e3f436b9fd38b6196f"
+      }
+    },
+    "r4": {
+      "status": "PASS",
+      "memory_mib": 2048,
+      "accelerator": "tcg",
+      "fresh_guest_per_run": true,
+      "run_order": [
+        2,
+        1,
+        4
+      ],
+      "matrix": [
+        {
+          "vcpus": 2,
+          "status": "PASS",
+          "transactions": 8,
+          "serial": "r4-2.serial.log",
+          "console": "r4-2.qemu.log",
+          "check": "r4-2-check.json"
+        },
+        {
+          "vcpus": 1,
+          "status": "PASS",
+          "transactions": 8,
+          "serial": "r4-1.serial.log",
+          "console": "r4-1.qemu.log",
+          "check": "r4-1-check.json"
+        },
+        {
+          "vcpus": 4,
+          "status": "PASS",
+          "transactions": 8,
+          "serial": "r4-4.serial.log",
+          "console": "r4-4.qemu.log",
+          "check": "r4-4-check.json"
+        }
+      ],
+      "build": "r4-build.log",
+      "iso_log": "r4-iso.log",
+      "check": "r4-check.json",
+      "sha256": {
+        "elf": "b22047e8eb2c22c6dbdfcdeca52c7c6849214a326a6ac6b23e6f262d735f16b1",
+        "iso": "098801853c64eb3414354ced555e2815a9d5eb84c98a6a633cca8628c01bc006"
+      }
+    },
+    "transaction_session_compile": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "transaction-session.log"
+    },
+    "mmap_compile": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "mmap.log"
+    },
+    "candidate_ownership_guard": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "candidate-guard.log",
+      "new_findings": 0
+    },
+    "swap1": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "swap1.log",
+      "vcpus": 4,
+      "memory_mib": 2048,
+      "serial": "swap1.serial.log"
+    },
+    "ordinary_boot": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "phase3.0.log",
+      "vcpus": 2,
+      "memory_mib": 2048,
+      "serial": "phase3.0.serial.log"
+    }
+  },
+  "checker_negative_control": {
+    "status": "PASS",
+    "log": "checker-negative.log",
+    "removed_event": "KLC proof"
+  },
+  "pilot": {
+    "vcpus": 2,
+    "status": "FIXTURE_PACKAGING_FAILURE",
+    "serial": "pilot-2.serial.log",
+    "image_hashes": "pilot-images.sha256",
+    "images_retained": false,
+    "cause": "Cached ordinary utility lacked the fixture applet. R3 now embeds a separate feature-built image."
+  },
+  "production_defect_reproduced": false,
+  "ordinary_spawn_activation": false,
+  "remaining": {
+    "native_r5": "NOT_RUN",
+    "full_transaction_resource_census": "OPEN",
+    "populated_swap_teardown_in_transaction": "NOT_RUN",
+    "fault_driven_swap_in": "NOT_RUN",
+    "interactive_btop_and_qalculate": "NOT_RUN",
+    "file_routing": "OUT_OF_SCOPE",
+    "service_replacement": "OUT_OF_SCOPE",
+    "vfs_d1": "DEFERRED"
+  },
+  "qualification": "PASS"
+}

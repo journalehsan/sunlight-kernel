@@ -1,0 +1,88 @@
+{
+  "verdict": "PARTIAL",
+  "l1c3_ready_to_activate": false,
+  "ordinary_spawn_activation": false,
+  "candidate_root": "/tmp/klc-q1/candidate",
+  "boot_regression": {
+    "historical": "FAIL",
+    "cause": "Feature-enabled init invoked fixture syscall 61889 against an ordinary kernel before the base service startup and follow-up stat probes",
+    "historical_staging_transition": "UNCONFIRMED",
+    "repair": "Kernel feature-gated build and embedding use a separate fixture init artifact",
+    "historical_log": "target/vfs-l1c-2/ordinary.log",
+    "last_passing_baseline": "target/vfs-l1c-1/ordinary-final.serial.log",
+    "unchanged_replay": "PASS_NOT_REPRODUCED",
+    "replay_log": "target/vfs-l1c-2a/ordinary-replay.log",
+    "replay_serial": "target/vfs-l1c-2a/ordinary-replay.serial.log"
+  },
+  "ordinary_boot": {
+    "gate": "tools/test.sh phase3.0",
+    "memory_mib": 2048,
+    "cases": [
+      {"cpus": 1, "status": "PASS", "log": "target/vfs-l1c-2a/ordinary-1.log", "serial": "target/vfs-l1c-2a/ordinary-1.serial.log"},
+      {"cpus": 2, "status": "PASS", "log": "target/vfs-l1c-2a/ordinary-2.log", "serial": "target/vfs-l1c-2a/ordinary-2.serial.log"},
+      {"cpus": 4, "status": "PASS", "log": "target/vfs-l1c-2a/ordinary-4.log", "serial": "target/vfs-l1c-2a/ordinary-4.serial.log"}
+    ]
+  },
+  "native_publication": {
+    "memory_mib": 2048,
+    "matrix": "target/vfs-l1c-2a/native-final/matrix.json",
+    "iso_sha256": "aae1b112621efaf7f999248221e04c80900a17b9f2994300eba45926f373f17a",
+    "cpus": [1, 2, 4],
+    "status": "PASS",
+    "order": ["binding", "publication", "enqueue", "first dispatch", "metadata completion", "normal exit", "reap"],
+    "stat_tmp": "PASS",
+    "cancel_unsent": "PASS",
+    "cancel_after_ack": "PASS",
+    "l1p_cycles_per_cpu_count": 100,
+    "reaped_child": {"user_frames": 551, "page_tables": 8, "swap_blocks": 0}
+  },
+  "adapter": {
+    "status": "PARTIAL",
+    "successful_transfer_and_two_cancellation_checks": "PASS_NATIVE",
+    "failed_publication_disposal": "NOT_RUN_NATIVE",
+    "parent_exit_disposal": "NOT_RUN_NATIVE",
+    "refusal_and_retirement_disposal": "NOT_RUN_NATIVE"
+  },
+  "native_retirement_and_responses": {
+    "R1": "NOT_RUN",
+    "R2": "NOT_RUN",
+    "R3": "NOT_RUN",
+    "R4": "NOT_RUN",
+    "R5": "NOT_RUN",
+    "runtime_replacement": "BLOCKED_OWNER_DECISION"
+  },
+  "transaction_accounting": {
+    "status": "PARTIAL",
+    "host_mixed_cycles": 112,
+    "host_observed": ["private payload", "reserved PID", "continuation row", "release obligation", "modeled enqueue"],
+    "native_transaction_allocator_census": "NOT_RUN",
+    "unresolved_obligations_require_zero_delta": false
+  },
+  "regressions": {
+    "host_registration": {"status": "PASS", "tests": 104, "log": "target/vfs-l1c-2a/registration-final.log"},
+    "host_klc_cycles": [100, 100],
+    "host_ipc": {"status": "PASS", "log": "target/vfs-l1c-2a/ipc.log"},
+    "host_vfs_service": {"status": "PASS", "log": "target/vfs-l1c-2a/service.log"},
+    "host_descriptor": {"status": "PASS", "log": "target/vfs-l1c-2a/descriptor.log"},
+    "host_scheduler": {"status": "PASS", "log": "target/vfs-l1c-2a/scheduler.log"},
+    "host_kernel": {"status": "PASS", "log": "target/vfs-l1c-2a/kernel-host.log"},
+    "host_retirement": {"status": "PASS", "log": "target/vfs-l1c-2a/retirement.log"},
+    "host_zram": {"status": "PASS", "log": "target/vfs-l1c-2a/zram.log"},
+    "host_swap_slot": {"status": "PASS", "log": "target/vfs-l1c-2a/swap-slot.log"},
+    "native_swap1": {"status": "PASS", "cpus": 2, "memory_mib": 2048, "log": "target/vfs-l1c-2a/swap1.log"},
+    "fault_driven_swap_in": "NOT_RUN",
+    "primary_compile": {"status": "PASS", "log": "target/vfs-l1c-2a/primary-compile.log"},
+    "transaction_session_compile": {"status": "PASS", "log": "target/vfs-l1c-2a/transaction-session.log"},
+    "mmap_compile": {"status": "PASS", "log": "target/vfs-l1c-2a/mmap.log"}
+  },
+  "ownership_guard": {
+    "primary": {"status": "BASELINE_FAIL", "references": 71, "findings": 4, "log": "target/vfs-l1c-2a/guard-after.log"},
+    "candidate": {"status": "PASS", "references": 68, "findings": 0, "log": "target/vfs-l1c-2a/candidate-guard.log"}
+  },
+  "source_equivalence": {
+    "status": "PASS",
+    "baseline_paths": 12346,
+    "unexpected_drift": [],
+    "evidence": "target/vfs-l1c-2a/source-equivalence.json"
+  }
+}

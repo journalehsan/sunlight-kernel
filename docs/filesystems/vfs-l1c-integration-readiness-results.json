@@ -1,0 +1,274 @@
+{
+  "verdict": "BLOCKED",
+  "scope": "Documentation-only review of existing source and recorded qualification; no new runtime or builds",
+  "ordinary_spawn_activation": false,
+  "vfs_d1": "DEFERRED",
+  "requirements": [
+    {
+      "id": "AUTH",
+      "original_requirement": "Reserve a private identity and authenticate retain against the exact child, parent/source, request and service registration.",
+      "evidence": "L1C-1 proves private derivation and parked caller completion; L1C-2 checks ticket, incarnation, VM, credentials, grants, cwd, receipt and active endpoint under scheduler → broker → runtime serialization.",
+      "status": "SCOPED_PASS",
+      "remaining_limitation": "Production admission and handoff remain under SPAWN and BOUNDS.",
+      "blocks_integration": false,
+      "evidence_reports": [
+        "vfs-l1c-1-results.json",
+        "vfs-l1c-2-results.json"
+      ]
+    },
+    {
+      "id": "PUBLISH",
+      "original_requirement": "Install binding before public insertion, enqueue, first dispatch and namespace access; let peers progress while the caller waits.",
+      "evidence": "The debug fixture observes exclusion, peer dispatch, one enqueue, first dispatch and authenticated stat /tmp. L1C-2B completed 102 mixed transactions per CPU count (34 successful and 68 cancelled).",
+      "status": "SCOPED_PASS",
+      "remaining_limitation": "The mixed run is debug coverage, not the outstanding integrated ordinary-spawn mixed and race matrices.",
+      "blocks_integration": false,
+      "evidence_reports": [
+        "vfs-l1c-2a-results.json",
+        "vfs-l1c-2b-results.json"
+      ]
+    },
+    {
+      "id": "RETIRE",
+      "original_requirement": "Serialize publication and service retirement on both sides of ownership transfer.",
+      "evidence": "R1B and R1 cover retirement before and after acquisition; R2 covers retirement after result consumption before commit; R3 covers retirement after transfer. Adapter accounting closes the exercised standard-resource branches.",
+      "status": "SCOPED_PASS",
+      "remaining_limitation": "Exact service-image proof and binding drain cover the old lifetime; successor admission and reuse are separate.",
+      "blocks_integration": false,
+      "evidence_reports": [
+        "vfs-l1c-2b-r1b-results.json",
+        "vfs-l1c-2b-r1-results.json",
+        "vfs-l1c-2b-r2-results.json",
+        "vfs-l1c-2b-r3-results.json",
+        "vfs-l1c-adapter-accounting-results.json"
+      ]
+    },
+    {
+      "id": "REPLIES",
+      "original_requirement": "Cancel once, compensate a genuine late retain, and reject duplicate or stale replies without reviving the child or releasing a live receipt.",
+      "evidence": "R4 passes eight delayed replies per CPU count. R5 covers duplicate success/cancellation and continuation reuse at 1 and 2 vCPUs. Later accounting supplies scoped 4-vCPU success/cancellation and stale completion after continuation reuse. Live-authority accounting also covers unsent and consumed-retain cancellation, injected preparation rejection and authentic refusal.",
+      "status": "SCOPED_PASS",
+      "remaining_limitation": "Preserve the stopped original 4-vCPU R5 attempt; later evidence has its own scope. Ordinary-path and cross-lifetime replay remain separate.",
+      "blocks_integration": false,
+      "evidence_reports": [
+        "vfs-l1c-2b-r4-results.json",
+        "vfs-l1c-2b-r5-results.json",
+        "vfs-l1c-resource-closure-results.json",
+        "vfs-l1c-adapter-accounting-results.json"
+      ]
+    },
+    {
+      "id": "PARENT",
+      "original_requirement": "Provide deterministic parent lifecycle ownership and dispose each owner outside guards when disposal is due.",
+      "evidence": "A debug normal-exit hook disposes exactly once with a retain unsent or a reply held, on all three CPU counts with syscall-return cleanup bypassed. The earlier bypass-only pilot reaped the parent without settling the private child in the observation window.",
+      "status": "PARTIAL",
+      "remaining_limitation": "Cover acknowledgement in flight, parent termination racing service retirement, remote kill and exec. Resolve the production contract explicitly: L1C-2 calls for adapter disposal on parent exit/exec; the Stage 1 plan requires a captured transaction to retain its pin, discard the old reply ticket and remain eligible to publish. The debug cancellation witness cannot qualify that production outcome.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-2-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "REUSE",
+      "original_requirement": "Prove trusted native service replacement and cross-lifetime registration row reuse with stale reply rejection.",
+      "evidence": "Exact old-image collection and host replacement/reuse are recorded, along with native same-registration continuation reuse.",
+      "status": "NOT_RUN",
+      "remaining_limitation": "Use an authorized successor under an approved provenance policy; witness collection and reuse of the same row by a distinct trusted lifetime. Replay old identity/epoch and wrong endpoint replies without affecting the new transaction. Existing boot-only provenance does not authorize a successor.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-results.json",
+        "vfs-l1c-2b-results.json",
+        "vfs-l1c-2b-r5-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "RESOURCES",
+      "original_requirement": "Account for resources from reservation through rollback or scheduler transfer, reap and remote settlement.",
+      "evidence": "Primary accounting recovers from 100 private cancellations, 12 construction checkpoints, two ledger failures and 523 PMM failure points per CPU count. Later branch censuses identify exact owners, disposition and settlement with standard descriptors and zero populated swap; adapter accounting returns 550 child frames and eight tables per branch.",
+      "status": "PARTIAL",
+      "remaining_limitation": "Run a transaction census with live regular-file descriptions and references, child-owned IPC endpoints and queued payloads; verify transfer or single teardown and settlement of claims and ownership. Include production launch reservations when qualifying the ordinary adapters.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-resource-accounting-results.json",
+        "vfs-l1c-resource-closure-results.json",
+        "vfs-l1c-adapter-accounting-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "SWAP_TXN",
+      "original_requirement": "Qualify populated swap teardown and fault-driven swap-in in the transaction lifecycle.",
+      "evidence": "Existing child reaps had zero populated swap. SWAP-1 pressure and direct-call restore evidence are independent.",
+      "status": "NOT_RUN",
+      "remaining_limitation": "After publication, witness real reclaim and a fault-driven restore, and verify exit/exec cleanup with populated backing where required. Correlate exact page, slot and frame ownership; preserve private-child reclaim exclusion.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-results.json",
+        "vfs-l1c-2a-results.json",
+        "vfs-l1c-resource-closure-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "HEAP",
+      "original_requirement": "Account for allocator usage and establish stable resource reuse.",
+      "evidence": "1,000 serial ordinary cycles per guest reuse scheduler backing with final heap equal to warmed baseline. Known 4-vCPU backing accounts for 2,326,784 B of a 2,326,944 B primary increase.",
+      "status": "PARTIAL",
+      "remaining_limitation": "Full attribution remains open for the original 160 B and the userspace VFS heap. Use matched live-layout samples if the residual is reproduced, and service-side accounting for the service heap. Stability does not establish attribution or cover concurrent/heavier workloads.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-heap-accounting-results.json",
+        "vfs-l1c-resource-closure-results.json",
+        "vfs-l1c-adapter-accounting-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "BOUNDS",
+      "original_requirement": "Preserve admission limits, deadline, independent local teardown, and exact remote settlement.",
+      "evidence": "Private reservations, timeout rejection, cancellation and retirement accounting are exercised in components/fixtures. Matching image proof or authenticated settlement can clear exact obligations.",
+      "status": "PARTIAL",
+      "remaining_limitation": "Qualify ordinary admission/cleanup credits, quotas and end-to-end deadlines. If enforcing the proposed bounded drain policy, require approved terminal teardown and proof old authority cannot act; timeout or endpoint fencing alone cannot recycle remote/PID credits. Do not treat proposed timer values as measured or approved.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-results.json",
+        "vfs-l1c-1-results.json",
+        "vfs-l1c-2-results.json",
+        "vfs-l1c-2b-results.json",
+        "vfs-l1c-resource-closure-results.json"
+      ]
+    },
+    {
+      "id": "SPAWN",
+      "original_requirement": "Integrate both ordinary spawn contracts with one exact continuation and sole ownership from admission to publication or rollback.",
+      "evidence": "The reusable boundary exists. Both ordinary routes still provision inheritance after insertion; the debug adapter supplies fixture-specific ownership and canonical stdio.",
+      "status": "NOT_INTEGRATED",
+      "remaining_limitation": "After prerequisite closure, wire both adapters preserving session/account admission, general FD inheritance, stdio/TTY and capability grants, placement, supervision/trust/reap watchers, PID/generation results and compatible failure encodings. Prove authenticated binding before ordinary exposure, single completion and native mixed success/failure/retirement coverage on 1, 2 and 4 vCPUs. Verify trusted startup avoids the Init/VFS dependency cycle while ordinary admission fails closed.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-results.json",
+        "vfs-l1c-1-results.json",
+        "vfs-l1c-2-results.json",
+        "vfs-l1c-2a-results.json",
+        "vfs-l1c-2b-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "BUILDS",
+      "original_requirement": "Preserve release, host and feature regression gates.",
+      "evidence": "Recorded release and host registration (105 tests including 112 mixed cycles), IPC, VFS service, descriptor, kernel/scheduler, retirement, ZRAM and swap-slot checks passed. Transaction/session and mmap feature compiles passed in recorded snapshots.",
+      "status": "RECORDED_PASS",
+      "remaining_limitation": "Historical evidence applies to its source snapshots and must be refreshed for future integration changes.",
+      "blocks_integration": false,
+      "evidence_reports": [
+        "vfs-l1c-resource-closure-results.json",
+        "vfs-l1c-adapter-accounting-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "PRIMARY",
+      "original_requirement": "Qualify the ordinary primary workspace under the unchanged ownership and boot gates.",
+      "evidence": "The isolated candidate passes its ownership guard and ordinary Phase 3.0 at 2 GiB on 1, 2 and 4 vCPUs. Primary fixture/accounting and compilation evidence exists separately.",
+      "status": "BLOCKED",
+      "remaining_limitation": "Primary guard still has four pre-existing findings and its ordinary gate stopped before boot. Qualify the actual primary tree without weakening the guard or transferring candidate results. Preserve earlier boot failures and timeouts; the historical independent 1 GiB failure remains open and is not part of the later 2 GiB pass.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-results.json",
+        "vfs-l1c-2-results.json",
+        "vfs-l1c-2a-results.json",
+        "vfs-l1c-resource-accounting-results.json",
+        "vfs-l1c-adapter-accounting-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "SWAP1",
+      "original_requirement": "Preserve the standard two-pool SWAP-1 gate and ZRAM independence from VFS.",
+      "evidence": "Standard candidate gate passed at harness-selected 4 vCPUs. Exact 1- and 2-vCPU diagnostics hit the two-pool prerequisite under the existing CPU pool limit max(1, floor(online vCPUs / 2)).",
+      "status": "RECORDED_PASS",
+      "remaining_limitation": "Earlier 1/2/4 labels were four-vCPU runs. Exact lower-topology diagnostics are prerequisite unmet, not passes or evidence of a swap regression. No topology/pool policy change is required; swap-out and fault-driven swap-in must remain VFS-independent.",
+      "blocks_integration": false,
+      "evidence_reports": [
+        "vfs-l1c-adapter-accounting-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    },
+    {
+      "id": "APPS",
+      "original_requirement": "Pass the existing interactive Btop and Qalculate prerequisites.",
+      "evidence": "No qualifying interactive result in the reviewed transaction reports.",
+      "status": "NOT_RUN",
+      "remaining_limitation": "Run and capture both required interactive regressions on the qualifying platform; candidate boot/fixture and build results cannot substitute.",
+      "blocks_integration": true,
+      "evidence_reports": [
+        "vfs-l1c-2b-r5-results.json",
+        "vfs-l1c-resource-closure-results.json",
+        "vfs-l1c-parent-lifecycle-results.json"
+      ]
+    }
+  ],
+  "blocking_requirements": [
+    "PARENT",
+    "REUSE",
+    "RESOURCES",
+    "SWAP_TXN",
+    "HEAP",
+    "BOUNDS",
+    "SPAWN",
+    "PRIMARY",
+    "APPS"
+  ],
+  "minimum_remaining_work": [
+    "Close the parent lifecycle matrix with exact identity and autonomous progress, and reconcile the Stage 1 reply-ticket/source-pin contract with production adapter disposal. Keep the two qualified debug exit cases as controls.",
+    "Obtain a trusted successor witness, reuse the retired row across service lifetimes, and reject stale replies without weakening provenance or recycling unresolved ownership.",
+    "Close the outstanding resource classes and heap census with exact owners. Preserve the historical 160 B as unattributed unless evidence can identify it; report any new matched measurements separately.",
+    "Resolve production admission, deadline/drain, ABI and bootstrap contracts before activation. When separately authorized, wire both ordinary adapters and qualify the actual success and failure paths, including integrated mixed and race coverage.",
+    "Clear the primary ownership gate and qualify ordinary boot and both interactive applications on the primary platform. Retain the original regression gates, including standard 4-vCPU SWAP-1, for the integrated source."
+  ],
+  "heap_residual": {
+    "status": "UNATTRIBUTED",
+    "source": "original primary 4-vCPU run",
+    "pre_r5_bytes": 280808,
+    "warmed_bytes": 2607752,
+    "observed_delta_bytes": 2326944,
+    "accounted_delta_bytes": 2326784,
+    "residual_bytes": 160,
+    "serial_checkpoints": [
+      1,
+      10,
+      100,
+      1000
+    ],
+    "traced_run": {
+      "pre_r5_bytes": 280872,
+      "warmed_bytes": 2607656,
+      "residual_bytes": 0
+    },
+    "interpretation": "The stable residual is not evidence of cumulative growth in the exercised serial workload. The separate trace does not identify its allocation owner. The full attribution requirement remains open, including userspace VFS heap; no evidence identifies a transaction leak."
+  },
+  "swap1": {
+    "standard_vcpus": 4,
+    "minimum_pools": 2,
+    "standard_candidate_gate": "PASS",
+    "exact_diagnostics_vcpus": [
+      1,
+      2
+    ],
+    "exact_diagnostics_status": "PREREQUISITE_UNMET",
+    "zram_vfs_independent": true
+  },
+  "workspace": {
+    "primary_ownership_findings": 4,
+    "primary_ordinary_boot": "STOPPED_BEFORE_BOOT",
+    "candidate_ordinary_boot_vcpus": [
+      1,
+      2,
+      4
+    ],
+    "candidate_ordinary_boot_memory_mib": 2048
+  }
+}

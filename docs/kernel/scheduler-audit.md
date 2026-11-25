@@ -1,5 +1,8 @@
 # SunlightOS scheduler audit — Phase A
 
+See the [SMP work-stealing audit](scheduler-smp-stealing.md) for the current
+Round Robin path and open findings.
+
 This is the historical Phase A baseline. Phase B fixes, current source
 references, contracts and validation are recorded in
 [scheduler-hardening.md](scheduler-hardening.md). The source line numbers below

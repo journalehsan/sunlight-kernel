@@ -1,0 +1,345 @@
+{
+  "readiness": "L1C-3 BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "detached_publication": false,
+  "ordinary_spawn_activation": false,
+  "runtime_vfs_replacement": false,
+  "production_changes": [],
+  "registration_tests": 107,
+  "inline_attribution_bytes_per_slot": 64,
+  "commands": {
+    "fixture_build": "CARGO_NET_OFFLINE=true cargo build -p sunlight-kernel --features vfs_l1c_parent_lifecycle_test",
+    "iso": "bash tools/make_hybrid_iso.sh <kernel ELF> <ISO>",
+    "production": "CARGO_NET_OFFLINE=true cargo build --release -p sunlight-kernel",
+    "host_regressions": "python3 target/vfs-l1c-production-exec-lifecycle/host-regressions.py",
+    "ownership_guard": "python3 tools/audit_vfs_cutover.py --no-growth",
+    "candidate_boot": "SUNLIGHT_TEST_MEMORY_MB=2048 SUNLIGHT_TEST_CPUS=<vCPUs> bash tools/test.sh <phase3.0|swap1>"
+  },
+  "gates": {
+    "descriptor": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/descriptor.log"
+    },
+    "guard-candidate": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/guard-candidate.log"
+    },
+    "guard-primary": {
+      "status": "FAIL",
+      "exit_code": 1,
+      "log": "target/vfs-l1c-production-exec-lifecycle/guard-primary.log",
+      "preexisting_findings": [
+        "NEW (1): kernel/src/arch/x86_64/syscall.rs: kernel-global namespace: let capacity = crate::KERNEL_VFS",
+        "NEW (1): kernel/src/linux_procfs.rs: kernel-global namespace: let vfs = crate::KERNEL_VFS.lock();",
+        "NEW (1): kernel/src/process/mmap.rs: kernel-global namespace: let mut guard = crate::KERNEL_VFS.lock();",
+        "NEW (1): kernel/src/storage.rs: filesystem backend construction: let mut fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))"
+      ]
+    },
+    "ipc": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/ipc.log"
+    },
+    "kernel-host": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/kernel-host.log"
+    },
+    "phase3.0-1": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/phase3.0-1.log"
+    },
+    "phase3.0-2": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/phase3.0-2.log"
+    },
+    "phase3.0-4": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/phase3.0-4.log"
+    },
+    "production": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/production.log"
+    },
+    "registration": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/registration.log"
+    },
+    "retirement": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/retirement.log"
+    },
+    "scheduler": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/scheduler.log"
+    },
+    "service": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/service.log"
+    },
+    "swap-slot": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/swap-slot.log"
+    },
+    "swap1-4": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/swap1-4.log",
+      "pools": 2,
+      "vcpus": 4,
+      "memory_mib": 2048,
+      "serial_log": "target/vfs-l1c-production-exec-lifecycle/swap1-4.serial.log",
+      "serial_evidence": [
+        "[SWAP-1] configured 2 pools from 1437 MiB / 4 CPUs",
+        "[SWAP-1] sample requested=12 stored=12 logical_bytes=49152 compressed_bytes=324 physical_bytes=8192 pool0_pages=1 pool1_pages=11",
+        "[SWAP-1] pressure reclaimed 12 pages across pools; fallback bounded: OK",
+        "[SWAP-1] incompressible page rejected without ownership change: OK",
+        "[SWAP-1] restored=12 exact patterns and RW/NX metadata restored: OK",
+        "[SWAP-1] corrupted payload rejected before PTE publication: OK",
+        "[SWAP-1] munmap released swapped slot without swap-in: OK",
+        "[SWAP-1] stale slot generation rejected after reuse: OK",
+        "[SWAP-1] exit cleanup and PMM/slot accounting baseline: OK",
+        "[SWAP-1] focused pressure gate: OK"
+      ]
+    },
+    "zram": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "target/vfs-l1c-production-exec-lifecycle/zram.log"
+    }
+  },
+  "candidate_scope": "Existing isolated no-growth candidate; ordinary and SWAP-1 builds exclude the fixture.",
+  "native": {
+    "image": {
+      "elf_sha256": "87729d3468d2a6187c838ef0388b0240828b7d8397ca59c4dd525806d446ffc5",
+      "iso_sha256": "3cbb916ffa2c81ed7085e5a4f250f799ce3c5bfb853e36a3f15c9652900d552c"
+    },
+    "runs": [
+      {
+        "vcpus": 2,
+        "memory_mib": 2048,
+        "status": "PASS",
+        "exit_code": 0,
+        "serial_log": "target/vfs-l1c-production-exec-lifecycle/qualified-2.serial.log",
+        "qemu_argv": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/qualified.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/qualified-2.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial_evidence": [
+          "[VFS-ACCT] staged child=10 retain=9 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[SYSCALL] exec: not a valid ELF: /etc/motd",
+          "[VFS-EXEC] rejected exec preserved exact launch and receipt",
+          "[VFS-LAUNCH] published parent=Parent { pid: 9, incarnation: 689, image_generation: 1363 } child=Identity { ticket: Ticket { pid: 10, serial: 653 }, incarnation: 690, image_generation: 1365 } execution=0 inline_bytes=64",
+          "[SCHED] process_reaped pid=10 name='vfs-l1c-private' user_frames=550 page_tables=8 swap_blocks=0 ipc_cleared=0",
+          "[VFS-PARENT] reaped parent=9 incarnation=689 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0",
+          "[VFS-ACCT] PASS child=10 retain=9 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0",
+          "[VFS-ACCT] staged child=12 retain=11 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[VFS-EXEC] detached retained child=12 parent=11 incarnation=691 old_vm=1367 new_vm=1370 source_pinned=1 inline_bytes=64",
+          "[VFS-R4] teardown child=12 descriptors=3 frames=550 tables=8 swap=0",
+          "[VFS-PARENT] production disposed parent=11 child=12 retain=11 epoch=1",
+          "[VFS-EXEC] replacement image executed",
+          "[VFS-R5] release child=12 retain=11 epoch=1",
+          "[VFS-L1C-1] settled child=12 retain=11 epoch=1",
+          "[VFS-PARENT] reaped parent=11 incarnation=691 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0",
+          "[VFS-ACCT] PASS child=12 retain=11 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0",
+          "[VFS-PARENT] complete"
+        ]
+      },
+      {
+        "vcpus": 1,
+        "memory_mib": 2048,
+        "status": "PASS",
+        "exit_code": 0,
+        "serial_log": "target/vfs-l1c-production-exec-lifecycle/qualified-1.serial.log",
+        "qemu_argv": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/qualified.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/qualified-1.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "1",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial_evidence": [
+          "[VFS-ACCT] staged child=10 retain=9 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[SYSCALL] exec: not a valid ELF: /etc/motd",
+          "[VFS-EXEC] rejected exec preserved exact launch and receipt",
+          "[VFS-LAUNCH] published parent=Parent { pid: 9, incarnation: 689, image_generation: 1363 } child=Identity { ticket: Ticket { pid: 10, serial: 653 }, incarnation: 690, image_generation: 1365 } execution=0 inline_bytes=64",
+          "[SCHED] process_reaped pid=10 name='vfs-l1c-private' user_frames=550 page_tables=8 swap_blocks=0 ipc_cleared=0",
+          "[VFS-PARENT] reaped parent=9 incarnation=689 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0",
+          "[VFS-ACCT] PASS child=10 retain=9 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0",
+          "[VFS-ACCT] staged child=12 retain=11 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[VFS-EXEC] detached retained child=12 parent=11 incarnation=691 old_vm=1367 new_vm=1370 source_pinned=1 inline_bytes=64",
+          "[VFS-R4] teardown child=12 descriptors=3 frames=550 tables=8 swap=0",
+          "[VFS-PARENT] production disposed parent=11 child=12 retain=11 epoch=1",
+          "[VFS-EXEC] replacement image executed",
+          "[VFS-R5] release child=12 retain=11 epoch=1",
+          "[VFS-L1C-1] settled child=12 retain=11 epoch=1",
+          "[VFS-PARENT] reaped parent=11 incarnation=691 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0",
+          "[VFS-ACCT] PASS child=12 retain=11 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0",
+          "[VFS-PARENT] complete"
+        ]
+      },
+      {
+        "vcpus": 4,
+        "memory_mib": 2048,
+        "status": "PASS",
+        "exit_code": 0,
+        "serial_log": "target/vfs-l1c-production-exec-lifecycle/qualified-4.serial.log",
+        "qemu_argv": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/qualified.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/qualified-4.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "4",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial_evidence": [
+          "[VFS-ACCT] staged child=10 retain=9 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[SYSCALL] exec: not a valid ELF: /etc/motd",
+          "[VFS-EXEC] rejected exec preserved exact launch and receipt",
+          "[VFS-LAUNCH] published parent=Parent { pid: 9, incarnation: 689, image_generation: 1363 } child=Identity { ticket: Ticket { pid: 10, serial: 653 }, incarnation: 690, image_generation: 1365 } execution=0 inline_bytes=64",
+          "[SCHED] process_reaped pid=10 name='vfs-l1c-private' user_frames=550 page_tables=8 swap_blocks=0 ipc_cleared=0",
+          "[VFS-PARENT] reaped parent=9 incarnation=689 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0",
+          "[VFS-ACCT] PASS child=10 retain=9 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0",
+          "[VFS-ACCT] staged child=12 retain=11 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[VFS-EXEC] detached retained child=12 parent=11 incarnation=691 old_vm=1367 new_vm=1370 source_pinned=1 inline_bytes=64",
+          "[VFS-R5] release child=12 retain=11 epoch=1",
+          "[VFS-R4] teardown child=12 descriptors=3 frames=550 tables=8 swap=0",
+          "[VFS-PARENT] production disposed parent=11 child=12 retain=11 epoch=1",
+          "[VFS-L1C-1] settled child=12 retain=11 epoch=1",
+          "[VFS-EXEC] replacement image executed",
+          "[VFS-PARENT] reaped parent=11 incarnation=691 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0",
+          "[VFS-ACCT] PASS child=12 retain=11 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0",
+          "[VFS-PARENT] complete"
+        ]
+      }
+    ],
+    "prior_attempt": {
+      "image": {
+        "elf_sha256": "b64056942be10fc75a6c705acd406c81efbee15fb949a813b4f9f9993e105058",
+        "iso_sha256": "4b0a31d5efd4e05070f16ef9790ceef975d7a54ae2f7d660369c5ce9fc41f4d4"
+      },
+      "run": {
+        "vcpus": 2,
+        "memory_mib": 2048,
+        "status": "FAIL",
+        "exit_code": 1,
+        "serial_log": "target/vfs-l1c-production-exec-lifecycle/final-2.serial.log",
+        "qemu_argv": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/final.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/vfs-l1c-production-exec-lifecycle/final-2.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial_evidence": [
+          "[VFS-ACCT] staged child=10 retain=9 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[SYSCALL] exec: not a valid ELF: /etc/motd",
+          "[VFS-EXEC] rejected exec preserved exact launch and receipt",
+          "[VFS-LAUNCH] published parent=Parent { pid: 9, incarnation: 689, image_generation: 1363 } child=Identity { ticket: Ticket { pid: 10, serial: 653 }, incarnation: 690, image_generation: 1365 } execution=0 inline_bytes=64",
+          "[SCHED] process_reaped pid=10 name='vfs-l1c-private' user_frames=550 page_tables=8 swap_blocks=0 ipc_cleared=0",
+          "[VFS-PARENT] reaped parent=9 incarnation=689 status=37 descriptors=0 live_frames=0 stack=0 ipc_refs=0 namespace=0 vfs_caller=0",
+          "[VFS-ACCT] PASS child=10 retain=9 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0",
+          "[VFS-ACCT] staged child=12 retain=11 epoch=1 private_pid=1 process_box=1 fd_table_box=1 descriptors=3 mapped_user_pages=550 adapter=1 continuation=1 vfs_claim=1",
+          "[KERNEL PANIC] panicked at kernel/src/ipc/vfs_registration/spawn.rs:899:62:",
+          "original completion"
+        ]
+      },
+      "disposition": "Fixture receipt observer fell through to unrelated slot replay assertion before successful exec; corrected fixture and reran."
+    }
+  },
+  "limitations": [
+    "Failed exec after VM construction starts",
+    "Retain acknowledgement in flight at exec or exit",
+    "Service retirement race and remote kill",
+    "Trusted VFS service registration reuse",
+    "Heavier file and IPC resources, transaction swap-in, full heap attribution",
+    "Independent native census of the old parent VM at exec commit",
+    "Interactive Btop and Qalculate",
+    "Detached orphan policy, independent launch authority and revocation checks, production adapter reservations"
+  ]
+}

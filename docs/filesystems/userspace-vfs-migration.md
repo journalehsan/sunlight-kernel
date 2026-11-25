@@ -3125,3 +3125,58 @@ Create/append/exclusive/truncate/directory opens still fail closed on the routed
 path, `pread64`/`pwrite64` remain on the kernel path, and directory descriptors,
 secret/KV routing and actual routing enablement remain subsequent work. Because
 routing is still disabled, no native copied file syscall route is claimed.
+
+The [Helios authority audit](helios-vfs-authority-audit.md) records the current
+Qalculate stop boundary: production descriptor routing, a retained positional
+read contract for mmap, and authoritative FAT topology and capacity publication.
+
+[VFS-L1](vfs-l1.md) records the early spawn rollback repair and the unresolved
+retirement obligation when a namespace owner disappears before replying.
+Both ordinary spawn adapters still lack authenticated publication.
+
+[VFS-L1C](vfs-l1c.md) records exact namespace staging request correlation and
+full-capacity local PID retention coverage. Authenticated private-child
+publication and VFS-L1Q readiness remain open. VFS-D1 remains blocked.
+
+### VFS-D3: ZRAM independence and private mappings
+
+Keep ZRAM swap-out, compression, decompression, page-table updates and
+fault-driven swap-in in the kernel. They must work without disk access,
+VFS dispatch or a userspace acknowledgement. Preserve the authenticated boot
+policy submission by `sunlight-swapd`; reclaim must not depend on that process
+staying alive or on a filesystem service making progress.
+
+KLC-Q1 keeps the existing ZRAM implementation and leaves private file-backed
+mmap deferred. Retain the ownership guard and ordinary boot gate. Track native
+anonymous swap-out, fault-driven swap-in, restored bytes and permissions,
+exit and exec with live swapped pages, image retirement accounting, and
+scheduler progress during pressure independently. A kernel fixture that calls
+the restore routine directly does not exercise the fault handler. Host and
+compile checks do not count as native swap activity.
+
+VFS-D3 compatibility is **BLOCKED** until private mappings can be populated
+from authenticated service-owned descriptors. The required native gate is:
+
+1. Open a real file through the authoritative userspace VFS and populate a
+   private mapping with bounded positional reads on a retained description.
+   Verify initial bytes and permissions, then write to a writable private page.
+2. Drive production reclaim and verify that this exact page has compressed
+   backing and a non-present PTE. Access it to trigger a real fault; verify
+   the exact modified bytes and permissions. Check that restoration generated
+   no VFS request, userspace acknowledgement or disk I/O, and that the file
+   contents did not change.
+3. Repeat with the original descriptor closed. Where the fixture can safely
+   isolate service loss, repeat with VFS unavailable after population. Unmap
+   and verify that mapping, frame and slot ownership return to baseline.
+   Run under both UP and SMP and record each check as PASS, FAIL, BLOCKED or
+   NOT_RUN.
+
+Drop scheduler, PMM and incompatible address-space locks before a blocking
+VFS request. Retain the exact descriptor and caller/image identity across the
+request, revalidate before publication, and preserve rollback, page ownership
+and TLB synchronization when committing or cancelling the mapping.
+
+Track three separate limitations: restored pages are not re-enrolled in
+reclaim, tmpfs backing frames are outside the anonymous candidate filter, and
+service-backed descriptors cannot yet populate private mappings. Moving tmpfs
+to ring 3 does not make its backing pages swappable.
