@@ -7,6 +7,9 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 use sunlight_ipc::cpu_accounting::CpuCounters;
 
+#[path = "telemetry_frames.rs"]
+mod frames;
+
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
 /// Version 5: append process memory/identity metrics and sampling cost; preserve v4 offsets.
 pub const TELEMETRY_VERSION: u32 = 5;
@@ -218,6 +221,14 @@ pub struct ProcSnap {
     #[cfg(feature = "cpu_accounting_diag")]
     pub audit_deadlines: [bool; 2],
     pub is_finished_or_cleanup: bool,
+    memory: Option<SpaceMemory>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct SpaceMemory {
+    mapped: usize,
+    private: u64,
+    shared: u64,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -253,6 +264,7 @@ pub struct TelemetrySnapshot {
     pub monotonic_ns: u64,
     pub ticks_per_core: [u64; MAX_CORES],
     pub mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1,
+    shared_user_private: u64,
 }
 
 /// Capture only stable scalar data while holding SCHEDULER lock (cheap copy).
@@ -330,6 +342,7 @@ pub fn capture_telemetry_snapshot(
                 proc.ipc_deadline.is_some(),
             ],
             is_finished_or_cleanup,
+            memory: None,
         });
     }
     // Service count left at 0 unless we gain an honest service tag; do not
@@ -421,65 +434,184 @@ pub fn capture_telemetry_snapshot(
         monotonic_ns: sample_now,
         ticks_per_core,
         mem_acct,
+        shared_user_private: 0,
     }
 }
 
-/// Write snapshot to TELEMETRY page. Performs expensive page walks here (outside lock).
-/// SAFETY: caller must ensure no concurrent writers; typically called from timer after releasing SCHEDULER lock.
-pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
-    commit_telemetry_snapshot_inner(snap, None);
+#[derive(Default)]
+pub struct OwnershipTiming {
+    pub setup_ns: u64,
+    pub classify_ns: u64,
+    pub account_ns: u64,
+    pub work: usize,
+    pub stop: &'static str,
 }
 
-unsafe fn commit_telemetry_snapshot_inner(
-    snap: &TelemetrySnapshot,
-    held_pmm: Option<&PhysicalMemoryManager>,
-) {
-    let started = snap.sample_time_ns;
-    // One walk per address space. Aliases and Linux threads never multiply
-    // physical ownership. Include tasks beyond the visible row limit.
-    let mut spaces = alloc::collections::BTreeMap::new();
-    let mut owners = alloc::collections::BTreeMap::<u64, (usize, bool)>::new();
-    if let Some(resp) = crate::HHDM_REQ.response() {
-        let hhdm = x86_64::VirtAddr::new(resp.offset);
-        for ps in &snap.procs {
-            if ps.is_finished_or_cleanup || spaces.contains_key(&ps.pml4_phys.as_u64()) {
+/// The scheduler and PMM guards must cover both walks and scalar capture.
+pub unsafe fn sample_frame_ownership(
+    snap: &mut TelemetrySnapshot,
+    pmm: &PhysicalMemoryManager,
+    timing: &mut OwnershipTiming,
+) -> bool {
+    use crate::process::address_space::AddressSpace;
+    const WORDS: usize = crate::memory::pmm::MAX_FRAMES / 64;
+    static SCRATCH: spin::Mutex<frames::FrameScratch<WORDS, { WORDS / 64 }>> =
+        spin::Mutex::new(frames::FrameScratch::new());
+    use crate::arch::x86_64::interrupts::now_ns;
+    let started = now_ns();
+    let Some(resp) = crate::HHDM_REQ.response() else {
+        timing.stop = "hhdm";
+        return false;
+    };
+    let hhdm = x86_64::VirtAddr::new(resp.offset);
+    let mut order = Vec::new();
+    if order.try_reserve_exact(snap.procs.len()).is_err() {
+        timing.stop = "order";
+        return false;
+    }
+    order.extend(
+        snap.procs
+            .iter()
+            .enumerate()
+            .map(|(index, proc)| (proc.pml4_phys, proc.tgid, index)),
+    );
+    order.sort_unstable();
+    let spaces = || order.chunk_by(|left, right| left.0 == right.0);
+    let mut scratch = SCRATCH.lock();
+    scratch.reset_sample();
+
+    let walk_started = now_ns();
+    timing.setup_ns = walk_started.saturating_sub(started);
+    let mut remaining = 2_000_000usize;
+    let mut stop = "complete";
+    let mut pass_started = walk_started;
+    let mut classified = false;
+    let mut exhausted = false;
+    let mut run = || {
+        let mut charge = |cost| {
+            let Some(next) = remaining.checked_sub(cost) else {
+                stop = "work";
+                return false;
+            };
+            if now_ns().saturating_sub(walk_started) >= 8_000_000 {
+                stop = "time";
+                return false;
+            }
+            remaining = next;
+            true
+        };
+        let mut shared_user_private = 0;
+        let mut correction_end = 0;
+        for (space_index, space) in spaces().enumerate() {
+            let address_space = AddressSpace::from_pml4(space[0].0);
+            let multiple_groups = space[0].1 != space[space.len() - 1].1;
+            let mut memory = SpaceMemory::default();
+            let mut complete = true;
+            let result =
+                address_space.visit_user_frames_bounded(hhdm, &mut charge, |address, count| {
+                    let mut frame = (address / 4096) as usize;
+                    let end = frame + count;
+                    let tracked_end = end.min(WORDS * 64);
+                    while frame < tracked_end {
+                        let bit = frame % 64;
+                        let len = (tracked_end - frame).min(64 - bit);
+                        let private = pmm.private_frame_mask(frame, len) << bit;
+                        let present = (u64::MAX >> (64 - len)) << bit;
+                        let (local_private, shared, transfer, earlier) =
+                            scratch.classify_word(frame / 64, present, private, multiple_groups);
+                        memory.private += local_private * 4096;
+                        memory.shared += shared * 4096;
+                        shared_user_private += transfer * 4096;
+                        if earlier {
+                            correction_end = space_index;
+                        }
+                        frame += len;
+                    }
+                    for frame in frame..end {
+                        match scratch.first_external_in_space(frame) {
+                            Some(true) => memory.shared += 4096,
+                            Some(false) => {}
+                            None => complete = false,
+                        }
+                    }
+                });
+            exhausted = !complete;
+            let Some(mapped) = result.filter(|_| complete) else {
+                return false;
+            };
+            memory.mapped = mapped;
+            for &(_, _, index) in space {
+                snap.procs[index].memory = Some(memory);
+            }
+            scratch.reset_space();
+        }
+        pass_started = now_ns();
+        classified = true;
+        for space in spaces().take(correction_end) {
+            if snap.procs[space[0].2]
+                .memory
+                .is_some_and(|memory| memory.private == 0)
+            {
                 continue;
             }
-            let aspace = crate::process::address_space::AddressSpace::from_pml4(ps.pml4_phys);
-            let mut frames = Vec::new();
-            let mapped = aspace.visit_user_frames(hhdm, |frame| frames.push(frame));
-            frames.sort_unstable();
-            frames.dedup();
-            let mut groups: Vec<u32> = snap
-                .procs
-                .iter()
-                .filter(|p| !p.is_finished_or_cleanup && p.pml4_phys == ps.pml4_phys)
-                .map(|p| p.tgid)
-                .collect();
-            groups.sort_unstable();
-            groups.dedup();
-            for frame in &frames {
-                owners.entry(*frame).or_default().0 += groups.len();
+            let address_space = AddressSpace::from_pml4(space[0].0);
+            let mut memory = SpaceMemory::default();
+            let mut complete = true;
+            let mapped =
+                address_space.visit_user_frames_bounded(hhdm, &mut charge, |address, count| {
+                    let mut frame = (address / 4096) as usize;
+                    let end = frame + count;
+                    let tracked_end = end.min(WORDS * 64);
+                    while frame < tracked_end {
+                        let bit = frame % 64;
+                        let len = (tracked_end - frame).min(64 - bit);
+                        let present = (u64::MAX >> (64 - len)) << bit;
+                        let (private, shared) = scratch.account_word(frame / 64, present);
+                        memory.private += private * 4096;
+                        memory.shared += shared * 4096;
+                        frame += len;
+                    }
+                    for frame in frame..end {
+                        match scratch.first_external_in_space(frame) {
+                            Some(true) => memory.shared += 4096,
+                            Some(false) => {}
+                            None => complete = false,
+                        }
+                    }
+                });
+            exhausted = !complete;
+            let Some(mapped) = mapped.filter(|_| complete) else {
+                return false;
+            };
+            memory.mapped = mapped;
+            for &(_, _, index) in space {
+                snap.procs[index].memory = Some(memory);
             }
-            spaces.insert(ps.pml4_phys.as_u64(), (mapped, frames));
+            scratch.reset_space();
         }
-    }
-    let mut shared_user_private = 0u64;
-    {
-        let guard = if held_pmm.is_none() {
-            Some(crate::PMM.lock())
-        } else {
-            None
-        };
-        let pmm = held_pmm.unwrap_or_else(|| guard.as_ref().unwrap());
-        for (frame, (count, user_private)) in &mut owners {
-            *user_private = pmm.class_of(x86_64::PhysAddr::new(*frame))
-                == Some(crate::memory::accounting::PhysicalMemoryClass::UserPrivate);
-            if *user_private && *count > 1 {
-                shared_user_private += 4096;
-            }
-        }
-    }
+        snap.shared_user_private = shared_user_private;
+        true
+    };
+    let complete = run();
+    let ended = now_ns();
+    timing.classify_ns = if classified { pass_started } else { ended }.saturating_sub(walk_started);
+    timing.account_ns = if classified {
+        ended.saturating_sub(pass_started)
+    } else {
+        0
+    };
+    timing.work = 2_000_000 - remaining;
+    timing.stop = if exhausted && stop == "complete" {
+        "external"
+    } else {
+        stop
+    };
+    complete
+}
+
+/// SAFETY: caller must serialize writers and supply a complete sample.
+pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
+    let started = snap.sample_time_ns;
     let seq = TELEMETRY.sequence.wrapping_add(1);
     TELEMETRY.sequence = seq;
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
@@ -502,7 +634,7 @@ unsafe fn commit_telemetry_snapshot_inner(
     TELEMETRY.gpu_count = snap.gpu_count;
 
     crate::linux_procfs::publish_rss(snap.global_timekeeper_ticks, snap.procs.iter()
-        .filter_map(|p| Some((p.proc_identity, spaces.get(&p.pml4_phys.as_u64())?.0))));
+        .filter_map(|p| Some((p.proc_identity, p.memory?.mapped))));
     let mut count = 0usize;
     for ps in &snap.procs {
         if count >= MAX_PROCESSES {
@@ -520,10 +652,10 @@ unsafe fn commit_telemetry_snapshot_inner(
         metrics.app_id = ps.app_id;
         metrics.threads = 1;
         metrics.uptime_secs = ps.uptime_secs;
-        if let Some((mapped, frames)) = spaces.get(&ps.pml4_phys.as_u64()) {
-            metrics.mapped_bytes = (*mapped as u64).saturating_mul(4096);
-            (metrics.private_bytes, metrics.shared_bytes) =
-                sunlight_ipc::telemetry::unique_memory_bytes(frames, |frame| owners[&frame]);
+        if let Some(memory) = ps.memory {
+            metrics.mapped_bytes = (memory.mapped as u64).saturating_mul(4096);
+            metrics.private_bytes = memory.private;
+            metrics.shared_bytes = memory.shared;
         }
         entry.mem_pages = (metrics.mapped_bytes / 4096).min(u32::MAX as u64) as u32;
         TELEMETRY.process_metrics[count] = metrics;
@@ -563,7 +695,7 @@ unsafe fn commit_telemetry_snapshot_inner(
     TELEMETRY.mem_acct = snap.mem_acct;
     // UserPrivate frames shared through fork/COW move between disjoint buckets.
     // Preserve the sum and therefore the allocator conservation equation.
-    let transfer = shared_user_private.min(TELEMETRY.mem_acct.task_private_unique_bytes);
+    let transfer = snap.shared_user_private.min(TELEMETRY.mem_acct.task_private_unique_bytes);
     TELEMETRY.mem_acct.task_private_unique_bytes -= transfer;
     TELEMETRY.mem_acct.shared_memory_unique_bytes = TELEMETRY
         .mem_acct
@@ -573,17 +705,6 @@ unsafe fn commit_telemetry_snapshot_inner(
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
     TELEMETRY.sample_cost_ns = crate::arch::x86_64::interrupts::now_ns().saturating_sub(started);
     TELEMETRY.sequence = seq.wrapping_add(1);
-}
-
-/// SAFETY: caller must serialize updates (timer ISR with interrupts disabled).
-/// Refactored for Phase 2: captures scalars under lock, heavy work (page walks) moved out.
-pub unsafe fn update_telemetry(
-    sched: &mut Scheduler,
-    pmm: &PhysicalMemoryManager,
-    _tick_count: u64,
-) {
-    let snap = capture_telemetry_snapshot(sched, pmm);
-    commit_telemetry_snapshot_inner(&snap, Some(pmm));
 }
 
 /// Opt-in, bounded five-second reports, outside scheduler/PMM locks. Rates

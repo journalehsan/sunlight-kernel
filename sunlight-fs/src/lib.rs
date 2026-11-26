@@ -31,9 +31,12 @@ pub use policy::{
     FsOperation, PolicyReason,
 };
 pub use ramfs::{
-    initramfs_static_file_data_bytes, RamEntry, RamFs, INITRAMFS,
+    initramfs_static_file_data_bytes, RamEntry, RamFs,
     INITRAMFS_EMBEDDED_IN_KERNEL_IMAGE,
 };
+pub use ramfs::INITRAMFS;
+#[cfg(feature = "boot-resources")]
+pub mod boot_resources;
 pub use vfs::{
     mode, FatFs, FileHandle, FileStat, FileSystem, FileType, FsNode, Vfs, VfsDirEntry, VFS_NAME_MAX,
 };

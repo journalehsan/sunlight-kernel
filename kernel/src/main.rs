@@ -5,6 +5,7 @@
 #![allow(static_mut_refs)]
 #![feature(abi_x86_interrupt)]
 #![feature(alloc_error_handler)]
+#![feature(allocator_api)]
 
 extern crate alloc;
 
@@ -45,6 +46,8 @@ static PMM: spin::Mutex<PhysicalMemoryManager> = spin::Mutex::new(PhysicalMemory
 
 // Limine requests (firmware-neutral; BIOS and UEFI share this path)
 static MEMMAP_REQ: limine::request::MemmapRequest = limine::request::MemmapRequest::new();
+static EXECUTABLE_ADDRESS_REQ: limine::request::ExecutableAddressRequest =
+    limine::request::ExecutableAddressRequest::new();
 static HHDM_REQ: limine::request::HhdmRequest = limine::request::HhdmRequest::new();
 pub(crate) static FB_REQ: limine::request::FramebufferRequest =
     limine::request::FramebufferRequest::new();
@@ -76,10 +79,14 @@ macro_rules! embedded_service_bytes {
 macro_rules! embedded_service_bytes {
     ($path:literal) => { b"" as &[u8] };
 }
-#[cfg(not(feature = "native_c_guest"))]
+#[cfg(not(any(feature = "native_c_guest", feature = "boot_resources")))]
 const BOOT_INITRAMFS: &[sunlight_fs::RamEntry] = sunlight_fs::INITRAMFS;
 #[cfg(feature = "native_c_guest")]
 const BOOT_INITRAMFS: &[sunlight_fs::RamEntry] = native_c_guest::INITRAMFS;
+#[cfg(all(feature = "native_c_guest", feature = "boot_resources"))]
+compile_error!("boot_resources requires the ordinary bootstrap services");
+#[cfg(feature = "boot_resources")]
+mod boot_resources;
 
 // Embedded service binaries (must be built before kernel)
 #[cfg(not(all(
@@ -111,8 +118,11 @@ static SUNLIGHT_USB_MOUSE_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-usb-mouse");
 static DEVICED_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/deviced");
+#[cfg(not(feature = "boot_resources"))]
 static VFS_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
+#[cfg(feature = "boot_resources")]
+static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(env!("SUNLIGHT_BOOT_RESOURCE_VFS"));
 static TTY_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
 static PTY_SERVER_ELF_BYTES: &[u8] =
@@ -534,12 +544,18 @@ pub extern "C" fn _start() -> ! {
     let entries = memmap_response.entries();
     let hhdm_response = HHDM_REQ.response().expect("no hhdm from bootloader");
     let hhdm_offset = VirtAddr::new(hhdm_response.offset);
+    let executable_address = EXECUTABLE_ADDRESS_REQ
+        .response()
+        .expect("no executable address from bootloader");
+    let kernel_span = memory::pmm::kernel_reserved_span(
+        executable_address.physical_base,
+        executable_address.virtual_base,
+    );
     {
         let mut pmm = PMM.lock();
         unsafe {
-            pmm.init(entries);
+            pmm.init(entries, kernel_span);
         }
-        let kernel_span = memory::pmm::kernel_reserved_span();
         let (total, free) = pmm.stats();
         serial_println!(
             "[PMM] kernel image reserves phys {:#x}..{:#x} ({} frames, {} MiB)",
@@ -552,6 +568,8 @@ pub extern "C" fn _start() -> ! {
         splash.set_ram((total * 4 / 1024) as u32);
         // Physical memory accounting Phase 1: measure static INITRAMFS file data
         // embedded in the kernel image. No second copy is created at mount time.
+        #[cfg(not(feature = "boot_resources"))]
+        {
         let ramfs_bytes = sunlight_fs::initramfs_static_file_data_bytes(BOOT_INITRAMFS);
         memory::accounting::set_ramfs_static_file_bytes(ramfs_bytes);
         // Boot-image residency: static assets live inside the kernel image only.
@@ -562,6 +580,9 @@ pub extern "C" fn _start() -> ! {
             ramfs_bytes / 1024
         );
         serial_println!("[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)");
+        }
+        #[cfg(feature = "boot_resources")]
+        boot_resources::initial_accounting(entries, total, free);
         // OSOD smoke test (Rust panic path, not #DE).
         // Set the static to 1, rebuild/boot, confirm orange screen, then set back to 0.
         // Uses read_volatile so enabling it does not trip unreachable_code under deny(warnings).
@@ -740,7 +761,18 @@ pub extern "C" fn _start() -> ! {
     memory::tmpfs::init(hhdm_offset.as_u64());
     #[cfg(feature = "tmpfs_test")]
     memory::tmpfs::run_gate();
-    init_kernel_vfs();
+    #[cfg(feature = "boot_resources")]
+    let module = boot_resources::Module::load(entries, hhdm_offset);
+    #[cfg(feature = "boot_resources")]
+    let boot_seed = sunlight_fs::boot_resources::entries(module.bytes)
+        .expect("invalid boot resource inventory");
+    #[cfg(feature = "boot_resources")]
+    memory::accounting::set_ramfs_static_file_bytes(
+        sunlight_fs::initramfs_static_file_data_bytes(boot_seed)
+    );
+    #[cfg(not(feature = "boot_resources"))]
+    let boot_seed = BOOT_INITRAMFS;
+    init_kernel_vfs(boot_seed);
 
     // 6. Syscall MSRs
     serial_println!("[SYSCALL] Setting up MSRs...");
@@ -998,6 +1030,8 @@ pub extern "C" fn _start() -> ! {
                     .expect("boot-share ledger commit");
             }
 
+            #[cfg(feature = "boot_resources")]
+            module.map_vfs(&mut vfs, &mut pmm, hhdm_offset);
             vfs.init_context(entry, layout::USER_STACK_TOP);
             // Only the boot-loaded embedded image may consume delegated VFS
             // authority for an authenticated IPC requester. Exec withdraws it.
@@ -1973,6 +2007,8 @@ pub extern "C" fn _start() -> ! {
     #[cfg(all(debug_assertions, feature = "vfs_l1p_test"))]
     process::pending::native_fixture(hhdm_offset);
 
+    #[cfg(feature = "boot_resources")]
+    boot_resources::checkpoint("pre-scheduler");
     serial_println!("[PROC] Entering scheduler — dropping to Ring 3");
     serial_println!("══════════════════════════════════════");
 
@@ -2521,11 +2557,11 @@ mod usb_storage;
 /// Build the authoritative VFS: legacy superfloppies retain `/boot` or
 /// `/state`; an unambiguous eligible partition mounts at `/mnt`.
 /// See docs/storage/partitioned-storage.md for selection and trust policy.
-fn init_kernel_vfs() {
+fn init_kernel_vfs(seed: &'static [sunlight_fs::RamEntry]) {
     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
 
     if vfs
-        .mount_tmpfs("/", sunlight_fs::Tmpfs::new(BOOT_INITRAMFS))
+        .mount_tmpfs("/", sunlight_fs::Tmpfs::new(seed))
         .is_err()
     {
         serial_println!("[VFS] kernel ramfs mount FAILED");
@@ -2704,7 +2740,9 @@ fn log_boot_firmware_diagnostics() {
         serial_println!("[BOOT] SMP: no MP response (single-CPU fallback)");
     }
 
-    // SunlightOS embeds userspace in the kernel; no Limine modules/initrd.
+    #[cfg(feature = "boot_resources")]
+    serial_println!("[BOOT] modules/initrd: indexed boot resource module required");
+    #[cfg(not(feature = "boot_resources"))]
     serial_println!("[BOOT] modules/initrd: none (embedded userspace)");
     serial_println!("[BOOT] entering common kernel initialization");
 }

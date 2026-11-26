@@ -1627,15 +1627,38 @@ const FREEZRAM_MAX_PAGES: u64 = 4096;
 /// Bounded round-trip diagnostic for the real anonymous-page swap pipeline.
 fn cmd_freezram(args: &[&str]) -> i32 {
     match args {
+        #[cfg(feature = "zram-pressure-test")]
+        ["pressure-test"] => run_zram_pressure(),
+        #[cfg(feature = "zram-pressure-test")]
+        ["pressure-monitor"] => monitor_zram_pressure(),
         #[cfg(feature = "zram-lifecycle-test")]
-        ["lifecycle-test"] => {
+        [mode @ ("lifecycle-test" | "fault-test")] => {
+            let fault_test = *mode == "fault-test";
             let mapping = allocate_freezram_pattern(16 * 4096).expect("lifecycle mmap");
-            assert_eq!(unsafe { libc::sys::syscall2(0xf1c4, 1, mapping as u64) }, 1);
+            if fault_test {
+                let status = unsafe {
+                    libc::mman::c_mprotect(mapping, 6 * 4096, libc::mman::PROT_READ as i32)
+                };
+                assert_eq!(status, 0);
+            }
+            let checkpoint = |stage| {
+                assert_eq!(unsafe { libc::sys::syscall2(0xf1c4, stage, mapping as u64) }, 1);
+            };
+            checkpoint(if fault_test { 3 } else { 1 });
             let fill = libc::freezram_fill(mapping, 12).expect("lifecycle fill");
             assert_eq!(fill.error, FillError::None as u64);
             assert_eq!(fill.stored_pages, 12);
-            assert_eq!(unsafe { libc::sys::syscall2(0xf1c4, 2, mapping as u64) }, 1);
-            // Leave 12 swapped and four resident anonymous pages for SYS_EXIT.
+            checkpoint(if fault_test { 4 } else { 2 });
+            if fault_test {
+                for round in 0..3 {
+                    if round != 0 {
+                        checkpoint(6);
+                    }
+                    verify_freezram_fault_pattern(mapping, round);
+                    checkpoint(5);
+                }
+            }
+            // Leave the mapping intact for SYS_EXIT.
             37
         }
         ["status"] => print_zram_devices(),
@@ -1663,6 +1686,185 @@ fn cmd_freezram(args: &[&str]) -> i32 {
     }
 }
 
+#[cfg(feature = "zram-pressure-test")]
+fn pressure_now_ms() -> u64 {
+    let mut time = libc::time::Timespec { tv_sec: 0, tv_nsec: 0 };
+    assert_eq!(unsafe { libc::time::clock_gettime(libc::time::CLOCK_MONOTONIC, &mut time) }, 0);
+    time.tv_sec as u64 * 1000 + time.tv_nsec as u64 / 1_000_000
+}
+
+#[cfg(feature = "zram-pressure-test")]
+fn pressure_checkpoint(stage: u64, value: u64) -> u64 {
+    unsafe { libc::sys::syscall2(0xf1c4, stage, value) }
+}
+
+#[cfg(feature = "zram-pressure-test")]
+fn monitor_zram_pressure() -> i32 {
+    use sunlight_ipc::{ipc_call_timeout, nameserver_lookup_timeout, IpcMsg, TimerMsg};
+    let lookup_start = pressure_now_ms();
+    let timer = loop {
+        if let Some(timer) = nameserver_lookup_timeout("time", 250) {
+            break timer;
+        }
+        if pressure_now_ms() - lookup_start >= 5000 {
+            return 1;
+        }
+        libc::yield_now();
+    };
+    let start = pressure_now_ms();
+    let telemetry = telemetry_page();
+    let mut calls = 0;
+    let mut after_reap = 0;
+    loop {
+        let request = pressure_now_ms();
+        let reply = ipc_call_timeout(timer, IpcMsg::with_label(TimerMsg::GET_TICKS), 1000);
+        let elapsed = pressure_now_ms() - request;
+        let ok = matches!(reply, Ok(message) if message.label == TimerMsg::REPLY);
+        debug_log_u64(if ok { "[ZRAM-HEARTBEAT] ok_ms=" } else { "[ZRAM-HEARTBEAT] failed_ms=" }, elapsed);
+        if let Some(page) = telemetry {
+            unsafe {
+                let sequence = core::ptr::addr_of!(page.sequence).read_volatile();
+                core::sync::atomic::fence(core::sync::atomic::Ordering::Acquire);
+                let sample_ns = core::ptr::addr_of!(page.sample_time_ns).read_volatile();
+                core::sync::atomic::fence(core::sync::atomic::Ordering::Acquire);
+                if sequence != 0 && sequence % 2 == 0
+                    && sequence == core::ptr::addr_of!(page.sequence).read_volatile()
+                {
+                    debug_log_u64("[ZRAM-TELEMETRY] sequence=", sequence.into());
+                    debug_log_u64("[ZRAM-TELEMETRY] sample_ns=", sample_ns);
+                    debug_log_u64("[ZRAM-TELEMETRY] observed_ms=", pressure_now_ms());
+                }
+            }
+        }
+        calls += 1;
+        if calls >= 20 && pressure_checkpoint(11, request) == 1 {
+            after_reap += 1;
+            if after_reap >= 20 {
+                return 0;
+            }
+        }
+        if request - start >= 250_000 {
+            return 1;
+        }
+        let delay = libc::time::Timespec { tv_sec: 0, tv_nsec: 100_000_000 };
+        assert_eq!(unsafe { libc::time::nanosleep(&delay, core::ptr::null_mut()) }, 0);
+    }
+}
+
+#[cfg(feature = "zram-pressure-test")]
+fn run_zram_pressure() -> i32 {
+    const MIB: usize = 1024 * 1024;
+    const PAGE: usize = 4096;
+    const CAP_PAGES: usize = 384 * 1024;
+    let start = pressure_now_ms();
+    let budget = pressure_checkpoint(7, start) as usize;
+    const COLD_PAGES: u64 = 512;
+    const SCRATCH_PAGES: usize = 64;
+    const RESERVE_PAGES: usize = 8192;
+    const WORKER_MS: u64 = 220_000;
+    assert!((1024..=CAP_PAGES).contains(&budget));
+    let Ok(cold) = allocate_freezram_pattern(2 * MIB) else { return 38 };
+    assert_eq!(unsafe { libc::mman::c_mprotect(cold, MIB, libc::mman::PROT_READ as i32) }, 0);
+    assert_eq!(pressure_checkpoint(15, cold as u64), 1);
+    let Ok(hot) = allocate_freezram_pattern(MIB) else { return 38 };
+    for epoch in 0..3u8 {
+        let mut mappings = [(core::ptr::null_mut::<u8>(), 0); 128];
+        let mut remaining = budget - 3 * MIB / PAGE - SCRATCH_PAGES;
+        let mut used = 0;
+        let mut reserve = (CAP_PAGES - budget).min(RESERVE_PAGES);
+        while remaining != 0 {
+            if pressure_now_ms() - start >= WORKER_MS { return 39; }
+            if used == mappings.len() { return 38; }
+            let headroom = pressure_checkpoint(14, 0) as usize;
+            let batch = headroom.saturating_sub(512).clamp(256, 8192).min(remaining);
+            let length = batch * PAGE;
+            let Ok(mapping) = allocate_freezram_pattern(length) else { return 38 };
+            mappings[used] = (mapping, length);
+            used += 1;
+            remaining -= batch;
+            for page in 0..256 {
+                let byte = unsafe { hot.add(page * PAGE) };
+                assert_eq!(unsafe { byte.read_volatile() }, freezram_pattern(page as u64, 0));
+                unsafe { byte.write_volatile(freezram_pattern(page as u64, 0)) };
+            }
+        }
+        assert_eq!(pressure_checkpoint(13, pressure_now_ms() - start), 1);
+        let mut turnover = 0;
+        let goal = if epoch == 2 { 2 * COLD_PAGES } else { COLD_PAGES };
+        while pressure_checkpoint(16, u64::from(epoch)) < goal
+            && turnover < 4096
+            && pressure_now_ms() - start < WORKER_MS
+        {
+            let headroom = pressure_checkpoint(14, 0) as usize;
+            if headroom != 0 {
+                let pages = headroom.saturating_add(256).max(512);
+                if pages > reserve || used == mappings.len() {
+                    break;
+                }
+                let length = pages * PAGE;
+                let Ok(mapping) = allocate_freezram_pattern(length) else { return 38 };
+                mappings[used] = (mapping, length);
+                used += 1;
+                reserve -= pages;
+            }
+            let Ok(scratch) = allocate_freezram_pattern(SCRATCH_PAGES * PAGE) else {
+                return 38;
+            };
+            assert!(libc::mman::munmap(scratch, SCRATCH_PAGES * PAGE).is_ok());
+            turnover += 1;
+            if turnover % 128 == 0 {
+                assert_eq!(pressure_checkpoint(8, turnover), 1);
+            }
+            if turnover % 32 == 0 {
+                for page in 0..256 {
+                    let byte = unsafe { hot.add(page * PAGE) };
+                    let expected = freezram_pattern(page as u64, 0);
+                    assert_eq!(unsafe { byte.read_volatile() }, expected);
+                    unsafe { byte.write_volatile(expected) };
+                }
+            }
+        }
+        assert_eq!(pressure_checkpoint(18, turnover), 1);
+        if pressure_checkpoint(16, u64::from(epoch)) < goal {
+            return 40;
+        }
+        if epoch == 1 {
+            for &(mapping, length) in &mappings[..used] {
+                assert!(libc::mman::munmap(mapping, length).is_ok());
+            }
+            continue;
+        }
+        let mut verified = 0u64;
+        for (mapping, length, cold_mapping) in core::iter::once((cold, 2 * MIB, true))
+            .chain(mappings[..used].iter().map(|&(mapping, length)| (mapping, length, false)))
+        {
+            let bytes = unsafe { core::slice::from_raw_parts(mapping, length) };
+            for (page, data) in bytes.chunks_exact(PAGE).enumerate() {
+                if page % 256 == 0 && pressure_now_ms() - start >= WORKER_MS { return 39; }
+                if epoch == 2 && cold_mapping && page % 256 >= 192 {
+                    continue;
+                }
+                for (offset, &byte) in data.iter().enumerate() {
+                    let version = u8::from(epoch == 2 && cold_mapping && page >= 256 && offset == 0);
+                    assert_eq!(byte, freezram_pattern(page as u64, offset) ^ version);
+                }
+                if epoch == 0 && cold_mapping && page >= 256 {
+                    unsafe { mapping.add(page * PAGE).write_volatile(freezram_pattern(page as u64, 0) ^ 1) };
+                }
+                verified += PAGE as u64;
+            }
+        }
+        assert_eq!(pressure_checkpoint(12, verified), 1);
+        if epoch == 0 {
+            for &(mapping, length) in &mappings[..used] {
+                assert!(libc::mman::munmap(mapping, length).is_ok());
+            }
+        }
+    }
+    assert_eq!(pressure_checkpoint(17, pressure_now_ms() - start), 1);
+    37
+}
+
 fn print_freezram_usage() {
     let _ = write_all(b"usage: freezram [pages] | freezram status\n");
 }
@@ -1672,6 +1874,30 @@ fn freezram_pattern(page_index: u64, byte_index: usize) -> u8 {
     page_index
         .wrapping_mul(37)
         .wrapping_add(stripe.wrapping_mul(11)) as u8
+}
+
+#[cfg(feature = "zram-lifecycle-test")]
+fn verify_freezram_fault_pattern(mapping: *mut u8, round: u8) {
+    for page_index in 0..16 {
+        let page = unsafe { mapping.add(page_index * 4096) };
+        for byte_index in 0..4096 {
+            let address = unsafe { page.add(byte_index) };
+            let mut expected = freezram_pattern(page_index as u64, byte_index);
+            if (6..12).contains(&page_index) && byte_index == 0 {
+                expected ^= round;
+            }
+            let actual = unsafe { address.read_volatile() };
+            assert_eq!(actual, expected, "page {page_index}, byte {byte_index}");
+        }
+        if (6..12).contains(&page_index) {
+            // Carry writes across subsequent compress/restore cycles.
+            let expected = freezram_pattern(page_index as u64, 0) ^ (round + 1);
+            unsafe {
+                page.write_volatile(expected);
+                assert_eq!(page.read_volatile(), expected);
+            }
+        }
+    }
 }
 
 fn allocate_freezram_pattern(length_bytes: usize) -> Result<*mut u8, Errno> {

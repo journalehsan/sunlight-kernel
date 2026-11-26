@@ -114,6 +114,7 @@ impl Heap {
     }
 
     /// Initialize the sole bounded heap while the external lock is held.
+    #[cfg(not(feature = "adaptive-document-heap"))]
     unsafe fn initialize(&mut self) -> bool {
         if self.initialized {
             return true;
@@ -135,16 +136,19 @@ impl Heap {
             Err(_) => return false,
         };
 
+        self.initialize_region(base, HEAP_SIZE)
+    }
+
+    unsafe fn initialize_region(&mut self, base: *mut u8, heap_size: usize) -> bool {
         let start = base as usize;
-        let heap_size = HEAP_SIZE;
         let Some(end) = start.checked_add(heap_size) else {
             #[cfg(feature = "dynamic-heap")]
-            let _ = crate::mman::munmap(base, DYNAMIC_HEAP_SIZE);
+            let _ = crate::mman::munmap(base, heap_size);
             return false;
         };
         if start & (FREE_BLOCK_ALIGN - 1) != 0 {
             #[cfg(feature = "dynamic-heap")]
-            let _ = crate::mman::munmap(base, DYNAMIC_HEAP_SIZE);
+            let _ = crate::mman::munmap(base, heap_size);
             return false;
         }
 
@@ -190,7 +194,7 @@ impl Heap {
     /// Allocate a raw backing block.  `align` is a validated power of two and
     /// at least `FreeBlock` alignment.  All arithmetic is checked.
     unsafe fn allocate_backing(&mut self, size: usize, align: usize) -> (*mut u8, usize) {
-        if size == 0 || !valid_align(align) || !self.initialize() {
+        if size == 0 || !valid_align(align) || !self.initialized {
             return (ptr::null_mut(), 0);
         }
 
@@ -380,7 +384,7 @@ impl Heap {
         let Some(capacity) = self.end.checked_sub(self.start) else {
             return false;
         };
-        if capacity != HEAP_SIZE {
+        if capacity > HEAP_SIZE {
             return false;
         }
         let mut total = 0usize;
@@ -422,10 +426,38 @@ impl Heap {
     }
 }
 
-struct HeapCell(UnsafeCell<Heap>);
+#[cfg(not(feature = "adaptive-document-heap"))]
+type ProcessHeap = Heap;
+
+#[cfg(feature = "adaptive-document-heap")]
+mod adaptive;
+#[cfg(feature = "adaptive-document-heap")]
+use adaptive::ProcessHeap;
+
+#[cfg(not(feature = "adaptive-document-heap"))]
+impl Heap {
+    unsafe fn allocate(&mut self, size: usize, align: usize) -> (*mut u8, usize) {
+        if !self.initialize() {
+            return (ptr::null_mut(), 0);
+        }
+        self.allocate_backing(size, align)
+    }
+
+    fn region_for(&mut self, _: usize) -> Option<&mut Heap> {
+        Some(self)
+    }
+
+    unsafe fn trim(&mut self, _: usize) {}
+
+    fn capacity(&self) -> usize {
+        HEAP_SIZE
+    }
+}
+
+struct HeapCell(UnsafeCell<ProcessHeap>);
 unsafe impl Sync for HeapCell {}
 
-static HEAP: HeapCell = HeapCell(UnsafeCell::new(Heap::new()));
+static HEAP: HeapCell = HeapCell(UnsafeCell::new(ProcessHeap::new()));
 static HEAP_LOCK: AtomicBool = AtomicBool::new(false);
 static ALLOCATED_BACKING_BYTES: AtomicUsize = AtomicUsize::new(0);
 static REQUESTED_USER_BYTES: AtomicUsize = AtomicUsize::new(0);
@@ -451,7 +483,7 @@ impl HeapGuard {
         Self
     }
 
-    unsafe fn heap(&self) -> &mut Heap {
+    unsafe fn heap(&self) -> &mut ProcessHeap {
         &mut *HEAP.0.get()
     }
 }
@@ -501,15 +533,14 @@ fn record_high_water(current: usize) {
 
 /// Return a coherent, fixed-size heap telemetry snapshot.
 ///
-/// The free-list traversal is performed while holding the existing heap lock;
-/// all atomic counters are copied after that lock is released.
+/// The free-list traversal and counter reads hold the existing heap lock.
 pub fn heap_stats() -> HeapStats {
-    let (free_bytes, largest_free_block, free_list_block_count) = {
-        let guard = HeapGuard::lock();
-        unsafe { guard.heap().free_list_summary() }
-    };
+    let guard = HeapGuard::lock();
+    let heap = unsafe { guard.heap() };
+    let (free_bytes, largest_free_block, free_list_block_count) =
+        unsafe { heap.free_list_summary() };
     HeapStats {
-        heap_capacity: HEAP_SIZE,
+        heap_capacity: heap.capacity(),
         allocated_backing_bytes: ALLOCATED_BACKING_BYTES.load(Ordering::Relaxed),
         requested_user_bytes: REQUESTED_USER_BYTES.load(Ordering::Relaxed),
         free_bytes,
@@ -603,7 +634,7 @@ unsafe fn allocate(user_size: usize, user_align: usize) -> *mut u8 {
         return ptr::null_mut();
     };
     let guard = HeapGuard::lock();
-    let (backing, actual_backing_size) = guard.heap().allocate_backing(backing_size, backing_align);
+    let (backing, actual_backing_size) = guard.heap().allocate(backing_size, backing_align);
     if backing.is_null() {
         FAILED_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
         return ptr::null_mut();
@@ -640,20 +671,22 @@ unsafe fn release(ptr: *mut u8) -> bool {
         return true;
     }
     let guard = HeapGuard::lock();
-    let Some((header, info)) = validated_header(guard.heap(), ptr) else {
+    let heap = guard.heap();
+    let Some(region) = heap.region_for(ptr as usize) else {
+        return false;
+    };
+    let Some((header, info)) = validated_header(region, ptr) else {
         return false;
     };
     // Invalidate the header while the block is still unavailable.  If the
     // release is rejected, restore the state before dropping the lock.
     (*header).state = FREED;
-    if guard
-        .heap()
-        .release_backing(info.backing_addr, info.backing_size, info.backing_align)
-    {
+    if region.release_backing(info.backing_addr, info.backing_size, info.backing_align) {
         ALLOCATED_BACKING_BYTES.fetch_sub(info.backing_size, Ordering::Relaxed);
         REQUESTED_USER_BYTES.fetch_sub(info.user_size, Ordering::Relaxed);
         FREE_COUNT.fetch_add(1, Ordering::Relaxed);
         LIVE_ALLOCATION_COUNT.fetch_sub(1, Ordering::Relaxed);
+        heap.trim(info.backing_addr);
         true
     } else {
         // A rejected release must leave a valid allocation valid.
@@ -664,7 +697,7 @@ unsafe fn release(ptr: *mut u8) -> bool {
 
 unsafe fn requested_size(ptr: *mut u8) -> Option<usize> {
     let guard = HeapGuard::lock();
-    validated_header(guard.heap(), ptr).map(|(_, info)| info.user_size)
+    validated_header(guard.heap().region_for(ptr as usize)?, ptr).map(|(_, info)| info.user_size)
 }
 
 // ── C ABI allocator symbols ─────────────────────────────────────────────────

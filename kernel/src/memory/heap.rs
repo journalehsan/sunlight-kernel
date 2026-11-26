@@ -9,7 +9,7 @@ const MIN_HEAP_START: u64 = 0xFFFF_FFFF_9000_0000;
 const HEAP_ALIGNMENT: u64 = 2 * 1024 * 1024;
 // Anonymous-page tracking and transactional mmap journals coexist with desktop
 // service state. Native std's renderer and viewer each map a 128 MiB heap; leave
-// room for replacing the tracking buffer and creating workers under that load.
+// room for candidate storage and creating workers under that load.
 pub const HEAP_SIZE: usize = 16 * 1024 * 1024; // 16 MiB, bounded at boot
 pub const HEAP_PAGES: usize = HEAP_SIZE / Size4KiB::SIZE as usize;
 
@@ -86,4 +86,9 @@ pub fn heap_stats() -> HeapStats {
         free,
         reusable: free,
     }
+}
+
+#[cfg(feature = "zram_pressure_test")]
+pub(crate) fn try_heap_usage() -> Option<(usize, usize)> {
+    ALLOCATOR.try_lock().map(|heap| (heap.used(), heap.free()))
 }

@@ -165,7 +165,7 @@ impl Tmpfs {
                 .get(idx)
                 .and_then(Option::as_ref)
                 .map(|v| v.size())
-                .unwrap_or(self.entries[idx].data.len())
+                .unwrap_or_else(|| self.entries[idx].len())
         } else {
             self.dynamic.entries[idx - self.entries.len()].data.size()
         }
@@ -280,11 +280,8 @@ impl Tmpfs {
         if idx < self.entries.len() && self.buffers.get(idx).and_then(Option::as_ref).is_none() {
             self.prepare_buffers()?;
             let limits = self.quota()?;
-            let original = if preserve {
-                self.entries[idx].data
-            } else {
-                &[]
-            };
+            let original = &self.entries[idx];
+            let original_len = if preserve { original.len() } else { 0 };
             let mut inode = TmpfsInode {
                 id: idx as u64 + 1,
                 mode: self.entries[idx].mode,
@@ -293,8 +290,19 @@ impl Tmpfs {
                 limits: limits.clone(),
                 charged_inode: false,
             };
-            inode.reserve_pages(capacity.max(original.len()))?;
-            inode.write_at(0, original, &limits)?;
+            inode.reserve_pages(capacity.max(original_len))?;
+            #[cfg(feature = "boot-resources")]
+            if preserve && original.resource.is_some() {
+                let mut page = [0; 4096];
+                for offset in (0..original_len).step_by(page.len()) {
+                    let count = original.read(offset, &mut page)?;
+                    inode.write_at(offset, &page[..count], &limits)?;
+                }
+            } else if preserve {
+                inode.write_at(0, original.data, &limits)?;
+            }
+            #[cfg(not(feature = "boot-resources"))]
+            inode.write_at(0, if preserve { original.data } else { &[] }, &limits)?;
             self.buffers[idx] = Some(inode);
         }
         Ok(())
@@ -496,12 +504,7 @@ impl FileSystem for Tmpfs {
                 .and_then(Option::as_ref)
                 .is_none()
         {
-            let data = self.entries[entry_idx].data;
-            let len = buf.len().min(data.len().saturating_sub(offset));
-            if len != 0 {
-                buf[..len].copy_from_slice(&data[offset..offset + len]);
-            }
-            return Ok(len);
+            return self.entries[entry_idx].read(offset, buf);
         }
         self.inode_mut(entry_idx)?.read_at(offset, buf)
     }

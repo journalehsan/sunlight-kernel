@@ -103,7 +103,10 @@ impl DocumentHandle for HayroHandle {
             let width = u32::from(pixmap.width());
             let height = u32::from(pixmap.height());
             let stride = width.checked_mul(4).context("bitmap stride overflow")?;
-            let mut data = pixmap.data_as_u8_slice().to_vec();
+            let pixels = pixmap.data_as_u8_slice();
+            let mut data = Vec::new();
+            data.try_reserve_exact(pixels.len())?;
+            data.extend_from_slice(pixels);
             // Keep the existing top-down BGRA8 wire format and opaque canvas input.
             for rgba in data.chunks_exact_mut(4) {
                 ensure!(rgba[3] == 255, "expected an opaque PDF page");

@@ -11,6 +11,7 @@
 #
 # Environment:
 #   LIMINE_BRANCH  — passed to setup_limine.sh (default: v8.x)
+#   SUNLIGHT_BOOT_RESOURCE_MODULE — optional prototype module path
 set -euo pipefail
 
 if [[ $# -lt 2 || $# -gt 4 ]]; then
@@ -24,7 +25,12 @@ KERNEL_ELF="$1"
 ISO_OUT="$2"
 LIMINE_DIR="${3:-$PROJECT_ROOT/target/limine}"
 LIMINE_BRANCH="${LIMINE_BRANCH:-v8.x}"
-ISO_ROOT="$PROJECT_ROOT/target/iso_root"
+if [[ -n "${SUNLIGHT_BOOT_RESOURCE_MODULE:-}" ]]; then
+    ISO_ROOT="$(mktemp -d "$PROJECT_ROOT/target/boot-resource-iso.XXXXXX")"
+    trap 'rm -rf "$ISO_ROOT"' EXIT
+else
+    ISO_ROOT="$PROJECT_ROOT/target/iso_root"
+fi
 LIMINE_CONF="$PROJECT_ROOT/limine.conf"
 
 if [[ ! -f "$KERNEL_ELF" ]]; then
@@ -56,6 +62,11 @@ mkdir -p "$ISO_ROOT/EFI/BOOT"
 
 cp "$KERNEL_ELF" "$ISO_ROOT/boot/sunlight-kernel.elf"
 cp "$LIMINE_CONF" "$ISO_ROOT/boot/limine/limine.conf"
+if [[ -n "${SUNLIGHT_BOOT_RESOURCE_MODULE:-}" ]]; then
+    cp "$SUNLIGHT_BOOT_RESOURCE_MODULE" "$ISO_ROOT/boot/sunlight-resources.bin"
+    sed -i '/^[[:space:]]*kernel_path:/a\    module_path: boot():/boot/sunlight-resources.bin' \
+        "$ISO_ROOT/boot/limine/limine.conf"
+fi
 cp "$LIMINE_DIR/bin/limine-bios.sys" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/limine-bios-cd.bin" "$ISO_ROOT/boot/limine/"
 cp "$LIMINE_DIR/bin/limine-uefi-cd.bin" "$ISO_ROOT/boot/limine/"

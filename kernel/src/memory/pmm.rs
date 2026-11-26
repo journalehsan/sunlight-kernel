@@ -5,7 +5,7 @@ use x86_64::PhysAddr;
 use super::accounting::{self, PhysicalMemoryClass};
 
 const FRAME_SIZE: usize = 4096;
-const MAX_FRAMES: usize = 4 * 1024 * 1024; // 16 GiB (bitmap-tracked region)
+pub(crate) const MAX_FRAMES: usize = 4 * 1024 * 1024; // 16 GiB (bitmap-tracked region)
 const BITMAP_SIZE: usize = MAX_FRAMES / 8;
 
 static mut BITMAP: [u8; BITMAP_SIZE] = [0; BITMAP_SIZE];
@@ -14,6 +14,8 @@ static mut BITMAP: [u8; BITMAP_SIZE] = [0; BITMAP_SIZE];
 static mut FRAME_OWNER: [u32; MAX_FRAMES] = [u32::MAX; MAX_FRAMES];
 static mut TOTAL_FRAMES: usize = 0;
 static mut FREE_FRAMES: usize = 0;
+#[cfg(feature = "boot_resources")]
+pub(crate) static BOOT_MIN_FREE: AtomicUsize = AtomicUsize::new(usize::MAX);
 
 // === Diagnostic counters for memory leak detection ===
 static ALLOC_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -70,7 +72,7 @@ impl PhysicalMemoryManager {
 
     /// Initialize from Limine memory map entries.
     /// SAFETY: Must be called exactly once before any alloc/free operations.
-    pub unsafe fn init(&mut self, entries: &[&Entry]) {
+    pub unsafe fn init(&mut self, entries: &[&Entry], kernel_span: KernelReservedSpan) {
         // Mark all as used initially (not free; class will be set for kernel span only).
         BITMAP.fill(0xFF);
         FRAME_OWNER.fill(PMM_OWNER_FREE);
@@ -83,22 +85,25 @@ impl PhysicalMemoryManager {
 
         for entry in entries {
             let len = entry.length;
-            // Track installed conventional-ish RAM coverage.
+            // Count only ranges identified as RAM. Reserved ranges can
+            // describe address space rather than installed memory.
             match entry.type_ {
                 limine::memmap::MEMMAP_USABLE
                 | limine::memmap::MEMMAP_BOOTLOADER_RECLAIMABLE
                 | limine::memmap::MEMMAP_ACPI_RECLAIMABLE
                 | limine::memmap::MEMMAP_ACPI_NVS
+                | limine::memmap::MEMMAP_BAD_MEMORY
                 | limine::memmap::MEMMAP_EXECUTABLE_AND_MODULES => {
-                    installed = installed.saturating_add(len);
-                }
-                limine::memmap::MEMMAP_RESERVED | limine::memmap::MEMMAP_BAD_MEMORY => {
-                    reserved_firmware = reserved_firmware.saturating_add(len);
                     installed = installed.saturating_add(len);
                 }
                 _ => {
                     // Framebuffer / MMIO etc.: do not count as ordinary RAM.
                 }
+            }
+            if entry.type_ == limine::memmap::MEMMAP_RESERVED
+                || entry.type_ == limine::memmap::MEMMAP_BAD_MEMORY
+            {
+                reserved_firmware = reserved_firmware.saturating_add(len);
             }
 
             if entry.type_ == limine::memmap::MEMMAP_USABLE {
@@ -127,29 +132,21 @@ impl PhysicalMemoryManager {
         accounting::set_installed_bytes(installed.max(usable));
         accounting::set_reserved_firmware_bytes(reserved_firmware);
 
-        // Mark kernel frames as used (primary class: ReservedKernelImage).
-        let kernel_start = core::ptr::addr_of!(__kernel_start) as usize;
-        let kernel_end = core::ptr::addr_of!(__kernel_end) as usize;
-        // The kernel is linked in the higher half at 0xFFFF_FFFF_8000_0000 and
-        // Limine loads it contiguously starting at physical address 0. Reserve
-        // the full loaded image span instead of a stale fixed 16 MiB window.
-        let kernel_phys_base = 0xFFFF_FFFF_8000_0000usize;
-        let kernel_phys_start = kernel_start.saturating_sub(kernel_phys_base);
-        let kernel_phys_end = kernel_end.saturating_sub(kernel_phys_base);
-        let start_frame = kernel_phys_start / FRAME_SIZE;
-        let end_frame = kernel_phys_end.div_ceil(FRAME_SIZE);
+        let start_frame = kernel_span.phys_start as usize / FRAME_SIZE;
+        let end_frame = (kernel_span.phys_end as usize).div_ceil(FRAME_SIZE);
 
-        // Only frames that were previously free (i.e. in the managed usable set)
-        // participate in managed accounting. Kernel pages outside MEMMAP_USABLE
-        // must not inflate class counters relative to TOTAL_FRAMES.
+        // The managed accounting domain includes the pinned image. Count its
+        // tracked frames in total exactly once, but never in the free pool.
         let mut kernel_managed_frames = 0u64;
         for f in start_frame..end_frame {
             if f < MAX_FRAMES {
                 let was_free = BITMAP[f / 8] & (1 << (f % 8)) == 0;
                 if was_free {
                     free -= 1;
-                    kernel_managed_frames += 1;
+                } else {
+                    total += 1;
                 }
+                kernel_managed_frames += 1;
                 BITMAP[f / 8] |= 1 << (f % 8);
                 FRAME_OWNER[f] =
                     pack_owner(PMM_OWNER_KERNEL, PhysicalMemoryClass::ReservedKernelImage);
@@ -162,6 +159,8 @@ impl PhysicalMemoryManager {
 
         TOTAL_FRAMES = total;
         FREE_FRAMES = free;
+        #[cfg(feature = "boot_resources")]
+        BOOT_MIN_FREE.store(free, Ordering::Relaxed);
     }
 
     /// Allocate one 4 KiB physical frame. Returns physical address.
@@ -255,6 +254,8 @@ impl PhysicalMemoryManager {
         BITMAP[byte_idx] |= 1 << bit;
         FRAME_OWNER[frame] = pack_owner(owner_pid, class);
         FREE_FRAMES -= 1;
+        #[cfg(feature = "boot_resources")]
+        BOOT_MIN_FREE.fetch_min(FREE_FRAMES, Ordering::Relaxed);
         self.scan_cursor = byte_idx;
         accounting::note_alloc(class, 1);
         #[cfg(all(
@@ -377,6 +378,8 @@ impl PhysicalMemoryManager {
                 }
             }
             accounting::note_alloc(class, count as u64);
+            #[cfg(feature = "boot_resources")]
+            BOOT_MIN_FREE.fetch_min(unsafe { FREE_FRAMES }, Ordering::Relaxed);
             return Some(PhysAddr::new(start as u64 * FRAME_SIZE as u64));
         }
         None
@@ -507,6 +510,18 @@ impl PhysicalMemoryManager {
         Some(unpack_class(packed))
     }
 
+    #[inline]
+    pub(crate) fn private_frame_mask(&self, start: usize, count: usize) -> u64 {
+        debug_assert!(count <= 64 && start + count <= MAX_FRAMES);
+        let mut mask = 0;
+        for offset in 0..count {
+            let owner = unsafe { FRAME_OWNER[start + offset] };
+            mask |= u64::from(owner >> OWNER_CLASS_SHIFT == PhysicalMemoryClass::UserPrivate as u32)
+                << offset;
+        }
+        mask
+    }
+
     /// Return (total_frames, free_frames) for diagnostics.
     pub fn stats(&self) -> (usize, usize) {
         unsafe { (TOTAL_FRAMES, FREE_FRAMES) }
@@ -563,16 +578,20 @@ impl PhysicalMemoryManager {
     }
 }
 
-pub fn kernel_reserved_span() -> KernelReservedSpan {
-    let kernel_start = core::ptr::addr_of!(__kernel_start) as usize;
-    let kernel_end = core::ptr::addr_of!(__kernel_end) as usize;
-    let kernel_phys_base = 0xFFFF_FFFF_8000_0000usize;
-    let phys_start = kernel_start.saturating_sub(kernel_phys_base);
-    let phys_end = kernel_end.saturating_sub(kernel_phys_base);
-    let frame_count = phys_end.saturating_sub(phys_start).div_ceil(FRAME_SIZE);
+pub fn kernel_reserved_span(physical_base: u64, virtual_base: u64) -> KernelReservedSpan {
+    let translate = |address: *const u8| {
+        (address as u64)
+            .checked_sub(virtual_base)
+            .and_then(|offset| physical_base.checked_add(offset))
+            .expect("kernel image outside Limine load span")
+    };
+    let phys_start = translate(core::ptr::addr_of!(__kernel_start));
+    let phys_end = translate(core::ptr::addr_of!(__kernel_end));
+    let frame_size = FRAME_SIZE as u64;
+    let frame_count = (phys_end.div_ceil(frame_size) - phys_start / frame_size) as usize;
     KernelReservedSpan {
-        phys_start: phys_start as u64,
-        phys_end: phys_end as u64,
+        phys_start,
+        phys_end,
         frame_count,
     }
 }

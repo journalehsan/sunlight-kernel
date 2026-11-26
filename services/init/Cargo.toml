@@ -692,6 +692,8 @@ sunlight-ipc = { path = "../../ipc" }
 
 [features]
 zram-lifecycle-test = []
+zram-fault-test = ["zram-lifecycle-test"]
+zram-pressure-test = ["zram-lifecycle-test"]
 recovery-test = []
 vfs-l1c-1-test = []
 vfs-l1c-2-test = ["vfs-l1c-1-test"]

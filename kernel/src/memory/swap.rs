@@ -1,5 +1,6 @@
 //! Anonymous-page reclaim and the fault-critical ZRAM swap lifecycle.
 
+use super::candidate_queue::CandidateQueue;
 use super::pmm::PhysicalMemoryManager;
 use super::zram::{self, SlotId, ZramError, ZRAM_BLOCK_SIZE};
 use crate::process::address_space::{
@@ -7,7 +8,7 @@ use crate::process::address_space::{
 };
 use crate::process::region::{MappingKind, RegionBacking, RegionPolicy};
 use crate::sched::Scheduler;
-use alloc::collections::VecDeque;
+use alloc::alloc::Global;
 use core::sync::atomic::{AtomicU64, Ordering};
 use spin::Mutex;
 use sunlight_ipc::swap_policy::{FillDiagnostics, FillError};
@@ -50,10 +51,26 @@ static LAST_FILL_STORED: AtomicU64 = AtomicU64::new(0);
 static LAST_FILL_ERROR: AtomicU64 = AtomicU64::new(FillError::None as u64);
 
 #[derive(Debug, Clone, Copy)]
-pub struct AnonFrame {
-    pub pid: usize,
-    pub vaddr: VirtAddr,
-    pub frame: PhysAddr,
+struct AnonFrame {
+    pid: usize,
+    vaddr: VirtAddr,
+    // Page alignment leaves bit zero free. Keep the queue entry the same
+    // size so large anonymous mappings retain their metadata budget.
+    frame_and_deferral: u64,
+}
+
+impl AnonFrame {
+    const DEFER_ONCE: u64 = 1;
+
+    fn frame(self) -> PhysAddr {
+        PhysAddr::new(self.frame_and_deferral & !Self::DEFER_ONCE)
+    }
+
+    fn take_deferral(&mut self) -> bool {
+        let deferred = self.frame_and_deferral & Self::DEFER_ONCE != 0;
+        self.frame_and_deferral &= !Self::DEFER_ONCE;
+        deferred
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -65,26 +82,34 @@ pub struct ReclaimDiagnostics {
     pub candidate_count: usize,
 }
 
-static CANDIDATES: Mutex<VecDeque<AnonFrame>> = Mutex::new(VecDeque::new());
+static CANDIDATES: Mutex<CandidateQueue<AnonFrame>> = Mutex::new(CandidateQueue::new_in(Global));
 
 pub fn reserve_candidates(additional: usize) -> Result<(), ()> {
-    // mmap already knows its complete page count. Avoid geometric growth here:
-    // two large userspace heaps otherwise need the old candidate buffer, a
-    // doubled replacement buffer and the mapping rollback journal at once.
-    CANDIDATES
-        .lock()
-        .try_reserve_exact(additional)
-        .map_err(|_| ())
+    // Swapped leaves each retain room for re-enrollment. All queue growth
+    // and slot publication are serialized by the scheduler and PMM locks.
+    let additional = additional.checked_add(zram::live_slots()).ok_or(())?;
+    let mut candidates = CANDIDATES.lock();
+    let result = candidates.try_reserve(additional);
+    #[cfg(feature = "zram_pressure_test")]
+    if result.is_err() {
+        crate::serial_println!("[ZRAM-PRESSURE] reserve_failed len={} capacity={} extra={} heap={}",
+            candidates.len(), candidates.capacity(), additional, crate::memory::heap::heap_stats().allocated);
+    }
+    result
 }
 
 pub fn track_anon(pid: usize, vaddr: VirtAddr, frame: PhysAddr) {
-    CANDIDATES.lock().push_back(AnonFrame { pid, vaddr, frame });
+    CANDIDATES.lock().push_back(AnonFrame {
+        pid,
+        vaddr,
+        frame_and_deferral: frame.as_u64(),
+    });
 }
 
 pub fn untrack(frame: PhysAddr) {
     CANDIDATES
         .lock()
-        .retain(|candidate| candidate.frame != frame);
+        .retain(|candidate| candidate.frame() != frame);
 }
 
 /// Retire a sorted batch of physical frames with one candidate queue scan.
@@ -93,14 +118,15 @@ pub fn untrack_frames(frames: &[u64]) {
     if frames.is_empty() {
         return;
     }
-    CANDIDATES.lock().retain(|candidate| {
-        frames.binary_search(&candidate.frame.as_u64()).is_err()
-    });
+    CANDIDATES
+        .lock()
+        .retain(|candidate| frames.binary_search(&candidate.frame().as_u64()).is_err());
 }
 
-/// Retire candidates for a completely unmapped owner range in one scan.
-/// The caller holds the process/VM lock and has completed the TLB shootdown
-/// before releasing any frame in the range.
+/// Withdraw advisory candidates for an owner range in one scan.
+/// The caller holds the scheduler and PMM guards and has completed unmap
+/// preflight and reserved retirement capacity. This releases no backing;
+/// the caller still needs TLB acknowledgement before freeing any frame.
 pub fn untrack_range(pid: usize, start: u64, end: u64) {
     CANDIDATES.lock().retain(|candidate| {
         candidate.pid != pid || candidate.vaddr.as_u64() < start || candidate.vaddr.as_u64() >= end
@@ -116,12 +142,35 @@ pub fn candidate_count() -> usize {
 }
 
 #[cfg(feature = "zram_lifecycle_test")]
-pub(super) fn lifecycle_candidates(pid: usize) -> (usize, usize) {
+pub(super) fn lifecycle_candidates(pid: usize) -> (usize, usize, usize) {
     let candidates = CANDIDATES.lock();
     (
         candidates.len(),
-        candidates.iter().filter(|candidate| candidate.pid == pid).count(),
+        candidates
+            .iter()
+            .filter(|candidate| candidate.pid == pid)
+            .count(),
+        candidates.capacity(),
     )
+}
+
+#[cfg(feature = "zram_lifecycle_test")]
+pub(super) fn lifecycle_page_candidates(
+    pid: usize,
+    address: VirtAddr,
+    frame: Option<PhysAddr>,
+) -> usize {
+    CANDIDATES
+        .lock()
+        .iter()
+        .filter(|candidate| {
+            if candidate.pid != pid || candidate.vaddr != address {
+                return false;
+            }
+            assert_eq!(Some(candidate.frame()), frame);
+            true
+        })
+        .count()
 }
 
 pub fn diagnostics() -> ReclaimDiagnostics {
@@ -153,6 +202,18 @@ pub fn watermarks(total_pages: usize) -> (usize, usize) {
 ///
 /// SAFETY: caller holds the owning scheduler/address-space and PMM locks.
 pub unsafe fn swap_out_page(
+    address_space: &mut AddressSpace,
+    page: Page<Size4KiB>,
+    frame: PhysAddr,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> Result<u64, ZramError> {
+    // Targeted callers can evict pages without first popping a candidate.
+    reserve_candidates(1).map_err(|_| ZramError::AllocationFailure)?;
+    swap_out_with_capacity(address_space, page, frame, hhdm_offset, pmm)
+}
+
+unsafe fn swap_out_with_capacity(
     address_space: &mut AddressSpace,
     page: Page<Size4KiB>,
     frame: PhysAddr,
@@ -304,11 +365,12 @@ fn fill_error(error: ZramError) -> FillError {
 ///
 /// SAFETY: caller holds the owning scheduler/address-space and PMM locks.
 pub unsafe fn swap_in_page(
-    address_space: &mut AddressSpace,
+    sched: &mut Scheduler,
     page: Page<Size4KiB>,
     hhdm_offset: VirtAddr,
     pmm: &mut PhysicalMemoryManager,
 ) -> Result<PhysAddr, ZramError> {
+    let address_space = &sched.current_process().address_space;
     let raw = address_space
         .swapped_block_id(page, hhdm_offset)
         .ok_or(ZramError::InvalidBlock)?;
@@ -320,6 +382,13 @@ pub unsafe fn swap_in_page(
         (MappingKind::Anonymous, RegionBacking::AnonymousOwner(owner)) => owner,
         _ => return Err(ZramError::InvalidBlock),
     };
+    let owner = sched.current_memory_owner();
+    let pid = owner.pid;
+    let reenroll = pid as u32 == owner_pid
+        && region.policy.contains(RegionPolicy::MAY_UNMAP)
+        && !owner.trusted_swap_admin_service
+        && !owner.trusted_display_service;
+    let address_space = &mut sched.current_process_mut().address_space;
     let frame_addr = pmm
         .alloc_frame_owned(owner_pid)
         .ok_or(ZramError::OutOfSpace)?;
@@ -376,9 +445,19 @@ pub unsafe fn swap_in_page(
     // Fail-stop instead of publishing a present page while silently leaking or
     // double-releasing its old ownership token.
     zram::discard(slot, pmm, hhdm_offset).expect("published swap-in lost its live ZRAM slot");
-    // Do not enqueue from the page-fault path: that could grow the kernel heap
-    // and would make the just-faulted, currently active page an immediate
-    // reclaim candidate. A later aging/re-registration mechanism is deferred.
+    if reenroll {
+        let mut candidates = CANDIDATES.lock();
+        // The swapped leaf could not have a resident candidate. Its slot
+        // supplied the space consumed here, so fault-in never grows the heap.
+        assert!(candidates.len() < candidates.capacity());
+        candidates.push_back(AnonFrame {
+            pid,
+            vaddr: page.start_address(),
+            frame_and_deferral: frame_addr.as_u64() | AnonFrame::DEFER_ONCE,
+        });
+    }
+    #[cfg(feature = "zram_pressure_test")]
+    super::zram_lifecycle::pressure_page_event(pid, page.start_address().as_u64(), Some(stored_flags));
     Ok(frame_addr)
 }
 
@@ -407,7 +486,7 @@ fn candidate_is_eligible(
     if region.kind != MappingKind::Anonymous
         || !region.policy.contains(RegionPolicy::MAY_UNMAP)
         || region.backing != RegionBacking::AnonymousOwner(candidate.pid as u32)
-        || pmm.owner_of(candidate.frame) != Some(candidate.pid as u32)
+        || pmm.owner_of(candidate.frame()) != Some(candidate.pid as u32)
     {
         return false;
     }
@@ -419,7 +498,7 @@ fn candidate_is_eligible(
             .address_space
             .lookup_entry(page, hhdm_offset)
             .is_some_and(|(frame, flags)| {
-                frame == candidate.frame
+                frame == candidate.frame()
                     && flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
             })
     }
@@ -470,34 +549,85 @@ unsafe fn reclaim_until(
             CANDIDATES.lock().push_back(candidate);
             continue;
         }
-        if !candidate_is_eligible(candidate, sched, pmm, hhdm_offset) {
-            continue;
-        }
-        let Some(process_index) = sched
-            .processes
-            .iter()
-            .position(|process| process.pid == candidate.pid)
-        else {
-            continue;
-        };
-        let page = Page::<Size4KiB>::from_start_address(candidate.vaddr)
-            .expect("tracked anonymous address lost page alignment");
-        let result = swap_out_page(
-            &mut sched.processes[process_index].address_space,
-            page,
-            candidate.frame,
-            hhdm_offset,
-            pmm,
-        );
-        if result.is_ok() {
+        if reclaim_candidate(candidate, sched, hhdm_offset, pmm) {
             evicted += 1;
-            PAGES_RECLAIMED.fetch_add(1, Ordering::Relaxed);
-        } else if candidate_is_eligible(candidate, sched, pmm, hhdm_offset) {
-            CANDIDATES.lock().push_back(candidate);
         }
     }
     if evicted == 0 {
         RECLAIM_NO_PROGRESS.fetch_add(1, Ordering::Relaxed);
+    }
+    evicted
+}
+
+// A pass visits at most the initial queue length, so a deferred page
+// cannot be selected again by the same pass.
+unsafe fn reclaim_candidate(
+    mut candidate: AnonFrame,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> bool {
+    if !candidate_is_eligible(candidate, sched, pmm, hhdm_offset) {
+        return false;
+    }
+    if candidate.take_deferral() {
+        #[cfg(feature = "zram_pressure_test")]
+        super::zram_lifecycle::pressure_page_deferred(candidate.pid, candidate.vaddr.as_u64());
+        CANDIDATES.lock().push_back(candidate);
+        return false;
+    }
+    let process = sched
+        .process_mut_by_pid(candidate.pid)
+        .expect("eligible anonymous page lost its process");
+    let page = Page::from_start_address(candidate.vaddr)
+        .expect("tracked anonymous address lost page alignment");
+    if swap_out_with_capacity(
+        &mut process.address_space,
+        page,
+        candidate.frame(),
+        hhdm_offset,
+        pmm,
+    )
+    .is_ok()
+    {
+        PAGES_RECLAIMED.fetch_add(1, Ordering::Relaxed);
+        #[cfg(feature = "zram_pressure_test")]
+        super::zram_lifecycle::pressure_page_event(candidate.pid, candidate.vaddr.as_u64(), None);
+        true
+    } else {
+        if candidate_is_eligible(candidate, sched, pmm, hhdm_offset) {
+            CANDIDATES.lock().push_back(candidate);
+        }
+        false
+    }
+}
+
+#[cfg(feature = "zram_fault_test")]
+pub(super) fn reclaim_lifecycle_range(
+    start: u64,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> usize {
+    let pid = sched.current_process().pid;
+    let mut evicted = 0;
+    for index in 0..12 {
+        let address = start + index * ZRAM_BLOCK_SIZE as u64;
+        let candidate = {
+            let mut candidates = CANDIDATES.lock();
+            let mut found = None;
+            candidates.retain(|candidate| {
+                if found.is_none() && candidate.pid == pid && candidate.vaddr.as_u64() == address {
+                    found = Some(candidate);
+                    false
+                } else {
+                    true
+                }
+            });
+            found.expect("restored page was not enrolled")
+        };
+        CANDIDATE_SCANS.fetch_add(1, Ordering::Relaxed);
+        evicted += usize::from(unsafe { reclaim_candidate(candidate, sched, hhdm_offset, pmm) });
     }
     evicted
 }
@@ -546,7 +676,11 @@ pub(crate) fn maybe_reclaim_for_anonymous_allocation(
         .min(MAX_DIRECT_RECLAIM_PAGES)
         .min(budget.remaining_pages);
     budget.remaining_pages -= requested;
-    unsafe { reclaim_until(requested, avoid, sched, hhdm_offset, pmm, Some(deadline)) }
+    let reclaimed = unsafe { reclaim_until(requested, avoid, sched, hhdm_offset, pmm, Some(deadline)) };
+    #[cfg(feature = "zram_pressure_test")]
+    crate::serial_println!("[PRESSURE-RECLAIM] elapsed_ns={} reclaimed={}",
+        crate::arch::x86_64::interrupts::now_ns().saturating_sub(now), reclaimed);
+    reclaimed
 }
 
 #[cfg(feature = "swap1_test")]

@@ -1,0 +1,994 @@
+{
+  "date": "2026-11-26",
+  "configuration": {
+    "ram_mib": 2048,
+    "vcpus": 4,
+    "pools": 2,
+    "accel": "tcg",
+    "heap_mib": 16,
+    "ipc_timeout_ms": 1000,
+    "host_watchdog_seconds": 180
+  },
+  "historical": {
+    "max_sample_age_ms_estimate": 8805.186,
+    "timer_failure_ms": [
+      4980,
+      6150
+    ],
+    "ownership_incomplete": 48,
+    "ownership_attempts": 50
+  },
+  "method": {
+    "percentiles": "nearest rank",
+    "phases": "serial order relative to worker start and physical reap checkpoint",
+    "bsp_tick_samples": "telemetry ticks or wait/hold >=10 ms or entry gap >=30 ms, tick >=100",
+    "telemetry_age": "estimated difference between BSP tick clock in user space and internal sample clock; origins/cadence differ",
+    "scheduler_latency_scope": "BSP timer entry gaps and scheduler lock wait/hold; no per-task Ready-to-dispatch data"
+  },
+  "baseline": {
+    "image": {
+      "path": "target/pressure-service/baseline.iso",
+      "sha256": "c628702c595c1c7af0ab5e1443b421b55c3d29139ade4670a1baa71ef8b41f19"
+    },
+    "serial": {
+      "path": "target/pressure-service/baseline.serial.log",
+      "sha256": "c1e8cc467b6128fbebbc602a19e46b13caa81441d299a48c502b4bdddeaa83e5"
+    },
+    "args": [
+      "qemu-system-x86_64",
+      "-accel",
+      "tcg",
+      "-cdrom",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/pressure-service/baseline.iso",
+      "-serial",
+      "file:/home/ehsantor/Projects/sunlightos-kernel/target/pressure-service/baseline.serial.log",
+      "-m",
+      "2048",
+      "-smp",
+      "4",
+      "-display",
+      "none",
+      "-nic",
+      "none",
+      "-no-reboot",
+      "-no-shutdown",
+      "-device",
+      "virtio-rng-pci,disable-modern=on",
+      "-device",
+      "qemu-xhci,id=xhci",
+      "-device",
+      "usb-mouse,bus=xhci.0"
+    ],
+    "watchdog_exit": 0,
+    "phases": {
+      "before": {
+        "timer_reply_ms": {
+          "n": 20,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 10.0,
+          "p99": 10.0,
+          "max": 10.0
+        },
+        "timer_failure_ms": [],
+        "ownership_sampling_ms": {
+          "n": 2,
+          "min": 8.532883,
+          "p50": 8.532883,
+          "p95": 9.804944,
+          "p99": 9.804944,
+          "max": 9.804944
+        },
+        "ownership_complete": 0,
+        "telemetry_age_ms_estimate": {
+          "n": 0
+        },
+        "telemetry_generations_seen": [],
+        "bsp_gap_ms": {
+          "n": 2,
+          "min": 10.03703,
+          "p50": 10.03703,
+          "p95": 10.174819,
+          "p99": 10.174819,
+          "max": 10.174819
+        },
+        "bsp_wait_ms": {
+          "n": 2,
+          "min": 0.000185,
+          "p50": 0.000185,
+          "p95": 0.000307,
+          "p99": 0.000307,
+          "max": 0.000307
+        },
+        "bsp_hold_ms": {
+          "n": 2,
+          "min": 8.659777,
+          "p50": 8.659777,
+          "p95": 12.644267,
+          "p99": 12.644267,
+          "max": 12.644267
+        },
+        "bsp_pmm_wait_ms": {
+          "n": 2,
+          "min": 0.000282,
+          "p50": 0.000282,
+          "p95": 0.092707,
+          "p99": 0.092707,
+          "max": 0.092707
+        },
+        "bsp_pmm_hold_ms": {
+          "n": 2,
+          "min": 8.60292,
+          "p50": 8.60292,
+          "p95": 12.346188,
+          "p99": 12.346188,
+          "max": 12.346188
+        }
+      },
+      "during": {
+        "timer_reply_ms": {
+          "n": 179,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 60.0,
+          "p99": 1330.0,
+          "max": 1940.0
+        },
+        "timer_failure_ms": [
+          3030,
+          1400
+        ],
+        "ownership_sampling_ms": {
+          "n": 44,
+          "min": 8.215195,
+          "p50": 8.361271,
+          "p95": 8.555764,
+          "p99": 8.76959,
+          "max": 8.76959
+        },
+        "ownership_complete": 0,
+        "telemetry_age_ms_estimate": {
+          "n": 0
+        },
+        "telemetry_generations_seen": [],
+        "bsp_gap_ms": {
+          "n": 77,
+          "min": 9.951892,
+          "p50": 218.832949,
+          "p95": 1526.169604,
+          "p99": 1830.271531,
+          "max": 1830.271531
+        },
+        "bsp_wait_ms": {
+          "n": 77,
+          "min": 0.000127,
+          "p50": 0.011779,
+          "p95": 0.092844,
+          "p99": 0.159967,
+          "max": 0.159967
+        },
+        "bsp_hold_ms": {
+          "n": 77,
+          "min": 0.033112,
+          "p50": 8.326963,
+          "p95": 8.681215,
+          "p99": 10.376902,
+          "max": 10.376902
+        },
+        "bsp_pmm_wait_ms": {
+          "n": 44,
+          "min": 0.000159,
+          "p50": 0.000235,
+          "p95": 0.000436,
+          "p99": 0.061786,
+          "max": 0.061786
+        },
+        "bsp_pmm_hold_ms": {
+          "n": 44,
+          "min": 8.238656,
+          "p50": 8.398116,
+          "p95": 8.599447,
+          "p99": 10.126301,
+          "max": 10.126301
+        }
+      },
+      "after": {
+        "timer_reply_ms": {
+          "n": 20,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0
+        },
+        "timer_failure_ms": [],
+        "ownership_sampling_ms": {
+          "n": 3,
+          "min": 6.56222,
+          "p50": 8.358896,
+          "p95": 9.123112,
+          "p99": 9.123112,
+          "max": 9.123112
+        },
+        "ownership_complete": 1,
+        "telemetry_age_ms_estimate": {
+          "n": 8,
+          "min": 28.405818,
+          "p50": 328.405818,
+          "p95": 728.405818,
+          "p99": 728.405818,
+          "max": 728.405818
+        },
+        "telemetry_generations_seen": [
+          2
+        ],
+        "bsp_gap_ms": {
+          "n": 4,
+          "min": 9.892647,
+          "p50": 10.03948,
+          "p95": 269.60684,
+          "p99": 269.60684,
+          "max": 269.60684
+        },
+        "bsp_wait_ms": {
+          "n": 4,
+          "min": 0.000227,
+          "p50": 0.000272,
+          "p95": 0.000451,
+          "p99": 0.000451,
+          "max": 0.000451
+        },
+        "bsp_hold_ms": {
+          "n": 4,
+          "min": 0.06734,
+          "p50": 6.691474,
+          "p95": 9.484481,
+          "p99": 9.484481,
+          "max": 9.484481
+        },
+        "bsp_pmm_wait_ms": {
+          "n": 3,
+          "min": 0.000316,
+          "p50": 0.000349,
+          "p95": 0.000365,
+          "p99": 0.000365,
+          "max": 0.000365
+        },
+        "bsp_pmm_hold_ms": {
+          "n": 3,
+          "min": 6.622867,
+          "p50": 8.430416,
+          "p95": 9.384106,
+          "p99": 9.384106,
+          "max": 9.384106
+        }
+      }
+    },
+    "reclaim_ms": {
+      "n": 16,
+      "min": 10.082517,
+      "p50": 13.055227,
+      "p95": 14.716362,
+      "p99": 14.716362,
+      "max": 14.716362
+    },
+    "reclaim_evictions": 46,
+    "unmap_mib32": {
+      "wait_ms": {
+        "n": 0
+      },
+      "hold_ms": {
+        "n": 0
+      },
+      "pmm_wait_ms": {
+        "n": 0
+      },
+      "pmm_hold_ms": {
+        "n": 0
+      }
+    },
+    "checkpoints": [
+      {
+        "phase": "start",
+        "pid": 8,
+        "value": 2330,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448465,
+        "free": 340183,
+        "start": 7007,
+        "target": 14014,
+        "user": 29819,
+        "pt": 112,
+        "owned": 552,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "capacity": 4250,
+        "heap": 2722248,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "initialized",
+        "pid": 8,
+        "value": 2820,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448465,
+        "free": 5328,
+        "start": 7007,
+        "target": 14014,
+        "user": 363996,
+        "pt": 767,
+        "owned": 334752,
+        "candidates": 338275,
+        "owned_candidates": 334200,
+        "capacity": 338300,
+        "heap": 10757320,
+        "slots": 23,
+        "payload": 51924,
+        "backing": 94208,
+        "activations": 8,
+        "scans": 23,
+        "reclaimed": 23,
+        "no_progress": 0,
+        "out": 23,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "verified",
+        "pid": 8,
+        "value": 1367834624,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448465,
+        "free": 5328,
+        "start": 7007,
+        "target": 14014,
+        "user": 363996,
+        "pt": 767,
+        "owned": 334752,
+        "candidates": 338275,
+        "owned_candidates": 334200,
+        "capacity": 338300,
+        "heap": 10757320,
+        "slots": 23,
+        "payload": 51924,
+        "backing": 94208,
+        "activations": 8,
+        "scans": 23,
+        "reclaimed": 23,
+        "no_progress": 0,
+        "out": 23,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "initialized",
+        "pid": 8,
+        "value": 48350,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448465,
+        "free": 5326,
+        "start": 7007,
+        "target": 14014,
+        "user": 363973,
+        "pt": 769,
+        "owned": 334752,
+        "candidates": 338252,
+        "owned_candidates": 334200,
+        "capacity": 338300,
+        "heap": 10759240,
+        "slots": 46,
+        "payload": 105274,
+        "backing": 188416,
+        "activations": 16,
+        "scans": 46,
+        "reclaimed": 46,
+        "no_progress": 0,
+        "out": 46,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "verified",
+        "pid": 8,
+        "value": 1367834624,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448465,
+        "free": 5326,
+        "start": 7007,
+        "target": 14014,
+        "user": 363973,
+        "pt": 769,
+        "owned": 334752,
+        "candidates": 338252,
+        "owned_candidates": 334200,
+        "capacity": 338300,
+        "heap": 10759240,
+        "slots": 46,
+        "payload": 105274,
+        "backing": 188416,
+        "activations": 16,
+        "scans": 46,
+        "reclaimed": 46,
+        "no_progress": 0,
+        "out": 46,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "reaped",
+        "pid": 8,
+        "value": 8,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448465,
+        "free": 340743,
+        "start": 7007,
+        "target": 14014,
+        "user": 29221,
+        "pt": 104,
+        "owned": 0,
+        "candidates": 4052,
+        "owned_candidates": 0,
+        "capacity": 338300,
+        "heap": 10730456,
+        "slots": 46,
+        "payload": 105274,
+        "backing": 188416,
+        "activations": 16,
+        "scans": 46,
+        "reclaimed": 46,
+        "no_progress": 0,
+        "out": 46,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      }
+    ],
+    "reap": {
+      "pid": 8,
+      "user_frames": 334752,
+      "page_tables": 665,
+      "swap_blocks": 0,
+      "ipc_cleared": 0
+    }
+  },
+  "fixed": {
+    "image": {
+      "path": "target/pressure-service/fixed.iso",
+      "sha256": "df491abbd962bef1a4d8a521e0a1aed3e606bec1ad4e2c88a029490a647fe34e"
+    },
+    "serial": {
+      "path": "target/pressure-service/fixed.serial.log",
+      "sha256": "e945b8bb23f323e95d34d16ea1de690aac623b661679d0aef695fe89ea8691df"
+    },
+    "args": [
+      "qemu-system-x86_64",
+      "-accel",
+      "tcg",
+      "-cdrom",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/pressure-service/fixed.iso",
+      "-serial",
+      "file:/home/ehsantor/Projects/sunlightos-kernel/target/pressure-service/fixed.serial.log",
+      "-m",
+      "2048",
+      "-smp",
+      "4",
+      "-display",
+      "none",
+      "-nic",
+      "none",
+      "-no-reboot",
+      "-no-shutdown",
+      "-device",
+      "virtio-rng-pci,disable-modern=on",
+      "-device",
+      "qemu-xhci,id=xhci",
+      "-device",
+      "usb-mouse,bus=xhci.0"
+    ],
+    "watchdog_exit": 0,
+    "phases": {
+      "before": {
+        "timer_reply_ms": {
+          "n": 20,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0
+        },
+        "timer_failure_ms": [],
+        "ownership_sampling_ms": {
+          "n": 2,
+          "min": 8.891582,
+          "p50": 8.891582,
+          "p95": 9.707894,
+          "p99": 9.707894,
+          "max": 9.707894
+        },
+        "ownership_complete": 1,
+        "telemetry_age_ms_estimate": {
+          "n": 14,
+          "min": 27.770203,
+          "p50": 627.770203,
+          "p95": 1327.770203,
+          "p99": 1327.770203,
+          "max": 1327.770203
+        },
+        "telemetry_generations_seen": [
+          2
+        ],
+        "bsp_gap_ms": {
+          "n": 2,
+          "min": 10.067568,
+          "p50": 10.067568,
+          "p95": 10.157986,
+          "p99": 10.157986,
+          "max": 10.157986
+        },
+        "bsp_wait_ms": {
+          "n": 2,
+          "min": 0.000265,
+          "p50": 0.000265,
+          "p95": 0.000782,
+          "p99": 0.000782,
+          "max": 0.000782
+        },
+        "bsp_hold_ms": {
+          "n": 2,
+          "min": 9.12939,
+          "p50": 9.12939,
+          "p95": 12.604381,
+          "p99": 12.604381,
+          "max": 12.604381
+        },
+        "bsp_pmm_wait_ms": {
+          "n": 2,
+          "min": 0.000878,
+          "p50": 0.000878,
+          "p95": 0.122817,
+          "p99": 0.122817,
+          "max": 0.122817
+        },
+        "bsp_pmm_hold_ms": {
+          "n": 2,
+          "min": 8.974662,
+          "p50": 8.974662,
+          "p95": 12.300713,
+          "p99": 12.300713,
+          "max": 12.300713
+        }
+      },
+      "during": {
+        "timer_reply_ms": {
+          "n": 183,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 50.0,
+          "p99": 110.0,
+          "max": 260.0
+        },
+        "timer_failure_ms": [],
+        "ownership_sampling_ms": {
+          "n": 22,
+          "min": 4.700114,
+          "p50": 8.285066,
+          "p95": 8.514498,
+          "p99": 8.540009,
+          "max": 8.540009
+        },
+        "ownership_complete": 1,
+        "telemetry_age_ms_estimate": {
+          "n": 182,
+          "min": 1467.770203,
+          "p50": 13257.770203,
+          "p95": 22107.770203,
+          "p99": 22907.770203,
+          "max": 23007.770203
+        },
+        "telemetry_generations_seen": [
+          2
+        ],
+        "bsp_gap_ms": {
+          "n": 94,
+          "min": 4.602508,
+          "p50": 53.287933,
+          "p95": 102.650988,
+          "p99": 222.461581,
+          "max": 222.461581
+        },
+        "bsp_wait_ms": {
+          "n": 94,
+          "min": 8.5e-05,
+          "p50": 0.002971,
+          "p95": 0.061428,
+          "p99": 0.171948,
+          "max": 0.171948
+        },
+        "bsp_hold_ms": {
+          "n": 94,
+          "min": 0.029539,
+          "p50": 0.062976,
+          "p95": 8.50002,
+          "p99": 9.754773,
+          "max": 9.754773
+        },
+        "bsp_pmm_wait_ms": {
+          "n": 22,
+          "min": 0.000109,
+          "p50": 0.000217,
+          "p95": 0.000345,
+          "p99": 0.049972,
+          "max": 0.049972
+        },
+        "bsp_pmm_hold_ms": {
+          "n": 22,
+          "min": 4.806106,
+          "p50": 8.320204,
+          "p95": 8.588042,
+          "p99": 9.528789,
+          "max": 9.528789
+        }
+      },
+      "after": {
+        "timer_reply_ms": {
+          "n": 20,
+          "min": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0
+        },
+        "timer_failure_ms": [],
+        "ownership_sampling_ms": {
+          "n": 2,
+          "min": 5.55725,
+          "p50": 5.55725,
+          "p95": 6.537248,
+          "p99": 6.537248,
+          "max": 6.537248
+        },
+        "ownership_complete": 2,
+        "telemetry_age_ms_estimate": {
+          "n": 20,
+          "min": -5.713128,
+          "p50": 394.286872,
+          "p95": 889.933338,
+          "p99": 894.286872,
+          "max": 894.286872
+        },
+        "telemetry_generations_seen": [
+          4,
+          6,
+          8
+        ],
+        "bsp_gap_ms": {
+          "n": 2,
+          "min": 9.991324,
+          "p50": 9.991324,
+          "p95": 10.087554,
+          "p99": 10.087554,
+          "max": 10.087554
+        },
+        "bsp_wait_ms": {
+          "n": 2,
+          "min": 0.000156,
+          "p50": 0.000156,
+          "p95": 0.000298,
+          "p99": 0.000298,
+          "max": 0.000298
+        },
+        "bsp_hold_ms": {
+          "n": 2,
+          "min": 5.631609,
+          "p50": 5.631609,
+          "p95": 6.675847,
+          "p99": 6.675847,
+          "max": 6.675847
+        },
+        "bsp_pmm_wait_ms": {
+          "n": 2,
+          "min": 0.000203,
+          "p50": 0.000203,
+          "p95": 0.000322,
+          "p99": 0.000322,
+          "max": 0.000322
+        },
+        "bsp_pmm_hold_ms": {
+          "n": 2,
+          "min": 5.582992,
+          "p50": 5.582992,
+          "p95": 6.606447,
+          "p99": 6.606447,
+          "max": 6.606447
+        }
+      }
+    },
+    "reclaim_ms": {
+      "n": 16,
+      "min": 12.10073,
+      "p50": 12.910018,
+      "p95": 15.767575,
+      "p99": 15.767575,
+      "max": 15.767575
+    },
+    "reclaim_evictions": 40,
+    "unmap_mib32": {
+      "wait_ms": {
+        "n": 40,
+        "min": 9.2e-05,
+        "p50": 0.000257,
+        "p95": 0.041852,
+        "p99": 0.055151,
+        "max": 0.055151
+      },
+      "hold_ms": {
+        "n": 40,
+        "min": 49.36084,
+        "p50": 66.434165,
+        "p95": 101.437608,
+        "p99": 102.645085,
+        "max": 102.645085
+      },
+      "pmm_wait_ms": {
+        "n": 40,
+        "min": 0.000564,
+        "p50": 0.000891,
+        "p95": 0.006225,
+        "p99": 0.022575,
+        "max": 0.022575
+      },
+      "pmm_hold_ms": {
+        "n": 40,
+        "min": 49.35953,
+        "p50": 66.433505,
+        "p95": 101.42719,
+        "p99": 102.643574,
+        "max": 102.643574
+      }
+    },
+    "checkpoints": [
+      {
+        "phase": "start",
+        "pid": 8,
+        "value": 2350,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448464,
+        "free": 340181,
+        "start": 7007,
+        "target": 14014,
+        "user": 29819,
+        "pt": 112,
+        "owned": 552,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "capacity": 4250,
+        "heap": 2722504,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "initialized",
+        "pid": 8,
+        "value": 3520,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448464,
+        "free": 5328,
+        "start": 7007,
+        "target": 14014,
+        "user": 364001,
+        "pt": 767,
+        "owned": 334750,
+        "candidates": 338280,
+        "owned_candidates": 334198,
+        "capacity": 338300,
+        "heap": 10756616,
+        "slots": 16,
+        "payload": 35840,
+        "backing": 65536,
+        "activations": 8,
+        "scans": 16,
+        "reclaimed": 16,
+        "no_progress": 0,
+        "out": 16,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "verified",
+        "pid": 8,
+        "value": 1367826432,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448464,
+        "free": 5328,
+        "start": 7007,
+        "target": 14014,
+        "user": 364001,
+        "pt": 767,
+        "owned": 334750,
+        "candidates": 338280,
+        "owned_candidates": 334198,
+        "capacity": 338300,
+        "heap": 10756616,
+        "slots": 16,
+        "payload": 35840,
+        "backing": 65536,
+        "activations": 8,
+        "scans": 16,
+        "reclaimed": 16,
+        "no_progress": 0,
+        "out": 16,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "initialized",
+        "pid": 8,
+        "value": 16100,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448464,
+        "free": 5326,
+        "start": 7007,
+        "target": 14014,
+        "user": 363977,
+        "pt": 769,
+        "owned": 334750,
+        "candidates": 338256,
+        "owned_candidates": 334198,
+        "capacity": 338300,
+        "heap": 10759496,
+        "slots": 40,
+        "payload": 90952,
+        "backing": 163840,
+        "activations": 16,
+        "scans": 40,
+        "reclaimed": 40,
+        "no_progress": 0,
+        "out": 40,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "verified",
+        "pid": 8,
+        "value": 1367826432,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448464,
+        "free": 5326,
+        "start": 7007,
+        "target": 14014,
+        "user": 363977,
+        "pt": 769,
+        "owned": 334750,
+        "candidates": 338256,
+        "owned_candidates": 334198,
+        "capacity": 338300,
+        "heap": 10759496,
+        "slots": 40,
+        "payload": 90952,
+        "backing": 163840,
+        "activations": 16,
+        "scans": 40,
+        "reclaimed": 40,
+        "no_progress": 0,
+        "out": 40,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      {
+        "phase": "reaped",
+        "pid": 8,
+        "value": 8,
+        "cpus": 4,
+        "pools": 2,
+        "total": 448464,
+        "free": 340741,
+        "start": 7007,
+        "target": 14014,
+        "user": 29227,
+        "pt": 104,
+        "owned": 0,
+        "candidates": 4058,
+        "owned_candidates": 0,
+        "capacity": 338300,
+        "heap": 10726440,
+        "slots": 40,
+        "payload": 90952,
+        "backing": 163840,
+        "activations": 16,
+        "scans": 40,
+        "reclaimed": 40,
+        "no_progress": 0,
+        "out": 40,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      }
+    ],
+    "reap": {
+      "pid": 8,
+      "user_frames": 334750,
+      "page_tables": 665,
+      "swap_blocks": 0,
+      "ipc_cleared": 0
+    }
+  },
+  "regressions": {
+    "production_release": "PASS",
+    "host_kernel": {
+      "passed": 220,
+      "failed": 0,
+      "log": {
+        "path": "target/pressure-service/host.log",
+        "sha256": "b14e3a5e10a87772dc07222fea5005ee4be2ad8b0c9a2a8be4e6770df9edc6a8"
+      }
+    },
+    "direct_phase3_boot": {
+      "status": "PASS",
+      "serial": {
+        "path": "target/pressure-service/production.serial.log",
+        "sha256": "6b0c3a6b4269d2087b16248084d4b94d3ca31cb65f55b66d07fc4b9f6f06542b"
+      }
+    },
+    "standard_wrappers": {
+      "status": "BLOCKED_PRE_QEMU_VFS_GUARD",
+      "logs": [
+        {
+          "path": "target/pressure-service/standard-phase3.log",
+          "sha256": "ec922e067ae964beb29dd0e80e51cace0c5292182f362a59539f92d0f450e45e"
+        },
+        {
+          "path": "target/pressure-service/standard-swap1.log",
+          "sha256": "ec922e067ae964beb29dd0e80e51cace0c5292182f362a59539f92d0f450e45e"
+        }
+      ]
+    }
+  },
+  "gates": {
+    "timer_responsiveness": "PASS_IN_FIXED_RUN",
+    "telemetry_freshness": "FAIL",
+    "primary_full_qualification": "INCOMPLETE",
+    "worker_data_and_reap": "PASS",
+    "single_pool_one_vcpu": "NOT_RUN_PRIMARY_FRESHNESS_FAILED",
+    "single_pool_two_vcpus": "NOT_RUN_PRIMARY_FRESHNESS_FAILED",
+    "natural_same_page_restoration": "UNQUALIFIED",
+    "natural_same_page_reeviction": "UNQUALIFIED"
+  }
+}

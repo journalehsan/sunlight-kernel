@@ -1,0 +1,185 @@
+{
+  "iso": {
+    "path": "target/boot-resource-prototype/sunlightos.iso",
+    "bytes": 209842176,
+    "sha256": "6c6d7fb6e159e1de24d8eeb22073384896d6b6dc89877f813893c0b800c2420d"
+  },
+  "elf": {
+    "path": "target/boot-resource-prototype/kernel/x86_64-unknown-none/release/sunlight-kernel",
+    "bytes": 119320992,
+    "sha256": "3bf3ee4f106d91df1f80c655b482e5efecff85b0bed702cfeaed5008f90439a3"
+  },
+  "module": {
+    "path": "target/boot-resource-prototype/resources.bin",
+    "bytes": 86389346,
+    "sha256": "fc0d6989a11975da5d468a6bd04e93e5ee68cc474aa07d5f9fa659d6695872ba"
+  },
+  "vfs_elf": {
+    "path": "target/boot-resource-prototype/vfs/x86_64-unknown-none/release/sunlight-vfs-server",
+    "bytes": 246320,
+    "sha256": "ed44910cb5b1adb674882c974eea394a8de0971ad9b4e97fc27fa88c342106bf"
+  },
+  "staging_confirmation": {
+    "guest_mib": 512,
+    "checkpoint": "Phase 3.0 OK",
+    "physical_base_hex": "0x18d48000",
+    "matching_elf_bytes": 119320992,
+    "sha256": "3bf3ee4f106d91df1f80c655b482e5efecff85b0bed702cfeaed5008f90439a3"
+  },
+  "qemu": "11.1.3 TCG; 2 vCPU; read-only ISO; no NIC or disk",
+  "audit_estimate": {
+    "name": "compressed_module_bounded_reads",
+    "estimated_elf_staging_bytes": 115281920,
+    "estimated_contiguous_elf_destination_bytes": 127614976,
+    "module_residency_bytes": 107479040,
+    "extra_decoder_scratch_bytes": 4194304,
+    "extra_cache_bytes": 8388608,
+    "extra_eager_output_bytes": 0,
+    "loader_checkpoint_bytes": 354766848,
+    "pre_scheduler_proxy_bytes": 483221504,
+    "largest_modeled_checkpoint_bytes": 483221504,
+    "headroom_to_512_mib_bytes": 53649408
+  },
+  "decoder_scratch_bytes_per_read": 4096,
+  "copy_on_write_extra_buffer_bytes": 4096,
+  "decoder_cache_bytes": 0,
+  "heap_backing_bytes": 16777216,
+  "integrity": {
+    "entries": 613,
+    "logical_file_bytes": 154184731,
+    "unique_nonempty_payloads": 284,
+    "baseline_elf_sha256": "618eaf0eb99ed77c6055a3e99497ba6136fd59168fd36eca3ba3373e6ac4cc30",
+    "method": "Independent LZ4 decode and byte-for-byte comparison of the full ordered inventory against audited ELF"
+  },
+  "host_fs_tests_passed": 114,
+  "ordinary_kernel_release_check": "passed",
+  "boot_matrix": [
+    {
+      "firmware": "bios",
+      "ram_mib": 2048,
+      "status": "passed",
+      "serial_path": "target/boot-resource-prototype/qualified/bios-2048.serial.log",
+      "serial_sha256": "9c9a1c6488a93e1547f7dde4f8dbb7a7bc3ad22ba23029cc6966eab7dc1d73a7",
+      "managed_frames": 473066,
+      "initial_free_frames": 440923,
+      "loader_reclaimable_bytes": 122875904,
+      "loaded_kernel_bytes": 131657728,
+      "module_rounded_bytes": 86392832,
+      "minimum_free_frames": {
+        "pre-scheduler": 434252,
+        "phase-3": 430143,
+        "namespace": 430140,
+        "session-bundles": 380398
+      },
+      "occupied_or_excluded_at_entry_bytes": 341463040,
+      "occupied_or_excluded_peaks_bytes": {
+        "pre-scheduler": 368787456,
+        "phase-3": 385617920,
+        "namespace": 385630208,
+        "session-bundles": 589373440
+      }
+    },
+    {
+      "firmware": "bios",
+      "ram_mib": 1024,
+      "status": "passed",
+      "serial_path": "target/boot-resource-prototype/qualified/bios-1024.serial.log",
+      "serial_sha256": "bba1f19ade524ffc12fab69f32d0003d0a42ffc44186b3ba94d84e139e4cadbd",
+      "managed_frames": 210922,
+      "initial_free_frames": 178779,
+      "loader_reclaimable_bytes": 122875904,
+      "loaded_kernel_bytes": 131657728,
+      "module_rounded_bytes": 86392832,
+      "minimum_free_frames": {
+        "pre-scheduler": 172108,
+        "phase-3": 167997,
+        "namespace": 167994,
+        "session-bundles": 117632
+      },
+      "occupied_or_excluded_at_entry_bytes": 341463040,
+      "occupied_or_excluded_peaks_bytes": {
+        "pre-scheduler": 368787456,
+        "phase-3": 385626112,
+        "namespace": 385638400,
+        "session-bundles": 591921152
+      }
+    },
+    {
+      "firmware": "bios",
+      "ram_mib": 768,
+      "status": "passed",
+      "serial_path": "target/boot-resource-prototype/qualified/bios-768.serial.log",
+      "serial_sha256": "17ab90748ac60240f8ddfb8397e69c2053cf45a89ac67087c675ebd84fdd6ea5",
+      "managed_frames": 145386,
+      "initial_free_frames": 113243,
+      "loader_reclaimable_bytes": 122875904,
+      "loaded_kernel_bytes": 131657728,
+      "module_rounded_bytes": 86392832,
+      "minimum_free_frames": {
+        "pre-scheduler": 106572,
+        "phase-3": 102463,
+        "namespace": 102460,
+        "session-bundles": 53257
+      },
+      "occupied_or_excluded_at_entry_bytes": 341463040,
+      "occupied_or_excluded_peaks_bytes": {
+        "pre-scheduler": 368787456,
+        "phase-3": 385617920,
+        "namespace": 385630208,
+        "session-bundles": 587165696
+      }
+    },
+    {
+      "firmware": "bios",
+      "ram_mib": 512,
+      "status": "passed",
+      "serial_path": "target/boot-resource-prototype/qualified/bios-512.serial.log",
+      "serial_sha256": "fecd08b91924fc40309d2c54573ab70165abd38a755b432c9e4eb793656a5a9d",
+      "managed_frames": 79850,
+      "initial_free_frames": 47707,
+      "loader_reclaimable_bytes": 122875904,
+      "loaded_kernel_bytes": 131657728,
+      "module_rounded_bytes": 86392832,
+      "minimum_free_frames": {
+        "pre-scheduler": 41036,
+        "phase-3": 36927,
+        "namespace": 36924,
+        "session-bundles": 0
+      },
+      "occupied_or_excluded_at_entry_bytes": 341463040,
+      "occupied_or_excluded_peaks_bytes": {
+        "pre-scheduler": 368787456,
+        "phase-3": 385617920,
+        "namespace": 385630208,
+        "session-bundles": 536870912
+      }
+    },
+    {
+      "firmware": "uefi",
+      "ram_mib": 512,
+      "status": "passed",
+      "serial_path": "target/boot-resource-prototype/qualified/uefi-512.serial.log",
+      "serial_sha256": "fb6e8cc413c5294588a362b3e5024a3523b1277f78f5c867d8b4923b18cebd84",
+      "managed_frames": 78266,
+      "initial_free_frames": 46123,
+      "loader_reclaimable_bytes": 123285504,
+      "loaded_kernel_bytes": 131657728,
+      "module_rounded_bytes": 86392832,
+      "minimum_free_frames": {
+        "pre-scheduler": 39460,
+        "phase-3": 35351,
+        "namespace": 35348,
+        "session-bundles": 0
+      },
+      "occupied_or_excluded_at_entry_bytes": 347951104,
+      "occupied_or_excluded_peaks_bytes": {
+        "pre-scheduler": 375242752,
+        "phase-3": 392073216,
+        "namespace": 392085504,
+        "session-bundles": 536870912
+      }
+    }
+  ],
+  "elf_staging_rounded_bytes": 119324672,
+  "qualification": "Boot milestone pass on tested guests; zero free frames observed at 512 MiB; no sustained support claim"
+}

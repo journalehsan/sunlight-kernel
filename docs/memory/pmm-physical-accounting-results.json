@@ -1,0 +1,409 @@
+{
+  "date": "2026-11-26",
+  "prior_audit": "peak-pressure-allocation-audit-results.json",
+  "page_bytes": 4096,
+  "qemu": {
+    "accel": "tcg",
+    "vcpus": 2,
+    "firmware": "SeaBIOS",
+    "timeout_seconds": 65,
+    "runner": "target/pmm-physical-accounting/run.py"
+  },
+  "build": "cargo build --offline --locked --release -p sunlight-kernel",
+  "host": {
+    "command": "cargo test --offline --locked --target x86_64-unknown-linux-gnu -p sunlight-kernel --lib",
+    "passed": 220,
+    "failed": 0,
+    "log": "target/pmm-physical-accounting/host.log"
+  },
+  "probe_elf": {
+    "virtual_start": "0xffffffff80000000",
+    "exclusive_virtual_end": "0xffffffff921fadc8",
+    "headers": "target/pmm-physical-accounting/fixed-probe-elf.txt"
+  },
+  "images": {
+    "probe_sha256": "17e2c348553692855be1d840cdc0465935525e8aeca2ca68d846019cdad2511d",
+    "ordinary_sha256": "53be48fabe8871f64c8885ef59f0d5e354e7721548da8d42a2d8428f095f9804"
+  },
+  "map_types": {
+    "0": "usable",
+    "1": "reserved address space",
+    "5": "bootloader reclaimable (withheld)",
+    "6": "executable and modules",
+    "7": "framebuffer"
+  },
+  "probe_runs": [
+    {
+      "ram_mib": 512,
+      "status": "BLOCKED",
+      "managed_frames": null,
+      "initial_free_frames": null,
+      "heap": null,
+      "zram_at_heap_initialization": null,
+      "reason": "No kernel entry in BIOS or alternate UEFI probe",
+      "serial": [
+        "target/pmm-physical-accounting/probe-512.serial.log",
+        "target/pmm-physical-accounting/probe-uefi-512.serial.log"
+      ]
+    },
+    {
+      "ram_mib": 1024,
+      "limine_load": {
+        "phys": "0x1bb1c000",
+        "virt": "0xffffffff80000000"
+      },
+      "image_end_exclusive": "0x2dd16dc8",
+      "map": [
+        {
+          "base": "0x1000",
+          "length": "0x53000",
+          "type": 5
+        },
+        {
+          "base": "0x54000",
+          "length": "0x4b000",
+          "type": 0
+        },
+        {
+          "base": "0x9fc00",
+          "length": "0x400",
+          "type": 1
+        },
+        {
+          "base": "0xf0000",
+          "length": "0x10000",
+          "type": 1
+        },
+        {
+          "base": "0x100000",
+          "length": "0x1b78d000",
+          "type": 0
+        },
+        {
+          "base": "0x1b88d000",
+          "length": "0x28f000",
+          "type": 5
+        },
+        {
+          "base": "0x1bb1c000",
+          "length": "0x121fb000",
+          "type": 6
+        },
+        {
+          "base": "0x2dd17000",
+          "length": "0x122c8000",
+          "type": 5
+        },
+        {
+          "base": "0x3ffdf000",
+          "length": "0x21000",
+          "type": 1
+        },
+        {
+          "base": "0xfd000000",
+          "length": "0x3e8000",
+          "type": 7
+        },
+        {
+          "base": "0xfffc0000",
+          "length": "0x40000",
+          "type": 1
+        },
+        {
+          "base": "0xfd00000000",
+          "length": "0x300000000",
+          "type": 1
+        }
+      ],
+      "bytes_by_limine_type": {
+        "0": 461209600,
+        "1": 12885365760,
+        "5": 307929088,
+        "6": 304066560,
+        "7": 4096000
+      },
+      "reported_installed_ram_bytes": 1073205248,
+      "previous_installed_estimate_bytes": 13958571008,
+      "reported_reserved_address_space_bytes": 12885365760,
+      "managed_frames": 186835,
+      "managed_bytes": 765276160,
+      "initial_free_frames": 112600,
+      "initial_free_bytes": 461209600,
+      "initial_occupied_frames": 74235,
+      "image_occupied_bytes": 304066560,
+      "alloc_free_probe": {
+        "status": "PASS",
+        "allocated_frames": 64,
+        "free_at_peak": 112536,
+        "free_after_release": 112600
+      },
+      "heap": {
+        "capacity_bytes": 16777216,
+        "used_bytes": 0,
+        "pmm_backing_frames": 4096
+      },
+      "zram_at_heap_initialization": {
+        "active_pools": 0,
+        "dynamic_slot_and_backing_metadata_bytes": 0,
+        "payload_bytes": 0,
+        "backing_bytes": 0
+      },
+      "status": "PASS",
+      "serial": "target/pmm-physical-accounting/fixed-probe-1024.serial.log",
+      "serial_sha256": "db370c100d14b48c93aafad0f7e5f4a1e303628697874560ae99a9a56df1a370"
+    },
+    {
+      "ram_mib": 2048,
+      "limine_load": {
+        "phys": "0x5bb1c000",
+        "virt": "0xffffffff80000000"
+      },
+      "image_end_exclusive": "0x6dd16dc8",
+      "map": [
+        {
+          "base": "0x1000",
+          "length": "0x53000",
+          "type": 5
+        },
+        {
+          "base": "0x54000",
+          "length": "0x4b000",
+          "type": 0
+        },
+        {
+          "base": "0x9fc00",
+          "length": "0x400",
+          "type": 1
+        },
+        {
+          "base": "0xf0000",
+          "length": "0x10000",
+          "type": 1
+        },
+        {
+          "base": "0x100000",
+          "length": "0x5b78d000",
+          "type": 0
+        },
+        {
+          "base": "0x5b88d000",
+          "length": "0x28f000",
+          "type": 5
+        },
+        {
+          "base": "0x5bb1c000",
+          "length": "0x121fb000",
+          "type": 6
+        },
+        {
+          "base": "0x6dd17000",
+          "length": "0x122c8000",
+          "type": 5
+        },
+        {
+          "base": "0x7ffdf000",
+          "length": "0x21000",
+          "type": 1
+        },
+        {
+          "base": "0xfd000000",
+          "length": "0x3e8000",
+          "type": 7
+        },
+        {
+          "base": "0xfffc0000",
+          "length": "0x40000",
+          "type": 1
+        },
+        {
+          "base": "0xfd00000000",
+          "length": "0x300000000",
+          "type": 1
+        }
+      ],
+      "bytes_by_limine_type": {
+        "0": 1534951424,
+        "1": 12885365760,
+        "5": 307929088,
+        "6": 304066560,
+        "7": 4096000
+      },
+      "reported_installed_ram_bytes": 2146947072,
+      "previous_installed_estimate_bytes": 15032312832,
+      "reported_reserved_address_space_bytes": 12885365760,
+      "managed_frames": 448979,
+      "managed_bytes": 1839017984,
+      "initial_free_frames": 374744,
+      "initial_free_bytes": 1534951424,
+      "initial_occupied_frames": 74235,
+      "image_occupied_bytes": 304066560,
+      "alloc_free_probe": {
+        "status": "PASS",
+        "allocated_frames": 64,
+        "free_at_peak": 374680,
+        "free_after_release": 374744
+      },
+      "heap": {
+        "capacity_bytes": 16777216,
+        "used_bytes": 0,
+        "pmm_backing_frames": 4096
+      },
+      "zram_at_heap_initialization": {
+        "active_pools": 0,
+        "dynamic_slot_and_backing_metadata_bytes": 0,
+        "payload_bytes": 0,
+        "backing_bytes": 0
+      },
+      "status": "PASS",
+      "serial": "target/pmm-physical-accounting/fixed-probe-2048.serial.log",
+      "serial_sha256": "28f99c032b29ee5cbcff0a736fa702d2308e634c4d38127368b22a0214bfbeb8"
+    },
+    {
+      "ram_mib": 4096,
+      "limine_load": {
+        "phys": "0x9bb1c000",
+        "virt": "0xffffffff80000000"
+      },
+      "image_end_exclusive": "0xadd16dc8",
+      "map": [
+        {
+          "base": "0x1000",
+          "length": "0x53000",
+          "type": 5
+        },
+        {
+          "base": "0x54000",
+          "length": "0x4b000",
+          "type": 0
+        },
+        {
+          "base": "0x9fc00",
+          "length": "0x400",
+          "type": 1
+        },
+        {
+          "base": "0xf0000",
+          "length": "0x10000",
+          "type": 1
+        },
+        {
+          "base": "0x100000",
+          "length": "0x9b78b000",
+          "type": 0
+        },
+        {
+          "base": "0x9b88b000",
+          "length": "0x291000",
+          "type": 5
+        },
+        {
+          "base": "0x9bb1c000",
+          "length": "0x121fb000",
+          "type": 6
+        },
+        {
+          "base": "0xadd17000",
+          "length": "0x122c8000",
+          "type": 5
+        },
+        {
+          "base": "0xbffdf000",
+          "length": "0x21000",
+          "type": 1
+        },
+        {
+          "base": "0xfd000000",
+          "length": "0x3e8000",
+          "type": 7
+        },
+        {
+          "base": "0xfffc0000",
+          "length": "0x40000",
+          "type": 1
+        },
+        {
+          "base": "0x100000000",
+          "length": "0x40000000",
+          "type": 0
+        },
+        {
+          "base": "0xfd00000000",
+          "length": "0x300000000",
+          "type": 1
+        }
+      ],
+      "bytes_by_limine_type": {
+        "0": 3682426880,
+        "1": 12885365760,
+        "5": 307937280,
+        "6": 304066560,
+        "7": 4096000
+      },
+      "reported_installed_ram_bytes": 4294430720,
+      "previous_installed_estimate_bytes": 17179796480,
+      "reported_reserved_address_space_bytes": 12885365760,
+      "managed_frames": 973265,
+      "managed_bytes": 3986493440,
+      "initial_free_frames": 899030,
+      "initial_free_bytes": 3682426880,
+      "initial_occupied_frames": 74235,
+      "image_occupied_bytes": 304066560,
+      "alloc_free_probe": {
+        "status": "PASS",
+        "allocated_frames": 64,
+        "free_at_peak": 898966,
+        "free_after_release": 899030
+      },
+      "heap": {
+        "capacity_bytes": 16777216,
+        "used_bytes": 0,
+        "pmm_backing_frames": 4096
+      },
+      "zram_at_heap_initialization": {
+        "active_pools": 0,
+        "dynamic_slot_and_backing_metadata_bytes": 0,
+        "payload_bytes": 0,
+        "backing_bytes": 0
+      },
+      "status": "PASS",
+      "serial": "target/pmm-physical-accounting/fixed-probe-4096.serial.log",
+      "serial_sha256": "f773f0b9eaf8e826b60fd30874ba51046e0975d4d0e597cf34d1b92bb6fd495f"
+    }
+  ],
+  "ordinary_boot": [
+    {
+      "ram_mib": 512,
+      "status": "BLOCKED",
+      "marker": null,
+      "serial": "target/pmm-physical-accounting/final-512.serial.log",
+      "serial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "ram_mib": 1024,
+      "status": "PASS",
+      "marker": "[SunlightOS] Phase 3.0 OK",
+      "serial": "target/pmm-physical-accounting/final-1024.serial.log",
+      "serial_sha256": "2a39130a4ce0199adf484eb3df68cc1bff81884511a7e5e0d2213c027f0b32bb"
+    },
+    {
+      "ram_mib": 2048,
+      "status": "PASS",
+      "marker": "[SunlightOS] Phase 3.0 OK",
+      "serial": "target/pmm-physical-accounting/final-2048.serial.log",
+      "serial_sha256": "4ddd2ee57c21237d618782c72464ad1fd8892d492c8f473fe9c7ce3b85a5e97e"
+    },
+    {
+      "ram_mib": 4096,
+      "status": "PASS",
+      "marker": "[SunlightOS] Phase 3.0 OK",
+      "serial": "target/pmm-physical-accounting/final-4096.serial.log",
+      "serial_sha256": "d72d633a9f5c44d055df52be11cb4471cd1cd53174fb4442347f1da23f616d6d"
+    }
+  ],
+  "gates": {
+    "natural_production_watermark": "BLOCKED in prior bounded pressure workload; not rerun",
+    "natural_same_page_restore_and_reevict": "UNQUALIFIED",
+    "full_desktop_boot": "NOT TESTED",
+    "reclamation_scope": "Explicit PMM frame return only in new probe; prior pressure audit separately records process reap"
+  }
+}

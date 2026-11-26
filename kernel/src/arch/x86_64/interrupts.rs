@@ -613,6 +613,17 @@ extern "x86-interrupt" fn page_fault_handler(
     if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
         && handle_swap_page_fault(vaddr)
     {
+        #[cfg(any(feature = "zram_fault_test", feature = "zram_pressure_test"))]
+        if is_user_frame(&_stack_frame) {
+            let pid = crate::sched::SCHEDULER.lock().current_pid();
+            serial_println!(
+                "[ZRAM-FAULT] vector=14 pid={} address={:#x} rip={:#x} error={:#x}",
+                pid,
+                vaddr,
+                _stack_frame.instruction_pointer.as_u64(),
+                error_code.bits(),
+            );
+        }
         return;
     }
 
@@ -728,7 +739,7 @@ fn handle_swap_page_fault(vaddr: u64) -> bool {
     }
 
     match unsafe {
-        crate::memory::swap::swap_in_page(&mut process.address_space, page, hhdm, &mut pmm)
+        crate::memory::swap::swap_in_page(&mut sched, page, hhdm, &mut pmm)
     } {
         Ok(_) => {
             crate::serial_println!("[SWAP] page-in at {:#x}", page_addr);
@@ -1136,17 +1147,26 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     #[cfg(feature = "scheduler_perf_diag")]
     let sched_lock_clock_valid = crate::sched::perf::observe_clock(cpu_id, sched_lock_start);
 
-    // ── Phase 1: brief lock — tick accounting + BSP timer work (no heavy telemetry) ─
+    // ── Phase 1: tick accounting and bounded BSP sampling ─
     //
-    // Capture telemetry scalars under lock (cheap), release lock, then do expensive
-    // page counting outside the lock (Phase 2 goal).
+    // Capture while page tables are stable; publish after releasing the lock.
     #[cfg(feature = "scheduler_guest_bench")]
     let mut bench_reason = 0;
     let mut telemetry_snap: Option<crate::telemetry::TelemetrySnapshot> = None;
+    #[cfg(feature = "zram_lifecycle_test")]
+    let mut ownership_sample = None;
+    #[cfg(feature = "zram_pressure_test")]
+    let (pressure_acquired, pressure_released);
+    #[cfg(feature = "zram_pressure_test")]
+    let mut pressure_pmm = None;
     #[cfg(feature = "scheduler_perf_diag")]
     let sched_lock_acquired;
     {
         let mut sched = crate::sched::SCHEDULER.lock();
+        #[cfg(feature = "zram_pressure_test")]
+        {
+            pressure_acquired = now_ns();
+        }
         #[cfg(feature = "scheduler_timer_trace")]
         crate::scheduler_timer_trace::event(&sched, 1, 0, timer_entry_ns, ticks_total, 0);
         #[cfg(feature = "scheduler_perf_diag")]
@@ -1190,13 +1210,34 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         if cpu_id == 0 {
             // Elapsed deadline: delayed timer delivery may skip an exact
             // modulo tick. Never publish repeatedly for the same global tick.
-            static LAST_TELEMETRY_TICK: AtomicU64 = AtomicU64::new(0);
-            if ticks_total.saturating_sub(LAST_TELEMETRY_TICK.load(Ordering::Relaxed)) >= 100 {
-                LAST_TELEMETRY_TICK.store(ticks_total, Ordering::Relaxed);
+            static NEXT_TELEMETRY_TICK: AtomicU64 = AtomicU64::new(100);
+            if ticks_total >= NEXT_TELEMETRY_TICK.load(Ordering::Relaxed) {
+                #[cfg(feature = "zram_pressure_test")]
+                let pmm_start = now_ns();
                 let pmm = crate::PMM.lock();
-                // Capture only scalars here; expensive walks moved out.
-                telemetry_snap = Some(crate::telemetry::capture_telemetry_snapshot(&sched, &pmm));
-                // pmm dropped; sched still held briefly for remaining BSP work.
+                #[cfg(feature = "zram_pressure_test")]
+                let pmm_acquired = now_ns();
+                let mut snap = crate::telemetry::capture_telemetry_snapshot(&sched, &pmm);
+                #[cfg(feature = "zram_lifecycle_test")]
+                let ownership_start = now_ns();
+                let mut timing = crate::telemetry::OwnershipTiming::default();
+                let complete =
+                    unsafe { crate::telemetry::sample_frame_ownership(&mut snap, &pmm, &mut timing) };
+                NEXT_TELEMETRY_TICK.store(
+                    ticks_total.saturating_add(if complete { 100 } else { 25 }),
+                    Ordering::Relaxed,
+                );
+                #[cfg(feature = "zram_lifecycle_test")]
+                {
+                    ownership_sample = Some((complete, now_ns().saturating_sub(ownership_start), timing));
+                }
+                if complete {
+                    telemetry_snap = Some(snap);
+                }
+                #[cfg(feature = "zram_pressure_test")]
+                {
+                    pressure_pmm = Some((pmm_acquired - pmm_start, now_ns() - pmm_acquired));
+                }
             }
 
             // Timer-server notification and TTY wakeup.
@@ -1256,7 +1297,24 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 }
             }
         }
+        #[cfg(feature = "zram_pressure_test")]
+        {
+            pressure_released = now_ns();
+        }
     } // Phase 1 lock released here — other cores can now proceed.
+
+    #[cfg(feature = "zram_pressure_test")]
+    if cpu_id == 0 {
+        static PREVIOUS: AtomicU64 = AtomicU64::new(0);
+        let gap = sched_lock_start.saturating_sub(PREVIOUS.swap(sched_lock_start, Ordering::Relaxed));
+        let wait = pressure_acquired.saturating_sub(sched_lock_start);
+        let hold = pressure_released.saturating_sub(pressure_acquired);
+        if pressure_pmm.is_some() || wait >= 10_000_000 || hold >= 10_000_000 || gap >= 30_000_000 {
+            let (pmm_wait, pmm_hold) = pressure_pmm.unwrap_or_default();
+            serial_println!("[PRESSURE-TICK] tick={} gap={} wait={} hold={} pmm_wait={} pmm_hold={}",
+                ticks_total, gap, wait, hold, pmm_wait, pmm_hold);
+        }
+    }
 
     if cpu_id == 0 {
         crate::ipc::reap_vfs_spawn();
@@ -1271,7 +1329,33 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         );
     }
 
-    // Phase 2 telemetry commit outside SCHEDULER lock (expensive page walks here).
+    // Phase 2 publishes the complete sample outside SCHEDULER lock.
+    #[cfg(feature = "zram_pressure_test")]
+    if cpu_id == 0 {
+        static LAST_COMPLETE_NS: AtomicU64 = AtomicU64::new(0);
+        static PEAK_AGE_NS: AtomicU64 = AtomicU64::new(0);
+        let previous = LAST_COMPLETE_NS.load(Ordering::Relaxed);
+        if previous != 0 {
+            PEAK_AGE_NS.fetch_max(now_ns().saturating_sub(previous), Ordering::Relaxed);
+        }
+        if ownership_sample.is_some() {
+            serial_println!(
+                "[PRESSURE-AGE] tick={} previous_ns={} peak_ns={}",
+                ticks_total, previous, PEAK_AGE_NS.swap(0, Ordering::Relaxed)
+            );
+        }
+        if let Some(snap) = telemetry_snap.as_ref() {
+            LAST_COMPLETE_NS.store(snap.sample_time_ns, Ordering::Relaxed);
+        }
+    }
+    #[cfg(feature = "zram_lifecycle_test")]
+    if let Some((complete, elapsed, timing)) = ownership_sample {
+        serial_println!(
+            "[FRAME-OWNERSHIP] tick={} complete={} sample_ns={} setup_ns={} classify_ns={} account_ns={} work={} stop={}",
+            ticks_total, complete as u8, elapsed, timing.setup_ns, timing.classify_ns,
+            timing.account_ns, timing.work, timing.stop
+        );
+    }
     if let Some(snap) = telemetry_snap {
         #[cfg(feature = "cpu_accounting_diag")]
         crate::telemetry::report_cpu_sample(&snap);

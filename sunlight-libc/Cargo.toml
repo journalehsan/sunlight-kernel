@@ -706,6 +706,7 @@ dynamic-heap-8m = ["dynamic-heap"]
 dynamic-heap-16m = ["dynamic-heap"]
 # Bounded renderer heap, including source snapshots and serialized bitmaps.
 dynamic-heap-128m = ["dynamic-heap"]
+adaptive-document-heap = ["dynamic-heap-128m"]
 # Link the native Rust std platform ABI and startup entry point.
 native-std = ["dynamic-heap"]
 # C main-return/exit callbacks; keep Rust's raw std exit contract unchanged.

@@ -1,0 +1,1429 @@
+{
+  "date": "2026-11-26",
+  "qualification": "MEM-Q1",
+  "qemu": {
+    "version": "11.1.3",
+    "accelerator": "tcg",
+    "firmware": "SeaBIOS",
+    "vcpus": 2,
+    "baseline_timeout_seconds": 65,
+    "qualification_timeout_seconds": 100,
+    "runner": "target/mem-q1/settle.py",
+    "guarded_definition": "Same ELF; Limine serial and verbose enabled; bounded serial capture.",
+    "guarded_512_runner_exit_note": "Zero indicates the expected Limine failure marker was captured."
+  },
+  "limine_revision": "5ed5674868183107ea4f0a42b34799af6fe8efee",
+  "lowest_passing_ram_tested_mib": 768,
+  "exact_minimum_qualified": false,
+  "desktop_readiness": "not_run",
+  "server_workload_readiness": "not_run",
+  "bootloader_reclaim_enabled": false,
+  "page_bytes": 4096,
+  "heap_backing_bytes": 16777216,
+  "images": {
+    "prior.iso": {
+      "path": "target/mem-q1/prior.iso",
+      "bytes": 308203520,
+      "sha256": "53be48fabe8871f64c8885ef59f0d5e354e7721548da8d42a2d8428f095f9804"
+    },
+    "current.iso": {
+      "path": "target/mem-q1/current.iso",
+      "bytes": 308211712,
+      "sha256": "2977b605b62affc45824b8322d6f23c9d82e5f05d234bb43d582fe88287d3443"
+    },
+    "guarded.iso": {
+      "path": "target/mem-q1/guarded.iso",
+      "bytes": 308211712,
+      "sha256": "4d3571d8b1832819923e95959b98447d1d103fae3c2185d1df069115ecfd0dc2"
+    },
+    "qualified.iso": {
+      "path": "target/mem-q1/qualified.iso",
+      "bytes": 295868416,
+      "sha256": "e93d2fcc6ccecb97a83808a285e26df7549d479a701d89556be6fad264c8ceeb"
+    },
+    "qualified-guarded.iso": {
+      "path": "target/mem-q1/qualified-guarded.iso",
+      "bytes": 295868416,
+      "sha256": "cc5fee829a9cd572c82037955c9cdadca180934137e8eba23c37e522af0f5581"
+    },
+    "probe.iso": {
+      "path": "target/mem-q1/probe.iso",
+      "bytes": 295868416,
+      "sha256": "41e1064917f10549db0285dd76668b0bab56155b78f7cfcac3a88d0159ad7972"
+    }
+  },
+  "elf": {
+    "baseline": {
+      "artifact": {
+        "path": "target/mem-q1/baseline.elf",
+        "bytes": 304074776,
+        "sha256": "3f8aea6dcadb2f251da67bdd4f9b696c91b6c51f931a24945b6b235d6d01f763"
+      },
+      "staging_bytes": 304078848,
+      "destination_bytes": 304070656,
+      "simultaneous_lower_bound_bytes": 608149504
+    },
+    "qualified": {
+      "artifact": {
+        "path": "target/mem-q1/qualified.elf",
+        "bytes": 291733920,
+        "sha256": "618eaf0eb99ed77c6055a3e99497ba6136fd59168fd36eca3ba3373e6ac4cc30"
+      },
+      "staging_bytes": 291737600,
+      "destination_bytes": 304070656,
+      "simultaneous_lower_bound_bytes": 595808256
+    },
+    "probe": {
+      "artifact": {
+        "path": "target/mem-q1/probe.elf",
+        "bytes": 291733920,
+        "sha256": "b6481781598777667df489d9991ee7285043403396f769435f27ca15da114f19"
+      },
+      "staging_bytes": 291737600,
+      "destination_bytes": 304070656,
+      "simultaneous_lower_bound_bytes": 595808256
+    }
+  },
+  "build": {
+    "command": "cargo build --offline --locked --release -p sunlight-kernel",
+    "log": {
+      "path": "target/mem-q1/qualified-build.log",
+      "bytes": 1766,
+      "sha256": "308396b95a130f67e7a3e7dfcfbbee752c40bca5f4b449841e4e0618b9da8517"
+    }
+  },
+  "host": {
+    "command": "cargo test --offline --locked --target x86_64-unknown-linux-gnu -p sunlight-kernel --lib",
+    "passed": 220,
+    "failed": 0,
+    "log": {
+      "path": "target/mem-q1/final-host.log",
+      "bytes": 29630,
+      "sha256": "848cbc472e30ee95df939b2785beb69d8ee11dc3891eb1024df2a4be8667d249"
+    }
+  },
+  "baseline": {
+    "prior": [
+      {
+        "ram_mib": 512,
+        "runner_exit": 124,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior-512.serial.log",
+          "-m",
+          "512",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/prior-512.serial.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "kernel_entry": false,
+        "ordinary_boot": false,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": false,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": []
+      },
+      {
+        "ram_mib": 768,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior-768.serial.log",
+          "-m",
+          "768",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/prior-768.serial.log",
+          "bytes": 24884,
+          "sha256": "e0eeaed7b7203b9fc0dce126f43c08cc2dc830fa80068c7b40b92af490822c51"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": [
+          "183/473 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 1024,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior-1024.serial.log",
+          "-m",
+          "1024",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/prior-1024.serial.log",
+          "bytes": 27164,
+          "sha256": "f7c8145b6132e838eb5e8997b46aa243f9689b14ed3373e67053d95bc9ca5092"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": [
+          "439/729 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 2048,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/prior-2048.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/prior-2048.serial.log",
+          "bytes": 67772,
+          "sha256": "cb7e57a85a982e14aa50cedde4fb1d3f80d478ee352644ff77f38ea51a2d47ab"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=1753 physical_budget_kib=448980 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "1463/1753 MiB free"
+        ]
+      }
+    ],
+    "direct": [
+      {
+        "ram_mib": 512,
+        "runner_exit": 124,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/current.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/direct-512.serial.log",
+          "-m",
+          "512",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/direct-512.serial.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "kernel_entry": false,
+        "ordinary_boot": false,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": false,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": []
+      },
+      {
+        "ram_mib": 768,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/current.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/direct-768.serial.log",
+          "-m",
+          "768",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/direct-768.serial.log",
+          "bytes": 24568,
+          "sha256": "7dda1931154098d7f23f58f513fe111f6d481825fd69cdc833405f7175bdbfab"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": [
+          "183/473 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 1024,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/current.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/direct-1024.serial.log",
+          "-m",
+          "1024",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/direct-1024.serial.log",
+          "bytes": 23627,
+          "sha256": "18d92d2f664fd421a2670fd7ef65b353ad20201c17c3afa584cc3818f5ed2d01"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": false,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": [
+          "439/729 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 2048,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/current.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/direct-2048.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/direct-2048.serial.log",
+          "bytes": 67622,
+          "sha256": "25489f4e798e22b110cc92257d2c22a3de750796576a2a55e5dd46f04fd81231"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=1753 physical_budget_kib=448976 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "1463/1753 MiB free"
+        ]
+      }
+    ],
+    "guarded": [
+      {
+        "ram_mib": 512,
+        "runner_exit": 124,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded-512.serial.log",
+          "-m",
+          "512",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/guarded-512.serial.log",
+          "bytes": 784,
+          "sha256": "c5c312b85582f65abef5220f6cc07362338ece1f7e3d3dca6741f850fc41aba2"
+        },
+        "kernel_entry": false,
+        "ordinary_boot": false,
+        "limine_elf_destination_oom": true,
+        "vfs_namespace_ready": false,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": []
+      },
+      {
+        "ram_mib": 768,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded-768.serial.log",
+          "-m",
+          "768",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/guarded-768.serial.log",
+          "bytes": 34932,
+          "sha256": "2718b66735e2680a89c4dca2cd2dd22e38bcdf32d56b81eb6b1fa9b434e6a0f5"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=473 physical_budget_kib=121296 admin_pid=10"
+        ],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": [
+          "183/473 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 1024,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded-1024.serial.log",
+          "-m",
+          "1024",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/guarded-1024.serial.log",
+          "bytes": 36955,
+          "sha256": "b1b015b9570bf49f548c38d1ca78e9522f00cea68fd96a9769b2c3003a029b5d"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=729 physical_budget_kib=186832 admin_pid=10"
+        ],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": [
+          "439/729 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 2048,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/guarded-2048.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/guarded-2048.serial.log",
+          "bytes": 49894,
+          "sha256": "cce1bafe257c4ca9c28ec0d1b3fb0a535a9bc92a786fd7c21954c2e45e5c3012"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=1753 physical_budget_kib=448976 admin_pid=10"
+        ],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": [
+          "1463/1753 MiB free"
+        ]
+      }
+    ]
+  },
+  "qualified": {
+    "direct": [
+      {
+        "ram_mib": 512,
+        "runner_exit": 124,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-direct-512.serial.log",
+          "-m",
+          "512",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-direct-512.serial.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "kernel_entry": false,
+        "ordinary_boot": false,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": false,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": []
+      },
+      {
+        "ram_mib": 768,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-direct-768.serial.log",
+          "-m",
+          "768",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-direct-768.serial.log",
+          "bytes": 52949,
+          "sha256": "6d347fc2e6e0687031b9a99644ac60c30da8d90743cf37b518706bc42ec6d277"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=485 physical_budget_kib=124308 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "195/485 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 1024,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-direct-1024.serial.log",
+          "-m",
+          "1024",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-direct-1024.serial.log",
+          "bytes": 55189,
+          "sha256": "6553315066bbcca6be6f5584a100e288ec09ba3626ada7a2dc896f6342ab20f9"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=741 physical_budget_kib=189844 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "451/741 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 2048,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-direct-2048.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-direct-2048.serial.log",
+          "bytes": 67792,
+          "sha256": "34d7fb6bf796c655a1d3a083fbb53ba9351f85d35a725ae8ba2dac483efc3b51"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=1765 physical_budget_kib=451988 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "1475/1765 MiB free"
+        ]
+      }
+    ],
+    "guarded": [
+      {
+        "ram_mib": 512,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified-guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-guarded-512.serial.log",
+          "-m",
+          "512",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-guarded-512.serial.log",
+          "bytes": 784,
+          "sha256": "c5c312b85582f65abef5220f6cc07362338ece1f7e3d3dca6741f850fc41aba2"
+        },
+        "kernel_entry": false,
+        "ordinary_boot": false,
+        "limine_elf_destination_oom": true,
+        "vfs_namespace_ready": false,
+        "zram_configured": false,
+        "zram_policy": [],
+        "session_foundation_ready": false,
+        "session_config_ready": false,
+        "pmm_summary": []
+      },
+      {
+        "ram_mib": 768,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified-guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-guarded-768.serial.log",
+          "-m",
+          "768",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-guarded-768.serial.log",
+          "bytes": 63453,
+          "sha256": "3282fbb22bbeb844c958ffd71f1ca595779d9b5574722789fc40117c7c2952f5"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=485 physical_budget_kib=124328 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "195/485 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 1024,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified-guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-guarded-1024.serial.log",
+          "-m",
+          "1024",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-guarded-1024.serial.log",
+          "bytes": 69303,
+          "sha256": "72f066981511ac05db25a48fab753722952835237f4711927e1c5eab65c507bc"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=741 physical_budget_kib=189844 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "451/741 MiB free"
+        ]
+      },
+      {
+        "ram_mib": 2048,
+        "runner_exit": 0,
+        "args": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/qualified-guarded.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/final-guarded-2048.serial.log",
+          "-m",
+          "2048",
+          "-smp",
+          "2",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-no-reboot",
+          "-no-shutdown",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-device",
+          "qemu-xhci,id=xhci",
+          "-device",
+          "usb-mouse,bus=xhci.0"
+        ],
+        "serial": {
+          "path": "target/mem-q1/final-guarded-2048.serial.log",
+          "bytes": 68688,
+          "sha256": "200d9dfe0a17b4d066934db7a252c546315b6fb126207577605854b8e0229ae9"
+        },
+        "kernel_entry": true,
+        "ordinary_boot": true,
+        "limine_elf_destination_oom": false,
+        "vfs_namespace_ready": true,
+        "zram_configured": true,
+        "zram_policy": [
+          "enabled pools=1 logical_mib=1765 physical_budget_kib=451988 admin_pid=10"
+        ],
+        "session_foundation_ready": true,
+        "session_config_ready": true,
+        "pmm_summary": [
+          "1475/1765 MiB free"
+        ]
+      }
+    ]
+  },
+  "instrumented_checkpoints": [
+    {
+      "ram_mib": 768,
+      "runner_exit": 0,
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/probe.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/probe-768.serial.log",
+        "-m",
+        "768",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/mem-q1/probe-768.serial.log",
+        "bytes": 62729,
+        "sha256": "1eaa9bb31d468c136c7b5780060f640f70f5b9881b1cab483d7da4070944b916"
+      },
+      "kernel_entry": true,
+      "ordinary_boot": true,
+      "limine_elf_destination_oom": false,
+      "vfs_namespace_ready": true,
+      "zram_configured": true,
+      "zram_policy": [
+        "enabled pools=1 logical_mib=485 physical_budget_kib=124308 admin_pid=10"
+      ],
+      "session_foundation_ready": true,
+      "session_config_ready": true,
+      "pmm_summary": [
+        "195/485 MiB free"
+      ],
+      "memory_map": [
+        {
+          "type": 5,
+          "base": "0x1000",
+          "length_bytes": 339968
+        },
+        {
+          "type": 0,
+          "base": "0x54000",
+          "length_bytes": 307200
+        },
+        {
+          "type": 1,
+          "base": "0x9fc00",
+          "length_bytes": 1024
+        },
+        {
+          "type": 1,
+          "base": "0xf0000",
+          "length_bytes": 65536
+        },
+        {
+          "type": 0,
+          "base": "0x100000",
+          "length_bytes": 204800000
+        },
+        {
+          "type": 5,
+          "base": "0xc450000",
+          "length_bytes": 2682880
+        },
+        {
+          "type": 6,
+          "base": "0xc6df000",
+          "length_bytes": 304070656
+        },
+        {
+          "type": 5,
+          "base": "0x1e8db000",
+          "length_bytes": 292569088
+        },
+        {
+          "type": 1,
+          "base": "0x2ffdf000",
+          "length_bytes": 135168
+        },
+        {
+          "type": 7,
+          "base": "0xfd000000",
+          "length_bytes": 4096000
+        },
+        {
+          "type": 1,
+          "base": "0xfffc0000",
+          "length_bytes": 262144
+        },
+        {
+          "type": 1,
+          "base": "0xfd00000000",
+          "length_bytes": 12884901888
+        }
+      ],
+      "bootloader_reclaimable_bytes": 295591936,
+      "pinned_image_frames": 74236,
+      "initial_managed_frames": 124311,
+      "initial_free_frames": 50075,
+      "embedded_ramfs_bytes": 154184731,
+      "post_heap": {
+        "managed": 124311,
+        "free": 45971,
+        "heap_used": 0,
+        "heap_free": 16777216,
+        "zram_pools": 0,
+        "zram_stored": 0,
+        "zram_bytes": 0
+      },
+      "pre_scheduler": {
+        "managed": 124311,
+        "free": 21786,
+        "heap_used": 181896,
+        "heap_free": 16595320,
+        "zram_pools": 0,
+        "zram_stored": 0,
+        "zram_bytes": 0
+      }
+    },
+    {
+      "ram_mib": 1024,
+      "runner_exit": 0,
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/probe.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/probe-1024.serial.log",
+        "-m",
+        "1024",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/mem-q1/probe-1024.serial.log",
+        "bytes": 34660,
+        "sha256": "c6f0fabfa5f8cc982043a4aebca19e8434dfe765aceb64e5ac57396c703b8b93"
+      },
+      "kernel_entry": true,
+      "ordinary_boot": true,
+      "limine_elf_destination_oom": false,
+      "vfs_namespace_ready": true,
+      "zram_configured": true,
+      "zram_policy": [
+        "enabled pools=1 logical_mib=741 physical_budget_kib=189844 admin_pid=10"
+      ],
+      "session_foundation_ready": false,
+      "session_config_ready": false,
+      "pmm_summary": [
+        "451/741 MiB free"
+      ],
+      "memory_map": [
+        {
+          "type": 5,
+          "base": "0x1000",
+          "length_bytes": 339968
+        },
+        {
+          "type": 0,
+          "base": "0x54000",
+          "length_bytes": 307200
+        },
+        {
+          "type": 1,
+          "base": "0x9fc00",
+          "length_bytes": 1024
+        },
+        {
+          "type": 1,
+          "base": "0xf0000",
+          "length_bytes": 65536
+        },
+        {
+          "type": 0,
+          "base": "0x100000",
+          "length_bytes": 473235456
+        },
+        {
+          "type": 5,
+          "base": "0x1c450000",
+          "length_bytes": 2682880
+        },
+        {
+          "type": 6,
+          "base": "0x1c6df000",
+          "length_bytes": 304070656
+        },
+        {
+          "type": 5,
+          "base": "0x2e8db000",
+          "length_bytes": 292569088
+        },
+        {
+          "type": 1,
+          "base": "0x3ffdf000",
+          "length_bytes": 135168
+        },
+        {
+          "type": 7,
+          "base": "0xfd000000",
+          "length_bytes": 4096000
+        },
+        {
+          "type": 1,
+          "base": "0xfffc0000",
+          "length_bytes": 262144
+        },
+        {
+          "type": 1,
+          "base": "0xfd00000000",
+          "length_bytes": 12884901888
+        }
+      ],
+      "bootloader_reclaimable_bytes": 295591936,
+      "pinned_image_frames": 74236,
+      "initial_managed_frames": 189847,
+      "initial_free_frames": 115611,
+      "embedded_ramfs_bytes": 154184731,
+      "post_heap": {
+        "managed": 189847,
+        "free": 111507,
+        "heap_used": 0,
+        "heap_free": 16777216,
+        "zram_pools": 0,
+        "zram_stored": 0,
+        "zram_bytes": 0
+      },
+      "pre_scheduler": {
+        "managed": 189847,
+        "free": 87322,
+        "heap_used": 181896,
+        "heap_free": 16595320,
+        "zram_pools": 0,
+        "zram_stored": 0,
+        "zram_bytes": 0
+      }
+    },
+    {
+      "ram_mib": 2048,
+      "runner_exit": 0,
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/probe.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/mem-q1/probe-2048.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/mem-q1/probe-2048.serial.log",
+        "bytes": 68671,
+        "sha256": "c92242b1cd9f30daee584928c5fe0a825aae1cc276e72adce10ff061322e7bc7"
+      },
+      "kernel_entry": true,
+      "ordinary_boot": true,
+      "limine_elf_destination_oom": false,
+      "vfs_namespace_ready": true,
+      "zram_configured": true,
+      "zram_policy": [
+        "enabled pools=1 logical_mib=1765 physical_budget_kib=451988 admin_pid=10"
+      ],
+      "session_foundation_ready": true,
+      "session_config_ready": true,
+      "pmm_summary": [
+        "1475/1765 MiB free"
+      ],
+      "memory_map": [
+        {
+          "type": 5,
+          "base": "0x1000",
+          "length_bytes": 339968
+        },
+        {
+          "type": 0,
+          "base": "0x54000",
+          "length_bytes": 307200
+        },
+        {
+          "type": 1,
+          "base": "0x9fc00",
+          "length_bytes": 1024
+        },
+        {
+          "type": 1,
+          "base": "0xf0000",
+          "length_bytes": 65536
+        },
+        {
+          "type": 0,
+          "base": "0x100000",
+          "length_bytes": 1546977280
+        },
+        {
+          "type": 5,
+          "base": "0x5c450000",
+          "length_bytes": 2682880
+        },
+        {
+          "type": 6,
+          "base": "0x5c6df000",
+          "length_bytes": 304070656
+        },
+        {
+          "type": 5,
+          "base": "0x6e8db000",
+          "length_bytes": 292569088
+        },
+        {
+          "type": 1,
+          "base": "0x7ffdf000",
+          "length_bytes": 135168
+        },
+        {
+          "type": 7,
+          "base": "0xfd000000",
+          "length_bytes": 4096000
+        },
+        {
+          "type": 1,
+          "base": "0xfffc0000",
+          "length_bytes": 262144
+        },
+        {
+          "type": 1,
+          "base": "0xfd00000000",
+          "length_bytes": 12884901888
+        }
+      ],
+      "bootloader_reclaimable_bytes": 295591936,
+      "pinned_image_frames": 74236,
+      "initial_managed_frames": 451991,
+      "initial_free_frames": 377755,
+      "embedded_ramfs_bytes": 154184731,
+      "post_heap": {
+        "managed": 451991,
+        "free": 373651,
+        "heap_used": 0,
+        "heap_free": 16777216,
+        "zram_pools": 0,
+        "zram_stored": 0,
+        "zram_bytes": 0
+      },
+      "pre_scheduler": {
+        "managed": 451991,
+        "free": 349466,
+        "heap_used": 181896,
+        "heap_free": 16595320,
+        "zram_pools": 0,
+        "zram_stored": 0,
+        "zram_bytes": 0
+      }
+    }
+  ]
+}

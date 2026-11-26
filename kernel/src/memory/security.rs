@@ -929,12 +929,7 @@ pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm:
         let address = BASE + index as u64 * PAGE_BYTES;
         let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address)).unwrap();
         let frame = unsafe {
-            crate::memory::swap::swap_in_page(
-                &mut sched.current_process_mut().address_space,
-                page,
-                hhdm,
-                pmm,
-            )
+            crate::memory::swap::swap_in_page(&mut sched, page, hhdm, pmm)
         }
         .unwrap();
         let bytes = unsafe { &*((hhdm + frame.as_u64()).as_ptr::<[u8; 4096]>()) };
@@ -995,12 +990,7 @@ pub fn run_swap1_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm:
     let corrupt_slot = crate::memory::zram::SlotId::from_raw(corrupt_raw).unwrap();
     crate::memory::zram::corrupt_payload_for_test(corrupt_slot, hhdm).unwrap();
     assert!(unsafe {
-        crate::memory::swap::swap_in_page(
-            &mut sched.current_process_mut().address_space,
-            corrupt_page,
-            hhdm,
-            pmm,
-        )
+        crate::memory::swap::swap_in_page(&mut sched, corrupt_page, hhdm, pmm)
     }
     .is_err());
     assert_eq!(

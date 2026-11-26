@@ -792,6 +792,7 @@ test = false
 
 [features]
 zram-lifecycle-test = []
+zram-pressure-test = []
 storage-test = []
 vfs-l1c-r3-test = []
 

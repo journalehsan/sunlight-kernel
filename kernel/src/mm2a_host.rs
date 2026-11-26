@@ -1,4 +1,9 @@
 #![no_std]
+#![cfg_attr(test, feature(allocator_api))]
+
+#[cfg(test)]
+#[path = "memory/candidate_queue.rs"]
+mod candidate_queue;
 
 extern crate alloc;
 

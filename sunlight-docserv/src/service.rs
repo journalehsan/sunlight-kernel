@@ -186,6 +186,8 @@ pub fn run_native(mut service: DocService) -> Result<()> {
         "register docserv endpoint"
     );
     eprintln!("[DOCSERV] ready");
+    #[cfg(feature = "native-heap-probe")]
+    heap_probe_sample("ready");
     let mut pending: HashMap<u64, Vec<u8>> = HashMap::new();
     let mut message = ipc_recv(endpoint);
     loop {
@@ -199,7 +201,52 @@ pub fn run_native(mut service: DocService) -> Result<()> {
                 IpcMsg::with_label(ERROR)
             }
         };
+        #[cfg(feature = "native-heap-probe")]
+        heap_probe_sample("rpc");
         message = ipc_reply_and_wait(endpoint, reply);
+    }
+}
+
+#[cfg(feature = "native-heap-probe")]
+pub fn heap_probe_sample(stage: &str) {
+    use core::fmt::Write;
+    struct SerialBuffer {
+        bytes: [u8; 256],
+        used: usize,
+    }
+    impl Write for SerialBuffer {
+        fn write_str(&mut self, value: &str) -> core::fmt::Result {
+            let end = self.used + value.len();
+            self.bytes
+                .get_mut(self.used..end)
+                .ok_or(core::fmt::Error)?
+                .copy_from_slice(value.as_bytes());
+            self.used = end;
+            Ok(())
+        }
+    }
+    sunlight_ipc::debug_log(match stage {
+        "ready" => "[DOC-HEAP] ready\n",
+        "idle" => "[DOC-HEAP] idle\n",
+        "rpc" => "[DOC-HEAP] rpc\n",
+        _ => "[DOC-HEAP] recovered\n",
+    });
+    let stats = sunlight_libc::alloc::heap_stats();
+    let mut line = SerialBuffer {
+        bytes: [0; 256],
+        used: 0,
+    };
+    let _ = writeln!(
+        line,
+        "[DOC-HEAP] stats stage={stage} capacity={} live={} backing={} peak={} failures={}",
+        stats.heap_capacity,
+        stats.requested_user_bytes,
+        stats.allocated_backing_bytes,
+        stats.high_water_allocated_bytes,
+        stats.failed_allocation_count
+    );
+    if let Ok(line) = core::str::from_utf8(&line.bytes[..line.used]) {
+        sunlight_ipc::debug_log(line);
     }
 }
 
@@ -225,12 +272,16 @@ fn transport(
                 Ok(request) => service.dispatch(owner, request),
                 Err(error) => DocResponse::Err(format!("malformed document request: {error}")),
             };
-            let bytes = postcard::to_allocvec(&response)?;
-            ensure!(bytes.len() <= MAX_RESPONSE, "response is too large");
+            let length = postcard::experimental::serialized_size(&response)?;
+            ensure!(length <= MAX_RESPONSE, "response is too large");
             ensure!(
-                pending.values().map(Vec::len).sum::<usize>() + bytes.len() <= 128 * 1024 * 1024,
+                pending.values().map(Vec::len).sum::<usize>() + length <= 128 * 1024 * 1024,
                 "pending document replies exceed the memory budget"
             );
+            let mut bytes = Vec::new();
+            bytes.try_reserve_exact(length)?;
+            bytes.resize(length, 0);
+            postcard::to_slice(&response, &mut bytes)?;
             let reply = IpcMsg::with_label(READY).word(0, bytes.len() as u64);
             pending.insert(owner, bytes);
             Ok(reply)

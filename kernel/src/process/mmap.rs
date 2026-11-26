@@ -728,6 +728,25 @@ fn map_private_kind(
         let frame_addr = match allocated_frame {
             Some(addr) => addr,
             None => {
+                #[cfg(feature = "boot_resources")]
+                crate::serial_println!(
+                    "[BOOT-MEM-OOM] pid={} request_pages={} installed_pages={} free={} user={} tables={}",
+                    pid, page_count, i, pmm.free_page_count(),
+                    crate::memory::accounting::class_frame_count(
+                        crate::memory::accounting::PhysicalMemoryClass::UserPrivate,
+                    ),
+                    crate::memory::accounting::class_frame_count(
+                        crate::memory::accounting::PhysicalMemoryClass::PageTable,
+                    ),
+                );
+                #[cfg(feature = "zram_pressure_test")]
+                {
+                    let heap = crate::memory::heap::heap_stats();
+                    crate::serial_println!(
+                        "[ZRAM-PRESSURE-ALLOC] owner=anonymous-user-frame pid={} bytes=4096 mapping_bytes={} installed_pages={} pmm_free={} heap_used={} heap_free={}",
+                        pid, page_count * 4096, i, pmm.free_page_count(), heap.allocated, heap.free,
+                    );
+                }
                 crate::process::address_space::note_frame_allocation_failure();
                 rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
                 if let Some(reservation) = reservation {
@@ -950,6 +969,7 @@ pub unsafe fn fault_in_anonymous_page(
         return Err(MmapError::SwappedUnsupported);
     }
 
+    crate::memory::swap::reserve_candidates(1).map_err(|_| MmapError::NoMemory)?;
     let frame_addr = pmm
         .alloc_frame_owned(owner as u32)
         .ok_or(MmapError::NoMemory)?;
@@ -1397,6 +1417,7 @@ pub fn sys_munmap(
     // Capacity cannot fail after an earlier chunk has already been withdrawn.
     let retirement = crate::memory::retirement::OWNERS.lock()
         .reserve(identity.pml4_phys, identity.generation).ok_or(MmapError::NoMemory)?;
+    crate::memory::swap::untrack_range(sched.current_memory_owner().pid, addr, end);
     let mut chunk_start = addr;
     while chunk_start < end {
         let remaining_pages = (end - chunk_start) / 4096;
@@ -1483,12 +1504,6 @@ pub fn sys_munmap(
             }
             #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
             crate::memory::tlb::ack_test_receipt(&retirement);
-
-            crate::memory::swap::untrack_range(
-                sched.current_memory_owner().pid,
-                chunk_start,
-                chunk_start + chunk_pages * 4096,
-            );
 
             // The synchronous acknowledgement above is the ownership-release
             // barrier: no CPU may retain a translation to any frame freed here.

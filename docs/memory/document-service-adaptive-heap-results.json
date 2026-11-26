@@ -1,0 +1,829 @@
+{
+  "qemu": "11.1.3 TCG, 2 vCPUs, optical only",
+  "frame_bytes": 4096,
+  "initial_heap_target_bytes": 262144,
+  "heap_limit_bytes": 134217728,
+  "inventory": {
+    "entries_matched": 613,
+    "logical_bytes_matched": 154184731,
+    "baseline_sha256": "618eaf0eb99ed77c6055a3e99497ba6136fd59168fd36eca3ba3373e6ac4cc30",
+    "module_sha256": "fc0d6989a11975da5d468a6bd04e93e5ee68cc474aa07d5f9fa659d6695872ba"
+  },
+  "runs": [
+    {
+      "guest": "bios-512",
+      "iso_sha256": "5ac5dfa3235a7d1e32529fd6ddc561dcffff9838813828bc065e3d9290e227ef",
+      "serial": "target/document-service-adaptive-heap/bios-512.serial.log",
+      "status": "passed",
+      "ready": true,
+      "workload_pass": true,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": true,
+      "physical_memory": {
+        "pre-scheduler": [
+          {
+            "minimum_free_frames": 41022,
+            "free_frames": 41022
+          }
+        ],
+        "phase-3": [
+          {
+            "minimum_free_frames": 36913,
+            "free_frames": 36913
+          }
+        ],
+        "namespace": [
+          {
+            "minimum_free_frames": 36910,
+            "free_frames": 36910
+          }
+        ],
+        "session-ready": [
+          {
+            "minimum_free_frames": 24867,
+            "free_frames": 24868
+          }
+        ],
+        "session-bundles": [
+          {
+            "minimum_free_frames": 23353,
+            "free_frames": 23353
+          }
+        ],
+        "doc-ready": [
+          {
+            "minimum_free_frames": 19953,
+            "free_frames": 19953
+          }
+        ],
+        "doc-idle": [
+          {
+            "minimum_free_frames": 14273,
+            "free_frames": 14275
+          }
+        ],
+        "doc-rpc": {
+          "samples": 36,
+          "minimum_free_frames": 1461,
+          "lowest_sampled_free_frames": 10001
+        },
+        "doc-recovered": [
+          {
+            "minimum_free_frames": 1461,
+            "free_frames": 14275
+          }
+        ]
+      },
+      "heap": {
+        "ready": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 714,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "idle": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 714,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "rpc": {
+          "samples": 36,
+          "max_capacity_bytes": 17715200,
+          "max_live_bytes": 17468155,
+          "max_backing_bytes": 17472344,
+          "max_peak_backing_bytes": 34921808,
+          "max_failures": 1
+        },
+        "recovered": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 1062,
+            "backing_bytes": 2608,
+            "peak_backing_bytes": 34921808,
+            "failures": 1
+          }
+        ]
+      },
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 220
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 600
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 110
+        }
+      ]
+    },
+    {
+      "guest": "uefi-512",
+      "iso_sha256": "5ac5dfa3235a7d1e32529fd6ddc561dcffff9838813828bc065e3d9290e227ef",
+      "serial": "target/document-service-adaptive-heap/uefi-512.serial.log",
+      "status": "passed",
+      "ready": true,
+      "workload_pass": true,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": true,
+      "physical_memory": {
+        "pre-scheduler": [
+          {
+            "minimum_free_frames": 39446,
+            "free_frames": 39446
+          }
+        ],
+        "phase-3": [
+          {
+            "minimum_free_frames": 35337,
+            "free_frames": 35337
+          }
+        ],
+        "namespace": [
+          {
+            "minimum_free_frames": 35334,
+            "free_frames": 35334
+          }
+        ],
+        "doc-ready": [
+          {
+            "minimum_free_frames": 19991,
+            "free_frames": 19991
+          }
+        ],
+        "session-ready": [
+          {
+            "minimum_free_frames": 18908,
+            "free_frames": 18909
+          }
+        ],
+        "session-bundles": [
+          {
+            "minimum_free_frames": 14873,
+            "free_frames": 14873
+          }
+        ],
+        "doc-idle": [
+          {
+            "minimum_free_frames": 13229,
+            "free_frames": 13231
+          }
+        ],
+        "doc-rpc": {
+          "samples": 36,
+          "minimum_free_frames": 417,
+          "lowest_sampled_free_frames": 8957
+        },
+        "doc-recovered": [
+          {
+            "minimum_free_frames": 417,
+            "free_frames": 13231
+          }
+        ]
+      },
+      "heap": {
+        "ready": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 722,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "idle": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 714,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "rpc": {
+          "samples": 36,
+          "max_capacity_bytes": 17715200,
+          "max_live_bytes": 17468155,
+          "max_backing_bytes": 17472344,
+          "max_peak_backing_bytes": 34921808,
+          "max_failures": 1
+        },
+        "recovered": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 1062,
+            "backing_bytes": 2608,
+            "peak_backing_bytes": 34921808,
+            "failures": 1
+          }
+        ]
+      },
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 790
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 680
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 110
+        }
+      ]
+    },
+    {
+      "guest": "bios-768",
+      "iso_sha256": "5ac5dfa3235a7d1e32529fd6ddc561dcffff9838813828bc065e3d9290e227ef",
+      "serial": "target/document-service-adaptive-heap/bios-768.serial.log",
+      "status": "passed",
+      "ready": true,
+      "workload_pass": true,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": true,
+      "physical_memory": {
+        "pre-scheduler": [
+          {
+            "minimum_free_frames": 106558,
+            "free_frames": 106558
+          }
+        ],
+        "phase-3": [
+          {
+            "minimum_free_frames": 102449,
+            "free_frames": 102449
+          }
+        ],
+        "namespace": [
+          {
+            "minimum_free_frames": 102446,
+            "free_frames": 102446
+          }
+        ],
+        "doc-ready": [
+          {
+            "minimum_free_frames": 86570,
+            "free_frames": 86570
+          }
+        ],
+        "session-ready": [
+          {
+            "minimum_free_frames": 86018,
+            "free_frames": 86019
+          }
+        ],
+        "session-bundles": [
+          {
+            "minimum_free_frames": 84868,
+            "free_frames": 84869
+          }
+        ],
+        "doc-idle": [
+          {
+            "minimum_free_frames": 79809,
+            "free_frames": 79811
+          }
+        ],
+        "doc-rpc": {
+          "samples": 36,
+          "minimum_free_frames": 66997,
+          "lowest_sampled_free_frames": 75537
+        },
+        "doc-recovered": [
+          {
+            "minimum_free_frames": 66997,
+            "free_frames": 79811
+          }
+        ]
+      },
+      "heap": {
+        "ready": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 714,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "idle": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 714,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "rpc": {
+          "samples": 36,
+          "max_capacity_bytes": 17715200,
+          "max_live_bytes": 17468155,
+          "max_backing_bytes": 17472344,
+          "max_peak_backing_bytes": 34921808,
+          "max_failures": 1
+        },
+        "recovered": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 1062,
+            "backing_bytes": 2608,
+            "peak_backing_bytes": 34921808,
+            "failures": 1
+          }
+        ]
+      },
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 200
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 570
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 80
+        }
+      ]
+    },
+    {
+      "guest": "bios-1024",
+      "iso_sha256": "5ac5dfa3235a7d1e32529fd6ddc561dcffff9838813828bc065e3d9290e227ef",
+      "serial": "target/document-service-adaptive-heap/bios-1024.serial.log",
+      "status": "passed",
+      "ready": true,
+      "workload_pass": true,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": true,
+      "physical_memory": {
+        "pre-scheduler": [
+          {
+            "minimum_free_frames": 172094,
+            "free_frames": 172094
+          }
+        ],
+        "phase-3": [
+          {
+            "minimum_free_frames": 167985,
+            "free_frames": 167985
+          }
+        ],
+        "namespace": [
+          {
+            "minimum_free_frames": 167982,
+            "free_frames": 167982
+          }
+        ],
+        "doc-ready": [
+          {
+            "minimum_free_frames": 151575,
+            "free_frames": 151576
+          }
+        ],
+        "session-ready": [
+          {
+            "minimum_free_frames": 151024,
+            "free_frames": 151025
+          }
+        ],
+        "session-bundles": [
+          {
+            "minimum_free_frames": 150485,
+            "free_frames": 150486
+          }
+        ],
+        "doc-idle": [
+          {
+            "minimum_free_frames": 145346,
+            "free_frames": 145347
+          }
+        ],
+        "doc-rpc": {
+          "samples": 36,
+          "minimum_free_frames": 132533,
+          "lowest_sampled_free_frames": 141073
+        },
+        "doc-recovered": [
+          {
+            "minimum_free_frames": 132533,
+            "free_frames": 145347
+          }
+        ]
+      },
+      "heap": {
+        "ready": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 714,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "idle": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 714,
+            "backing_bytes": 2056,
+            "peak_backing_bytes": 2056,
+            "failures": 0
+          }
+        ],
+        "rpc": {
+          "samples": 36,
+          "max_capacity_bytes": 17715200,
+          "max_live_bytes": 17468155,
+          "max_backing_bytes": 17472344,
+          "max_peak_backing_bytes": 34921808,
+          "max_failures": 1
+        },
+        "recovered": [
+          {
+            "capacity_bytes": 262144,
+            "live_bytes": 1062,
+            "backing_bytes": 2608,
+            "peak_backing_bytes": 34921808,
+            "failures": 1
+          }
+        ]
+      },
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 360
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 650
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 170
+        }
+      ]
+    }
+  ],
+  "earlier_attempts": [
+    {
+      "guest": "bios-512",
+      "iso_sha256": "b32b5d324e4720f0ea13eaaaf30450d31a31ece2fdb9d392cd25eceb04b885db",
+      "serial": "target/document-service-adaptive-heap/second/bios-512.serial.log",
+      "status": "no gate outcome recorded",
+      "ready": true,
+      "workload_pass": false,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 4,
+      "session_bundle_gate": true,
+      "first_ready": {
+        "minimum_free_frames": 19953,
+        "free_frames": 19953
+      },
+      "first_idle": {
+        "minimum_free_frames": 14274,
+        "free_frames": 14275
+      },
+      "oom_mmap": "[BOOT-MEM-OOM] pid=29 request_pages=4097 installed_pages=3669 free=0 user=38923 tables=383",
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 220
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 170
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 290
+        }
+      ]
+    },
+    {
+      "guest": "uefi-512",
+      "iso_sha256": "b32b5d324e4720f0ea13eaaaf30450d31a31ece2fdb9d392cd25eceb04b885db",
+      "serial": "target/document-service-adaptive-heap/second/uefi-512.serial.log",
+      "status": "no gate outcome recorded",
+      "ready": true,
+      "workload_pass": false,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 4,
+      "session_bundle_gate": true,
+      "first_ready": {
+        "minimum_free_frames": 19459,
+        "free_frames": 19460
+      },
+      "first_idle": {
+        "minimum_free_frames": 13228,
+        "free_frames": 13231
+      },
+      "oom_mmap": "[BOOT-MEM-OOM] pid=29 request_pages=4097 installed_pages=2627 free=0 user=37335 tables=370",
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 470
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 240
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 210
+        }
+      ]
+    },
+    {
+      "guest": "bios-768",
+      "iso_sha256": "b32b5d324e4720f0ea13eaaaf30450d31a31ece2fdb9d392cd25eceb04b885db",
+      "serial": "target/document-service-adaptive-heap/second/bios-768.serial.log",
+      "status": "passed",
+      "ready": true,
+      "workload_pass": true,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": true,
+      "first_ready": {
+        "minimum_free_frames": 86570,
+        "free_frames": 86570
+      },
+      "first_idle": {
+        "minimum_free_frames": 79809,
+        "free_frames": 79811
+      },
+      "oom_mmap": null,
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 180
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 750
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 140
+        }
+      ]
+    },
+    {
+      "guest": "bios-1024",
+      "iso_sha256": "b32b5d324e4720f0ea13eaaaf30450d31a31ece2fdb9d392cd25eceb04b885db",
+      "serial": "target/document-service-adaptive-heap/second/bios-1024.serial.log",
+      "status": "passed",
+      "ready": true,
+      "workload_pass": true,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": true,
+      "first_ready": {
+        "minimum_free_frames": 152105,
+        "free_frames": 152106
+      },
+      "first_idle": {
+        "minimum_free_frames": 145344,
+        "free_frames": 145347
+      },
+      "oom_mmap": null,
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 220
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 850
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 170
+        }
+      ]
+    },
+    {
+      "guest": "bios-512",
+      "iso_sha256": "f221e17f1a92af0f377bde1f07b19faa95c553708e61e933a9ea149927456632",
+      "serial": "target/document-service-adaptive-heap/first/bios-512.serial.log",
+      "status": "no gate outcome recorded",
+      "ready": true,
+      "workload_pass": false,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 6,
+      "session_bundle_gate": true,
+      "first_ready": {
+        "minimum_free_frames": 20507,
+        "free_frames": 20507
+      },
+      "first_idle": {
+        "minimum_free_frames": 14275,
+        "free_frames": 14278
+      },
+      "oom_mmap": "[BOOT-MEM-OOM] pid=29 request_pages=8193 installed_pages=5886 free=0 user=43176 tables=382",
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 240
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 440
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 430
+        }
+      ]
+    },
+    {
+      "guest": "uefi-512",
+      "iso_sha256": "f221e17f1a92af0f377bde1f07b19faa95c553708e61e933a9ea149927456632",
+      "serial": "target/document-service-adaptive-heap/first/uefi-512.serial.log",
+      "status": "no gate outcome recorded",
+      "ready": true,
+      "workload_pass": false,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 7,
+      "session_bundle_gate": false,
+      "first_ready": {
+        "minimum_free_frames": 18912,
+        "free_frames": 18912
+      },
+      "first_idle": {
+        "minimum_free_frames": 13232,
+        "free_frames": 13234
+      },
+      "oom_mmap": "[BOOT-MEM-OOM] pid=30 request_pages=8193 installed_pages=4844 free=0 user=41623 tables=369",
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 670
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 320
+        },
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 440
+        }
+      ]
+    },
+    {
+      "guest": "bios-768",
+      "iso_sha256": "f221e17f1a92af0f377bde1f07b19faa95c553708e61e933a9ea149927456632",
+      "serial": "target/document-service-adaptive-heap/first/bios-768.serial.log",
+      "status": "failed",
+      "ready": false,
+      "workload_pass": false,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": false,
+      "first_ready": null,
+      "first_idle": {
+        "minimum_free_frames": 79812,
+        "free_frames": 79814
+      },
+      "oom_mmap": null,
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 390
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 2410
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 630
+        }
+      ]
+    },
+    {
+      "guest": "bios-1024",
+      "iso_sha256": "f221e17f1a92af0f377bde1f07b19faa95c553708e61e933a9ea149927456632",
+      "serial": "target/document-service-adaptive-heap/first/bios-1024.serial.log",
+      "status": "failed",
+      "ready": false,
+      "workload_pass": false,
+      "growth_alignment_failure_probe": true,
+      "oom_exits": 0,
+      "session_bundle_gate": false,
+      "first_ready": null,
+      "first_idle": {
+        "minimum_free_frames": 145348,
+        "free_frames": 145350
+      },
+      "oom_mmap": null,
+      "renders": [
+        {
+          "page": 0,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 400
+        },
+        {
+          "page": 5,
+          "scale": 3,
+          "bytes": 17449344,
+          "elapsed_ms": 3040
+        },
+        {
+          "page": 2,
+          "scale": 1,
+          "bytes": 1938816,
+          "elapsed_ms": 220
+        }
+      ]
+    }
+  ],
+  "host_checks": {
+    "libc_allocator_passed": 9,
+    "document_service_passed": 11,
+    "native_production_document_binaries": "passed",
+    "ordinary_kernel_release_check_with_native_document_viewer": "passed"
+  },
+  "scope": "Bounded native service and workload gate; no sustained low-memory qualification."
+}

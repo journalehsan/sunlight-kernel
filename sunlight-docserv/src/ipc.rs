@@ -44,6 +44,7 @@ pub enum DocResponse {
         width: u32,
         height: u32,
         stride: u32,
+        #[serde(with = "bitmap_bytes")]
         data: Vec<u8>,
     },
     /// Extracted UTF-8 text.
@@ -70,9 +71,50 @@ pub enum DocResponse {
     Err(String),
 }
 
+mod bitmap_bytes {
+    use alloc::vec::Vec;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            bytes.serialize(serializer)
+        } else {
+            serializer.serialize_bytes(bytes)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+        if deserializer.is_human_readable() {
+            return Vec::deserialize(deserializer);
+        }
+        let bytes = <&[u8]>::deserialize(deserializer)?;
+        let mut owned = Vec::new();
+        owned
+            .try_reserve_exact(bytes.len())
+            .map_err(serde::de::Error::custom)?;
+        owned.extend_from_slice(bytes);
+        Ok(owned)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bitmap_retains_the_native_postcard_wire_layout() -> anyhow::Result<()> {
+        let pixels = [0, 127, 128, 255];
+        let old_wire = postcard::to_allocvec(&(3u32, 1u32, 1u32, 4u32, &pixels[..]))?;
+        let response = DocResponse::RenderedPage {
+            width: 1,
+            height: 1,
+            stride: 4,
+            data: pixels.to_vec(),
+        };
+        assert_eq!(postcard::to_allocvec(&response)?, old_wire);
+        assert_eq!(postcard::from_bytes::<DocResponse>(&old_wire)?, response);
+        Ok(())
+    }
 
     #[test]
     fn every_request_round_trips() -> anyhow::Result<()> {

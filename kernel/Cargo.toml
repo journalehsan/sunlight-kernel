@@ -710,7 +710,10 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+boot_resources = ["sunlight-fs/boot-resources"]
 zram_lifecycle_test = []
+zram_fault_test = ["zram_lifecycle_test"]
+zram_pressure_test = ["zram_lifecycle_test"]
 # Native stat caller fixtures; absent from ordinary images.
 vfs_stat_failure_test = []
 # Opt-in disposable-device qualification; halts before FAT/VFS probing.

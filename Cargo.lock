@@ -2978,6 +2978,7 @@ dependencies = [
 name = "sunlight-fs"
 version = "0.2.9090-alpha.2"
 dependencies = [
+ "lz4_flex",
  "sunlight-block",
  "sunlight-fat",
  "sunlight-mm",

@@ -19,6 +19,8 @@ pub struct RamEntry {
     pub gid: u32,
     pub mode: u16,
     pub is_dir: bool,
+    #[cfg(feature = "boot-resources")]
+    pub(crate) resource: Option<crate::boot_resources::Resource>,
 }
 
 /// Exact sum of static INITRAMFS file payload bytes (directories contribute 0).
@@ -28,7 +30,7 @@ pub fn initramfs_static_file_data_bytes(entries: &[RamEntry]) -> u64 {
     let mut total: u64 = 0;
     for e in entries {
         if !e.is_dir {
-            total = total.saturating_add(e.data.len() as u64);
+            total = total.saturating_add(e.len() as u64);
         }
     }
     total
@@ -36,9 +38,29 @@ pub fn initramfs_static_file_data_bytes(entries: &[RamEntry]) -> u64 {
 
 /// True when static RAMFS file data is embedded in the kernel/boot image
 /// (include_bytes) rather than allocated as separate PMM frames.
-pub const INITRAMFS_EMBEDDED_IN_KERNEL_IMAGE: bool = true;
+pub const INITRAMFS_EMBEDDED_IN_KERNEL_IMAGE: bool = !cfg!(feature = "boot-resources");
 
 impl RamEntry {
+    pub fn len(&self) -> usize {
+        #[cfg(feature = "boot-resources")]
+        if let Some(resource) = &self.resource {
+            return resource.len;
+        }
+        self.data.len()
+    }
+
+    pub fn read(&self, offset: usize, buf: &mut [u8]) -> Result<usize, crate::FsError> {
+        #[cfg(feature = "boot-resources")]
+        if let Some(resource) = &self.resource {
+            return resource.read(offset, buf);
+        }
+        let count = buf.len().min(self.data.len().saturating_sub(offset));
+        if count != 0 {
+            buf[..count].copy_from_slice(&self.data[offset..offset + count]);
+        }
+        Ok(count)
+    }
+
     pub const fn file(
         path: &'static str,
         uid: u32,
@@ -53,6 +75,8 @@ impl RamEntry {
             gid,
             mode: file_mode,
             is_dir: false,
+            #[cfg(feature = "boot-resources")]
+            resource: None,
         }
     }
 
@@ -64,6 +88,8 @@ impl RamEntry {
             gid,
             mode: dir_mode,
             is_dir: true,
+            #[cfg(feature = "boot-resources")]
+            resource: None,
         }
     }
 }

@@ -1,0 +1,4371 @@
+{
+  "date": "2026-11-26",
+  "method": {
+    "earlier_adaptive_worker_guest_limit_ms": 165000,
+    "earlier_adaptive_watchdog_seconds": 280,
+    "memory_mib": 2048,
+    "heap_mib": 16,
+    "acceleration": "TCG",
+    "worker_guest_limit_ms": 220000,
+    "monitor_guest_limit_ms": 250000,
+    "host_watchdog_seconds": 360,
+    "base_budget_pages": "min(PMM free - low + 1024, 393216), reserve 64 pages for temporary scratch",
+    "extra_ballast_limit_pages": 8192,
+    "absolute_payload_cap_pages": 393216,
+    "initial_watchdog_seconds": 200,
+    "initial_worker_guest_limit_ms": 90000,
+    "turnovers_per_epoch_limit": 4096,
+    "timer_ipc_deadline_ms": 1000,
+    "telemetry_age": "BSP checkpoints use the capture clock; monitor estimates use two clocks",
+    "witness": "Join ordered eviction, restore, and vector 14 user-read records by full PID and VA"
+  },
+  "runs": {
+    "primary": {
+      "image": {
+        "path": "target/zram-natural-qualification/pressure.iso",
+        "sha256": "dad42beb6c30ea90e32abb3052d5c9706c64466da01fb3883ec69faf9150b34b"
+      },
+      "serial": {
+        "path": "target/zram-natural-qualification/primary.serial.log",
+        "sha256": "a3aff3ab50a329bb87b5ff306876b8a7c2e2351c47f819c05c4dd254a7d33e77"
+      },
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/pressure.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/primary.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "watchdog_exit": 1,
+      "normal_exit_collected_once": false,
+      "phases": {
+        "before": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 2.642471,
+            "p50": 2.642471,
+            "p95": 4.106096,
+            "p99": 4.106096,
+            "max": 4.106096
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.644191,
+            "p50": 0.644191,
+            "p95": 1.126814,
+            "p99": 1.126814,
+            "max": 1.126814
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 1.987692,
+            "p50": 1.987692,
+            "p95": 2.745241,
+            "p99": 2.745241,
+            "max": 2.745241
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.000797,
+            "p50": 0.000797,
+            "p95": 0.054387,
+            "p99": 0.054387,
+            "max": 0.054387
+          },
+          "before_next_attempt_age_ms": {
+            "n": 1,
+            "min": 1001.386796,
+            "p50": 1001.386796,
+            "p95": 1001.386796,
+            "p99": 1001.386796,
+            "max": 1001.386796
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            2,
+            4
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 17,
+            "min": 55.230409,
+            "p50": 455.230409,
+            "p95": 965.230409,
+            "p99": 965.230409,
+            "max": 965.230409
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 10.022927,
+            "p50": 10.022927,
+            "p95": 10.054191,
+            "p99": 10.054191,
+            "max": 10.054191
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000381,
+            "p50": 0.000381,
+            "p95": 0.000472,
+            "p99": 0.000472,
+            "max": 0.000472
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 2.796623,
+            "p50": 2.796623,
+            "p95": 7.256376,
+            "p99": 7.256376,
+            "max": 7.256376
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 2.715245,
+            "p50": 2.715245,
+            "p95": 6.945189,
+            "p99": 6.945189,
+            "max": 6.945189
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.001154,
+            "p50": 0.001154,
+            "p95": 0.120736,
+            "p99": 0.120736,
+            "max": 0.120736
+          }
+        },
+        "during": {
+          "complete": 16,
+          "incomplete": 2,
+          "stop_counts": {
+            "complete": 16,
+            "time": 2
+          },
+          "sample_ms": {
+            "n": 18,
+            "min": 1.42928,
+            "p50": 7.791206,
+            "p95": 8.349787,
+            "p99": 8.349787,
+            "max": 8.349787
+          },
+          "setup_ms": {
+            "n": 18,
+            "min": 0.2348,
+            "p50": 0.263449,
+            "p95": 0.491588,
+            "p99": 0.491588,
+            "max": 0.491588
+          },
+          "classify_ms": {
+            "n": 18,
+            "min": 1.003922,
+            "p50": 7.537109,
+            "p95": 8.071722,
+            "p99": 8.071722,
+            "max": 8.071722
+          },
+          "account_ms": {
+            "n": 18,
+            "min": 0.0,
+            "p50": 0.000612,
+            "p95": 0.044397,
+            "p99": 0.044397,
+            "max": 0.044397
+          },
+          "before_next_attempt_age_ms": {
+            "n": 18,
+            "min": 995.595703,
+            "p50": 1007.444934,
+            "p95": 1418.285473,
+            "p99": 1418.285473,
+            "max": 1418.285473
+          },
+          "work_units": {
+            "n": 18,
+            "min": 51968.0,
+            "p50": 377856.0,
+            "p95": 385024.0,
+            "p99": 385024.0,
+            "max": 385024.0
+          },
+          "timer_reply_ms": {
+            "n": 144,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 50.0,
+            "max": 60.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            4,
+            6,
+            8,
+            10,
+            12,
+            14,
+            16,
+            18,
+            20,
+            22,
+            24,
+            26,
+            28,
+            30,
+            32,
+            34
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 143,
+            "min": 10.586232,
+            "p50": 521.599774,
+            "p95": 969.634925,
+            "p99": 1110.586232,
+            "max": 1210.586232
+          },
+          "bsp_gap_ms": {
+            "n": 56,
+            "min": 8.687881,
+            "p50": 45.863217,
+            "p95": 68.563504,
+            "p99": 316.78453,
+            "max": 316.78453
+          },
+          "bsp_wait_ms": {
+            "n": 56,
+            "min": 9.4e-05,
+            "p50": 0.000408,
+            "p95": 0.062975,
+            "p99": 0.075517,
+            "max": 0.075517
+          },
+          "bsp_hold_ms": {
+            "n": 56,
+            "min": 0.034611,
+            "p50": 0.058977,
+            "p95": 8.258582,
+            "p99": 8.435968,
+            "max": 8.435968
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 18,
+            "min": 1.568408,
+            "p50": 7.827942,
+            "p95": 8.39087,
+            "p99": 8.39087,
+            "max": 8.39087
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 18,
+            "min": 0.000185,
+            "p50": 0.000744,
+            "p95": 0.049266,
+            "p99": 0.049266,
+            "max": 0.049266
+          }
+        },
+        "after": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 1.18338,
+            "p50": 1.18338,
+            "p95": 2.147251,
+            "p99": 2.147251,
+            "max": 2.147251
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.325029,
+            "p50": 0.325029,
+            "p95": 0.550182,
+            "p99": 0.550182,
+            "max": 0.550182
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 0.849991,
+            "p50": 0.849991,
+            "p95": 1.586621,
+            "p99": 1.586621,
+            "max": 1.586621
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.000579,
+            "p50": 0.000579,
+            "p95": 0.000992,
+            "p99": 0.000992,
+            "max": 0.000992
+          },
+          "before_next_attempt_age_ms": {
+            "n": 2,
+            "min": 1000.17148,
+            "p50": 1000.17148,
+            "p95": 1007.669618,
+            "p99": 1007.669618,
+            "max": 1007.669618
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 71680.0,
+            "p99": 71680.0,
+            "max": 71680.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 20.0,
+            "max": 20.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            36,
+            38
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 20,
+            "min": 10.265187,
+            "p50": 415.239704,
+            "p95": 910.265187,
+            "p99": 915.239704,
+            "max": 915.239704
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 10.033654,
+            "p50": 10.033654,
+            "p95": 10.160818,
+            "p99": 10.160818,
+            "max": 10.160818
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000234,
+            "p50": 0.000234,
+            "p95": 0.008852,
+            "p99": 0.008852,
+            "max": 0.008852
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 1.387786,
+            "p50": 1.387786,
+            "p95": 2.356746,
+            "p99": 2.356746,
+            "max": 2.356746
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 1.33616,
+            "p50": 1.33616,
+            "p95": 2.270658,
+            "p99": 2.270658,
+            "max": 2.270658
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.000874,
+            "p50": 0.000874,
+            "p95": 0.001013,
+            "p99": 0.001013,
+            "max": 0.001013
+          }
+        }
+      },
+      "checkpoints": [
+        {
+          "phase": "start",
+          "pid": 8,
+          "value": 2690,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 333160,
+          "start": 6898,
+          "target": 13797,
+          "user": 29821,
+          "pt": 112,
+          "owned": 553,
+          "candidates": 4098,
+          "owned_candidates": 0,
+          "capacity": 4250,
+          "heap": 2722504,
+          "slots": 0,
+          "payload": 0,
+          "backing": 0,
+          "activations": 0,
+          "scans": 0,
+          "reclaimed": 0,
+          "no_progress": 0,
+          "out": 0,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 1890,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 5296,
+          "start": 6898,
+          "target": 13797,
+          "user": 357025,
+          "pt": 754,
+          "owned": 327775,
+          "candidates": 331302,
+          "owned_candidates": 327222,
+          "capacity": 331330,
+          "heap": 10589968,
+          "slots": 18,
+          "payload": 40410,
+          "backing": 73728,
+          "activations": 8,
+          "scans": 18,
+          "reclaimed": 18,
+          "no_progress": 0,
+          "out": 18,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1339252736,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 5296,
+          "start": 6898,
+          "target": 13797,
+          "user": 357025,
+          "pt": 754,
+          "owned": 327775,
+          "candidates": 331302,
+          "owned_candidates": 327222,
+          "capacity": 331330,
+          "heap": 10589968,
+          "slots": 18,
+          "payload": 40410,
+          "backing": 73728,
+          "activations": 8,
+          "scans": 18,
+          "reclaimed": 18,
+          "no_progress": 0,
+          "out": 18,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 10850,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 5295,
+          "start": 6898,
+          "target": 13797,
+          "user": 357009,
+          "pt": 755,
+          "owned": 327775,
+          "candidates": 331286,
+          "owned_candidates": 327222,
+          "capacity": 331330,
+          "heap": 10591984,
+          "slots": 34,
+          "payload": 77006,
+          "backing": 139264,
+          "activations": 16,
+          "scans": 34,
+          "reclaimed": 34,
+          "no_progress": 0,
+          "out": 34,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1339252736,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 5295,
+          "start": 6898,
+          "target": 13797,
+          "user": 357009,
+          "pt": 755,
+          "owned": 327775,
+          "candidates": 331286,
+          "owned_candidates": 327222,
+          "capacity": 331330,
+          "heap": 10591888,
+          "slots": 34,
+          "payload": 77006,
+          "backing": 139264,
+          "activations": 16,
+          "scans": 34,
+          "reclaimed": 34,
+          "no_progress": 0,
+          "out": 34,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "reaped",
+          "pid": 8,
+          "value": 8,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 333721,
+          "start": 6898,
+          "target": 13797,
+          "user": 29234,
+          "pt": 104,
+          "owned": 0,
+          "candidates": 4064,
+          "owned_candidates": 0,
+          "capacity": 331330,
+          "heap": 10558928,
+          "slots": 34,
+          "payload": 77006,
+          "backing": 139264,
+          "activations": 16,
+          "scans": 34,
+          "reclaimed": 34,
+          "no_progress": 0,
+          "out": 34,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        }
+      ],
+      "minimum_sampled_free_frames": 5295,
+      "maximum_sampled_heap_bytes": 10591984,
+      "worker_cleanup": [
+        {
+          "pid": 8,
+          "user_frames": 327775,
+          "page_tables": 651,
+          "swap_blocks": 0,
+          "ipc_cleared": 0
+        }
+      ],
+      "page_lifecycle": {
+        "address_count": 0,
+        "natural_cold_evictions": 0,
+        "user_read_restores_by_writable_bit": {},
+        "same_va_reevictions_by_writable_bit": {},
+        "cold_pages_left_swapped": 0,
+        "examples_by_writable_bit": {}
+      }
+    },
+    "four": {
+      "image": {
+        "path": "target/zram-natural-qualification/qualified.iso",
+        "sha256": "e58272c35f4c234882aee6519aa3272c93d51cd7da368f3d16ddb51db278efcb"
+      },
+      "serial": {
+        "path": "target/zram-natural-qualification/four.serial.log",
+        "sha256": "a01269608e6bd748bb2871f412dcc45d6831840bc7a8d26416e32f1dd32fbde6"
+      },
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/qualified.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/four.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "watchdog_exit": 1,
+      "normal_exit_collected_once": false,
+      "phases": {
+        "before": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 2.751532,
+            "p50": 2.751532,
+            "p95": 4.418655,
+            "p99": 4.418655,
+            "max": 4.418655
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.603341,
+            "p50": 0.603341,
+            "p95": 1.086802,
+            "p99": 1.086802,
+            "max": 1.086802
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 1.967605,
+            "p50": 1.967605,
+            "p95": 3.065633,
+            "p99": 3.065633,
+            "max": 3.065633
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.048741,
+            "p50": 0.048741,
+            "p95": 0.067017,
+            "p99": 0.067017,
+            "max": 0.067017
+          },
+          "before_next_attempt_age_ms": {
+            "n": 1,
+            "min": 1008.972429,
+            "p50": 1008.972429,
+            "p95": 1008.972429,
+            "p99": 1008.972429,
+            "max": 1008.972429
+          },
+          "work_units": {
+            "n": 2,
+            "min": 46080.0,
+            "p50": 46080.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            2,
+            4
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 20,
+            "min": 23.082659,
+            "p50": 424.94154,
+            "p95": 923.082659,
+            "p99": 924.94154,
+            "max": 924.94154
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 10.184585,
+            "p50": 10.184585,
+            "p95": 13.304589,
+            "p99": 13.304589,
+            "max": 13.304589
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000981,
+            "p50": 0.000981,
+            "p95": 0.468854,
+            "p99": 0.468854,
+            "max": 0.468854
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 4.441563,
+            "p50": 4.441563,
+            "p95": 7.506732,
+            "p99": 7.506732,
+            "max": 7.506732
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 4.176908,
+            "p50": 4.176908,
+            "p95": 7.103062,
+            "p99": 7.103062,
+            "max": 7.103062
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.042319,
+            "p50": 0.042319,
+            "p95": 0.178338,
+            "p99": 0.178338,
+            "max": 0.178338
+          }
+        },
+        "during": {
+          "complete": 16,
+          "incomplete": 297,
+          "stop_counts": {
+            "complete": 16,
+            "time": 297
+          },
+          "sample_ms": {
+            "n": 313,
+            "min": 1.464445,
+            "p50": 8.443714,
+            "p95": 8.663788,
+            "p99": 8.812251,
+            "max": 10.783135
+          },
+          "setup_ms": {
+            "n": 313,
+            "min": 0.225531,
+            "p50": 0.424699,
+            "p95": 0.630565,
+            "p99": 0.758757,
+            "max": 0.907317
+          },
+          "classify_ms": {
+            "n": 313,
+            "min": 1.013411,
+            "p50": 8.009272,
+            "p95": 8.020975,
+            "p99": 8.101774,
+            "max": 10.409629
+          },
+          "account_ms": {
+            "n": 313,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.000223,
+            "p99": 0.001053,
+            "max": 0.004641
+          },
+          "before_next_attempt_age_ms": {
+            "n": 313,
+            "min": 1001.58192,
+            "p50": 13198.164629,
+            "p95": 48778.714501,
+            "p99": 51824.697754,
+            "max": 52578.31755
+          },
+          "work_units": {
+            "n": 313,
+            "min": 51968.0,
+            "p50": 264704.0,
+            "p95": 374272.0,
+            "p99": 384512.0,
+            "max": 385536.0
+          },
+          "timer_reply_ms": {
+            "n": 666,
+            "min": 0.0,
+            "p50": 10.0,
+            "p95": 30.0,
+            "p99": 400.0,
+            "max": 890.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            6,
+            8,
+            10,
+            12,
+            14,
+            16,
+            18,
+            20,
+            22,
+            24,
+            26,
+            28,
+            30,
+            32,
+            34
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 664,
+            "min": 2.150665,
+            "p50": 5203.920466,
+            "p95": 47753.920466,
+            "p99": 51883.920466,
+            "max": 52533.920466
+          },
+          "bsp_gap_ms": {
+            "n": 391,
+            "min": 6.751761,
+            "p50": 13.611834,
+            "p95": 77.126407,
+            "p99": 88.029949,
+            "max": 180.950989
+          },
+          "bsp_wait_ms": {
+            "n": 391,
+            "min": 9.5e-05,
+            "p50": 0.011279,
+            "p95": 0.070024,
+            "p99": 0.143967,
+            "max": 0.174896
+          },
+          "bsp_hold_ms": {
+            "n": 391,
+            "min": 0.029308,
+            "p50": 8.477171,
+            "p95": 8.772637,
+            "p99": 9.141214,
+            "max": 180.546365
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 313,
+            "min": 1.550439,
+            "p50": 8.489467,
+            "p95": 8.733775,
+            "p99": 8.872024,
+            "max": 10.824132
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 313,
+            "min": 7.3e-05,
+            "p50": 0.00025,
+            "p95": 0.000662,
+            "p99": 0.001889,
+            "max": 0.004177
+          }
+        },
+        "after": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 1.781629,
+            "p50": 1.781629,
+            "p95": 1.991602,
+            "p99": 1.991602,
+            "max": 1.991602
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.42628,
+            "p50": 0.42628,
+            "p95": 0.506306,
+            "p99": 0.506306,
+            "max": 0.506306
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 1.265951,
+            "p50": 1.265951,
+            "p95": 1.554959,
+            "p99": 1.554959,
+            "max": 1.554959
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.000355,
+            "p50": 0.000355,
+            "p95": 0.000812,
+            "p99": 0.000812,
+            "max": 0.000812
+          },
+          "before_next_attempt_age_ms": {
+            "n": 2,
+            "min": 999.157328,
+            "p50": 999.157328,
+            "p95": 1007.84544,
+            "p99": 1007.84544,
+            "max": 1007.84544
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 58624.0,
+            "p99": 58624.0,
+            "max": 58624.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 20.0,
+            "max": 20.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            36,
+            38
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 20,
+            "min": 15.504306,
+            "p50": 428.780591,
+            "p95": 925.504306,
+            "p99": 928.780591,
+            "max": 928.780591
+          },
+          "bsp_gap_ms": {
+            "n": 3,
+            "min": 2.675401,
+            "p50": 10.132131,
+            "p95": 10.629131,
+            "p99": 10.629131,
+            "max": 10.629131
+          },
+          "bsp_wait_ms": {
+            "n": 3,
+            "min": 0.000255,
+            "p50": 0.013572,
+            "p95": 20.94908,
+            "p99": 20.94908,
+            "max": 20.94908
+          },
+          "bsp_hold_ms": {
+            "n": 3,
+            "min": 0.041439,
+            "p50": 2.220414,
+            "p95": 2.22545,
+            "p99": 2.22545,
+            "max": 2.22545
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 2.131934,
+            "p50": 2.131934,
+            "p95": 2.141508,
+            "p99": 2.141508,
+            "max": 2.141508
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.001152,
+            "p50": 0.001152,
+            "p95": 0.001497,
+            "p99": 0.001497,
+            "max": 0.001497
+          }
+        }
+      },
+      "checkpoints": [
+        {
+          "phase": "start",
+          "pid": 8,
+          "value": 2950,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 333160,
+          "start": 6898,
+          "target": 13797,
+          "user": 29821,
+          "pt": 112,
+          "owned": 553,
+          "candidates": 4098,
+          "owned_candidates": 0,
+          "capacity": 4250,
+          "heap": 2722504,
+          "slots": 0,
+          "payload": 0,
+          "backing": 0,
+          "activations": 0,
+          "scans": 0,
+          "reclaimed": 0,
+          "no_progress": 0,
+          "out": 0,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 2340,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 5296,
+          "start": 6898,
+          "target": 13797,
+          "user": 357031,
+          "pt": 754,
+          "owned": 327775,
+          "candidates": 331308,
+          "owned_candidates": 327222,
+          "capacity": 331330,
+          "heap": 10589008,
+          "slots": 12,
+          "payload": 26741,
+          "backing": 49152,
+          "activations": 8,
+          "scans": 12,
+          "reclaimed": 12,
+          "no_progress": 0,
+          "out": 12,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 4096,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6966,
+          "start": 6898,
+          "target": 13797,
+          "user": 353839,
+          "pt": 754,
+          "owned": 327775,
+          "candidates": 328116,
+          "owned_candidates": 327222,
+          "capacity": 331500,
+          "heap": 10788744,
+          "slots": 3204,
+          "payload": 4278528,
+          "backing": 6283264,
+          "activations": 1985,
+          "scans": 3204,
+          "reclaimed": 3204,
+          "no_progress": 0,
+          "out": 3204,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1339252736,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6966,
+          "start": 6898,
+          "target": 13797,
+          "user": 353839,
+          "pt": 754,
+          "owned": 327775,
+          "candidates": 328116,
+          "owned_candidates": 327222,
+          "capacity": 331500,
+          "heap": 10788744,
+          "slots": 3204,
+          "payload": 4278528,
+          "backing": 6283264,
+          "activations": 1985,
+          "scans": 3204,
+          "reclaimed": 3204,
+          "no_progress": 0,
+          "out": 3204,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 82890,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6965,
+          "start": 6898,
+          "target": 13797,
+          "user": 353839,
+          "pt": 755,
+          "owned": 327775,
+          "candidates": 328116,
+          "owned_candidates": 327222,
+          "capacity": 331500,
+          "heap": 10788744,
+          "slots": 3204,
+          "payload": 4278528,
+          "backing": 6283264,
+          "activations": 1985,
+          "scans": 3204,
+          "reclaimed": 3204,
+          "no_progress": 0,
+          "out": 3204,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 760,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6965,
+          "start": 6898,
+          "target": 13797,
+          "user": 353839,
+          "pt": 755,
+          "owned": 327775,
+          "candidates": 328116,
+          "owned_candidates": 327222,
+          "capacity": 331500,
+          "heap": 10788744,
+          "slots": 3204,
+          "payload": 4278528,
+          "backing": 6283264,
+          "activations": 1985,
+          "scans": 3204,
+          "reclaimed": 3204,
+          "no_progress": 0,
+          "out": 3204,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "reaped",
+          "pid": 8,
+          "value": 8,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 335391,
+          "start": 6898,
+          "target": 13797,
+          "user": 26064,
+          "pt": 104,
+          "owned": 0,
+          "candidates": 894,
+          "owned_candidates": 0,
+          "capacity": 331500,
+          "heap": 10755784,
+          "slots": 3204,
+          "payload": 4278528,
+          "backing": 6283264,
+          "activations": 1985,
+          "scans": 3204,
+          "reclaimed": 3204,
+          "no_progress": 0,
+          "out": 3204,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        }
+      ],
+      "minimum_sampled_free_frames": 5296,
+      "maximum_sampled_heap_bytes": 10788744,
+      "worker_cleanup": [
+        {
+          "pid": 8,
+          "user_frames": 327775,
+          "page_tables": 651,
+          "swap_blocks": 0,
+          "ipc_cleared": 0
+        }
+      ],
+      "page_lifecycle": {
+        "address_count": 0,
+        "natural_cold_evictions": 0,
+        "user_read_restores_by_writable_bit": {},
+        "same_va_reevictions_by_writable_bit": {},
+        "cold_pages_left_swapped": 0,
+        "examples_by_writable_bit": {}
+      }
+    },
+    "adaptive-4": {
+      "image": {
+        "path": "target/zram-natural-qualification/adaptive.iso",
+        "sha256": "76457d2f8c156925040e4bfadf522707489fff3ac00518682b02d45f2eadf48e"
+      },
+      "serial": {
+        "path": "target/zram-natural-qualification/adaptive-4.serial.log",
+        "sha256": "66fb3576742749d3b2ca4037aeb9765cbcfbdabf685d04a4cb973e8f4224482e"
+      },
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/adaptive.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/adaptive-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "watchdog_exit": 1,
+      "normal_exit_collected_once": false,
+      "phases": {
+        "before": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 2.615555,
+            "p50": 2.615555,
+            "p95": 3.996992,
+            "p99": 3.996992,
+            "max": 3.996992
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.51956,
+            "p50": 0.51956,
+            "p95": 1.044106,
+            "p99": 1.044106,
+            "max": 1.044106
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 1.931661,
+            "p50": 1.931661,
+            "p95": 2.70335,
+            "p99": 2.70335,
+            "max": 2.70335
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.046409,
+            "p50": 0.046409,
+            "p95": 0.069781,
+            "p99": 0.069781,
+            "max": 0.069781
+          },
+          "before_next_attempt_age_ms": {
+            "n": 1,
+            "min": 1003.216492,
+            "p50": 1003.216492,
+            "p95": 1003.216492,
+            "p99": 1003.216492,
+            "max": 1003.216492
+          },
+          "work_units": {
+            "n": 2,
+            "min": 50944.0,
+            "p50": 50944.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            2,
+            4
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 19,
+            "min": 85.128334,
+            "p50": 485.826152,
+            "p95": 985.128334,
+            "p99": 985.128334,
+            "max": 985.128334
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 8.133025,
+            "p50": 8.133025,
+            "p95": 10.170474,
+            "p99": 10.170474,
+            "max": 10.170474
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000435,
+            "p50": 0.000435,
+            "p95": 0.000845,
+            "p99": 0.000845,
+            "max": 0.000845
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 3.869619,
+            "p50": 3.869619,
+            "p95": 6.368922,
+            "p99": 6.368922,
+            "max": 6.368922
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 3.704553,
+            "p50": 3.704553,
+            "p95": 6.199346,
+            "p99": 6.199346,
+            "max": 6.199346
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.048833,
+            "p50": 0.048833,
+            "p95": 0.052328,
+            "p99": 0.052328,
+            "max": 0.052328
+          }
+        },
+        "during": {
+          "complete": 8,
+          "incomplete": 599,
+          "stop_counts": {
+            "complete": 8,
+            "time": 599
+          },
+          "sample_ms": {
+            "n": 607,
+            "min": 1.368207,
+            "p50": 8.506579,
+            "p95": 12.704058,
+            "p99": 101.107026,
+            "max": 238.354433
+          },
+          "setup_ms": {
+            "n": 607,
+            "min": 0.277102,
+            "p50": 0.485068,
+            "p95": 1.927565,
+            "p99": 47.332322,
+            "max": 205.312833
+          },
+          "classify_ms": {
+            "n": 607,
+            "min": 1.072229,
+            "p50": 8.010323,
+            "p95": 10.350627,
+            "p99": 44.181721,
+            "max": 91.674884
+          },
+          "account_ms": {
+            "n": 607,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.000299,
+            "max": 0.001889
+          },
+          "before_next_attempt_age_ms": {
+            "n": 607,
+            "min": 996.771408,
+            "p50": 37343.031677,
+            "p95": 72140.103018,
+            "p99": 78226.225165,
+            "max": 79725.863415
+          },
+          "work_units": {
+            "n": 607,
+            "min": 1792.0,
+            "p50": 227328.0,
+            "p95": 348672.0,
+            "p99": 358912.0,
+            "max": 387584.0
+          },
+          "timer_reply_ms": {
+            "n": 994,
+            "min": 0.0,
+            "p50": 10.0,
+            "p95": 40.0,
+            "p99": 500.0,
+            "max": 1020.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            4,
+            6,
+            8,
+            10,
+            12,
+            14,
+            16,
+            18
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 992,
+            "min": 26.798453,
+            "p50": 34797.234592,
+            "p95": 71244.380086,
+            "p99": 78554.380086,
+            "max": 79644.380086
+          },
+          "bsp_gap_ms": {
+            "n": 779,
+            "min": 1.013899,
+            "p50": 16.575191,
+            "p95": 118.458986,
+            "p99": 360.161798,
+            "max": 2817.330776
+          },
+          "bsp_wait_ms": {
+            "n": 779,
+            "min": 0.000101,
+            "p50": 0.012408,
+            "p95": 0.135393,
+            "p99": 31.076443,
+            "max": 108.793422
+          },
+          "bsp_hold_ms": {
+            "n": 779,
+            "min": 0.025979,
+            "p50": 8.546698,
+            "p95": 12.532616,
+            "p99": 115.859,
+            "max": 238.769383
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 607,
+            "min": 1.445127,
+            "p50": 8.565504,
+            "p95": 12.821989,
+            "p99": 115.58472,
+            "max": 238.506639
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 607,
+            "min": 6.9e-05,
+            "p50": 0.000301,
+            "p95": 0.002152,
+            "p99": 0.008897,
+            "max": 0.017141
+          }
+        },
+        "after": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 2.866271,
+            "p50": 2.866271,
+            "p95": 4.085446,
+            "p99": 4.085446,
+            "max": 4.085446
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.668806,
+            "p50": 0.668806,
+            "p95": 0.941359,
+            "p99": 0.941359,
+            "max": 0.941359
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 2.181138,
+            "p50": 2.181138,
+            "p95": 3.11632,
+            "p99": 3.11632,
+            "max": 3.11632
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.00043,
+            "p50": 0.00043,
+            "p95": 0.002365,
+            "p99": 0.002365,
+            "max": 0.002365
+          },
+          "before_next_attempt_age_ms": {
+            "n": 2,
+            "min": 1002.901765,
+            "p50": 1002.901765,
+            "p95": 1012.851233,
+            "p99": 1012.851233,
+            "max": 1012.851233
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            20,
+            22,
+            24
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 20,
+            "min": -8.716207,
+            "p50": 398.400982,
+            "p95": 891.283793,
+            "p99": 898.400982,
+            "max": 898.400982
+          },
+          "bsp_gap_ms": {
+            "n": 4,
+            "min": 10.09495,
+            "p50": 10.11592,
+            "p95": 34.720247,
+            "p99": 34.720247,
+            "max": 34.720247
+          },
+          "bsp_wait_ms": {
+            "n": 4,
+            "min": 0.000776,
+            "p50": 0.000826,
+            "p95": 17.383579,
+            "p99": 17.383579,
+            "max": 17.383579
+          },
+          "bsp_hold_ms": {
+            "n": 4,
+            "min": 0.11429,
+            "p50": 0.281713,
+            "p95": 4.532625,
+            "p99": 4.532625,
+            "max": 4.532625
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 2.962733,
+            "p50": 2.962733,
+            "p95": 4.347872,
+            "p99": 4.347872,
+            "max": 4.347872
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.001674,
+            "p50": 0.001674,
+            "p95": 0.001765,
+            "p99": 0.001765,
+            "max": 0.001765
+          }
+        }
+      },
+      "checkpoints": [
+        {
+          "phase": "start",
+          "pid": 8,
+          "value": 2900,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 333160,
+          "start": 6898,
+          "target": 13797,
+          "user": 29821,
+          "pt": 112,
+          "owned": 553,
+          "candidates": 4098,
+          "owned_candidates": 0,
+          "capacity": 4250,
+          "heap": 2722504,
+          "slots": 0,
+          "payload": 0,
+          "backing": 0,
+          "activations": 0,
+          "scans": 0,
+          "reclaimed": 0,
+          "no_progress": 0,
+          "out": 0,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 4020,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 5296,
+          "start": 6898,
+          "target": 13797,
+          "user": 357028,
+          "pt": 754,
+          "owned": 327775,
+          "candidates": 331305,
+          "owned_candidates": 327222,
+          "capacity": 331330,
+          "heap": 10589008,
+          "slots": 15,
+          "payload": 33573,
+          "backing": 61440,
+          "activations": 8,
+          "scans": 15,
+          "reclaimed": 15,
+          "no_progress": 0,
+          "out": 15,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 2878,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6830,
+          "start": 6898,
+          "target": 13797,
+          "user": 353969,
+          "pt": 760,
+          "owned": 328799,
+          "candidates": 328246,
+          "owned_candidates": 328246,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4610,
+          "payload": 4388443,
+          "backing": 6283264,
+          "activations": 2889,
+          "scans": 4610,
+          "reclaimed": 4610,
+          "no_progress": 0,
+          "out": 4610,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1345544192,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6318,
+          "start": 6898,
+          "target": 13797,
+          "user": 354481,
+          "pt": 760,
+          "owned": 329311,
+          "candidates": 328758,
+          "owned_candidates": 328758,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6283264,
+          "activations": 2889,
+          "scans": 4610,
+          "reclaimed": 4610,
+          "no_progress": 0,
+          "out": 4610,
+          "in_attempts": 512,
+          "in_success": 512,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 112560,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 7857,
+          "start": 6898,
+          "target": 13797,
+          "user": 352945,
+          "pt": 757,
+          "owned": 327775,
+          "candidates": 327222,
+          "owned_candidates": 327222,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6283264,
+          "activations": 2889,
+          "scans": 4610,
+          "reclaimed": 4610,
+          "no_progress": 0,
+          "out": 4610,
+          "in_attempts": 512,
+          "in_success": 512,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 1775,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6501,
+          "start": 6898,
+          "target": 13797,
+          "user": 354289,
+          "pt": 769,
+          "owned": 329119,
+          "candidates": 328566,
+          "owned_candidates": 328566,
+          "capacity": 335240,
+          "heap": 11026136,
+          "slots": 6529,
+          "payload": 4708916,
+          "backing": 6283264,
+          "activations": 4670,
+          "scans": 7809,
+          "reclaimed": 7297,
+          "no_progress": 0,
+          "out": 7297,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "reaped",
+          "pid": 8,
+          "value": 8,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 336285,
+          "start": 6898,
+          "target": 13797,
+          "user": 25170,
+          "pt": 104,
+          "owned": 0,
+          "candidates": 0,
+          "owned_candidates": 0,
+          "capacity": 335240,
+          "heap": 10993080,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6283264,
+          "activations": 4670,
+          "scans": 7809,
+          "reclaimed": 7297,
+          "no_progress": 0,
+          "out": 7297,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        }
+      ],
+      "minimum_sampled_free_frames": 5296,
+      "maximum_sampled_heap_bytes": 11026136,
+      "worker_cleanup": [
+        {
+          "pid": 8,
+          "user_frames": 329119,
+          "page_tables": 665,
+          "swap_blocks": 2431,
+          "ipc_cleared": 0
+        }
+      ],
+      "page_lifecycle": {
+        "address_count": 512,
+        "natural_cold_evictions": 512,
+        "user_read_restores_by_writable_bit": {
+          "0": 256,
+          "1": 256
+        },
+        "same_va_reevictions_by_writable_bit": {},
+        "cold_pages_left_swapped": 0,
+        "examples_by_writable_bit": {}
+      }
+    },
+    "final-4": {
+      "image": {
+        "path": "target/zram-natural-qualification/final.iso",
+        "sha256": "ac7ed2b313b18e9c67885d9c18b65a8269348e7a3a576d6d1f06b301c0374a90"
+      },
+      "serial": {
+        "path": "target/zram-natural-qualification/final-4.serial.log",
+        "sha256": "4a907bbd2423e516baffeb8284caa8a1f6205bea8590994d609d369b5e2b963e"
+      },
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/final-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "watchdog_exit": 0,
+      "normal_exit_collected_once": true,
+      "phases": {
+        "before": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 2.820256,
+            "p50": 2.820256,
+            "p95": 3.323037,
+            "p99": 3.323037,
+            "max": 3.323037
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.784668,
+            "p50": 0.784668,
+            "p95": 0.80362,
+            "p99": 0.80362,
+            "max": 0.80362
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 2.003391,
+            "p50": 2.003391,
+            "p95": 2.314721,
+            "p99": 2.314721,
+            "max": 2.314721
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.001048,
+            "p50": 0.001048,
+            "p95": 0.060268,
+            "p99": 0.060268,
+            "max": 0.060268
+          },
+          "before_next_attempt_age_ms": {
+            "n": 1,
+            "min": 1005.051117,
+            "p50": 1005.051117,
+            "p95": 1005.051117,
+            "p99": 1005.051117,
+            "max": 1005.051117
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            2,
+            4
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 19,
+            "min": 39.890333,
+            "p50": 441.554987,
+            "p95": 941.554987,
+            "p99": 941.554987,
+            "max": 941.554987
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 10.105332,
+            "p50": 10.105332,
+            "p95": 10.136562,
+            "p99": 10.136562,
+            "max": 10.136562
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000399,
+            "p50": 0.000399,
+            "p95": 0.000859,
+            "p99": 0.000859,
+            "max": 0.000859
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 3.000305,
+            "p50": 3.000305,
+            "p95": 5.477853,
+            "p99": 5.477853,
+            "max": 5.477853
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 2.892341,
+            "p50": 2.892341,
+            "p95": 5.212985,
+            "p99": 5.212985,
+            "max": 5.212985
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.002299,
+            "p50": 0.002299,
+            "p95": 0.101462,
+            "p99": 0.101462,
+            "max": 0.101462
+          }
+        },
+        "during": {
+          "complete": 15,
+          "incomplete": 428,
+          "stop_counts": {
+            "complete": 15,
+            "time": 428
+          },
+          "sample_ms": {
+            "n": 443,
+            "min": 2.534276,
+            "p50": 8.453952,
+            "p95": 8.835814,
+            "p99": 9.684015,
+            "max": 11.178148
+          },
+          "setup_ms": {
+            "n": 443,
+            "min": 0.220998,
+            "p50": 0.421374,
+            "p95": 0.769595,
+            "p99": 1.165591,
+            "max": 3.153467
+          },
+          "classify_ms": {
+            "n": 443,
+            "min": 2.188832,
+            "p50": 8.010707,
+            "p95": 8.030633,
+            "p99": 8.156421,
+            "max": 9.733106
+          },
+          "account_ms": {
+            "n": 443,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.00089,
+            "max": 0.219417
+          },
+          "before_next_attempt_age_ms": {
+            "n": 443,
+            "min": 1002.491501,
+            "p50": 39268.824152,
+            "p95": 89563.787229,
+            "p99": 94242.463438,
+            "max": 95412.661217
+          },
+          "work_units": {
+            "n": 443,
+            "min": 65536.0,
+            "p50": 237568.0,
+            "p95": 361984.0,
+            "p99": 381440.0,
+            "max": 387584.0
+          },
+          "timer_reply_ms": {
+            "n": 890,
+            "min": 0.0,
+            "p50": 10.0,
+            "p95": 40.0,
+            "p99": 400.0,
+            "max": 530.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            4,
+            6,
+            8,
+            10,
+            12,
+            14,
+            16,
+            18,
+            20,
+            22,
+            24,
+            26,
+            28,
+            30,
+            32,
+            34
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 889,
+            "min": 5.915785,
+            "p50": 31872.680171,
+            "p95": 89232.680171,
+            "p99": 92842.680171,
+            "max": 95252.680171
+          },
+          "bsp_gap_ms": {
+            "n": 688,
+            "min": 0.409818,
+            "p50": 21.857098,
+            "p95": 62.130278,
+            "p99": 92.079112,
+            "max": 156.839945
+          },
+          "bsp_wait_ms": {
+            "n": 688,
+            "min": 7.7e-05,
+            "p50": 0.012087,
+            "p95": 0.122644,
+            "p99": 0.243691,
+            "max": 2.770062
+          },
+          "bsp_hold_ms": {
+            "n": 688,
+            "min": 0.031528,
+            "p50": 8.443567,
+            "p95": 8.927059,
+            "p99": 9.351319,
+            "max": 15.254475
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 443,
+            "min": 2.587768,
+            "p50": 8.511807,
+            "p95": 8.927419,
+            "p99": 9.839233,
+            "max": 14.843649
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 443,
+            "min": 0.000688,
+            "p50": 0.001509,
+            "p95": 0.002836,
+            "p99": 0.005034,
+            "max": 0.145293
+          }
+        },
+        "after": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 1.459165,
+            "p50": 1.459165,
+            "p95": 2.818913,
+            "p99": 2.818913,
+            "max": 2.818913
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.381205,
+            "p50": 0.381205,
+            "p95": 0.562512,
+            "p99": 0.562512,
+            "max": 0.562512
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 1.071092,
+            "p50": 1.071092,
+            "p95": 2.244056,
+            "p99": 2.244056,
+            "max": 2.244056
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.000325,
+            "p50": 0.000325,
+            "p95": 0.00122,
+            "p99": 0.00122,
+            "max": 0.00122
+          },
+          "before_next_attempt_age_ms": {
+            "n": 2,
+            "min": 1005.665077,
+            "p50": 1005.665077,
+            "p95": 1266.912503,
+            "p99": 1266.912503,
+            "max": 1266.912503
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 30.0,
+            "max": 30.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            34,
+            36,
+            38
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 20,
+            "min": 86.260599,
+            "p50": 488.555358,
+            "p95": 988.555358,
+            "p99": 1253.654649,
+            "max": 1253.654649
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 10.10731,
+            "p50": 10.10731,
+            "p95": 10.197069,
+            "p99": 10.197069,
+            "max": 10.197069
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000264,
+            "p50": 0.000264,
+            "p95": 0.000364,
+            "p99": 0.000364,
+            "max": 0.000364
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 1.633694,
+            "p50": 1.633694,
+            "p95": 2.962846,
+            "p99": 2.962846,
+            "max": 2.962846
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 1.570894,
+            "p50": 1.570894,
+            "p95": 2.878398,
+            "p99": 2.878398,
+            "max": 2.878398
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.001827,
+            "p50": 0.001827,
+            "p95": 0.002253,
+            "p99": 0.002253,
+            "max": 0.002253
+          }
+        }
+      },
+      "checkpoints": [
+        {
+          "phase": "start",
+          "pid": 8,
+          "value": 2870,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 333160,
+          "start": 6898,
+          "target": 13797,
+          "user": 29821,
+          "pt": 112,
+          "owned": 553,
+          "candidates": 4098,
+          "owned_candidates": 0,
+          "capacity": 4250,
+          "heap": 2722736,
+          "slots": 0,
+          "payload": 0,
+          "backing": 0,
+          "activations": 0,
+          "scans": 0,
+          "reclaimed": 0,
+          "no_progress": 0,
+          "out": 0,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 3930,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 5296,
+          "start": 6898,
+          "target": 13797,
+          "user": 357035,
+          "pt": 754,
+          "owned": 327775,
+          "candidates": 331312,
+          "owned_candidates": 327222,
+          "capacity": 331330,
+          "heap": 10588624,
+          "slots": 8,
+          "payload": 17660,
+          "backing": 32768,
+          "activations": 8,
+          "scans": 8,
+          "reclaimed": 8,
+          "no_progress": 0,
+          "out": 8,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 2909,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6831,
+          "start": 6898,
+          "target": 13797,
+          "user": 353968,
+          "pt": 760,
+          "owned": 328798,
+          "candidates": 328245,
+          "owned_candidates": 328245,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4611,
+          "payload": 4388610,
+          "backing": 6283264,
+          "activations": 2920,
+          "scans": 4611,
+          "reclaimed": 4611,
+          "no_progress": 0,
+          "out": 4611,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1345544192,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6319,
+          "start": 6898,
+          "target": 13797,
+          "user": 354480,
+          "pt": 760,
+          "owned": 329310,
+          "candidates": 328757,
+          "owned_candidates": 328757,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4099,
+          "payload": 4303106,
+          "backing": 6283264,
+          "activations": 2920,
+          "scans": 4611,
+          "reclaimed": 4611,
+          "no_progress": 0,
+          "out": 4611,
+          "in_attempts": 512,
+          "in_success": 512,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 101640,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 7857,
+          "start": 6898,
+          "target": 13797,
+          "user": 352945,
+          "pt": 757,
+          "owned": 327775,
+          "candidates": 327222,
+          "owned_candidates": 327222,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6283264,
+          "activations": 2920,
+          "scans": 4611,
+          "reclaimed": 4611,
+          "no_progress": 0,
+          "out": 4611,
+          "in_attempts": 513,
+          "in_success": 513,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 148,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6654,
+          "start": 6898,
+          "target": 13797,
+          "user": 354146,
+          "pt": 759,
+          "owned": 328976,
+          "candidates": 328423,
+          "owned_candidates": 328423,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4112,
+          "payload": 4305277,
+          "backing": 6283264,
+          "activations": 3069,
+          "scans": 5379,
+          "reclaimed": 4867,
+          "no_progress": 9,
+          "out": 4867,
+          "in_attempts": 755,
+          "in_success": 755,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 110300,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 7859,
+          "start": 6898,
+          "target": 13797,
+          "user": 352945,
+          "pt": 755,
+          "owned": 327775,
+          "candidates": 327222,
+          "owned_candidates": 327222,
+          "capacity": 333030,
+          "heap": 10972992,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6283264,
+          "activations": 3069,
+          "scans": 5379,
+          "reclaimed": 4867,
+          "no_progress": 9,
+          "out": 4867,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 303,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6637,
+          "start": 6898,
+          "target": 13797,
+          "user": 354162,
+          "pt": 760,
+          "owned": 328992,
+          "candidates": 328439,
+          "owned_candidates": 328439,
+          "capacity": 333200,
+          "heap": 10977080,
+          "slots": 4610,
+          "payload": 4388699,
+          "backing": 6283264,
+          "activations": 3374,
+          "scans": 6134,
+          "reclaimed": 5379,
+          "no_progress": 9,
+          "out": 5379,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1345810432,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6253,
+          "start": 6898,
+          "target": 13797,
+          "user": 354546,
+          "pt": 760,
+          "owned": 329376,
+          "candidates": 328823,
+          "owned_candidates": 328823,
+          "capacity": 333200,
+          "heap": 10977080,
+          "slots": 4226,
+          "payload": 4324379,
+          "backing": 6283264,
+          "activations": 3374,
+          "scans": 6134,
+          "reclaimed": 5379,
+          "no_progress": 9,
+          "out": 5379,
+          "in_attempts": 1152,
+          "in_success": 1152,
+          "in_failed": 0
+        },
+        {
+          "phase": "held_for_exit",
+          "pid": 8,
+          "value": 123870,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 6253,
+          "start": 6898,
+          "target": 13797,
+          "user": 354546,
+          "pt": 760,
+          "owned": 329376,
+          "candidates": 328823,
+          "owned_candidates": 328823,
+          "capacity": 333200,
+          "heap": 10977080,
+          "slots": 4226,
+          "payload": 4324379,
+          "backing": 6283264,
+          "activations": 3374,
+          "scans": 6134,
+          "reclaimed": 5379,
+          "no_progress": 9,
+          "out": 5379,
+          "in_attempts": 1152,
+          "in_success": 1152,
+          "in_failed": 0
+        },
+        {
+          "phase": "reaped",
+          "pid": 8,
+          "value": 8,
+          "cpus": 4,
+          "pools": 2,
+          "total": 441505,
+          "free": 336285,
+          "start": 6898,
+          "target": 13797,
+          "user": 25170,
+          "pt": 104,
+          "owned": 0,
+          "candidates": 0,
+          "owned_candidates": 0,
+          "capacity": 333200,
+          "heap": 10944024,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6283264,
+          "activations": 3374,
+          "scans": 6134,
+          "reclaimed": 5379,
+          "no_progress": 9,
+          "out": 5379,
+          "in_attempts": 1152,
+          "in_success": 1152,
+          "in_failed": 0
+        }
+      ],
+      "minimum_sampled_free_frames": 5296,
+      "maximum_sampled_heap_bytes": 10977080,
+      "worker_cleanup": [
+        {
+          "pid": 8,
+          "user_frames": 329376,
+          "page_tables": 656,
+          "swap_blocks": 128,
+          "ipc_cleared": 0
+        }
+      ],
+      "page_lifecycle": {
+        "address_count": 512,
+        "natural_cold_evictions": 1024,
+        "user_read_restores_by_writable_bit": {
+          "0": 448,
+          "1": 448
+        },
+        "same_va_reevictions_by_writable_bit": {
+          "0": 256,
+          "1": 256
+        },
+        "cold_pages_left_swapped": 128,
+        "examples_by_writable_bit": {
+          "0": {
+            "pid": 8,
+            "va": "0x10000ff000",
+            "events": [
+              [
+                "evict",
+                null
+              ],
+              [
+                "restore",
+                0
+              ],
+              [
+                "fault",
+                "0x4"
+              ],
+              [
+                "defer",
+                null
+              ],
+              [
+                "evict",
+                null
+              ]
+            ]
+          },
+          "1": {
+            "pid": 8,
+            "va": "0x10001ff000",
+            "events": [
+              [
+                "evict",
+                null
+              ],
+              [
+                "restore",
+                1
+              ],
+              [
+                "fault",
+                "0x4"
+              ],
+              [
+                "defer",
+                null
+              ],
+              [
+                "evict",
+                null
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "final-2": {
+      "image": {
+        "path": "target/zram-natural-qualification/final.iso",
+        "sha256": "ac7ed2b313b18e9c67885d9c18b65a8269348e7a3a576d6d1f06b301c0374a90"
+      },
+      "serial": {
+        "path": "target/zram-natural-qualification/final-2.serial.log",
+        "sha256": "d4eb6ceae4e2ceaa856f626cf9478b061f46182f24e0cd7fad917f7db94664fe"
+      },
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/final-2.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "watchdog_exit": 0,
+      "normal_exit_collected_once": true,
+      "phases": {
+        "before": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 3.808413,
+            "p50": 3.808413,
+            "p95": 4.264449,
+            "p99": 4.264449,
+            "max": 4.264449
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 1.049078,
+            "p50": 1.049078,
+            "p95": 1.46631,
+            "p99": 1.46631,
+            "max": 1.46631
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 2.137015,
+            "p50": 2.137015,
+            "p95": 3.196123,
+            "p99": 3.196123,
+            "max": 3.196123
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.001184,
+            "p50": 0.001184,
+            "p95": 0.036163,
+            "p99": 0.036163,
+            "max": 0.036163
+          },
+          "before_next_attempt_age_ms": {
+            "n": 1,
+            "min": 1002.767283,
+            "p50": 1002.767283,
+            "p95": 1002.767283,
+            "p99": 1002.767283,
+            "max": 1002.767283
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            2,
+            4
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 16,
+            "min": 26.409529,
+            "p50": 329.120724,
+            "p95": 926.409529,
+            "p99": 926.409529,
+            "max": 926.409529
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 9.966495,
+            "p50": 9.966495,
+            "p95": 10.053378,
+            "p99": 10.053378,
+            "max": 10.053378
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000384,
+            "p50": 0.000384,
+            "p95": 0.000534,
+            "p99": 0.000534,
+            "max": 0.000534
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 4.673022,
+            "p50": 4.673022,
+            "p95": 7.809994,
+            "p99": 7.809994,
+            "max": 7.809994
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 4.542841,
+            "p50": 4.542841,
+            "p95": 7.37498,
+            "p99": 7.37498,
+            "max": 7.37498
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.002915,
+            "p50": 0.002915,
+            "p95": 0.192477,
+            "p99": 0.192477,
+            "max": 0.192477
+          }
+        },
+        "during": {
+          "complete": 23,
+          "incomplete": 257,
+          "stop_counts": {
+            "complete": 23,
+            "time": 257
+          },
+          "sample_ms": {
+            "n": 280,
+            "min": 1.371366,
+            "p50": 8.453697,
+            "p95": 8.648352,
+            "p99": 9.438638,
+            "max": 11.055392
+          },
+          "setup_ms": {
+            "n": 280,
+            "min": 0.245741,
+            "p50": 0.431856,
+            "p95": 0.595149,
+            "p99": 0.684409,
+            "max": 0.942857
+          },
+          "classify_ms": {
+            "n": 280,
+            "min": 1.071202,
+            "p50": 8.008168,
+            "p95": 8.019617,
+            "p99": 8.858735,
+            "max": 10.611188
+          },
+          "account_ms": {
+            "n": 280,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.000319,
+            "p99": 0.000634,
+            "max": 0.037257
+          },
+          "before_next_attempt_age_ms": {
+            "n": 280,
+            "min": 1001.542579,
+            "p50": 3539.444057,
+            "p95": 14508.198772,
+            "p99": 16278.990253,
+            "max": 16780.1978
+          },
+          "work_units": {
+            "n": 280,
+            "min": 51968.0,
+            "p50": 271360.0,
+            "p95": 385536.0,
+            "p99": 388096.0,
+            "max": 388096.0
+          },
+          "timer_reply_ms": {
+            "n": 532,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 60.0,
+            "p99": 510.0,
+            "max": 830.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            4,
+            6,
+            8,
+            10,
+            12,
+            14,
+            16,
+            18,
+            20,
+            22,
+            24,
+            26,
+            28,
+            30,
+            32,
+            34,
+            36,
+            38,
+            40,
+            42,
+            44,
+            46,
+            48
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 529,
+            "min": -6.269229,
+            "p50": 2248.999533,
+            "p95": 13762.530123,
+            "p99": 16048.999533,
+            "max": 16758.999533
+          },
+          "bsp_gap_ms": {
+            "n": 868,
+            "min": 0.242164,
+            "p50": 10.099011,
+            "p95": 44.688802,
+            "p99": 68.428318,
+            "max": 139.734847
+          },
+          "bsp_wait_ms": {
+            "n": 868,
+            "min": 6.9e-05,
+            "p50": 10.619784,
+            "p95": 23.48182,
+            "p99": 43.702501,
+            "max": 68.029086
+          },
+          "bsp_hold_ms": {
+            "n": 868,
+            "min": 0.005713,
+            "p50": 0.074488,
+            "p95": 8.705094,
+            "p99": 8.919851,
+            "max": 11.220675
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 280,
+            "min": 1.409173,
+            "p50": 8.500307,
+            "p95": 8.716782,
+            "p99": 9.493473,
+            "max": 11.120338
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 280,
+            "min": 0.000792,
+            "p50": 0.001684,
+            "p95": 0.00306,
+            "p99": 0.004112,
+            "max": 0.049638
+          }
+        },
+        "after": {
+          "complete": 1,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 1
+          },
+          "sample_ms": {
+            "n": 1,
+            "min": 3.534479,
+            "p50": 3.534479,
+            "p95": 3.534479,
+            "p99": 3.534479,
+            "max": 3.534479
+          },
+          "setup_ms": {
+            "n": 1,
+            "min": 0.996138,
+            "p50": 0.996138,
+            "p95": 0.996138,
+            "p99": 0.996138,
+            "max": 0.996138
+          },
+          "classify_ms": {
+            "n": 1,
+            "min": 2.522353,
+            "p50": 2.522353,
+            "p95": 2.522353,
+            "p99": 2.522353,
+            "max": 2.522353
+          },
+          "account_ms": {
+            "n": 1,
+            "min": 0.001187,
+            "p50": 0.001187,
+            "p95": 0.001187,
+            "p99": 0.001187,
+            "max": 0.001187
+          },
+          "before_next_attempt_age_ms": {
+            "n": 1,
+            "min": 1004.662179,
+            "p50": 1004.662179,
+            "p95": 1004.662179,
+            "p99": 1004.662179,
+            "max": 1004.662179
+          },
+          "work_units": {
+            "n": 1,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 19,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            50,
+            52
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 20,
+            "min": -3.534854,
+            "p50": 416.465146,
+            "p95": 916.097063,
+            "p99": 916.465146,
+            "max": 916.465146
+          },
+          "bsp_gap_ms": {
+            "n": 1,
+            "min": 10.164533,
+            "p50": 10.164533,
+            "p95": 10.164533,
+            "p99": 10.164533,
+            "max": 10.164533
+          },
+          "bsp_wait_ms": {
+            "n": 1,
+            "min": 0.00078,
+            "p50": 0.00078,
+            "p95": 0.00078,
+            "p99": 0.00078,
+            "max": 0.00078
+          },
+          "bsp_hold_ms": {
+            "n": 1,
+            "min": 3.912019,
+            "p50": 3.912019,
+            "p95": 3.912019,
+            "p99": 3.912019,
+            "max": 3.912019
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 1,
+            "min": 3.787422,
+            "p50": 3.787422,
+            "p95": 3.787422,
+            "p99": 3.787422,
+            "max": 3.787422
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 1,
+            "min": 0.005158,
+            "p50": 0.005158,
+            "p95": 0.005158,
+            "p99": 0.005158,
+            "max": 0.005158
+          }
+        }
+      },
+      "checkpoints": [
+        {
+          "phase": "start",
+          "pid": 8,
+          "value": 2540,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 333672,
+          "start": 6906,
+          "target": 13813,
+          "user": 29821,
+          "pt": 112,
+          "owned": 553,
+          "candidates": 4098,
+          "owned_candidates": 0,
+          "capacity": 4250,
+          "heap": 2722504,
+          "slots": 0,
+          "payload": 0,
+          "backing": 0,
+          "activations": 0,
+          "scans": 0,
+          "reclaimed": 0,
+          "no_progress": 0,
+          "out": 0,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 2080,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 5303,
+          "start": 6906,
+          "target": 13813,
+          "user": 357524,
+          "pt": 755,
+          "owned": 328279,
+          "candidates": 331801,
+          "owned_candidates": 327726,
+          "capacity": 331840,
+          "heap": 10602232,
+          "slots": 23,
+          "payload": 51924,
+          "backing": 94208,
+          "activations": 8,
+          "scans": 23,
+          "reclaimed": 23,
+          "no_progress": 0,
+          "out": 23,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 2303,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 6839,
+          "start": 6906,
+          "target": 13813,
+          "user": 354472,
+          "pt": 761,
+          "owned": 329302,
+          "candidates": 328749,
+          "owned_candidates": 328749,
+          "capacity": 333540,
+          "heap": 10985256,
+          "slots": 4611,
+          "payload": 4388610,
+          "backing": 6279168,
+          "activations": 2314,
+          "scans": 4611,
+          "reclaimed": 4611,
+          "no_progress": 0,
+          "out": 4611,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1347608576,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 6327,
+          "start": 6906,
+          "target": 13813,
+          "user": 354984,
+          "pt": 761,
+          "owned": 329814,
+          "candidates": 329261,
+          "owned_candidates": 329261,
+          "capacity": 333540,
+          "heap": 10985256,
+          "slots": 4099,
+          "payload": 4303106,
+          "backing": 6279168,
+          "activations": 2314,
+          "scans": 4611,
+          "reclaimed": 4611,
+          "no_progress": 0,
+          "out": 4611,
+          "in_attempts": 512,
+          "in_success": 512,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 68580,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 7865,
+          "start": 6906,
+          "target": 13813,
+          "user": 353449,
+          "pt": 758,
+          "owned": 328279,
+          "candidates": 327726,
+          "owned_candidates": 327726,
+          "capacity": 333540,
+          "heap": 10985256,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6279168,
+          "activations": 2314,
+          "scans": 4611,
+          "reclaimed": 4611,
+          "no_progress": 0,
+          "out": 4611,
+          "in_attempts": 513,
+          "in_success": 513,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 133,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 6650,
+          "start": 6906,
+          "target": 13813,
+          "user": 354662,
+          "pt": 760,
+          "owned": 329492,
+          "candidates": 328939,
+          "owned_candidates": 328939,
+          "capacity": 333540,
+          "heap": 10985256,
+          "slots": 4100,
+          "payload": 4303273,
+          "backing": 6279168,
+          "activations": 2448,
+          "scans": 5380,
+          "reclaimed": 4868,
+          "no_progress": 7,
+          "out": 4868,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 75460,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 7866,
+          "start": 6906,
+          "target": 13813,
+          "user": 353449,
+          "pt": 757,
+          "owned": 328279,
+          "candidates": 327726,
+          "owned_candidates": 327726,
+          "capacity": 333540,
+          "heap": 10985256,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6279168,
+          "activations": 2448,
+          "scans": 5380,
+          "reclaimed": 4868,
+          "no_progress": 7,
+          "out": 4868,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 255,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 6646,
+          "start": 6906,
+          "target": 13813,
+          "user": 354665,
+          "pt": 761,
+          "owned": 329495,
+          "candidates": 328942,
+          "owned_candidates": 328942,
+          "capacity": 333710,
+          "heap": 10989344,
+          "slots": 4610,
+          "payload": 4388699,
+          "backing": 6279168,
+          "activations": 2705,
+          "scans": 6148,
+          "reclaimed": 5380,
+          "no_progress": 7,
+          "out": 5380,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1347870720,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 6262,
+          "start": 6906,
+          "target": 13813,
+          "user": 355049,
+          "pt": 761,
+          "owned": 329879,
+          "candidates": 329326,
+          "owned_candidates": 329326,
+          "capacity": 333710,
+          "heap": 10989344,
+          "slots": 4226,
+          "payload": 4324379,
+          "backing": 6279168,
+          "activations": 2705,
+          "scans": 6148,
+          "reclaimed": 5380,
+          "no_progress": 7,
+          "out": 5380,
+          "in_attempts": 1152,
+          "in_success": 1152,
+          "in_failed": 0
+        },
+        {
+          "phase": "held_for_exit",
+          "pid": 8,
+          "value": 87570,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 6262,
+          "start": 6906,
+          "target": 13813,
+          "user": 355049,
+          "pt": 761,
+          "owned": 329879,
+          "candidates": 329326,
+          "owned_candidates": 329326,
+          "capacity": 333710,
+          "heap": 10989440,
+          "slots": 4226,
+          "payload": 4324379,
+          "backing": 6279168,
+          "activations": 2705,
+          "scans": 6148,
+          "reclaimed": 5380,
+          "no_progress": 7,
+          "out": 5380,
+          "in_attempts": 1152,
+          "in_success": 1152,
+          "in_failed": 0
+        },
+        {
+          "phase": "reaped",
+          "pid": 8,
+          "value": 8,
+          "cpus": 2,
+          "pools": 1,
+          "total": 442017,
+          "free": 336798,
+          "start": 6906,
+          "target": 13813,
+          "user": 25170,
+          "pt": 104,
+          "owned": 0,
+          "candidates": 0,
+          "owned_candidates": 0,
+          "capacity": 333710,
+          "heap": 10956288,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6279168,
+          "activations": 2705,
+          "scans": 6148,
+          "reclaimed": 5380,
+          "no_progress": 7,
+          "out": 5380,
+          "in_attempts": 1152,
+          "in_success": 1152,
+          "in_failed": 0
+        }
+      ],
+      "minimum_sampled_free_frames": 5303,
+      "maximum_sampled_heap_bytes": 10989440,
+      "worker_cleanup": [
+        {
+          "pid": 8,
+          "user_frames": 329879,
+          "page_tables": 657,
+          "swap_blocks": 128,
+          "ipc_cleared": 0
+        }
+      ],
+      "page_lifecycle": {
+        "address_count": 512,
+        "natural_cold_evictions": 1024,
+        "user_read_restores_by_writable_bit": {
+          "0": 448,
+          "1": 448
+        },
+        "same_va_reevictions_by_writable_bit": {
+          "0": 256,
+          "1": 256
+        },
+        "cold_pages_left_swapped": 128,
+        "examples_by_writable_bit": {
+          "0": {
+            "pid": 8,
+            "va": "0x10000ff000",
+            "events": [
+              [
+                "evict",
+                null
+              ],
+              [
+                "restore",
+                0
+              ],
+              [
+                "fault",
+                "0x4"
+              ],
+              [
+                "defer",
+                null
+              ],
+              [
+                "evict",
+                null
+              ]
+            ]
+          },
+          "1": {
+            "pid": 8,
+            "va": "0x10001ff000",
+            "events": [
+              [
+                "evict",
+                null
+              ],
+              [
+                "restore",
+                1
+              ],
+              [
+                "fault",
+                "0x4"
+              ],
+              [
+                "defer",
+                null
+              ],
+              [
+                "evict",
+                null
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "final-1": {
+      "image": {
+        "path": "target/zram-natural-qualification/final.iso",
+        "sha256": "ac7ed2b313b18e9c67885d9c18b65a8269348e7a3a576d6d1f06b301c0374a90"
+      },
+      "serial": {
+        "path": "target/zram-natural-qualification/final-1.serial.log",
+        "sha256": "291747f07ba87e68e550805af97a6d0e0ad7339357c5545768156ed23ffcca5c"
+      },
+      "args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/final-1.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "1",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "watchdog_exit": 0,
+      "normal_exit_collected_once": true,
+      "phases": {
+        "before": {
+          "complete": 2,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 2
+          },
+          "sample_ms": {
+            "n": 2,
+            "min": 1.658177,
+            "p50": 1.658177,
+            "p95": 5.357338,
+            "p99": 5.357338,
+            "max": 5.357338
+          },
+          "setup_ms": {
+            "n": 2,
+            "min": 0.359703,
+            "p50": 0.359703,
+            "p95": 0.974946,
+            "p99": 0.974946,
+            "max": 0.974946
+          },
+          "classify_ms": {
+            "n": 2,
+            "min": 1.291595,
+            "p50": 1.291595,
+            "p95": 4.032848,
+            "p99": 4.032848,
+            "max": 4.032848
+          },
+          "account_ms": {
+            "n": 2,
+            "min": 0.000641,
+            "p50": 0.000641,
+            "p95": 0.110078,
+            "p99": 0.110078,
+            "max": 0.110078
+          },
+          "before_next_attempt_age_ms": {
+            "n": 1,
+            "min": 1007.07281,
+            "p50": 1007.07281,
+            "p95": 1007.07281,
+            "p99": 1007.07281,
+            "max": 1007.07281
+          },
+          "work_units": {
+            "n": 2,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 51968.0,
+            "p99": 51968.0,
+            "max": 51968.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            2,
+            4
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 16,
+            "min": 44.485713,
+            "p50": 349.627317,
+            "p95": 949.627317,
+            "p99": 949.627317,
+            "max": 949.627317
+          },
+          "bsp_gap_ms": {
+            "n": 2,
+            "min": 10.151569,
+            "p50": 10.151569,
+            "p95": 10.277523,
+            "p99": 10.277523,
+            "max": 10.277523
+          },
+          "bsp_wait_ms": {
+            "n": 2,
+            "min": 0.000303,
+            "p50": 0.000303,
+            "p95": 0.00047,
+            "p99": 0.00047,
+            "max": 0.00047
+          },
+          "bsp_hold_ms": {
+            "n": 2,
+            "min": 1.757125,
+            "p50": 1.757125,
+            "p95": 7.479576,
+            "p99": 7.479576,
+            "max": 7.479576
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 2,
+            "min": 1.7038,
+            "p50": 1.7038,
+            "p95": 7.211296,
+            "p99": 7.211296,
+            "max": 7.211296
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 2,
+            "min": 0.001456,
+            "p50": 0.001456,
+            "p95": 0.077268,
+            "p99": 0.077268,
+            "max": 0.077268
+          }
+        },
+        "during": {
+          "complete": 40,
+          "incomplete": 158,
+          "stop_counts": {
+            "complete": 40,
+            "time": 158
+          },
+          "sample_ms": {
+            "n": 198,
+            "min": 1.854235,
+            "p50": 8.388337,
+            "p95": 8.4598,
+            "p99": 9.491727,
+            "max": 12.6765
+          },
+          "setup_ms": {
+            "n": 198,
+            "min": 0.223359,
+            "p50": 0.37453,
+            "p95": 0.445431,
+            "p99": 0.560596,
+            "max": 2.900386
+          },
+          "classify_ms": {
+            "n": 198,
+            "min": 1.608171,
+            "p50": 8.0069,
+            "p95": 8.015875,
+            "p99": 9.048777,
+            "max": 9.76893
+          },
+          "account_ms": {
+            "n": 198,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.000661,
+            "p99": 0.000933,
+            "max": 0.036761
+          },
+          "before_next_attempt_age_ms": {
+            "n": 198,
+            "min": 999.855937,
+            "p50": 2006.970994,
+            "p95": 4808.695313,
+            "p99": 6856.219354,
+            "max": 7113.595352
+          },
+          "work_units": {
+            "n": 198,
+            "min": 99328.0,
+            "p50": 303104.0,
+            "p95": 388096.0,
+            "p99": 388608.0,
+            "max": 388608.0
+          },
+          "timer_reply_ms": {
+            "n": 83,
+            "min": 190.0,
+            "p50": 510.0,
+            "p95": 520.0,
+            "p99": 530.0,
+            "max": 530.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            4,
+            6,
+            8,
+            10,
+            12,
+            14,
+            16,
+            18,
+            20,
+            22,
+            24,
+            26,
+            28,
+            30,
+            32,
+            34,
+            36,
+            38,
+            40,
+            42,
+            44,
+            46,
+            48,
+            50,
+            52,
+            54,
+            56,
+            58,
+            60,
+            62,
+            64,
+            66,
+            68,
+            70,
+            72,
+            74,
+            76,
+            78,
+            80,
+            82,
+            84
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 83,
+            "min": 14.975926,
+            "p50": 933.795918,
+            "p95": 2951.722901,
+            "p99": 6336.386207,
+            "max": 6336.386207
+          },
+          "bsp_gap_ms": {
+            "n": 221,
+            "min": 5.78532,
+            "p50": 16.664976,
+            "p95": 32.301399,
+            "p99": 32.735429,
+            "max": 76.155771
+          },
+          "bsp_wait_ms": {
+            "n": 221,
+            "min": 2.9e-05,
+            "p50": 0.000107,
+            "p95": 0.000256,
+            "p99": 0.000443,
+            "max": 0.000604
+          },
+          "bsp_hold_ms": {
+            "n": 221,
+            "min": 0.036817,
+            "p50": 8.468154,
+            "p95": 8.557908,
+            "p99": 9.58014,
+            "max": 12.750894
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 198,
+            "min": 1.889082,
+            "p50": 8.424822,
+            "p95": 8.507,
+            "p99": 9.530813,
+            "max": 12.705729
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 198,
+            "min": 0.00073,
+            "p50": 0.001197,
+            "p95": 0.0017,
+            "p99": 0.002981,
+            "max": 0.053756
+          }
+        },
+        "after": {
+          "complete": 3,
+          "incomplete": 0,
+          "stop_counts": {
+            "complete": 3
+          },
+          "sample_ms": {
+            "n": 3,
+            "min": 2.090379,
+            "p50": 2.134914,
+            "p95": 2.628439,
+            "p99": 2.628439,
+            "max": 2.628439
+          },
+          "setup_ms": {
+            "n": 3,
+            "min": 0.679994,
+            "p50": 0.822092,
+            "p95": 0.97286,
+            "p99": 0.97286,
+            "max": 0.97286
+          },
+          "classify_ms": {
+            "n": 3,
+            "min": 1.263336,
+            "p50": 1.449569,
+            "p95": 1.644856,
+            "p99": 1.644856,
+            "max": 1.644856
+          },
+          "account_ms": {
+            "n": 3,
+            "min": 0.000262,
+            "p50": 0.000452,
+            "p95": 0.000649,
+            "p99": 0.000649,
+            "max": 0.000649
+          },
+          "before_next_attempt_age_ms": {
+            "n": 3,
+            "min": 997.332997,
+            "p50": 1008.711596,
+            "p95": 2244.613272,
+            "p99": 2244.613272,
+            "max": 2244.613272
+          },
+          "work_units": {
+            "n": 3,
+            "min": 51968.0,
+            "p50": 51968.0,
+            "p95": 132864.0,
+            "p99": 132864.0,
+            "max": 132864.0
+          },
+          "timer_reply_ms": {
+            "n": 20,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "failed_reply_ms": [],
+          "generations_seen": [
+            84,
+            86,
+            88
+          ],
+          "client_sample_age_ms_estimate": {
+            "n": 20,
+            "min": 62.251367,
+            "p50": 467.958565,
+            "p95": 967.958565,
+            "p99": 2210.049607,
+            "max": 2210.049607
+          },
+          "bsp_gap_ms": {
+            "n": 3,
+            "min": 9.936496,
+            "p50": 10.087207,
+            "p95": 10.166268,
+            "p99": 10.166268,
+            "max": 10.166268
+          },
+          "bsp_wait_ms": {
+            "n": 3,
+            "min": 6.2e-05,
+            "p50": 0.000304,
+            "p95": 0.00064,
+            "p99": 0.00064,
+            "max": 0.00064
+          },
+          "bsp_hold_ms": {
+            "n": 3,
+            "min": 2.235856,
+            "p50": 2.330881,
+            "p95": 2.817475,
+            "p99": 2.817475,
+            "max": 2.817475
+          },
+          "bsp_pmm_hold_ms": {
+            "n": 3,
+            "min": 2.206657,
+            "p50": 2.277728,
+            "p95": 2.717199,
+            "p99": 2.717199,
+            "max": 2.717199
+          },
+          "bsp_pmm_wait_ms": {
+            "n": 3,
+            "min": 0.000568,
+            "p50": 0.002651,
+            "p95": 0.00293,
+            "p99": 0.00293,
+            "max": 0.00293
+          }
+        }
+      },
+      "checkpoints": [
+        {
+          "phase": "start",
+          "pid": 8,
+          "value": 2570,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 333931,
+          "start": 6910,
+          "target": 13821,
+          "user": 29821,
+          "pt": 112,
+          "owned": 553,
+          "candidates": 4098,
+          "owned_candidates": 0,
+          "capacity": 4250,
+          "heap": 2722504,
+          "slots": 0,
+          "payload": 0,
+          "backing": 0,
+          "activations": 0,
+          "scans": 0,
+          "reclaimed": 0,
+          "no_progress": 0,
+          "out": 0,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 1860,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 5307,
+          "start": 6910,
+          "target": 13821,
+          "user": 357786,
+          "pt": 755,
+          "owned": 328534,
+          "candidates": 332063,
+          "owned_candidates": 327981,
+          "capacity": 332180,
+          "heap": 10609448,
+          "slots": 16,
+          "payload": 35840,
+          "backing": 65536,
+          "activations": 8,
+          "scans": 16,
+          "reclaimed": 16,
+          "no_progress": 0,
+          "out": 16,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 2335,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 6842,
+          "start": 6910,
+          "target": 13821,
+          "user": 354728,
+          "pt": 761,
+          "owned": 329558,
+          "candidates": 329005,
+          "owned_candidates": 329005,
+          "capacity": 333710,
+          "heap": 10989344,
+          "slots": 4610,
+          "payload": 4388443,
+          "backing": 6279168,
+          "activations": 2346,
+          "scans": 4610,
+          "reclaimed": 4610,
+          "no_progress": 0,
+          "out": 4610,
+          "in_attempts": 0,
+          "in_success": 0,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1348653056,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 6330,
+          "start": 6910,
+          "target": 13821,
+          "user": 355240,
+          "pt": 761,
+          "owned": 330070,
+          "candidates": 329517,
+          "owned_candidates": 329517,
+          "capacity": 333710,
+          "heap": 10989344,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6279168,
+          "activations": 2346,
+          "scans": 4610,
+          "reclaimed": 4610,
+          "no_progress": 0,
+          "out": 4610,
+          "in_attempts": 512,
+          "in_success": 512,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 62140,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 7869,
+          "start": 6910,
+          "target": 13821,
+          "user": 353704,
+          "pt": 758,
+          "owned": 328534,
+          "candidates": 327981,
+          "owned_candidates": 327981,
+          "capacity": 333710,
+          "heap": 10989344,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6279168,
+          "activations": 2346,
+          "scans": 4610,
+          "reclaimed": 4610,
+          "no_progress": 0,
+          "out": 4610,
+          "in_attempts": 512,
+          "in_success": 512,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 131,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 6654,
+          "start": 6910,
+          "target": 13821,
+          "user": 354917,
+          "pt": 760,
+          "owned": 329747,
+          "candidates": 329194,
+          "owned_candidates": 329194,
+          "capacity": 333710,
+          "heap": 10989344,
+          "slots": 4100,
+          "payload": 4303273,
+          "backing": 6279168,
+          "activations": 2478,
+          "scans": 5380,
+          "reclaimed": 4868,
+          "no_progress": 3,
+          "out": 4868,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "initialized",
+          "pid": 8,
+          "value": 68410,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 7870,
+          "start": 6910,
+          "target": 13821,
+          "user": 353704,
+          "pt": 757,
+          "owned": 328534,
+          "candidates": 327981,
+          "owned_candidates": 327981,
+          "capacity": 333710,
+          "heap": 10989344,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6279168,
+          "activations": 2478,
+          "scans": 5380,
+          "reclaimed": 4868,
+          "no_progress": 3,
+          "out": 4868,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "turnover",
+          "pid": 8,
+          "value": 255,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 6651,
+          "start": 6910,
+          "target": 13821,
+          "user": 354919,
+          "pt": 761,
+          "owned": 329749,
+          "candidates": 329196,
+          "owned_candidates": 329196,
+          "capacity": 333880,
+          "heap": 10993432,
+          "slots": 4611,
+          "payload": 4388866,
+          "backing": 6279168,
+          "activations": 2735,
+          "scans": 6149,
+          "reclaimed": 5381,
+          "no_progress": 3,
+          "out": 5381,
+          "in_attempts": 768,
+          "in_success": 768,
+          "in_failed": 0
+        },
+        {
+          "phase": "verified",
+          "pid": 8,
+          "value": 1348915200,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 6266,
+          "start": 6910,
+          "target": 13821,
+          "user": 355304,
+          "pt": 761,
+          "owned": 330134,
+          "candidates": 329581,
+          "owned_candidates": 329581,
+          "capacity": 333880,
+          "heap": 10993432,
+          "slots": 4226,
+          "payload": 4324379,
+          "backing": 6279168,
+          "activations": 2735,
+          "scans": 6149,
+          "reclaimed": 5381,
+          "no_progress": 3,
+          "out": 5381,
+          "in_attempts": 1153,
+          "in_success": 1153,
+          "in_failed": 0
+        },
+        {
+          "phase": "held_for_exit",
+          "pid": 8,
+          "value": 80390,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 6266,
+          "start": 6910,
+          "target": 13821,
+          "user": 355304,
+          "pt": 761,
+          "owned": 330134,
+          "candidates": 329581,
+          "owned_candidates": 329581,
+          "capacity": 333880,
+          "heap": 10993432,
+          "slots": 4226,
+          "payload": 4324379,
+          "backing": 6279168,
+          "activations": 2735,
+          "scans": 6149,
+          "reclaimed": 5381,
+          "no_progress": 3,
+          "out": 5381,
+          "in_attempts": 1153,
+          "in_success": 1153,
+          "in_failed": 0
+        },
+        {
+          "phase": "reaped",
+          "pid": 8,
+          "value": 8,
+          "cpus": 1,
+          "pools": 1,
+          "total": 442276,
+          "free": 337057,
+          "start": 6910,
+          "target": 13821,
+          "user": 25170,
+          "pt": 104,
+          "owned": 0,
+          "candidates": 0,
+          "owned_candidates": 0,
+          "capacity": 333880,
+          "heap": 10960376,
+          "slots": 4098,
+          "payload": 4302939,
+          "backing": 6279168,
+          "activations": 2735,
+          "scans": 6149,
+          "reclaimed": 5381,
+          "no_progress": 3,
+          "out": 5381,
+          "in_attempts": 1153,
+          "in_success": 1153,
+          "in_failed": 0
+        }
+      ],
+      "minimum_sampled_free_frames": 5307,
+      "maximum_sampled_heap_bytes": 10993432,
+      "worker_cleanup": [
+        {
+          "pid": 8,
+          "user_frames": 330134,
+          "page_tables": 657,
+          "swap_blocks": 128,
+          "ipc_cleared": 0
+        }
+      ],
+      "page_lifecycle": {
+        "address_count": 512,
+        "natural_cold_evictions": 1024,
+        "user_read_restores_by_writable_bit": {
+          "0": 448,
+          "1": 448
+        },
+        "same_va_reevictions_by_writable_bit": {
+          "0": 256,
+          "1": 256
+        },
+        "cold_pages_left_swapped": 128,
+        "examples_by_writable_bit": {
+          "0": {
+            "pid": 8,
+            "va": "0x10000ff000",
+            "events": [
+              [
+                "evict",
+                null
+              ],
+              [
+                "restore",
+                0
+              ],
+              [
+                "fault",
+                "0x4"
+              ],
+              [
+                "defer",
+                null
+              ],
+              [
+                "evict",
+                null
+              ]
+            ]
+          },
+          "1": {
+            "pid": 8,
+            "va": "0x10001ff000",
+            "events": [
+              [
+                "evict",
+                null
+              ],
+              [
+                "restore",
+                1
+              ],
+              [
+                "fault",
+                "0x4"
+              ],
+              [
+                "defer",
+                null
+              ],
+              [
+                "evict",
+                null
+              ]
+            ]
+          }
+        }
+      }
+    }
+  },
+  "direct_production_boot": {
+    "exit": 0,
+    "serial": {
+      "path": "target/zram-natural-qualification/production.serial.log",
+      "sha256": "22972f8d0dbc7e3c16d1c9e055de6f3dab15ece9885098c966f38ef8f473096e"
+    },
+    "image": {
+      "path": "target/zram-natural-qualification/production.iso",
+      "sha256": "36940cb99e5ced2f22fb700e7df8134e549ce3a35101819f91899318a1f406c3"
+    },
+    "args": [
+      "qemu-system-x86_64",
+      "-accel",
+      "tcg",
+      "-cdrom",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/production.iso",
+      "-serial",
+      "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-natural-qualification/production.serial.log",
+      "-m",
+      "2048",
+      "-smp",
+      "4",
+      "-display",
+      "none",
+      "-nic",
+      "none",
+      "-no-reboot",
+      "-no-shutdown",
+      "-device",
+      "virtio-rng-pci,disable-modern=on",
+      "-device",
+      "qemu-xhci,id=xhci",
+      "-device",
+      "usb-mouse,bus=xhci.0"
+    ]
+  },
+  "validation": {
+    "production-final": {
+      "exit": 0,
+      "log": {
+        "path": "target/zram-natural-qualification/production-final.log",
+        "sha256": "862157f40197ede275a738b3dfde325a16a4b948ceda36df77b885b9db264c4b"
+      }
+    },
+    "host": {
+      "exit": 0,
+      "log": {
+        "path": "target/zram-natural-qualification/host.log",
+        "sha256": "4b7faebb8b5696489af804a746b88d868582504a8eda474517e2b2c5b789b013"
+      }
+    },
+    "standard-swap1": {
+      "exit": 1,
+      "log": {
+        "path": "target/zram-natural-qualification/standard-swap1.log",
+        "sha256": "ec922e067ae964beb29dd0e80e51cace0c5292182f362a59539f92d0f450e45e"
+      }
+    },
+    "standard-phase3.0": {
+      "exit": 1,
+      "log": {
+        "path": "target/zram-natural-qualification/standard-phase3.0.log",
+        "sha256": "ec922e067ae964beb29dd0e80e51cace0c5292182f362a59539f92d0f450e45e"
+      }
+    }
+  }
+}

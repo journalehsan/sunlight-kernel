@@ -1,0 +1,1137 @@
+{
+  "kernel_heap_bytes": 16777216,
+  "static_frame_scratch_symbol_bytes": 1613840,
+  "prior_stop": {
+    "request_bytes": 280,
+    "heap_used_bytes": 16774912,
+    "heap_free_bytes": 2304,
+    "last_initialized_mib": 704,
+    "attribution": "Matches previously traced BTreeMap leaf allocation; exact stop not traced"
+  },
+  "host_comparison": {
+    "private-small": {
+      "base_frames": 4096,
+      "legacy": {
+        "method": "legacy",
+        "median_ns": 562162,
+        "max_ns": 651755,
+        "peak_extra_bytes": 233120,
+        "allocations_per_sample": 693,
+        "largest_request_bytes": 32768
+      },
+      "bounded": {
+        "method": "bounded",
+        "median_ns": 70601,
+        "max_ns": 483716,
+        "peak_extra_bytes": 0,
+        "allocations_per_sample": 0,
+        "largest_request_bytes": 0
+      },
+      "accuracy": {
+        "matching_rows_mapped_private_shared": [
+          [
+            4096,
+            4096,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ]
+        ],
+        "matching_private_transfer_frames": 0
+      }
+    },
+    "alias-cow-external": {
+      "base_frames": 32768,
+      "legacy": {
+        "method": "legacy",
+        "median_ns": 8323855,
+        "max_ns": 9562893,
+        "peak_extra_bytes": 2243016,
+        "allocations_per_sample": 5499,
+        "largest_request_bytes": 524288
+      },
+      "bounded": {
+        "method": "bounded",
+        "median_ns": 415367,
+        "max_ns": 506811,
+        "peak_extra_bytes": 0,
+        "allocations_per_sample": 0,
+        "largest_request_bytes": 0
+      },
+      "accuracy": {
+        "matching_rows_mapped_private_shared": [
+          [
+            32773,
+            19150,
+            13619
+          ],
+          [
+            8192,
+            0,
+            8192
+          ],
+          [
+            2979,
+            0,
+            2979
+          ]
+        ],
+        "matching_private_transfer_frames": 8936
+      }
+    },
+    "private-pressure": {
+      "base_frames": 180224,
+      "legacy": {
+        "method": "legacy",
+        "median_ns": 33907464,
+        "max_ns": 35628864,
+        "peak_extra_bytes": 10919152,
+        "allocations_per_sample": 30053,
+        "largest_request_bytes": 2097152
+      },
+      "bounded": {
+        "method": "bounded",
+        "median_ns": 1452945,
+        "max_ns": 1512350,
+        "peak_extra_bytes": 0,
+        "allocations_per_sample": 0,
+        "largest_request_bytes": 0
+      },
+      "accuracy": {
+        "matching_rows_mapped_private_shared": [
+          [
+            180224,
+            180224,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ]
+        ],
+        "matching_private_transfer_frames": 0
+      }
+    },
+    "mixed-watermark-scale": {
+      "base_frames": 262144,
+      "legacy": {
+        "method": "legacy",
+        "median_ns": 77035899,
+        "max_ns": 97155921,
+        "peak_extra_bytes": 17944600,
+        "allocations_per_sample": 43738,
+        "largest_request_bytes": 4194304
+      },
+      "bounded": {
+        "method": "bounded",
+        "median_ns": 4239594,
+        "max_ns": 4300472,
+        "peak_extra_bytes": 0,
+        "allocations_per_sample": 0,
+        "largest_request_bytes": 0
+      },
+      "accuracy": {
+        "matching_rows_mapped_private_shared": [
+          [
+            262149,
+            153200,
+            108945
+          ],
+          [
+            65536,
+            0,
+            65536
+          ],
+          [
+            23832,
+            0,
+            23832
+          ]
+        ],
+        "matching_private_transfer_frames": 71494
+      }
+    }
+  },
+  "native_fault": [
+    {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 1,
+      "pools": 1,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/fault.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/native-1.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "1",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/frame-ownership-telemetry/native-1.serial.log",
+        "sha256": "39672acdc518974ec6a997b8753bc7dff0b29afcbdcbe3042385767dab0ef8f4"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 424,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 1,
+        "pools": 1,
+        "frames": 261484,
+        "user": 28201,
+        "pt": 86,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4250,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2601136
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 12,
+          "slot_capacity": 16,
+          "free_capacity": 16,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "completion_line": 12127,
+      "settled_heap_checkpoint_range_bytes": [
+        2601936,
+        2601936
+      ]
+    },
+    {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 2,
+      "pools": 1,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/fault.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/native-2.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/frame-ownership-telemetry/native-2.serial.log",
+        "sha256": "f30703b8022ec59c89d3a6dfbfede6a006983aa76f22ca53afd38ee0e2ccf392"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 429,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 2,
+        "pools": 1,
+        "frames": 261228,
+        "user": 28201,
+        "pt": 84,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4250,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2601232
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 12,
+          "slot_capacity": 16,
+          "free_capacity": 16,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "completion_line": 12132,
+      "settled_heap_checkpoint_range_bytes": [
+        2602032,
+        2602032
+      ]
+    },
+    {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 4,
+      "pools": 2,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/fault.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/native-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/frame-ownership-telemetry/native-4.serial.log",
+        "sha256": "0ce9cf839769202faed9be404134a9ccc4e33cccd3d8381ede110ef5eff7b7f5"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 443,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 4,
+        "pools": 2,
+        "frames": 260716,
+        "user": 28201,
+        "pt": 84,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4250,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2601232
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 6,
+          "slot_capacity": 8,
+          "free_capacity": 8,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        },
+        "1": {
+          "entries": 6,
+          "slot_capacity": 8,
+          "free_capacity": 8,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "completion_line": 12947,
+      "settled_heap_checkpoint_range_bytes": [
+        2602000,
+        2602128
+      ]
+    }
+  ],
+  "native_pressure": [
+    {
+      "vcpus": 1,
+      "status": "PASS",
+      "worker_exit": 37,
+      "completion_line": 759,
+      "ram_mib": 2048,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/pressure.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/pressure-1.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "1",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/frame-ownership-telemetry/pressure-1.serial.log",
+        "sha256": "35ac54a5dac7a70b84a06fbee7dfe985fbbe5f91a7e6eedaf1a8b23124f59576"
+      },
+      "initialized_mib": 1012,
+      "verified_bytes": 1061158912,
+      "max_heap_checkpoint_bytes": 8956688,
+      "start": {
+        "phase": "start",
+        "pid": 8,
+        "value": 830,
+        "cpus": 1,
+        "pools": 1,
+        "total": 368001,
+        "free": 259845,
+        "start": 5750,
+        "target": 11500,
+        "user": 29817,
+        "pt": 110,
+        "owned": 551,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "capacity": 4250,
+        "heap": 2722248,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "first_activation": {
+        "phase": "sample",
+        "pid": 8,
+        "value": 30,
+        "cpus": 1,
+        "pools": 1,
+        "total": 368001,
+        "free": 5396,
+        "start": 5750,
+        "target": 11500,
+        "user": 283767,
+        "pt": 607,
+        "owned": 254503,
+        "candidates": 258048,
+        "owned_candidates": 253952,
+        "capacity": 258060,
+        "heap": 8826360,
+        "slots": 2,
+        "payload": 4228,
+        "backing": 8192,
+        "activations": 1,
+        "scans": 2,
+        "reclaimed": 2,
+        "no_progress": 0,
+        "out": 2,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "last_sample": {
+        "phase": "sample",
+        "pid": 8,
+        "value": 50,
+        "cpus": 1,
+        "pools": 1,
+        "total": 368001,
+        "free": 266,
+        "start": 5750,
+        "target": 11500,
+        "user": 288827,
+        "pt": 617,
+        "owned": 259623,
+        "candidates": 263108,
+        "owned_candidates": 259072,
+        "capacity": 263330,
+        "heap": 8956688,
+        "slots": 62,
+        "payload": 144165,
+        "backing": 253952,
+        "activations": 21,
+        "scans": 62,
+        "reclaimed": 62,
+        "no_progress": 0,
+        "out": 62,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "reaped": {
+        "phase": "reaped",
+        "pid": 8,
+        "value": 8,
+        "cpus": 1,
+        "pools": 1,
+        "total": 368001,
+        "free": 260404,
+        "start": 5750,
+        "target": 11500,
+        "user": 29204,
+        "pt": 102,
+        "owned": 0,
+        "candidates": 4036,
+        "owned_candidates": 0,
+        "capacity": 263330,
+        "heap": 8923632,
+        "slots": 62,
+        "payload": 144165,
+        "backing": 253952,
+        "activations": 21,
+        "scans": 62,
+        "reclaimed": 62,
+        "no_progress": 0,
+        "out": 62,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "timer": {
+        "max_reply_ms": 450,
+        "ok": 14,
+        "failed": 0
+      },
+      "ownership_attempts_through_completion": [
+        {
+          "tick": 101,
+          "complete": 1,
+          "sample_ns": 6814090
+        },
+        {
+          "tick": 202,
+          "complete": 0,
+          "sample_ns": 8437293
+        },
+        {
+          "tick": 302,
+          "complete": 0,
+          "sample_ns": 8269439
+        },
+        {
+          "tick": 402,
+          "complete": 0,
+          "sample_ns": 8291201
+        },
+        {
+          "tick": 502,
+          "complete": 0,
+          "sample_ns": 8268271
+        },
+        {
+          "tick": 602,
+          "complete": 0,
+          "sample_ns": 8286865
+        },
+        {
+          "tick": 702,
+          "complete": 0,
+          "sample_ns": 8272524
+        },
+        {
+          "tick": 802,
+          "complete": 0,
+          "sample_ns": 8273304
+        }
+      ],
+      "whole_run_heap_peak": "NOT_MEASURED"
+    },
+    {
+      "vcpus": 2,
+      "status": "PASS",
+      "worker_exit": 37,
+      "completion_line": 863,
+      "ram_mib": 2048,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/pressure.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/pressure-2.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/frame-ownership-telemetry/pressure-2.serial.log",
+        "sha256": "831d69f65816fbfb621619b254764ef2b1903ad78b9647ac8f5bf415431bad41"
+      },
+      "initialized_mib": 1012,
+      "verified_bytes": 1061158912,
+      "max_heap_checkpoint_bytes": 8956656,
+      "start": {
+        "phase": "start",
+        "pid": 8,
+        "value": 1630,
+        "cpus": 2,
+        "pools": 1,
+        "total": 367742,
+        "free": 259587,
+        "start": 5745,
+        "target": 11491,
+        "user": 29817,
+        "pt": 110,
+        "owned": 551,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "capacity": 4250,
+        "heap": 2722376,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "first_activation": {
+        "phase": "sample",
+        "pid": 8,
+        "value": 30,
+        "cpus": 2,
+        "pools": 1,
+        "total": 367742,
+        "free": 5138,
+        "start": 5745,
+        "target": 11491,
+        "user": 283768,
+        "pt": 607,
+        "owned": 254503,
+        "candidates": 258049,
+        "owned_candidates": 253952,
+        "capacity": 258060,
+        "heap": 8826232,
+        "slots": 1,
+        "payload": 2162,
+        "backing": 4096,
+        "activations": 1,
+        "scans": 1,
+        "reclaimed": 1,
+        "no_progress": 0,
+        "out": 1,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "last_sample": {
+        "phase": "sample",
+        "pid": 8,
+        "value": 50,
+        "cpus": 2,
+        "pools": 1,
+        "total": 367742,
+        "free": 8,
+        "start": 5745,
+        "target": 11491,
+        "user": 288849,
+        "pt": 617,
+        "owned": 259623,
+        "candidates": 263130,
+        "owned_candidates": 259072,
+        "capacity": 263330,
+        "heap": 8956560,
+        "slots": 40,
+        "payload": 90952,
+        "backing": 163840,
+        "activations": 21,
+        "scans": 40,
+        "reclaimed": 40,
+        "no_progress": 0,
+        "out": 40,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "reaped": {
+        "phase": "reaped",
+        "pid": 8,
+        "value": 8,
+        "cpus": 2,
+        "pools": 1,
+        "total": 367742,
+        "free": 260146,
+        "start": 5745,
+        "target": 11491,
+        "user": 29226,
+        "pt": 102,
+        "owned": 0,
+        "candidates": 4058,
+        "owned_candidates": 0,
+        "capacity": 263330,
+        "heap": 8923504,
+        "slots": 40,
+        "payload": 90952,
+        "backing": 163840,
+        "activations": 21,
+        "scans": 40,
+        "reclaimed": 40,
+        "no_progress": 0,
+        "out": 40,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "timer": {
+        "max_reply_ms": 1120,
+        "ok": 105,
+        "failed": 0
+      },
+      "ownership_attempts_through_completion": [
+        {
+          "tick": 113,
+          "complete": 1,
+          "sample_ns": 9573659
+        },
+        {
+          "tick": 215,
+          "complete": 0,
+          "sample_ns": 8493740
+        },
+        {
+          "tick": 315,
+          "complete": 0,
+          "sample_ns": 8423078
+        },
+        {
+          "tick": 415,
+          "complete": 0,
+          "sample_ns": 10897027
+        },
+        {
+          "tick": 516,
+          "complete": 0,
+          "sample_ns": 8685287
+        },
+        {
+          "tick": 616,
+          "complete": 0,
+          "sample_ns": 8553983
+        },
+        {
+          "tick": 716,
+          "complete": 0,
+          "sample_ns": 8461837
+        },
+        {
+          "tick": 816,
+          "complete": 0,
+          "sample_ns": 8818340
+        },
+        {
+          "tick": 916,
+          "complete": 0,
+          "sample_ns": 8920808
+        },
+        {
+          "tick": 1016,
+          "complete": 0,
+          "sample_ns": 8548261
+        },
+        {
+          "tick": 1116,
+          "complete": 0,
+          "sample_ns": 8426318
+        },
+        {
+          "tick": 1216,
+          "complete": 0,
+          "sample_ns": 8541313
+        },
+        {
+          "tick": 1317,
+          "complete": 0,
+          "sample_ns": 8640182
+        },
+        {
+          "tick": 1478,
+          "complete": 0,
+          "sample_ns": 8371438
+        }
+      ],
+      "whole_run_heap_peak": "NOT_MEASURED"
+    },
+    {
+      "vcpus": 4,
+      "status": "BLOCKED_PRESSURE_ALLOCATION",
+      "worker_exit": 38,
+      "completion_line": 742,
+      "ram_mib": 2048,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/pressure.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/frame-ownership-telemetry/pressure-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/frame-ownership-telemetry/pressure-4.serial.log",
+        "sha256": "d5ed63157adc5b1cf3874165ea66b7f8b4ce41548b15776607f4228946b4a93b"
+      },
+      "initialized_mib": 1010,
+      "verified_bytes": 0,
+      "max_heap_checkpoint_bytes": 8944296,
+      "start": {
+        "phase": "start",
+        "pid": 8,
+        "value": 1230,
+        "cpus": 4,
+        "pools": 2,
+        "total": 367230,
+        "free": 259075,
+        "start": 5737,
+        "target": 11475,
+        "user": 29817,
+        "pt": 110,
+        "owned": 551,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "capacity": 4250,
+        "heap": 2722376,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "first_activation": {
+        "phase": "sample",
+        "pid": 8,
+        "value": 30,
+        "cpus": 4,
+        "pools": 2,
+        "total": 367230,
+        "free": 4626,
+        "start": 5737,
+        "target": 11475,
+        "user": 283768,
+        "pt": 607,
+        "owned": 254503,
+        "candidates": 258049,
+        "owned_candidates": 253952,
+        "capacity": 258060,
+        "heap": 8826232,
+        "slots": 1,
+        "payload": 2162,
+        "backing": 4096,
+        "activations": 1,
+        "scans": 1,
+        "reclaimed": 1,
+        "no_progress": 0,
+        "out": 1,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "last_sample": {
+        "phase": "sample",
+        "pid": 8,
+        "value": 48,
+        "cpus": 4,
+        "pools": 2,
+        "total": 367230,
+        "free": 9,
+        "start": 5737,
+        "target": 11475,
+        "user": 288340,
+        "pt": 616,
+        "owned": 259111,
+        "candidates": 262621,
+        "owned_candidates": 258560,
+        "capacity": 262820,
+        "heap": 8944296,
+        "slots": 37,
+        "payload": 83932,
+        "backing": 151552,
+        "activations": 19,
+        "scans": 37,
+        "reclaimed": 37,
+        "no_progress": 0,
+        "out": 37,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "reaped": {
+        "phase": "reaped",
+        "pid": 8,
+        "value": 8,
+        "cpus": 4,
+        "pools": 2,
+        "total": 367230,
+        "free": 259634,
+        "start": 5737,
+        "target": 11475,
+        "user": 29227,
+        "pt": 102,
+        "owned": 0,
+        "candidates": 4059,
+        "owned_candidates": 0,
+        "capacity": 262990,
+        "heap": 8915456,
+        "slots": 39,
+        "payload": 88603,
+        "backing": 159744,
+        "activations": 20,
+        "scans": 39,
+        "reclaimed": 39,
+        "no_progress": 0,
+        "out": 39,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0
+      },
+      "timer": {
+        "max_reply_ms": 40,
+        "ok": 34,
+        "failed": 0
+      },
+      "ownership_attempts_through_completion": [
+        {
+          "tick": 100,
+          "complete": 1,
+          "sample_ns": 5346612
+        },
+        {
+          "tick": 200,
+          "complete": 0,
+          "sample_ns": 8434202
+        },
+        {
+          "tick": 300,
+          "complete": 0,
+          "sample_ns": 8553082
+        },
+        {
+          "tick": 400,
+          "complete": 0,
+          "sample_ns": 8634343
+        },
+        {
+          "tick": 500,
+          "complete": 0,
+          "sample_ns": 8400041
+        },
+        {
+          "tick": 939,
+          "complete": 1,
+          "sample_ns": 4348021
+        }
+      ],
+      "whole_run_heap_peak": "NOT_MEASURED"
+    }
+  ],
+  "images": {
+    "fault": {
+      "path": "target/frame-ownership-telemetry/fault.iso",
+      "sha256": "112d3c24c6704943e43ea5acb1bab09a86e1580be2bf76d31920ad34d71b80b7"
+    },
+    "pressure": {
+      "path": "target/frame-ownership-telemetry/pressure.iso",
+      "sha256": "309b6d245b2643dcc346d16a008236969400247867067c431efbe79f835c50cd"
+    }
+  },
+  "production_build": 0,
+  "host_regressions": {
+    "descriptor": 0,
+    "ipc": 0,
+    "kernel-host": 0,
+    "registration": 0,
+    "retirement": 0,
+    "scheduler": 0,
+    "service": 0,
+    "swap-slot": 0,
+    "zram": 0
+  },
+  "gates": {
+    "natural_activation": "OBSERVED_1_2_4",
+    "pressure_same_page_restore_and_reeviction": "NOT_OBSERVED",
+    "fresh_memory_telemetry_at_peak_pressure": "BLOCKED_BY_SAMPLE_BUDGET",
+    "native_before_after_telemetry_field_comparison": "NOT_RUN"
+  }
+}

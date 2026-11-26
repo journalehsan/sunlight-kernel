@@ -1,0 +1,6791 @@
+{
+  "status": "pass",
+  "base_commit": "b79f7e4d8a055122c0ed06b2e53dda2ffc280295",
+  "source_files": [
+    {
+      "path": "kernel/src/memory/swap.rs",
+      "sha256": "234801b36a809b1e2dc51a7930a37be0a7e660cb526c8b83a3f4556602f8e9b7"
+    },
+    {
+      "path": "kernel/src/memory/zram.rs",
+      "sha256": "a3f4d23709d63f09b3c9847709443b4813f118503a99c7ce55590f78ed70f97b"
+    },
+    {
+      "path": "kernel/src/memory/zram_lifecycle.rs",
+      "sha256": "45e930559e96e010dcb6157a3cbcf01614ca7166fa44f58a40641c0e1cba72d5"
+    },
+    {
+      "path": "kernel/src/process/mmap.rs",
+      "sha256": "0f5f622014f590bae4595167c4917874725af33b755f530fa9a89be80de68f23"
+    },
+    {
+      "path": "kernel/src/arch/x86_64/interrupts.rs",
+      "sha256": "9c4827009c881f5d6ad15e0ab873921d9d09326aaaccd7819ae22c051b9410a0"
+    },
+    {
+      "path": "kernel/src/memory/security.rs",
+      "sha256": "2eef8c93828a0171d6d262dc4f39b041e65067c9e1ce73957f509dea809990db"
+    },
+    {
+      "path": "services/init/src/main.rs",
+      "sha256": "160be42f0c340f5298e2c17fcde899a8332302859c9a147ac33c5cd5b3b2f08f"
+    },
+    {
+      "path": "sunlight-utils/src/main.rs",
+      "sha256": "ef5cea4e289cb942b25fed9a03f2071f5d3ab1d8340241c22af8e527c5fe3040"
+    }
+  ],
+  "prior_review": {
+    "fault_report": "docs/memory/zram-fault-driven-swap-in.md",
+    "fault_results_json_present": false,
+    "fault_results_evidence_reviewed": [
+      {
+        "path": "target/zram-fault-driven-swap-in/native-4.summary.json",
+        "sha256": "3845151940dda28acff731208321b68509f524acd1607dff07ef2f30c2b91059"
+      },
+      {
+        "path": "target/zram-fault-driven-swap-in/native-2.summary.json",
+        "sha256": "b3e5af3fc4b1b4a706e4e34f9d0e4d6ece7db632503b8b97309481b984cf8b65"
+      },
+      {
+        "path": "target/zram-fault-driven-swap-in/native-1.summary.json",
+        "sha256": "ee1beb56166efb9fab868daaf3f9ea4cf7fff257e6ec9ef82ed0f188cc94753c"
+      }
+    ],
+    "populated_process_report": "docs/memory/zram-process-lifecycle.md"
+  },
+  "implementation": {
+    "candidate_reservation": "queue capacity covers resident candidates and outstanding live slots",
+    "fault_in_candidate_queue_allocations": 0,
+    "eligibility": "anonymous, MAY_UNMAP, address-space and PMM owner match, present user leaf, trusted-service exclusions",
+    "restored_candidate_first_eligible_scan": "rotate to queue tail once",
+    "eviction_selection": "initial authenticated fill, then test-scoped selection with production candidate checks and eviction",
+    "candidate_bytes_x86_64": 24
+  },
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "native_image": {
+    "path": "target/zram-repeated-reclaim/repeated-final.iso",
+    "sha256": "7205908e0f6f3f2d488acfa0e7faefe5dd4c631707abb003aec4ad59606f2c72"
+  },
+  "native_build_log": {
+    "path": "target/zram-repeated-reclaim/build-final.log",
+    "sha256": "34923967730d4a42faaaa1e2934aae3b330120d74361b3e6431d2f6e81f8873b"
+  },
+  "faulting_instructions": {
+    "path": "target/zram-repeated-reclaim/faulting-instructions.log",
+    "sha256": "b5bf5ab9fb80d21ffe10f1affb1ec0169790407793e2da29116b05b0c7dbdb21"
+  },
+  "populated_only_image": {
+    "path": "target/zram-repeated-reclaim/populated-final.iso",
+    "sha256": "4a889cbdb5370a9a89d979936ca7d0e3d0af8e71b4f7140b0bf7c1d5ce31eb46"
+  },
+  "populated_only_build_log": {
+    "path": "target/zram-repeated-reclaim/populated-final-build.log",
+    "sha256": "b5aecdbe728d1e2ccad6879c96a86753fb8447f15d38ebd7e906518ec6b276c5"
+  },
+  "census_checker": {
+    "path": "target/zram-repeated-reclaim/check.py",
+    "sha256": "b81ea8d765128c04c17eb7bdde2ef248e25710490641af76bb64ae9e0d3944f5"
+  },
+  "native_repeated_reclaim": {
+    "4": {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 4,
+      "pools": 2,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/repeated-final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/native-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/zram-repeated-reclaim/native-4.serial.log",
+        "sha256": "a3a99ef7e32898dcccac71edbb523816fa5e16cc5a001394f54cfa44504a1ab8"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 443,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 4,
+        "pools": 2,
+        "frames": 261764,
+        "user": 28201,
+        "pt": 84,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4098,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2597512
+      },
+      "phase_ranges": {
+        "resident": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261187,
+            261187
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4114,
+            4115
+          ],
+          "swapins": [
+            0,
+            3564
+          ],
+          "swapouts": [
+            0,
+            3564
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2630952,
+            4397904
+          ]
+        },
+        "populated": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261197,
+            261197
+          ],
+          "user": [
+            28756,
+            28756
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            2,
+            2
+          ],
+          "slots": [
+            12,
+            12
+          ],
+          "compressed": [
+            2004,
+            2010
+          ],
+          "backing": [
+            8192,
+            8192
+          ],
+          "candidates": [
+            4102,
+            4102
+          ],
+          "owned_candidates": [
+            4,
+            4
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            0,
+            3588
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            555,
+            555
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2631512,
+            4433520
+          ]
+        },
+        "restored": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261187,
+            261187
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            12,
+            3600
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2631512,
+            4433520
+          ]
+        },
+        "settled": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261764,
+            261764
+          ],
+          "user": [
+            28201,
+            28201
+          ],
+          "pt": [
+            84,
+            84
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4098,
+            4098
+          ],
+          "owned_candidates": [
+            0,
+            0
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            36,
+            3600
+          ],
+          "swapouts": [
+            36,
+            3600
+          ],
+          "owned": [
+            0,
+            0
+          ],
+          "regions": [
+            0,
+            0
+          ],
+          "fds": [
+            0,
+            0
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            0,
+            0
+          ],
+          "reclaimed": [
+            1,
+            1
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2598688,
+            4365080
+          ]
+        }
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 6,
+          "slot_capacity": 8,
+          "free_capacity": 8,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        },
+        "1": {
+          "entries": 6,
+          "slot_capacity": 8,
+          "free_capacity": 8,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "settled_heap_histogram_bytes": {
+        "2598688": 92,
+        "4246968": 1,
+        "4365080": 2,
+        "3225584": 1,
+        "3270816": 1,
+        "3191448": 1,
+        "3276328": 1,
+        "3801144": 1
+      },
+      "completion_line": 12948,
+      "witnesses": {
+        "1": {
+          "checkpoints": [
+            {
+              "line": 460,
+              "phase": "resident",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4114,
+              "swapins": 0,
+              "swapouts": 0,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2630952
+            },
+            {
+              "line": 464,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261197,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 2,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 8192,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 0,
+              "swapouts": 12,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 492,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 12,
+              "swapouts": 12,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 497,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261197,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 2,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 8192,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 12,
+              "swapouts": 24,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 525,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 24,
+              "swapouts": 24,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 530,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261197,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 2,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 8192,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 24,
+              "swapouts": 36,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 558,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 36,
+              "swapouts": 36,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 569,
+              "phase": "settled",
+              "pid": 6,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261764,
+              "user": 28201,
+              "pt": 84,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4098,
+              "owned_candidates": 0,
+              "candidate_capacity": 4115,
+              "swapins": 36,
+              "swapouts": 36,
+              "owned": 0,
+              "regions": 0,
+              "fds": 0,
+              "ipc_bytes": 0,
+              "stack": 0,
+              "reclaimed": 1,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2598688
+            }
+          ],
+          "pools": [
+            {
+              "line": 461,
+              "phase": "resident",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 0,
+              "slot_capacity": 0,
+              "free": 0,
+              "free_capacity": 0,
+              "storage_entries": 0,
+              "storage_capacity": 0,
+              "releases": 0
+            },
+            {
+              "line": 462,
+              "phase": "resident",
+              "pid": 6,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 0,
+              "slot_capacity": 0,
+              "free": 0,
+              "free_capacity": 0,
+              "storage_entries": 0,
+              "storage_capacity": 0,
+              "releases": 0
+            },
+            {
+              "line": 465,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            },
+            {
+              "line": 466,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            },
+            {
+              "line": 493,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 6
+            },
+            {
+              "line": 494,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 6
+            },
+            {
+              "line": 498,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 6
+            },
+            {
+              "line": 499,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 6
+            },
+            {
+              "line": 526,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 527,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 531,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 532,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 559,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 18
+            },
+            {
+              "line": 560,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 18
+            },
+            {
+              "line": 570,
+              "phase": "settled",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 18
+            },
+            {
+              "line": 571,
+              "phase": "settled",
+              "pid": 6,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 18
+            }
+          ],
+          "faults": [
+            {
+              "line": 468,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 470,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 472,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 474,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 476,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 478,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 480,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 482,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 484,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 486,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 488,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 490,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 501,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 503,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 505,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 507,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 509,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 511,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 513,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 515,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 517,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 519,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 521,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 523,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 534,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 536,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 538,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 540,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 542,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 544,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 546,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 548,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 550,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 552,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 554,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 556,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            }
+          ],
+          "repeat": [
+            {
+              "line": 495,
+              "pid": 6,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            },
+            {
+              "line": 528,
+              "pid": 6,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            }
+          ],
+          "normal_exit_line": 564,
+          "physical_reap_line": 566
+        },
+        "100": {
+          "checkpoints": [
+            {
+              "line": 12836,
+              "phase": "resident",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3564,
+              "swapouts": 3564,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 12840,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261197,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 2,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 8192,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3564,
+              "swapouts": 3576,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 12868,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3576,
+              "swapouts": 3576,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 12873,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261197,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 2,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 8192,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3576,
+              "swapouts": 3588,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 12901,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3588,
+              "swapouts": 3588,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 12906,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261197,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 2,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 8192,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3588,
+              "swapouts": 3600,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 12934,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261187,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3600,
+              "swapouts": 3600,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631744
+            },
+            {
+              "line": 12945,
+              "phase": "settled",
+              "pid": 105,
+              "cpus": 4,
+              "pools": 2,
+              "frames": 261764,
+              "user": 28201,
+              "pt": 84,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4098,
+              "owned_candidates": 0,
+              "candidate_capacity": 4115,
+              "swapins": 3600,
+              "swapouts": 3600,
+              "owned": 0,
+              "regions": 0,
+              "fds": 0,
+              "ipc_bytes": 0,
+              "stack": 0,
+              "reclaimed": 1,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2598688
+            }
+          ],
+          "pools": [
+            {
+              "line": 12837,
+              "phase": "resident",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1782
+            },
+            {
+              "line": 12838,
+              "phase": "resident",
+              "pid": 105,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1782
+            },
+            {
+              "line": 12841,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1782
+            },
+            {
+              "line": 12842,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1002,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1782
+            },
+            {
+              "line": 12869,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1788
+            },
+            {
+              "line": 12870,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1788
+            },
+            {
+              "line": 12874,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1788
+            },
+            {
+              "line": 12875,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1788
+            },
+            {
+              "line": 12902,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1794
+            },
+            {
+              "line": 12903,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1794
+            },
+            {
+              "line": 12907,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1794
+            },
+            {
+              "line": 12908,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 1,
+              "slots": 6,
+              "compressed": 1005,
+              "backing": 4096,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 0,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1794
+            },
+            {
+              "line": 12935,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1800
+            },
+            {
+              "line": 12936,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1800
+            },
+            {
+              "line": 12946,
+              "phase": "settled",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1800
+            },
+            {
+              "line": 12947,
+              "phase": "settled",
+              "pid": 105,
+              "pool": 1,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 6,
+              "slot_capacity": 8,
+              "free": 6,
+              "free_capacity": 8,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 1800
+            }
+          ],
+          "faults": [
+            {
+              "line": 12844,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12846,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12848,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12850,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12852,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12854,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12856,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12858,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12860,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12862,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12864,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12866,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12877,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12879,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12881,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12883,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12885,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12887,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12889,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12891,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12893,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12895,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12897,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12899,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12910,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12912,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12914,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12916,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12918,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12920,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12922,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12924,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12926,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12928,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12930,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12932,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            }
+          ],
+          "repeat": [
+            {
+              "line": 12871,
+              "pid": 105,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            },
+            {
+              "line": 12904,
+              "pid": 105,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            }
+          ],
+          "normal_exit_line": 12940,
+          "physical_reap_line": 12942
+        }
+      }
+    },
+    "2": {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 2,
+      "pools": 1,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/repeated-final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/native-2.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/zram-repeated-reclaim/native-2.serial.log",
+        "sha256": "749150e1266a3a555471ccdc86fe6d308b0c081ff319ff2ca83bdd77d6eaf340"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 429,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 2,
+        "pools": 1,
+        "frames": 262276,
+        "user": 28201,
+        "pt": 84,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4098,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2597512
+      },
+      "phase_ranges": {
+        "resident": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261699,
+            261699
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4114,
+            4115
+          ],
+          "swapins": [
+            0,
+            3564
+          ],
+          "swapouts": [
+            0,
+            3564
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2630952,
+            4397584
+          ]
+        },
+        "populated": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261710,
+            261710
+          ],
+          "user": [
+            28756,
+            28756
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            1,
+            1
+          ],
+          "slots": [
+            12,
+            12
+          ],
+          "compressed": [
+            2004,
+            2010
+          ],
+          "backing": [
+            4096,
+            4096
+          ],
+          "candidates": [
+            4102,
+            4102
+          ],
+          "owned_candidates": [
+            4,
+            4
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            0,
+            3588
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            555,
+            555
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2631416,
+            4433200
+          ]
+        },
+        "restored": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261699,
+            261699
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            12,
+            3600
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2631416,
+            4433200
+          ]
+        },
+        "settled": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            262276,
+            262276
+          ],
+          "user": [
+            28201,
+            28201
+          ],
+          "pt": [
+            84,
+            84
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4098,
+            4098
+          ],
+          "owned_candidates": [
+            0,
+            0
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            36,
+            3600
+          ],
+          "swapouts": [
+            36,
+            3600
+          ],
+          "owned": [
+            0,
+            0
+          ],
+          "regions": [
+            0,
+            0
+          ],
+          "fds": [
+            0,
+            0
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            0,
+            0
+          ],
+          "reclaimed": [
+            1,
+            1
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2598592,
+            4364760
+          ]
+        }
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 12,
+          "slot_capacity": 16,
+          "free_capacity": 16,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "settled_heap_histogram_bytes": {
+        "2598592": 99,
+        "4364760": 1
+      },
+      "completion_line": 12131,
+      "witnesses": {
+        "1": {
+          "checkpoints": [
+            {
+              "line": 445,
+              "phase": "resident",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4114,
+              "swapins": 0,
+              "swapouts": 0,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2630952
+            },
+            {
+              "line": 448,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261710,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 0,
+              "swapouts": 12,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 475,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 12,
+              "swapouts": 12,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 479,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261710,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 12,
+              "swapouts": 24,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 506,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 24,
+              "swapouts": 24,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 510,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261710,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 24,
+              "swapouts": 36,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 537,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 36,
+              "swapouts": 36,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 547,
+              "phase": "settled",
+              "pid": 6,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 262276,
+              "user": 28201,
+              "pt": 84,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4098,
+              "owned_candidates": 0,
+              "candidate_capacity": 4115,
+              "swapins": 36,
+              "swapouts": 36,
+              "owned": 0,
+              "regions": 0,
+              "fds": 0,
+              "ipc_bytes": 0,
+              "stack": 0,
+              "reclaimed": 1,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2598592
+            }
+          ],
+          "pools": [
+            {
+              "line": 446,
+              "phase": "resident",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 0,
+              "slot_capacity": 0,
+              "free": 0,
+              "free_capacity": 0,
+              "storage_entries": 0,
+              "storage_capacity": 0,
+              "releases": 0
+            },
+            {
+              "line": 449,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            },
+            {
+              "line": 476,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 480,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 507,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 24
+            },
+            {
+              "line": 511,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 24
+            },
+            {
+              "line": 538,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 36
+            },
+            {
+              "line": 548,
+              "phase": "settled",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 36
+            }
+          ],
+          "faults": [
+            {
+              "line": 451,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 453,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 455,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 457,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 459,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 461,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 463,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 465,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 467,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 469,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 471,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 473,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 482,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 484,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 486,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 488,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 490,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 492,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 494,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 496,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 498,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 500,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 502,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 504,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 513,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 515,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 517,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 519,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 521,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 523,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 525,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 527,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 529,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 531,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 533,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 535,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            }
+          ],
+          "repeat": [
+            {
+              "line": 477,
+              "pid": 6,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            },
+            {
+              "line": 508,
+              "pid": 6,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            }
+          ],
+          "normal_exit_line": 542,
+          "physical_reap_line": 544
+        },
+        "100": {
+          "checkpoints": [
+            {
+              "line": 12027,
+              "phase": "resident",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3564,
+              "swapouts": 3564,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 12030,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261710,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3564,
+              "swapouts": 3576,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 12057,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3576,
+              "swapouts": 3576,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 12061,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261710,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3576,
+              "swapouts": 3588,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 12088,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3588,
+              "swapouts": 3588,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 12092,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261710,
+              "user": 28756,
+              "pt": 94,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3588,
+              "swapouts": 3600,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 12119,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 261699,
+              "user": 28768,
+              "pt": 94,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3600,
+              "swapouts": 3600,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631648
+            },
+            {
+              "line": 12129,
+              "phase": "settled",
+              "pid": 105,
+              "cpus": 2,
+              "pools": 1,
+              "frames": 262276,
+              "user": 28201,
+              "pt": 84,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4098,
+              "owned_candidates": 0,
+              "candidate_capacity": 4115,
+              "swapins": 3600,
+              "swapouts": 3600,
+              "owned": 0,
+              "regions": 0,
+              "fds": 0,
+              "ipc_bytes": 0,
+              "stack": 0,
+              "reclaimed": 1,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2598592
+            }
+          ],
+          "pools": [
+            {
+              "line": 12028,
+              "phase": "resident",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3564
+            },
+            {
+              "line": 12031,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3564
+            },
+            {
+              "line": 12058,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3576
+            },
+            {
+              "line": 12062,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3576
+            },
+            {
+              "line": 12089,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3588
+            },
+            {
+              "line": 12093,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3588
+            },
+            {
+              "line": 12120,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3600
+            },
+            {
+              "line": 12130,
+              "phase": "settled",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3600
+            }
+          ],
+          "faults": [
+            {
+              "line": 12033,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12035,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12037,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12039,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12041,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12043,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12045,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12047,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12049,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12051,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12053,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12055,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12064,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12066,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12068,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12070,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12072,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12074,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12076,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12078,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12080,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12082,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12084,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12086,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12095,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12097,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12099,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12101,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12103,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12105,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12107,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12109,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12111,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12113,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12115,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12117,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            }
+          ],
+          "repeat": [
+            {
+              "line": 12059,
+              "pid": 105,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            },
+            {
+              "line": 12090,
+              "pid": 105,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            }
+          ],
+          "normal_exit_line": 12124,
+          "physical_reap_line": 12126
+        }
+      }
+    },
+    "1": {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 1,
+      "pools": 1,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/repeated-final.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/native-1.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "1",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/zram-repeated-reclaim/native-1.serial.log",
+        "sha256": "2741d147581dfbff6fe445058f065f8893e319bad180ee37c7428720297eb3e5"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 424,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 1,
+        "pools": 1,
+        "frames": 262532,
+        "user": 28201,
+        "pt": 86,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4098,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2597288
+      },
+      "phase_ranges": {
+        "resident": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261955,
+            261955
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4114,
+            4115
+          ],
+          "swapins": [
+            0,
+            3564
+          ],
+          "swapouts": [
+            0,
+            3564
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2630496,
+            2631552
+          ]
+        },
+        "populated": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261966,
+            261966
+          ],
+          "user": [
+            28756,
+            28756
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            1,
+            1
+          ],
+          "slots": [
+            12,
+            12
+          ],
+          "compressed": [
+            2004,
+            2010
+          ],
+          "backing": [
+            4096,
+            4096
+          ],
+          "candidates": [
+            4102,
+            4102
+          ],
+          "owned_candidates": [
+            4,
+            4
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            0,
+            3588
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            555,
+            555
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2631320,
+            2631552
+          ]
+        },
+        "restored": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261955,
+            261955
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            12,
+            3600
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2631320,
+            2631552
+          ]
+        },
+        "settled": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            262532,
+            262532
+          ],
+          "user": [
+            28201,
+            28201
+          ],
+          "pt": [
+            86,
+            86
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4098,
+            4098
+          ],
+          "owned_candidates": [
+            0,
+            0
+          ],
+          "candidate_capacity": [
+            4115,
+            4115
+          ],
+          "swapins": [
+            36,
+            3600
+          ],
+          "swapouts": [
+            36,
+            3600
+          ],
+          "owned": [
+            0,
+            0
+          ],
+          "regions": [
+            0,
+            0
+          ],
+          "fds": [
+            0,
+            0
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            0,
+            0
+          ],
+          "reclaimed": [
+            1,
+            1
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2598496,
+            2598496
+          ]
+        }
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 12,
+          "slot_capacity": 16,
+          "free_capacity": 16,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "settled_heap_histogram_bytes": {
+        "2598496": 100
+      },
+      "completion_line": 12127,
+      "witnesses": {
+        "1": {
+          "checkpoints": [
+            {
+              "line": 439,
+              "phase": "resident",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4114,
+              "swapins": 0,
+              "swapouts": 0,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2630496
+            },
+            {
+              "line": 442,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261966,
+              "user": 28756,
+              "pt": 96,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 0,
+              "swapouts": 12,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631320
+            },
+            {
+              "line": 469,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 12,
+              "swapouts": 12,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631320
+            },
+            {
+              "line": 473,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261966,
+              "user": 28756,
+              "pt": 96,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 12,
+              "swapouts": 24,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631320
+            },
+            {
+              "line": 501,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 24,
+              "swapouts": 24,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 505,
+              "phase": "populated",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261966,
+              "user": 28756,
+              "pt": 96,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 24,
+              "swapouts": 36,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 532,
+              "phase": "restored",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 36,
+              "swapouts": 36,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 542,
+              "phase": "settled",
+              "pid": 6,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 262532,
+              "user": 28201,
+              "pt": 86,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4098,
+              "owned_candidates": 0,
+              "candidate_capacity": 4115,
+              "swapins": 36,
+              "swapouts": 36,
+              "owned": 0,
+              "regions": 0,
+              "fds": 0,
+              "ipc_bytes": 0,
+              "stack": 0,
+              "reclaimed": 1,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2598496
+            }
+          ],
+          "pools": [
+            {
+              "line": 440,
+              "phase": "resident",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 0,
+              "slot_capacity": 0,
+              "free": 0,
+              "free_capacity": 0,
+              "storage_entries": 0,
+              "storage_capacity": 0,
+              "releases": 0
+            },
+            {
+              "line": 443,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 0
+            },
+            {
+              "line": 470,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 474,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 12
+            },
+            {
+              "line": 502,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 24
+            },
+            {
+              "line": 506,
+              "phase": "populated",
+              "pid": 6,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 24
+            },
+            {
+              "line": 533,
+              "phase": "restored",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 36
+            },
+            {
+              "line": 543,
+              "phase": "settled",
+              "pid": 6,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 36
+            }
+          ],
+          "faults": [
+            {
+              "line": 445,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 447,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 449,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 451,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 453,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 455,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 457,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 459,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 461,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 463,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 465,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 467,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 477,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 479,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 481,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 483,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 485,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 487,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 489,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 491,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 493,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 495,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 497,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 499,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 508,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 510,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 512,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 514,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 516,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 518,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 520,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 522,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 524,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 526,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 528,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 530,
+              "vector": 14,
+              "pid": 6,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            }
+          ],
+          "repeat": [
+            {
+              "line": 471,
+              "pid": 6,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            },
+            {
+              "line": 503,
+              "pid": 6,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            }
+          ],
+          "normal_exit_line": 537,
+          "physical_reap_line": 539
+        },
+        "100": {
+          "checkpoints": [
+            {
+              "line": 12023,
+              "phase": "resident",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3564,
+              "swapouts": 3564,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 12026,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261966,
+              "user": 28756,
+              "pt": 96,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3564,
+              "swapouts": 3576,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 12053,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3576,
+              "swapouts": 3576,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 12057,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261966,
+              "user": 28756,
+              "pt": 96,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3576,
+              "swapouts": 3588,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 12084,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3588,
+              "swapouts": 3588,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 12088,
+              "phase": "populated",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261966,
+              "user": 28756,
+              "pt": 96,
+              "compressed_frames": 1,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "candidates": 4102,
+              "owned_candidates": 4,
+              "candidate_capacity": 4115,
+              "swapins": 3588,
+              "swapouts": 3600,
+              "owned": 555,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 12115,
+              "phase": "restored",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 261955,
+              "user": 28768,
+              "pt": 96,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4114,
+              "owned_candidates": 16,
+              "candidate_capacity": 4115,
+              "swapins": 3600,
+              "swapouts": 3600,
+              "owned": 567,
+              "regions": 6,
+              "fds": 3,
+              "ipc_bytes": 0,
+              "stack": 1,
+              "reclaimed": 0,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2631552
+            },
+            {
+              "line": 12125,
+              "phase": "settled",
+              "pid": 105,
+              "cpus": 1,
+              "pools": 1,
+              "frames": 262532,
+              "user": 28201,
+              "pt": 86,
+              "compressed_frames": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "candidates": 4098,
+              "owned_candidates": 0,
+              "candidate_capacity": 4115,
+              "swapins": 3600,
+              "swapouts": 3600,
+              "owned": 0,
+              "regions": 0,
+              "fds": 0,
+              "ipc_bytes": 0,
+              "stack": 0,
+              "reclaimed": 1,
+              "rows": 4,
+              "row_capacity": 512,
+              "heap": 2598496
+            }
+          ],
+          "pools": [
+            {
+              "line": 12024,
+              "phase": "resident",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3564
+            },
+            {
+              "line": 12027,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2004,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3564
+            },
+            {
+              "line": 12054,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3576
+            },
+            {
+              "line": 12058,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3576
+            },
+            {
+              "line": 12085,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3588
+            },
+            {
+              "line": 12089,
+              "phase": "populated",
+              "pid": 105,
+              "pool": 0,
+              "slots": 12,
+              "compressed": 2010,
+              "backing": 4096,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 0,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3588
+            },
+            {
+              "line": 12116,
+              "phase": "restored",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3600
+            },
+            {
+              "line": 12126,
+              "phase": "settled",
+              "pid": 105,
+              "pool": 0,
+              "slots": 0,
+              "compressed": 0,
+              "backing": 0,
+              "entries": 12,
+              "slot_capacity": 16,
+              "free": 12,
+              "free_capacity": 16,
+              "storage_entries": 1,
+              "storage_capacity": 4,
+              "releases": 3600
+            }
+          ],
+          "faults": [
+            {
+              "line": 12029,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12031,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12033,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12035,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12037,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12039,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12041,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12043,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12045,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12047,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12049,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12051,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12060,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12062,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12064,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12066,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12068,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12070,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12072,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12074,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12076,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12078,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12080,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12082,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12091,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719476736,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12093,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719480832,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12095,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719484928,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12097,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719489024,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12099,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719493120,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12101,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719497216,
+              "rip": 4228629,
+              "error": 4
+            },
+            {
+              "line": 12103,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719501312,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12105,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719505408,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12107,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719509504,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12109,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719513600,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12111,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719517696,
+              "rip": 4228444,
+              "error": 4
+            },
+            {
+              "line": 12113,
+              "vector": 14,
+              "pid": 105,
+              "address": 68719521792,
+              "rip": 4228444,
+              "error": 4
+            }
+          ],
+          "repeat": [
+            {
+              "line": 12055,
+              "pid": 105,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            },
+            {
+              "line": 12086,
+              "pid": 105,
+              "first_pass_evicted": 0,
+              "second_pass_evicted": 12,
+              "scans": 24
+            }
+          ],
+          "normal_exit_line": 12120,
+          "physical_reap_line": 12122
+        }
+      }
+    }
+  },
+  "populated_exit_regression": {
+    "status": "pass",
+    "ram_mib": 2048,
+    "vcpus": 4,
+    "pools": 2,
+    "qemu_args": [
+      "qemu-system-x86_64",
+      "-accel",
+      "tcg",
+      "-cdrom",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/populated-final.iso",
+      "-serial",
+      "file:/home/ehsantor/Projects/sunlightos-kernel/target/zram-repeated-reclaim/populated-4.serial.log",
+      "-m",
+      "2048",
+      "-smp",
+      "4",
+      "-display",
+      "none",
+      "-nic",
+      "none",
+      "-no-reboot",
+      "-no-shutdown",
+      "-device",
+      "virtio-rng-pci,disable-modern=on",
+      "-device",
+      "qemu-xhci,id=xhci",
+      "-device",
+      "usb-mouse,bus=xhci.0"
+    ],
+    "serial": {
+      "path": "target/zram-repeated-reclaim/populated-4.serial.log",
+      "sha256": "d4a6589146dcaceab63a3215114334ab4c5a398f09d75f8774286be44f4b001a"
+    },
+    "children": 100,
+    "exit_status": 37,
+    "compression_rounds_per_child": 1,
+    "verified_bytes_per_child": 0,
+    "successful_user_read_vector_14_restores": 0,
+    "fault_rip_counts": {},
+    "freshly_restored_candidate_deferrals": 0,
+    "repeat_evictions_by_reclaim_candidate_path": 0,
+    "scheduler_rows": [
+      3
+    ],
+    "baseline": {
+      "line": 443,
+      "phase": "baseline",
+      "pid": 0,
+      "cpus": 4,
+      "pools": 2,
+      "frames": 261804,
+      "user": 28201,
+      "pt": 84,
+      "compressed_frames": 0,
+      "slots": 0,
+      "compressed": 0,
+      "backing": 0,
+      "candidates": 4098,
+      "owned_candidates": 0,
+      "candidate_capacity": 4098,
+      "swapins": 0,
+      "swapouts": 0,
+      "owned": 0,
+      "regions": 0,
+      "fds": 0,
+      "ipc_bytes": 0,
+      "stack": 0,
+      "reclaimed": 0,
+      "rows": 4,
+      "row_capacity": 512,
+      "heap": 2597512
+    },
+    "phase_ranges": {
+      "resident": {
+        "cpus": [
+          4,
+          4
+        ],
+        "pools": [
+          2,
+          2
+        ],
+        "frames": [
+          261227,
+          261227
+        ],
+        "user": [
+          28768,
+          28768
+        ],
+        "pt": [
+          94,
+          94
+        ],
+        "compressed_frames": [
+          0,
+          0
+        ],
+        "slots": [
+          0,
+          0
+        ],
+        "compressed": [
+          0,
+          0
+        ],
+        "backing": [
+          0,
+          0
+        ],
+        "candidates": [
+          4114,
+          4114
+        ],
+        "owned_candidates": [
+          16,
+          16
+        ],
+        "candidate_capacity": [
+          4114,
+          4115
+        ],
+        "swapins": [
+          0,
+          0
+        ],
+        "swapouts": [
+          0,
+          1188
+        ],
+        "owned": [
+          567,
+          567
+        ],
+        "regions": [
+          5,
+          5
+        ],
+        "fds": [
+          3,
+          3
+        ],
+        "ipc_bytes": [
+          0,
+          0
+        ],
+        "stack": [
+          1,
+          1
+        ],
+        "reclaimed": [
+          0,
+          0
+        ],
+        "rows": [
+          4,
+          4
+        ],
+        "row_capacity": [
+          512,
+          512
+        ],
+        "heap": [
+          2630952,
+          4386704
+        ]
+      },
+      "populated": {
+        "cpus": [
+          4,
+          4
+        ],
+        "pools": [
+          2,
+          2
+        ],
+        "frames": [
+          261237,
+          261237
+        ],
+        "user": [
+          28756,
+          28756
+        ],
+        "pt": [
+          94,
+          94
+        ],
+        "compressed_frames": [
+          2,
+          2
+        ],
+        "slots": [
+          12,
+          12
+        ],
+        "compressed": [
+          2004,
+          2004
+        ],
+        "backing": [
+          8192,
+          8192
+        ],
+        "candidates": [
+          4102,
+          4102
+        ],
+        "owned_candidates": [
+          4,
+          4
+        ],
+        "candidate_capacity": [
+          4115,
+          4115
+        ],
+        "swapins": [
+          0,
+          0
+        ],
+        "swapouts": [
+          12,
+          1200
+        ],
+        "owned": [
+          555,
+          555
+        ],
+        "regions": [
+          5,
+          5
+        ],
+        "fds": [
+          3,
+          3
+        ],
+        "ipc_bytes": [
+          0,
+          0
+        ],
+        "stack": [
+          1,
+          1
+        ],
+        "reclaimed": [
+          0,
+          0
+        ],
+        "rows": [
+          4,
+          4
+        ],
+        "row_capacity": [
+          512,
+          512
+        ],
+        "heap": [
+          2631512,
+          4432728
+        ]
+      },
+      "settled": {
+        "cpus": [
+          4,
+          4
+        ],
+        "pools": [
+          2,
+          2
+        ],
+        "frames": [
+          261804,
+          261804
+        ],
+        "user": [
+          28201,
+          28201
+        ],
+        "pt": [
+          84,
+          84
+        ],
+        "compressed_frames": [
+          0,
+          0
+        ],
+        "slots": [
+          0,
+          0
+        ],
+        "compressed": [
+          0,
+          0
+        ],
+        "backing": [
+          0,
+          0
+        ],
+        "candidates": [
+          4098,
+          4098
+        ],
+        "owned_candidates": [
+          0,
+          0
+        ],
+        "candidate_capacity": [
+          4115,
+          4115
+        ],
+        "swapins": [
+          0,
+          0
+        ],
+        "swapouts": [
+          12,
+          1200
+        ],
+        "owned": [
+          0,
+          0
+        ],
+        "regions": [
+          0,
+          0
+        ],
+        "fds": [
+          0,
+          0
+        ],
+        "ipc_bytes": [
+          0,
+          0
+        ],
+        "stack": [
+          0,
+          0
+        ],
+        "reclaimed": [
+          1,
+          1
+        ],
+        "rows": [
+          4,
+          4
+        ],
+        "row_capacity": [
+          512,
+          512
+        ],
+        "heap": [
+          2598688,
+          3940256
+        ]
+      }
+    },
+    "warm_pool_metadata": {
+      "0": {
+        "entries": 6,
+        "slot_capacity": 8,
+        "free_capacity": 8,
+        "storage_entries": 1,
+        "storage_capacity": 4
+      },
+      "1": {
+        "entries": 6,
+        "slot_capacity": 8,
+        "free_capacity": 8,
+        "storage_entries": 1,
+        "storage_capacity": 4
+      }
+    },
+    "reaps": [
+      {
+        "user_frames": 555,
+        "page_tables": 10,
+        "swap_blocks": 12,
+        "ipc_entries": 0,
+        "children": 100
+      }
+    ],
+    "settled_heap_histogram_bytes": {
+      "2598688": 85,
+      "3889696": 2,
+      "2598720": 2,
+      "2598704": 5,
+      "3370248": 1,
+      "3940256": 1,
+      "3514728": 1,
+      "3205024": 1,
+      "3544448": 1,
+      "3513888": 1
+    },
+    "completion_line": 3336,
+    "witnesses": {
+      "1": {
+        "checkpoints": [
+          {
+            "line": 459,
+            "phase": "resident",
+            "pid": 6,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261227,
+            "user": 28768,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "candidate_capacity": 4114,
+            "swapins": 0,
+            "swapouts": 0,
+            "owned": 567,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2630952
+          },
+          {
+            "line": 462,
+            "phase": "populated",
+            "pid": 6,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261237,
+            "user": 28756,
+            "pt": 94,
+            "compressed_frames": 2,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 8192,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "candidate_capacity": 4115,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 555,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631744
+          },
+          {
+            "line": 473,
+            "phase": "settled",
+            "pid": 6,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261804,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "candidate_capacity": 4115,
+            "swapins": 0,
+            "swapouts": 12,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598688
+          }
+        ],
+        "pools": [
+          {
+            "line": 460,
+            "phase": "resident",
+            "pid": 6,
+            "pool": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 0,
+            "slot_capacity": 0,
+            "free": 0,
+            "free_capacity": 0,
+            "storage_entries": 0,
+            "storage_capacity": 0,
+            "releases": 0
+          },
+          {
+            "line": 461,
+            "phase": "resident",
+            "pid": 6,
+            "pool": 1,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 0,
+            "slot_capacity": 0,
+            "free": 0,
+            "free_capacity": 0,
+            "storage_entries": 0,
+            "storage_capacity": 0,
+            "releases": 0
+          },
+          {
+            "line": 463,
+            "phase": "populated",
+            "pid": 6,
+            "pool": 0,
+            "slots": 6,
+            "compressed": 1002,
+            "backing": 4096,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 0,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 0
+          },
+          {
+            "line": 464,
+            "phase": "populated",
+            "pid": 6,
+            "pool": 1,
+            "slots": 6,
+            "compressed": 1002,
+            "backing": 4096,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 0,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 0
+          },
+          {
+            "line": 474,
+            "phase": "settled",
+            "pid": 6,
+            "pool": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 6,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 6
+          },
+          {
+            "line": 475,
+            "phase": "settled",
+            "pid": 6,
+            "pool": 1,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 6,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 6
+          }
+        ],
+        "faults": [],
+        "repeat": [],
+        "normal_exit_line": 468,
+        "physical_reap_line": 470
+      },
+      "100": {
+        "checkpoints": [
+          {
+            "line": 3319,
+            "phase": "resident",
+            "pid": 105,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261227,
+            "user": 28768,
+            "pt": 94,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4114,
+            "owned_candidates": 16,
+            "candidate_capacity": 4115,
+            "swapins": 0,
+            "swapouts": 1188,
+            "owned": 567,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631744
+          },
+          {
+            "line": 3322,
+            "phase": "populated",
+            "pid": 105,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261237,
+            "user": 28756,
+            "pt": 94,
+            "compressed_frames": 2,
+            "slots": 12,
+            "compressed": 2004,
+            "backing": 8192,
+            "candidates": 4102,
+            "owned_candidates": 4,
+            "candidate_capacity": 4115,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 555,
+            "regions": 5,
+            "fds": 3,
+            "ipc_bytes": 0,
+            "stack": 1,
+            "reclaimed": 0,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2631744
+          },
+          {
+            "line": 3333,
+            "phase": "settled",
+            "pid": 105,
+            "cpus": 4,
+            "pools": 2,
+            "frames": 261804,
+            "user": 28201,
+            "pt": 84,
+            "compressed_frames": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "candidates": 4098,
+            "owned_candidates": 0,
+            "candidate_capacity": 4115,
+            "swapins": 0,
+            "swapouts": 1200,
+            "owned": 0,
+            "regions": 0,
+            "fds": 0,
+            "ipc_bytes": 0,
+            "stack": 0,
+            "reclaimed": 1,
+            "rows": 4,
+            "row_capacity": 512,
+            "heap": 2598688
+          }
+        ],
+        "pools": [
+          {
+            "line": 3320,
+            "phase": "resident",
+            "pid": 105,
+            "pool": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 6,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 594
+          },
+          {
+            "line": 3321,
+            "phase": "resident",
+            "pid": 105,
+            "pool": 1,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 6,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 594
+          },
+          {
+            "line": 3323,
+            "phase": "populated",
+            "pid": 105,
+            "pool": 0,
+            "slots": 6,
+            "compressed": 1002,
+            "backing": 4096,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 0,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 594
+          },
+          {
+            "line": 3324,
+            "phase": "populated",
+            "pid": 105,
+            "pool": 1,
+            "slots": 6,
+            "compressed": 1002,
+            "backing": 4096,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 0,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 594
+          },
+          {
+            "line": 3334,
+            "phase": "settled",
+            "pid": 105,
+            "pool": 0,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 6,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 600
+          },
+          {
+            "line": 3335,
+            "phase": "settled",
+            "pid": 105,
+            "pool": 1,
+            "slots": 0,
+            "compressed": 0,
+            "backing": 0,
+            "entries": 6,
+            "slot_capacity": 8,
+            "free": 6,
+            "free_capacity": 8,
+            "storage_entries": 1,
+            "storage_capacity": 4,
+            "releases": 600
+          }
+        ],
+        "faults": [],
+        "repeat": [],
+        "normal_exit_line": 3328,
+        "physical_reap_line": 3330
+      }
+    }
+  },
+  "regressions": {
+    "production_kernel_release": {
+      "status": "pass",
+      "exit_code": 0,
+      "log": {
+        "path": "target/zram-repeated-reclaim/production-kernel.log",
+        "sha256": "5f2eae1fb189eceee6d4b9c66b4c2ff5898877ed097e0f2b05fee99d1d062b3e"
+      }
+    },
+    "production_userspace_release": {
+      "status": "pass",
+      "exit_code": 0,
+      "log": {
+        "path": "target/zram-repeated-reclaim/production-userspace.log",
+        "sha256": "667a5431f08a935beb2c7a242dfb1d789e3228f4238132d8cc526aff824ea5f8"
+      }
+    },
+    "hosts": {
+      "kernel-host": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/kernel-host.log",
+          "sha256": "cf3a9a893f85dd2a5bfa0aeb15df435b12d396e5e43d6c98754404a93e5580f2"
+        },
+        "test_summaries": [
+          "test result: ok. 217 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s"
+        ]
+      },
+      "zram": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/zram.log",
+          "sha256": "bfcf98354c441529ee0c2f6032959cdbe4246a444e3195992ce46fc2c6e0c528"
+        },
+        "test_summaries": [
+          "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 213 filtered out; finished in 0.00s"
+        ]
+      },
+      "swap-slot": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/swap-slot.log",
+          "sha256": "845f600bc20ea81a2dc6fdf05d133632fad5cae017de589944350ecf39685a1a"
+        },
+        "test_summaries": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 216 filtered out; finished in 0.00s"
+        ]
+      },
+      "scheduler": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/scheduler.log",
+          "sha256": "c802eee7840802a9fb1ef50086fe8302e7be4e37bd59f327bef227fc1c52ac64"
+        }
+      },
+      "retirement": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/retirement.log",
+          "sha256": "b4a76a49331a0a6eca026ed40d8cf4ce9d0de4f1b9d4afa34a3c7b08d93a29a9"
+        },
+        "test_summaries": [
+          "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 183 filtered out; finished in 0.01s"
+        ]
+      },
+      "ipc": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/ipc.log",
+          "sha256": "b51cb5e711b4646260626c87dc778424d81e076287472b0838e124208f3381cc"
+        },
+        "test_summaries": [
+          "test result: ok. 168 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+          "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "descriptor": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/descriptor.log",
+          "sha256": "4ed3d657f75929f324c60c09115e131b23e287ea12e13463ffb3f745e5f9158c"
+        },
+        "test_summaries": [
+          "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "service": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/service.log",
+          "sha256": "ee9a4a667d9d2fbb1cf27a21195fa296c9a95049d05cd6086abad1b6b236b762"
+        },
+        "test_summaries": [
+          "test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "registration": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/registration.log",
+          "sha256": "053a8efa06ec2b23e21668f52799b335b7fbbed16abb43048553ea5b64394f44"
+        },
+        "test_summaries": [
+          "test result: ok. 107 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      }
+    },
+    "ordinary_phase_3_0_candidate": {
+      "4": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/final-phase3.0-4.log",
+          "sha256": "4b1adf0a1de5835b465857fdf25bc9b00920fd6633691e6f28584556e1f163c7"
+        },
+        "serial": {
+          "path": "target/zram-repeated-reclaim/final-phase3.0-4.serial.log",
+          "sha256": "d05ddd29fbb4df949879edd05f8d71dbd1e84b645795bb2305ef41189dc2e9c8"
+        }
+      },
+      "2": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/final-phase3.0-2.log",
+          "sha256": "c65b3dd0acd8147bb08a98582eb9aa6365bbed8ce1660c97189b179715f1d191"
+        },
+        "serial": {
+          "path": "target/zram-repeated-reclaim/final-phase3.0-2.serial.log",
+          "sha256": "2c89a1bf5cfc5c9bf1e4ae7f9cdd77cabf13751b8b9b8eed9ed410b266bc1fb2"
+        }
+      },
+      "1": {
+        "status": "pass",
+        "exit_code": 0,
+        "log": {
+          "path": "target/zram-repeated-reclaim/final-phase3.0-1.log",
+          "sha256": "5f3ce678cd2567d2bec121fe16194ef1837e8b25b0ebb0d4291a58d8c65fba41"
+        },
+        "serial": {
+          "path": "target/zram-repeated-reclaim/final-phase3.0-1.serial.log",
+          "sha256": "5cf307f0e53f011f487a5bf6241c8efa55cabf3e1a32233a6802d3ab0f04b99a"
+        }
+      }
+    },
+    "standard_swap_1_candidate": {
+      "status": "pass",
+      "exit_code": 0,
+      "log": {
+        "path": "target/zram-repeated-reclaim/final-swap1-4.log",
+        "sha256": "5c5f12f34e7dc5c72790855df7481082d43cc5c61269116d1c54434c02970470"
+      },
+      "serial": {
+        "path": "target/zram-repeated-reclaim/final-swap1-4.serial.log",
+        "sha256": "9638c08ccf87e8da3134977c1867acb5133fa592880656d940f9cdc406649826"
+      },
+      "expected_checks": [
+        "[SWAP-1] configured 2 pools from",
+        "[SWAP-1] sample requested=12 stored=12 logical_bytes=49152 compressed_bytes=",
+        "[SWAP-1] pressure reclaimed 12 pages across pools; fallback bounded: OK",
+        "[SWAP-1] incompressible page rejected without ownership change: OK",
+        "[SWAP-1] restored=12 exact patterns and RW/NX metadata restored: OK",
+        "[SWAP-1] corrupted payload rejected before PTE publication: OK",
+        "[SWAP-1] munmap released swapped slot without swap-in: OK",
+        "[SWAP-1] stale slot generation rejected after reuse: OK",
+        "[SWAP-1] exit cleanup and PMM/slot accounting baseline: OK",
+        "[SWAP-1] focused pressure gate: OK"
+      ],
+      "restore_path": "direct internal swap-in",
+      "cpu_count": 4
+    },
+    "candidate_ownership_guard": {
+      "status": "pass",
+      "exit_code": 0,
+      "log": {
+        "path": "target/zram-repeated-reclaim/guard-candidate.log",
+        "sha256": "4d4462dfe6a7ed8467b12ee4f9da36c105c78f4c939a2b0623f5a222aaf9c610"
+      }
+    },
+    "primary_ownership_guard": {
+      "status": "blocked_by_pre_existing_findings",
+      "log": {
+        "path": "target/zram-repeated-reclaim/guard-primary.log",
+        "sha256": "6ba31b1949191300240a981e7d670d8c913aa8c6f09cdbced321faf673c10580"
+      },
+      "exit_code": 1,
+      "findings": [
+        "NEW (1): kernel/src/arch/x86_64/syscall.rs: kernel-global namespace: let capacity = crate::KERNEL_VFS",
+        "NEW (1): kernel/src/linux_procfs.rs: kernel-global namespace: let vfs = crate::KERNEL_VFS.lock();",
+        "NEW (1): kernel/src/process/mmap.rs: kernel-global namespace: let mut guard = crate::KERNEL_VFS.lock();",
+        "NEW (1): kernel/src/storage.rs: filesystem backend construction: let mut fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))"
+      ]
+    },
+    "candidate_source_manifest": {
+      "path": "target/zram-repeated-reclaim/candidate-source-manifest.json",
+      "sha256": "5c5752cd7c7c5ce0f47ae7fef0da71af48ec5358d663fa7c1ddb94f573c2b9f6"
+    },
+    "candidate_scope": "Existing isolated VFS candidate, with current production reclaim, slot reservation and swap-in changes overlaid for the gates. Native fixture ran from the primary workspace."
+  },
+  "limits": [
+    "Serial children and scoped reclaim of 12 pages per round. SWAP-1 separately tests pressure selection.",
+    "One-scan deferral uses fault-in recency. It does not sample the accessed bit or guarantee a time interval under sustained pressure.",
+    "Successful read-triggered fault-in and stores to already-restored writable pages only.",
+    "No concurrent children, natural pressure during the repeated native cycles, exec or remote termination, or slot-generation exhaustion."
+  ]
+}

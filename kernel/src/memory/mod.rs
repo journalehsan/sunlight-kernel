@@ -28,6 +28,7 @@ pub(crate) mod shared_quota;
 #[cfg(all(debug_assertions, feature = "shared_quota_test"))]
 pub(crate) mod shared_quota_gate;
 pub mod swap;
+mod candidate_queue;
 pub mod swap_slot;
 pub mod tlb;
 pub mod tmpfs;

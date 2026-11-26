@@ -302,8 +302,10 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
             #[cfg(feature = "vfs-l1c-2-test")]
             debug_log("[VFS-L1C-1] init observed result");
         }
-        #[cfg(feature = "zram-lifecycle-test")]
+        #[cfg(all(feature = "zram-lifecycle-test", not(feature = "zram-pressure-test")))]
         run_zram_lifecycle();
+        #[cfg(feature = "zram-pressure-test")]
+        run_zram_pressure(ep, &mut registry);
         match sunlight_libc::spawn(b"/bin/storagectl", &[b"storagectl", b"fstab"], None)
             .and_then(sunlight_libc::waitpid)
         {
@@ -315,7 +317,9 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
 
         for path in INIT_SERVICES.iter() {
             #[cfg(feature = "zram-lifecycle-test")]
-            if *path == "/sbin/sunlight-swapd" {
+            if *path == "/sbin/sunlight-swapd"
+                || (cfg!(feature = "zram-pressure-test") && *path == "/sbin/timer_server")
+            {
                 continue;
             }
             if spawn_service(spawn_cap, path) {
@@ -1087,19 +1091,60 @@ fn await_adapter_accounting() {
     }
 }
 
-#[cfg(feature = "zram-lifecycle-test")]
+#[cfg(all(feature = "zram-lifecycle-test", not(feature = "zram-pressure-test")))]
 fn run_zram_lifecycle() {
     let swapd = sunlight_libc::spawn(b"/sbin/sunlight-swapd", &[], None).expect("spawn swapd");
     assert_eq!(sunlight_libc::waitpid(swapd), Ok(0));
     wait_zram_reap(swapd);
+    let mode: &[u8] = if cfg!(feature = "zram-fault-test") {
+        b"fault-test"
+    } else {
+        b"lifecycle-test"
+    };
     for _ in 0..100 {
-        let pid = sunlight_libc::spawn(b"/bin/freezram", &[b"freezram", b"lifecycle-test"], None)
+        let pid = sunlight_libc::spawn(b"/bin/freezram", &[b"freezram", mode], None)
             .expect("spawn freezram");
         assert_eq!(sunlight_libc::waitpid(pid), Ok(37));
         assert!(sunlight_libc::waitpid(pid).is_err());
         wait_zram_reap(pid);
     }
-    debug_log("[ZRAM-LIFE] completed cycles=100 status=37 collected_once=1");
+    if cfg!(feature = "zram-fault-test") {
+        debug_log("[ZRAM-LIFE] fault workload completed cycles=100 status=37 collected_once=1");
+    } else {
+        debug_log("[ZRAM-LIFE] completed cycles=100 status=37 collected_once=1");
+    }
+}
+
+#[cfg(feature = "zram-pressure-test")]
+fn run_zram_pressure(ep: EndpointId, registry: &mut Registry) {
+    let swapd = sunlight_libc::spawn(b"/sbin/sunlight-swapd", &[], None).expect("spawn swapd");
+    assert_eq!(sunlight_libc::waitpid(swapd), Ok(0));
+    wait_zram_reap(swapd);
+    sunlight_libc::spawn(b"/sbin/timer_server", &[], None).expect("spawn timer service");
+    let monitor = sunlight_libc::spawn(b"/bin/freezram", &[b"freezram", b"pressure-monitor"], None)
+        .expect("spawn independent timer client");
+    while unsafe { sunlight_libc::sys::syscall2(0xf1c4, 10, 0) } == 0 {
+        assert_eq!(sunlight_libc::try_waitpid(monitor), Ok(None));
+        drain_nameserver(ep, registry, 1, 20);
+    }
+    let worker = sunlight_libc::spawn(b"/bin/freezram", &[b"freezram", b"pressure-test"], None)
+        .expect("spawn pressure workload");
+    let status = loop {
+        if let Some(status) = sunlight_libc::try_waitpid(worker).expect("collect workload") {
+            break status;
+        }
+        drain_nameserver(ep, registry, 1, 20);
+    };
+    assert!(sunlight_libc::waitpid(worker).is_err());
+    while unsafe { sunlight_libc::sys::syscall2(0xf1c4, 9, worker) } == 0 {
+        sunlight_libc::yield_now();
+    }
+    assert_eq!(sunlight_libc::waitpid(monitor), Ok(0));
+    if status == 37 {
+        debug_log("[ZRAM-PRESSURE] completed status=37 collected_once=1");
+    } else {
+        debug_log("[ZRAM-PRESSURE] workload stopped before verification");
+    }
 }
 
 #[cfg(feature = "zram-lifecycle-test")]

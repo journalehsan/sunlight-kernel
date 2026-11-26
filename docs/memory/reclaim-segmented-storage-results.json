@@ -1,0 +1,2191 @@
+{
+  "status": "segmented_storage_validated_natural_reclaim_blocked",
+  "natural_reclaim_qualified": false,
+  "design": {
+    "heap_capacity_bytes": 16777216,
+    "entry_bytes": 24,
+    "slots_per_chunk": 170,
+    "chunk_bytes": 4088,
+    "chunk_alignment_bytes": 8,
+    "full_capacity_bytes_per_slot_before": 24,
+    "full_capacity_bytes_per_slot_after": 24.04705882352941,
+    "static_mutex_and_queue_bytes_before": 40,
+    "static_mutex_and_queue_bytes_after": 64
+  },
+  "host": {
+    "regressions": {
+      "kernel-host": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/kernel-host.log",
+          "sha256": "84c2b50194591292ade0cc6a5d4fb485efc48ddb256461e5a3b7832a02f6b1b4"
+        }
+      },
+      "scheduler": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/scheduler.log",
+          "sha256": "c802eee7840802a9fb1ef50086fe8302e7be4e37bd59f327bef227fc1c52ac64"
+        }
+      },
+      "retirement": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/retirement.log",
+          "sha256": "9865be23e29bfaa4c8cbb424192d17c815e7bb511763160ad4444fa4833a0b3d"
+        }
+      },
+      "zram": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/zram.log",
+          "sha256": "10653395a9275cfc2bc6a25715c1beba7af4e193cbdeb60c804a0e51f07cc4e8"
+        }
+      },
+      "swap-slot": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/swap-slot.log",
+          "sha256": "95ca2a861195979002a6251cb9849223300d910f79835ac0c7baa3d3b9af4de4"
+        }
+      },
+      "ipc": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/ipc.log",
+          "sha256": "bd3f8c2f33fb7c0347f22648d900e6378efd5916d80b73fc05a376628cca16cd"
+        }
+      },
+      "service": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/service.log",
+          "sha256": "6d37bcd932f9d124c85660658a4095574413e8369470b5b29a239cdc43391ce4"
+        }
+      },
+      "registration": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/registration.log",
+          "sha256": "6c632ea898203bceacf93c2a649be4026c480e36657fdea83608152e46c8c747"
+        }
+      },
+      "descriptor": {
+        "status": "PASS",
+        "exit": 0,
+        "log": {
+          "path": "target/reclaim-segmented-storage/descriptor.log",
+          "sha256": "38c23d5cd463a177b65fa83ba1aba2ff2146ae93cb5c94415ab3194909bd05f9"
+        }
+      }
+    },
+    "kernel_test_count": 220,
+    "fragmented_heap": {
+      "status": "PASS",
+      "holes": 4,
+      "bytes_per_hole": 4088,
+      "contiguous_request_bytes": 8176,
+      "contiguous_request_succeeded": false,
+      "initial_chunks_reserved": 2,
+      "failed_additional_chunk_count": 3,
+      "rolled_back_chunks": 2,
+      "heap_bytes_after_drop": 0
+    },
+    "matched_heap": {
+      "status": "PASS",
+      "entries": 176130,
+      "batch_count": 21,
+      "batch_pages": 8192,
+      "initial_entries": 4098,
+      "baseline_bytes": 2620536,
+      "journal_bytes": 327680,
+      "before": {
+        "capacity": 176130,
+        "queue_bytes": 4227120,
+        "settled_heap_bytes": 6847656,
+        "peak_heap_bytes": 11205848
+      },
+      "after": {
+        "capacity": 176290,
+        "queue_bytes": 4239256,
+        "settled_heap_bytes": 6859792,
+        "peak_heap_bytes": 7187472
+      },
+      "scope": "Same first-fit allocator in independent 16 MiB host arenas. Peak sampled after every successful allocation; no native heap interleaving or timer scratch."
+    }
+  },
+  "builds": {
+    "production": {
+      "status": "PASS",
+      "exit": 0,
+      "log": {
+        "path": "target/reclaim-segmented-storage/build-production.log",
+        "sha256": "6f447bf58c9a2ce3a62bd23d4ee4b4a04bd440d320ef21703d869e28bcaaabd4"
+      }
+    },
+    "fault": {
+      "status": "PASS",
+      "exit": 0,
+      "log": {
+        "path": "target/reclaim-segmented-storage/build-fault.log",
+        "sha256": "86d56e5ae3d2f13b1f40dfe573cc31460d383c89bfcf7073f807c001a5d32a7c"
+      }
+    },
+    "populated": {
+      "status": "PASS",
+      "exit": 0,
+      "log": {
+        "path": "target/reclaim-segmented-storage/build-populated.log",
+        "sha256": "5a66b54ece81fe82365131b2f62449922f6244eb3b96918b6d80c3a448b0ba21"
+      }
+    },
+    "pressure": {
+      "status": "PASS",
+      "exit": 0,
+      "log": {
+        "path": "target/reclaim-segmented-storage/build-pressure.log",
+        "sha256": "f838f23c9b21b7786ccf0f9efa34b9cefaf8ba91964a41dcef678160fc776e18"
+      }
+    }
+  },
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "native_images": {
+    "fault": {
+      "path": "target/reclaim-segmented-storage/fault.iso",
+      "sha256": "a42d8ed9c14d2fcd8cbf5ea2d9b26c2a88bd2c067ce7e06e3172ecf477275fcc"
+    },
+    "populated": {
+      "path": "target/reclaim-segmented-storage/populated.iso",
+      "sha256": "65dd2843282e1c458f6f179f1c123603e18d0b293190b2bee39b38fc59893295"
+    },
+    "pressure": {
+      "path": "target/reclaim-segmented-storage/pressure.iso",
+      "sha256": "01c333f35397a1fcace661fe84d5452df32a2b22a7c294174f08ff3823f58286"
+    }
+  },
+  "native_census_checker": {
+    "path": "target/reclaim-segmented-storage/check.py",
+    "sha256": "b81ea8d765128c04c17eb7bdde2ef248e25710490641af76bb64ae9e0d3944f5"
+  },
+  "native_repeated_reclaim": [
+    {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 1,
+      "pools": 1,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/fault.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/native-1.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "1",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/reclaim-segmented-storage/native-1.serial.log",
+        "sha256": "26c81c459c2c9b4baac26a6bb86cd74a6675b597a7adfbf9b24d44d396e91b1b"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 424,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 1,
+        "pools": 1,
+        "frames": 262545,
+        "user": 28201,
+        "pt": 86,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4250,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2601264
+      },
+      "phase_ranges": {
+        "resident": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261968,
+            261968
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            0,
+            3564
+          ],
+          "swapouts": [
+            0,
+            3564
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634088,
+            2634992
+          ]
+        },
+        "populated": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261979,
+            261979
+          ],
+          "user": [
+            28756,
+            28756
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            1,
+            1
+          ],
+          "slots": [
+            12,
+            12
+          ],
+          "compressed": [
+            2004,
+            2010
+          ],
+          "backing": [
+            4096,
+            4096
+          ],
+          "candidates": [
+            4102,
+            4102
+          ],
+          "owned_candidates": [
+            4,
+            4
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            0,
+            3588
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            555,
+            555
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634760,
+            2634992
+          ]
+        },
+        "restored": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261968,
+            261968
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            12,
+            3600
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634760,
+            2634992
+          ]
+        },
+        "settled": {
+          "cpus": [
+            1,
+            1
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            262545,
+            262545
+          ],
+          "user": [
+            28201,
+            28201
+          ],
+          "pt": [
+            86,
+            86
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4098,
+            4098
+          ],
+          "owned_candidates": [
+            0,
+            0
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            36,
+            3600
+          ],
+          "swapouts": [
+            36,
+            3600
+          ],
+          "owned": [
+            0,
+            0
+          ],
+          "regions": [
+            0,
+            0
+          ],
+          "fds": [
+            0,
+            0
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            0,
+            0
+          ],
+          "reclaimed": [
+            1,
+            1
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2601936,
+            2601936
+          ]
+        }
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 12,
+          "slot_capacity": 16,
+          "free_capacity": 16,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "settled_heap_histogram_bytes": {
+        "2601936": 100
+      },
+      "completion_line": 12127,
+      "census": {
+        "path": "target/reclaim-segmented-storage/native-1.summary.json",
+        "sha256": "580a3a8dccddfe1def10457cf0f39da216e9870534f69849f16a4559940a29ef"
+      },
+      "image": "fault"
+    },
+    {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 2,
+      "pools": 1,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/fault.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/native-2.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "2",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/reclaim-segmented-storage/native-2.serial.log",
+        "sha256": "b7b3f5303453b102e6d06c3aeea9d02a38efef00094ec8f24d3ddc2a6a28528d"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 429,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 2,
+        "pools": 1,
+        "frames": 262289,
+        "user": 28201,
+        "pt": 84,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4250,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2601360
+      },
+      "phase_ranges": {
+        "resident": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261712,
+            261712
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            0,
+            3564
+          ],
+          "swapouts": [
+            0,
+            3564
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634416,
+            4208896
+          ]
+        },
+        "populated": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261723,
+            261723
+          ],
+          "user": [
+            28756,
+            28756
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            1,
+            1
+          ],
+          "slots": [
+            12,
+            12
+          ],
+          "compressed": [
+            2004,
+            2010
+          ],
+          "backing": [
+            4096,
+            4096
+          ],
+          "candidates": [
+            4102,
+            4102
+          ],
+          "owned_candidates": [
+            4,
+            4
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            0,
+            3588
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            555,
+            555
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634856,
+            4436640
+          ]
+        },
+        "restored": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            261712,
+            261712
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            94,
+            94
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            12,
+            3600
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634856,
+            4436640
+          ]
+        },
+        "settled": {
+          "cpus": [
+            2,
+            2
+          ],
+          "pools": [
+            1,
+            1
+          ],
+          "frames": [
+            262289,
+            262289
+          ],
+          "user": [
+            28201,
+            28201
+          ],
+          "pt": [
+            84,
+            84
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4098,
+            4098
+          ],
+          "owned_candidates": [
+            0,
+            0
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            36,
+            3600
+          ],
+          "swapouts": [
+            36,
+            3600
+          ],
+          "owned": [
+            0,
+            0
+          ],
+          "regions": [
+            0,
+            0
+          ],
+          "fds": [
+            0,
+            0
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            0,
+            0
+          ],
+          "reclaimed": [
+            1,
+            1
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2602032,
+            2602032
+          ]
+        }
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 12,
+          "slot_capacity": 16,
+          "free_capacity": 16,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "settled_heap_histogram_bytes": {
+        "2602032": 100
+      },
+      "completion_line": 12132,
+      "census": {
+        "path": "target/reclaim-segmented-storage/native-2.summary.json",
+        "sha256": "dcb14f66a2174bce2d5f702522cdbfcc350cccf1d82e516816e7b4fd8ec5bec7"
+      },
+      "image": "fault"
+    },
+    {
+      "status": "pass",
+      "ram_mib": 2048,
+      "vcpus": 4,
+      "pools": 2,
+      "qemu_args": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/fault.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/native-4.serial.log",
+        "-m",
+        "2048",
+        "-smp",
+        "4",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "qemu-xhci,id=xhci",
+        "-device",
+        "usb-mouse,bus=xhci.0"
+      ],
+      "serial": {
+        "path": "target/reclaim-segmented-storage/native-4.serial.log",
+        "sha256": "43c38b4d9e4b44e57ff500198846ce9121a8a90da61567621506c57711f42335"
+      },
+      "children": 100,
+      "exit_status": 37,
+      "compression_rounds_per_child": 3,
+      "verified_bytes_per_child": 196608,
+      "successful_user_read_vector_14_restores": 3600,
+      "fault_rip_counts": {
+        "0x408615": 1800,
+        "0x40855c": 1800
+      },
+      "freshly_restored_candidate_deferrals": 2400,
+      "repeat_evictions_by_reclaim_candidate_path": 2400,
+      "scheduler_rows": [
+        3
+      ],
+      "baseline": {
+        "line": 446,
+        "phase": "baseline",
+        "pid": 0,
+        "cpus": 4,
+        "pools": 2,
+        "frames": 261775,
+        "user": 28201,
+        "pt": 86,
+        "compressed_frames": 0,
+        "slots": 0,
+        "compressed": 0,
+        "backing": 0,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "candidate_capacity": 4250,
+        "swapins": 0,
+        "swapouts": 0,
+        "owned": 0,
+        "regions": 0,
+        "fds": 0,
+        "ipc_bytes": 0,
+        "stack": 0,
+        "reclaimed": 0,
+        "rows": 4,
+        "row_capacity": 512,
+        "heap": 2601264
+      },
+      "phase_ranges": {
+        "resident": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261198,
+            261198
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            0,
+            3564
+          ],
+          "swapouts": [
+            0,
+            3564
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634320,
+            4401248
+          ]
+        },
+        "populated": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261208,
+            261208
+          ],
+          "user": [
+            28756,
+            28756
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            2,
+            2
+          ],
+          "slots": [
+            12,
+            12
+          ],
+          "compressed": [
+            2004,
+            2010
+          ],
+          "backing": [
+            8192,
+            8192
+          ],
+          "candidates": [
+            4102,
+            4102
+          ],
+          "owned_candidates": [
+            4,
+            4
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            0,
+            3588
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            555,
+            555
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634856,
+            4436304
+          ]
+        },
+        "restored": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261198,
+            261198
+          ],
+          "user": [
+            28768,
+            28768
+          ],
+          "pt": [
+            96,
+            96
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4114,
+            4114
+          ],
+          "owned_candidates": [
+            16,
+            16
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            12,
+            3600
+          ],
+          "swapouts": [
+            12,
+            3600
+          ],
+          "owned": [
+            567,
+            567
+          ],
+          "regions": [
+            6,
+            6
+          ],
+          "fds": [
+            3,
+            3
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            1,
+            1
+          ],
+          "reclaimed": [
+            0,
+            0
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2634856,
+            4436864
+          ]
+        },
+        "settled": {
+          "cpus": [
+            4,
+            4
+          ],
+          "pools": [
+            2,
+            2
+          ],
+          "frames": [
+            261775,
+            261775
+          ],
+          "user": [
+            28201,
+            28201
+          ],
+          "pt": [
+            86,
+            86
+          ],
+          "compressed_frames": [
+            0,
+            0
+          ],
+          "slots": [
+            0,
+            0
+          ],
+          "compressed": [
+            0,
+            0
+          ],
+          "backing": [
+            0,
+            0
+          ],
+          "candidates": [
+            4098,
+            4098
+          ],
+          "owned_candidates": [
+            0,
+            0
+          ],
+          "candidate_capacity": [
+            4250,
+            4250
+          ],
+          "swapins": [
+            36,
+            3600
+          ],
+          "swapouts": [
+            36,
+            3600
+          ],
+          "owned": [
+            0,
+            0
+          ],
+          "regions": [
+            0,
+            0
+          ],
+          "fds": [
+            0,
+            0
+          ],
+          "ipc_bytes": [
+            0,
+            0
+          ],
+          "stack": [
+            0,
+            0
+          ],
+          "reclaimed": [
+            1,
+            1
+          ],
+          "rows": [
+            4,
+            4
+          ],
+          "row_capacity": [
+            512,
+            512
+          ],
+          "heap": [
+            2602032,
+            4078544
+          ]
+        }
+      },
+      "warm_pool_metadata": {
+        "0": {
+          "entries": 6,
+          "slot_capacity": 8,
+          "free_capacity": 8,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        },
+        "1": {
+          "entries": 6,
+          "slot_capacity": 8,
+          "free_capacity": 8,
+          "storage_entries": 1,
+          "storage_capacity": 4
+        }
+      },
+      "reaps": [
+        {
+          "user_frames": 567,
+          "page_tables": 10,
+          "swap_blocks": 0,
+          "ipc_entries": 0,
+          "children": 100
+        }
+      ],
+      "settled_heap_histogram_bytes": {
+        "2602032": 90,
+        "3649656": 1,
+        "3217992": 1,
+        "3970952": 1,
+        "3748720": 1,
+        "3324720": 1,
+        "4078544": 1,
+        "3543400": 1,
+        "3683280": 1,
+        "3739000": 1,
+        "3288176": 1
+      },
+      "completion_line": 12950,
+      "census": {
+        "path": "target/reclaim-segmented-storage/native-4.summary.json",
+        "sha256": "788263179bd6a19505c0c96f14f4da9b426d995644c43d93f76970249ec669b8"
+      },
+      "image": "fault"
+    }
+  ],
+  "native_populated_exit": {
+    "status": "pass",
+    "ram_mib": 2048,
+    "vcpus": 4,
+    "pools": 2,
+    "qemu_args": [
+      "qemu-system-x86_64",
+      "-accel",
+      "tcg",
+      "-cdrom",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/populated.iso",
+      "-serial",
+      "file:/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/populated-4.serial.log",
+      "-m",
+      "2048",
+      "-smp",
+      "4",
+      "-display",
+      "none",
+      "-nic",
+      "none",
+      "-no-reboot",
+      "-no-shutdown",
+      "-device",
+      "virtio-rng-pci,disable-modern=on",
+      "-device",
+      "qemu-xhci,id=xhci",
+      "-device",
+      "usb-mouse,bus=xhci.0"
+    ],
+    "serial": {
+      "path": "target/reclaim-segmented-storage/populated-4.serial.log",
+      "sha256": "08b5d50209ca0cf39a6c6a5a661e9d362051411b4a6fb18bbdb95ac4e38b90c0"
+    },
+    "children": 100,
+    "exit_status": 37,
+    "compression_rounds_per_child": 1,
+    "verified_bytes_per_child": 0,
+    "successful_user_read_vector_14_restores": 0,
+    "fault_rip_counts": {},
+    "freshly_restored_candidate_deferrals": 0,
+    "repeat_evictions_by_reclaim_candidate_path": 0,
+    "scheduler_rows": [
+      3
+    ],
+    "baseline": {
+      "line": 440,
+      "phase": "baseline",
+      "pid": 0,
+      "cpus": 4,
+      "pools": 2,
+      "frames": 261790,
+      "user": 28201,
+      "pt": 84,
+      "compressed_frames": 0,
+      "slots": 0,
+      "compressed": 0,
+      "backing": 0,
+      "candidates": 4098,
+      "owned_candidates": 0,
+      "candidate_capacity": 4250,
+      "swapins": 0,
+      "swapouts": 0,
+      "owned": 0,
+      "regions": 0,
+      "fds": 0,
+      "ipc_bytes": 0,
+      "stack": 0,
+      "reclaimed": 0,
+      "rows": 4,
+      "row_capacity": 512,
+      "heap": 2601200
+    },
+    "phase_ranges": {
+      "resident": {
+        "cpus": [
+          4,
+          4
+        ],
+        "pools": [
+          2,
+          2
+        ],
+        "frames": [
+          261213,
+          261213
+        ],
+        "user": [
+          28768,
+          28768
+        ],
+        "pt": [
+          94,
+          94
+        ],
+        "compressed_frames": [
+          0,
+          0
+        ],
+        "slots": [
+          0,
+          0
+        ],
+        "compressed": [
+          0,
+          0
+        ],
+        "backing": [
+          0,
+          0
+        ],
+        "candidates": [
+          4114,
+          4114
+        ],
+        "owned_candidates": [
+          16,
+          16
+        ],
+        "candidate_capacity": [
+          4250,
+          4250
+        ],
+        "swapins": [
+          0,
+          0
+        ],
+        "swapouts": [
+          0,
+          1188
+        ],
+        "owned": [
+          567,
+          567
+        ],
+        "regions": [
+          5,
+          5
+        ],
+        "fds": [
+          3,
+          3
+        ],
+        "ipc_bytes": [
+          0,
+          0
+        ],
+        "stack": [
+          1,
+          1
+        ],
+        "reclaimed": [
+          0,
+          0
+        ],
+        "rows": [
+          4,
+          4
+        ],
+        "row_capacity": [
+          512,
+          512
+        ],
+        "heap": [
+          2634416,
+          4401344
+        ]
+      },
+      "populated": {
+        "cpus": [
+          4,
+          4
+        ],
+        "pools": [
+          2,
+          2
+        ],
+        "frames": [
+          261223,
+          261223
+        ],
+        "user": [
+          28756,
+          28756
+        ],
+        "pt": [
+          94,
+          94
+        ],
+        "compressed_frames": [
+          2,
+          2
+        ],
+        "slots": [
+          12,
+          12
+        ],
+        "compressed": [
+          2004,
+          2004
+        ],
+        "backing": [
+          8192,
+          8192
+        ],
+        "candidates": [
+          4102,
+          4102
+        ],
+        "owned_candidates": [
+          4,
+          4
+        ],
+        "candidate_capacity": [
+          4250,
+          4250
+        ],
+        "swapins": [
+          0,
+          0
+        ],
+        "swapouts": [
+          12,
+          1200
+        ],
+        "owned": [
+          555,
+          555
+        ],
+        "regions": [
+          5,
+          5
+        ],
+        "fds": [
+          3,
+          3
+        ],
+        "ipc_bytes": [
+          0,
+          0
+        ],
+        "stack": [
+          1,
+          1
+        ],
+        "reclaimed": [
+          0,
+          0
+        ],
+        "rows": [
+          4,
+          4
+        ],
+        "row_capacity": [
+          512,
+          512
+        ],
+        "heap": [
+          2634952,
+          4436168
+        ]
+      },
+      "settled": {
+        "cpus": [
+          4,
+          4
+        ],
+        "pools": [
+          2,
+          2
+        ],
+        "frames": [
+          261790,
+          261790
+        ],
+        "user": [
+          28201,
+          28201
+        ],
+        "pt": [
+          84,
+          84
+        ],
+        "compressed_frames": [
+          0,
+          0
+        ],
+        "slots": [
+          0,
+          0
+        ],
+        "compressed": [
+          0,
+          0
+        ],
+        "backing": [
+          0,
+          0
+        ],
+        "candidates": [
+          4098,
+          4098
+        ],
+        "owned_candidates": [
+          0,
+          0
+        ],
+        "candidate_capacity": [
+          4250,
+          4250
+        ],
+        "swapins": [
+          0,
+          0
+        ],
+        "swapouts": [
+          12,
+          1200
+        ],
+        "owned": [
+          0,
+          0
+        ],
+        "regions": [
+          0,
+          0
+        ],
+        "fds": [
+          0,
+          0
+        ],
+        "ipc_bytes": [
+          0,
+          0
+        ],
+        "stack": [
+          0,
+          0
+        ],
+        "reclaimed": [
+          1,
+          1
+        ],
+        "rows": [
+          4,
+          4
+        ],
+        "row_capacity": [
+          512,
+          512
+        ],
+        "heap": [
+          2602128,
+          4368536
+        ]
+      }
+    },
+    "warm_pool_metadata": {
+      "0": {
+        "entries": 6,
+        "slot_capacity": 8,
+        "free_capacity": 8,
+        "storage_entries": 1,
+        "storage_capacity": 4
+      },
+      "1": {
+        "entries": 6,
+        "slot_capacity": 8,
+        "free_capacity": 8,
+        "storage_entries": 1,
+        "storage_capacity": 4
+      }
+    },
+    "reaps": [
+      {
+        "user_frames": 555,
+        "page_tables": 10,
+        "swap_blocks": 12,
+        "ipc_entries": 0,
+        "children": 100
+      }
+    ],
+    "settled_heap_histogram_bytes": {
+      "2602128": 86,
+      "2602144": 7,
+      "4053952": 1,
+      "4368536": 1,
+      "2602160": 1,
+      "3502936": 1,
+      "3390136": 1,
+      "3475864": 1,
+      "3640624": 1
+    },
+    "completion_line": 3336,
+    "census": {
+      "path": "target/reclaim-segmented-storage/populated-4.summary.json",
+      "sha256": "61de29e1a4907b1d0c8772e273a63845adcbd10cadfda42f87582f5e0e412367"
+    },
+    "image": "populated"
+  },
+  "native_pressure": {
+    "status": "BLOCKED_HEAP_ALLOCATION_PANIC",
+    "vcpus": 1,
+    "ram_mib": 2048,
+    "pools": 1,
+    "host_watchdog_seconds": 240,
+    "exit": 1,
+    "image": "pressure",
+    "argv": [
+      "qemu-system-x86_64",
+      "-accel",
+      "tcg",
+      "-cdrom",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/pressure.iso",
+      "-serial",
+      "file:/home/ehsantor/Projects/sunlightos-kernel/target/reclaim-segmented-storage/pressure-1.serial.log",
+      "-m",
+      "2048",
+      "-smp",
+      "1",
+      "-display",
+      "none",
+      "-nic",
+      "none",
+      "-no-reboot",
+      "-no-shutdown",
+      "-device",
+      "virtio-rng-pci,disable-modern=on",
+      "-device",
+      "qemu-xhci,id=xhci",
+      "-device",
+      "usb-mouse,bus=xhci.0"
+    ],
+    "serial": {
+      "path": "target/reclaim-segmented-storage/pressure-1.serial.log",
+      "sha256": "2783b9de0ae3495f7e162d853669bed7a6955a5e1a765dd80555cfb9ca99e2fa"
+    },
+    "previous_native_report": "reclaim-metadata-capacity-audit-results.json",
+    "prior_max_initialized_mib_same_topology": 672,
+    "max_completed_initialized_mib": 704,
+    "checkpoints": [
+      {
+        "phase": "start",
+        "pid": 8,
+        "value": 1620,
+        "cpus": 1,
+        "pools": 1,
+        "total": 368673,
+        "free": 260910,
+        "start": 5760,
+        "target": 11521,
+        "user": 29817,
+        "pt": 110,
+        "owned": 551,
+        "candidates": 4098,
+        "owned_candidates": 0,
+        "capacity": 4250,
+        "heap": 2722376,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0,
+        "queue_heap_bytes": 102200
+      },
+      {
+        "phase": "sample",
+        "pid": 8,
+        "value": 20,
+        "cpus": 1,
+        "pools": 1,
+        "total": 368673,
+        "free": 88541,
+        "start": 5760,
+        "target": 11521,
+        "user": 201849,
+        "pt": 447,
+        "owned": 172583,
+        "candidates": 176130,
+        "owned_candidates": 172032,
+        "capacity": 176290,
+        "heap": 6859792,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0,
+        "queue_heap_bytes": 4239256
+      },
+      {
+        "phase": "sample",
+        "pid": 8,
+        "value": 21,
+        "cpus": 1,
+        "pools": 1,
+        "total": 368673,
+        "free": 80333,
+        "start": 5760,
+        "target": 11521,
+        "user": 210041,
+        "pt": 463,
+        "owned": 180775,
+        "candidates": 184322,
+        "owned_candidates": 180224,
+        "capacity": 184450,
+        "heap": 7056016,
+        "slots": 0,
+        "payload": 0,
+        "backing": 0,
+        "activations": 0,
+        "scans": 0,
+        "reclaimed": 0,
+        "no_progress": 0,
+        "out": 0,
+        "in_attempts": 0,
+        "in_success": 0,
+        "in_failed": 0,
+        "queue_heap_bytes": 4435480
+      }
+    ],
+    "free_frames_above_start_at_last_sample": 74573,
+    "panic_request_bytes": 280,
+    "panic_request_alignment_bytes": 8,
+    "panic_heap_bytes_used": 16774912,
+    "panic_heap_bytes_free": 2304,
+    "panic_site": "No stack trace in this run. Size and pressure profile match timer telemetry tree-node exhaustion previously confirmed by debugger.",
+    "queue_reserve_failures_observed": 0,
+    "activations": 0,
+    "scans": 0,
+    "evictions": 0,
+    "natural_same_page_restore_and_reeviction": "NOT_RUN",
+    "pressure_worker_cleanup": "NOT_RUN",
+    "timer_responsiveness_during_natural_reclaim": "NOT_RUN",
+    "additional_pressure_topologies": "NOT_RUN (2 and 4 vCPUs)",
+    "whole_run_allocator_peak": "NOT_MEASURED"
+  }
+}

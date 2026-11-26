@@ -733,6 +733,14 @@ pub fn pool_stats(index: usize) -> Option<PoolStats> {
     (index < ACTIVE_POOLS.load(Ordering::Acquire)).then(|| POOLS[index].lock().stats)
 }
 
+pub(super) fn live_slots() -> usize {
+    POOLS
+        .iter()
+        .take(ACTIVE_POOLS.load(Ordering::Acquire))
+        .map(|pool| pool.lock().stats.used_logical_pages as usize)
+        .sum()
+}
+
 pub fn aggregate_stats() -> AggregateStats {
     let pool_count = ACTIVE_POOLS.load(Ordering::Acquire);
     let config = CONFIGURATION.lock();

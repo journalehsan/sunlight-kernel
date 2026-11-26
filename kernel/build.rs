@@ -583,6 +583,8 @@ fn main() {
 
     if env::var_os("CARGO_FEATURE_ZRAM_LIFECYCLE_TEST").is_some() {
         let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+        let fault_test = env::var_os("CARGO_FEATURE_ZRAM_FAULT_TEST").is_some();
+        let pressure_test = env::var_os("CARGO_FEATURE_ZRAM_PRESSURE_TEST").is_some();
         for (package, source) in [
             ("sunlight-init", "../services/init"),
             ("sunlight-utils", "../sunlight-utils"),
@@ -596,7 +598,19 @@ fn main() {
                     package,
                     output: package,
                     rustflags: service_rustflags,
-                    args: &["--release", "--bin", package, "--features", "zram-lifecycle-test"],
+                    args: &[
+                        "--release",
+                        "--bin",
+                        package,
+                        "--features",
+                        if pressure_test {
+                            "zram-pressure-test"
+                        } else if fault_test && package == "sunlight-init" {
+                            "zram-fault-test"
+                        } else {
+                            "zram-lifecycle-test"
+                        },
+                    ],
                 },
             );
         }
@@ -1304,6 +1318,7 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/arch/x86_64/linker.ld");
 }
 
 fn build_timestamp() -> String {

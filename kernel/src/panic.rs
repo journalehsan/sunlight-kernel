@@ -101,6 +101,8 @@ fn alloc_error(layout: core::alloc::Layout) -> ! {
         }
     }
 
+    #[cfg(feature = "zram_pressure_test")]
+    crate::serial_println_try!("[ZRAM-PRESSURE] alloc_error_heap={:?}", crate::memory::heap::try_heap_usage());
     crate::serial_println_try!(
         "\n[KERNEL PANIC] Out of memory (layout size={} align={})",
         layout.size(),

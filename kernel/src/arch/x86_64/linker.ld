@@ -30,6 +30,10 @@ SECTIONS
         *(.data .data.*)
     } :data
 
+    .got : {
+        *(.got .got.* .igot .igot.*)
+    } :data
+
     . = ALIGN(4096);
 
     .telemetry : {

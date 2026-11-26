@@ -2004,10 +2004,28 @@ impl AddressSpace {
     pub unsafe fn visit_user_frames(
         &self,
         hhdm_offset: VirtAddr,
-        mut visit: impl FnMut(u64),
+        visit: impl FnMut(u64),
     ) -> usize {
+        let mut visit = visit;
+        self.visit_user_frames_bounded(hhdm_offset, |_| true, |start, count| {
+            for offset in 0..count {
+                visit(start + offset as u64 * 4096);
+            }
+        })
+            .unwrap()
+    }
+
+    pub(crate) unsafe fn visit_user_frames_bounded(
+        &self,
+        hhdm_offset: VirtAddr,
+        mut charge: impl FnMut(usize) -> bool,
+        mut visit: impl FnMut(u64, usize),
+    ) -> Option<usize> {
         if self.is_reclaimed() {
-            return 0;
+            return Some(0);
+        }
+        if !charge(256) {
+            return None;
         }
         let mut total = 0usize;
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
@@ -2016,42 +2034,68 @@ impl AddressSpace {
                 continue;
             }
             let p3 = &*((hhdm_offset + p4e.addr().as_u64()).as_ptr::<PageTable>());
+            if !charge(512) {
+                return None;
+            }
             for p3e in p3.iter() {
                 if !p3e.flags().contains(PageTableFlags::PRESENT) {
                     continue;
                 }
                 // 1 GiB huge page
                 if p3e.flags().contains(PageTableFlags::HUGE_PAGE) {
-                    for i in 0..512 * 512 {
-                        visit(p3e.addr().as_u64() + i * 4096);
+                    for batch in 0..512 {
+                        if !charge(512) {
+                            return None;
+                        }
+                        visit(p3e.addr().as_u64() + batch * 512 * 4096, 512);
                     }
                     total += 512 * 512;
                     continue;
                 }
                 let p2 = &*((hhdm_offset + p3e.addr().as_u64()).as_ptr::<PageTable>());
+                if !charge(512) {
+                    return None;
+                }
                 for p2e in p2.iter() {
                     if !p2e.flags().contains(PageTableFlags::PRESENT) {
                         continue;
                     }
                     // 2 MiB huge page
                     if p2e.flags().contains(PageTableFlags::HUGE_PAGE) {
-                        for i in 0..512 {
-                            visit(p2e.addr().as_u64() + i * 4096);
+                        if !charge(512) {
+                            return None;
                         }
+                        visit(p2e.addr().as_u64(), 512);
                         total += 512;
                         continue;
                     }
                     let p1 = &*((hhdm_offset + p2e.addr().as_u64()).as_ptr::<PageTable>());
+                    if !charge(512) {
+                        return None;
+                    }
+                    let mut start = 0;
+                    let mut count = 0;
                     for p1e in p1.iter() {
-                        if !p1e.is_unused() && p1e.flags().contains(PageTableFlags::PRESENT) {
-                            visit(p1e.addr().as_u64());
+                        if p1e.flags().contains(PageTableFlags::PRESENT) {
+                            let address = p1e.addr().as_u64();
+                            if count != 0 && address != start + count as u64 * 4096 {
+                                visit(start, count);
+                                count = 0;
+                            }
+                            if count == 0 {
+                                start = address;
+                            }
+                            count += 1;
                             total += 1;
                         }
+                    }
+                    if count != 0 {
+                        visit(start, count);
                     }
                 }
             }
         }
-        total
+        Some(total)
     }
 
     /// Create or get the next-level page table for an entry.

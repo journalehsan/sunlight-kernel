@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use sunlight_fat::{FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 use sunlight_fs::{
     check_permission, parse_fstab, parse_group, parse_passwd, Credential, FileHandle, FileType,
-    FsError, FstabEntry, PermCheck, RamFs, Vfs, INITRAMFS,
+    FsError, FstabEntry, PermCheck, RamEntry, RamFs, Vfs,
 };
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup_timeout,
@@ -209,7 +209,20 @@ pub extern "C" fn _start() -> ! {
     // Root filesystem (RamFs)
     let mut vfs = Vfs::new();
     let mut boot = None;
-    let boot_mountpoint = mount_from_fstab(&mut vfs, &mut boot);
+    #[cfg(feature = "boot-resources")]
+    let seed = {
+        use sunlight_fs::boot_resources as resources;
+        let pointer = resources::USER_ADDRESS as *const u8;
+        let header = unsafe { core::slice::from_raw_parts(pointer, resources::HEADER) };
+        let size = resources::archive_size(header).expect("boot resource header");
+        let bytes = unsafe { core::slice::from_raw_parts(pointer, size) };
+        let entries = resources::entries(bytes).expect("boot resource inventory");
+        debug_log("[BOOT-RES] VFS inventory ready");
+        entries
+    };
+    #[cfg(not(feature = "boot-resources"))]
+    let seed = sunlight_fs::INITRAMFS;
+    let boot_mountpoint = mount_from_fstab(&mut vfs, &mut boot, seed);
 
     let namespace = sunlight_vfs_server::directory::DirectoryNamespace::mounted(vfs)
         .expect("service mounted namespace ownership");
@@ -372,9 +385,9 @@ fn drain_files(state: &mut State) {
 // FSTAB mount coordinator
 // ---------------------------------------------------------------------------
 
-fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>) -> Option<&'static str> {
+fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>, entries_seed: &'static [RamEntry]) -> Option<&'static str> {
     let mut seed = Vfs::new();
-    let _ = seed.mount_ramfs("/", RamFs::new(INITRAMFS));
+    let _ = seed.mount_ramfs("/", RamFs::new(entries_seed));
 
     let mut fstab_buf = [0u8; FSTAB_MAX_BYTES];
     let fstab_len = read_seed_file(&mut seed, "/etc/fstab", &mut fstab_buf);
@@ -399,7 +412,7 @@ fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>) -> Option<&'static
     let mut boot_mountpoint = None;
 
     for entry in entries.iter().flatten() {
-        if let Some(mountpoint) = mount_fstab_entry(vfs, boot, entry) {
+        if let Some(mountpoint) = mount_fstab_entry(vfs, boot, entry, entries_seed) {
             boot_mountpoint = Some(mountpoint);
         }
     }
@@ -411,11 +424,12 @@ fn mount_fstab_entry(
     vfs: &mut Vfs,
     boot: &mut Option<BootFs>,
     entry: &FstabEntry<'_>,
+    seed: &'static [RamEntry],
 ) -> Option<&'static str> {
     match entry.fs_type {
         "ramfs" | "tmpfs" => {
             if entry.mountpoint == "/" {
-                let _ = vfs.mount_ramfs("/", RamFs::new(INITRAMFS));
+                let _ = vfs.mount_ramfs("/", RamFs::new(seed));
             }
             None
         }

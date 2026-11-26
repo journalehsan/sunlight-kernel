@@ -78,7 +78,10 @@ impl Mapping {
     /// Copy bytes out so another process cannot mutate data while decoding it.
     pub fn read(&self, len: usize) -> Result<Vec<u8>> {
         ensure!(len <= self.capacity, "document IPC length exceeds mapping");
-        Ok(unsafe { core::slice::from_raw_parts(self.ptr, len) }.to_vec())
+        let mut bytes = Vec::new();
+        bytes.try_reserve_exact(len)?;
+        bytes.extend_from_slice(unsafe { core::slice::from_raw_parts(self.ptr, len) });
+        Ok(bytes)
     }
     /// Capability to transfer with an IPC message.
     pub fn capability(&self) -> CapabilityToken {

@@ -3216,6 +3216,24 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(feature = "boot_resources")]
+        match s.trim_end_matches('\n') {
+            "[SunlightOS] Phase 3.0 OK" => crate::boot_resources::checkpoint("phase-3"),
+            "[init] VFS namespace ready before service spawn" => {
+                crate::boot_resources::checkpoint("namespace");
+            }
+            "[SESSION-CONFIG] ELIGIBLE_BUNDLES PASS" => {
+                crate::boot_resources::checkpoint("session-bundles");
+            }
+            "[SESSION-CONFIG] SERVICE_READY PASS" => {
+                crate::boot_resources::checkpoint("session-ready");
+            }
+            "[DOC-HEAP] ready" => crate::boot_resources::checkpoint("doc-ready"),
+            "[DOC-HEAP] idle" => crate::boot_resources::checkpoint("doc-idle"),
+            "[DOC-HEAP] rpc" => crate::boot_resources::checkpoint("doc-rpc"),
+            "[DOC-HEAP] recovered" => crate::boot_resources::checkpoint("doc-recovered"),
+            _ => {}
+        }
         if cfg!(debug_assertions)
             && option_env!("SUNLIGHT_PROC02_REGISTRY_TRACE").is_some()
             && matches!(s, "[PROC-REG] before" | "[PROC-REG] after")
@@ -12941,9 +12959,15 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
     let addr = frame.rdi;
     let length = frame.rsi;
 
+    #[cfg(feature = "zram_pressure_test")]
+    let pressure_started = now_ns();
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(feature = "zram_pressure_test")]
+    let pressure_acquired = now_ns();
     let linux_compat = sched.current_process().is_linux_compat();
     let mut pmm = crate::PMM.lock();
+    #[cfg(feature = "zram_pressure_test")]
+    let pressure_pmm_acquired = now_ns();
     #[cfg(all(debug_assertions, feature = "helios_runtime_mmap"))]
     let before = mmap_probe_snapshot(&sched, &pmm, addr);
     let result = crate::process::mmap::sys_munmap(addr, length, &mut pmm, &mut sched);
@@ -12955,8 +12979,22 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
             mmap_probe_snapshot(&sched, &pmm, addr).unwrap()
         );
     }
+    #[cfg(feature = "zram_pressure_test")]
+    let pressure_released = now_ns();
     drop(pmm);
     drop(sched);
+
+    #[cfg(feature = "zram_pressure_test")]
+    if length >= 1024 * 1024 {
+        crate::serial_println!(
+            "[PRESSURE-UNMAP] bytes={} wait={} hold={} pmm_wait={} pmm_hold={}",
+            length,
+            pressure_acquired.saturating_sub(pressure_started),
+            pressure_released.saturating_sub(pressure_acquired),
+            pressure_pmm_acquired.saturating_sub(pressure_acquired),
+            pressure_released.saturating_sub(pressure_pmm_acquired),
+        );
+    }
 
     match result {
         Ok(()) => 0,

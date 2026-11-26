@@ -1,3 +1,6 @@
+#[cfg(feature = "native-heap-probe")]
+mod heap_probe;
+
 fn main() -> anyhow::Result<()> {
     #[cfg(feature = "native-hayro-smoke")]
     match std::env::args().nth(1).as_deref() {
@@ -164,6 +167,12 @@ fn main() -> anyhow::Result<()> {
             reply => anyhow::bail!("open failed: {reply:?}"),
         }
     }
+    #[cfg(feature = "native-heap-probe")]
+    std::thread::Builder::new().spawn(|| {
+        if let Err(error) = heap_probe::run() {
+            eprintln!("[DOC-HEAP] probe failed: {error:#}");
+        }
+    })?;
     sunlight_docserv::service::run_native(Default::default())
 }
 

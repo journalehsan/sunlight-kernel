@@ -678,6 +678,7 @@ version = "0.2.9090-alpha.2"
 edition = "2021"
 
 [features]
+boot-resources = ["dep:lz4_flex"]
 helios-git = []
 helios-wayland-sunapp-test = []
 helios-dynamic-elf-probe = []
@@ -692,6 +693,7 @@ helios-qalculate-probe = []
 helios-qalculate-dso-probe = ["helios-qalculate-probe"]
 
 [dependencies]
+lz4_flex = { version = "0.11", default-features = false, optional = true }
 sunlight-mm = { path = "../sunlight-mm" }
 sunlight-block = { path = "../sunlight-block" }
 sunlight-fat = { path = "../sunlight-fat" }
@@ -699,3 +701,7 @@ sunlight-fat = { path = "../sunlight-fat" }
 [dev-dependencies]
 sunlight-mm = { path = "../sunlight-mm", features = ["testutil"] }
 sunlight-fat = { path = "../sunlight-fat", features = ["testutil"] }
+
+[[example]]
+name = "pack_boot_resources"
+required-features = ["boot-resources"]
