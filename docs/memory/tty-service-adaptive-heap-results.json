@@ -1,0 +1,1376 @@
+{
+  "qemu": "11.1.3 TCG, 2 vCPUs, optical only, no NIC",
+  "module": {
+    "entries_matched": 613,
+    "logical_bytes_matched": 154184731,
+    "baseline_sha256": "618eaf0eb99ed77c6055a3e99497ba6136fd59168fd36eca3ba3373e6ac4cc30",
+    "module_sha256": "fc0d6989a11975da5d468a6bd04e93e5ee68cc474aa07d5f9fa659d6695872ba"
+  },
+  "iso_sha256": {
+    "baseline-probe": "cc363d172f7ea4e05ab26cdd0bb53a8252a67dbe4b263b9914167e3ded0c07d7",
+    "adaptive": "041d462d78d76c415bdba3ec51615c055860d067a7f2d1481f44cc1f82ab0a0b",
+    "pty": "f5b997e1c39ae634036d4fd718978415663316a76c7bfc598ee76cb237871216"
+  },
+  "runs": {
+    "baseline-workload": {
+      "status": "passed",
+      "command_response_ms": {
+        "echo tabone": 152,
+        "echo tabtwo": 151,
+        "cat /etc/locale.gen": 152,
+        "cat /tests/cat-big": 151,
+        "echo tabonealive": 151,
+        "echo tabtwoalive": 151,
+        "echo recovered": 152
+      },
+      "boot_and_document": true,
+      "serial_path": "target/tty-adaptive/baseline-workload/serial.log",
+      "heap_sample_coverage": {
+        "ready/0": [
+          "ready",
+          630,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "ready/0_last": [
+          "ready",
+          630,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "login-idle/0": [
+          "login-idle",
+          1630,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "login-idle/0_last": [
+          "login-idle",
+          11630,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "active/0": [
+          "active",
+          12500,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "active/0_last": [
+          "active",
+          13500,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "active/1": [
+          "active",
+          14500,
+          1,
+          16777216,
+          6816720,
+          6817000,
+          6817128,
+          0
+        ],
+        "active/1_last": [
+          "active",
+          36500,
+          1,
+          16777216,
+          6816720,
+          6817000,
+          7345744,
+          0
+        ],
+        "active/2": [
+          "active",
+          16500,
+          2,
+          16777216,
+          7343328,
+          7343832,
+          7343960,
+          0
+        ],
+        "active/2_last": [
+          "active",
+          31500,
+          2,
+          16777216,
+          7343328,
+          7343832,
+          7345744,
+          0
+        ]
+      },
+      "managed_frames": 79841,
+      "pmm": {
+        "doc-idle": {
+          "free": 14269,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            350,
+            28952,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 14268
+        },
+        "doc-recovered": {
+          "free": 14269,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            350,
+            28952,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 1455
+        }
+      },
+      "growth_probe_pass": false
+    },
+    "bios-512": {
+      "status": "passed",
+      "command_response_ms": {
+        "echo tabone": 152,
+        "echo tabtwo": 151,
+        "cat /etc/locale.gen": 152,
+        "cat /tests/cat-big": 151,
+        "echo tabonealive": 151,
+        "echo tabtwoalive": 152,
+        "echo recovered": 152
+      },
+      "boot_and_document": true,
+      "serial_path": "target/tty-adaptive/bios-512/serial.log",
+      "heap_sample_coverage": {
+        "ready/0": [
+          "ready",
+          800,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "ready/0_last": [
+          "ready",
+          800,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "growth-recovered/0": [
+          "growth-recovered",
+          820,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "growth-recovered/0_last": [
+          "growth-recovered",
+          820,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0": [
+          "login-idle",
+          2820,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0_last": [
+          "login-idle",
+          12940,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0": [
+          "active",
+          13340,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0_last": [
+          "active",
+          14340,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/1": [
+          "active",
+          15340,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7338800,
+          1
+        ],
+        "active/1_last": [
+          "active",
+          37350,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7345744,
+          1
+        ],
+        "active/2": [
+          "active",
+          17340,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7343832,
+          1
+        ],
+        "active/2_last": [
+          "active",
+          32350,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7345744,
+          1
+        ]
+      },
+      "managed_frames": 79841,
+      "pmm": {
+        "doc-idle": {
+          "free": 16769,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 16767
+        },
+        "doc-recovered": {
+          "free": 16769,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 3955
+        }
+      },
+      "growth_probe_pass": true
+    },
+    "uefi-512": {
+      "status": "passed",
+      "command_response_ms": {
+        "echo tabone": 153,
+        "echo tabtwo": 152,
+        "cat /etc/locale.gen": 152,
+        "cat /tests/cat-big": 152,
+        "echo tabonealive": 152,
+        "echo tabtwoalive": 153,
+        "echo recovered": 152
+      },
+      "boot_and_document": true,
+      "serial_path": "target/tty-adaptive/uefi-512/serial.log",
+      "heap_sample_coverage": {
+        "ready/0": [
+          "ready",
+          890,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "ready/0_last": [
+          "ready",
+          890,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "login-idle/0": [
+          "login-idle",
+          1920,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0_last": [
+          "login-idle",
+          12970,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0": [
+          "active",
+          13390,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0_last": [
+          "active",
+          14390,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/1": [
+          "active",
+          15390,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7338800,
+          1
+        ],
+        "active/1_last": [
+          "active",
+          37400,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7345744,
+          1
+        ],
+        "active/2": [
+          "active",
+          17390,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7343832,
+          1
+        ],
+        "active/2_last": [
+          "active",
+          32400,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7345744,
+          1
+        ]
+      },
+      "managed_frames": 78257,
+      "pmm": {
+        "doc-idle": {
+          "free": 15725,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            335,
+            25935,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            9
+          ],
+          "balanced": true,
+          "boot_min_free": 15723
+        },
+        "doc-recovered": {
+          "free": 15725,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            335,
+            25935,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            9
+          ],
+          "balanced": true,
+          "boot_min_free": 2911
+        }
+      },
+      "growth_probe_pass": true
+    },
+    "bios-768": {
+      "status": "passed",
+      "command_response_ms": {
+        "echo tabone": 152,
+        "echo tabtwo": 151,
+        "cat /etc/locale.gen": 152,
+        "cat /tests/cat-big": 151,
+        "echo tabonealive": 151,
+        "echo tabtwoalive": 152,
+        "echo recovered": 152
+      },
+      "boot_and_document": true,
+      "serial_path": "target/tty-adaptive/bios-768/serial.log",
+      "heap_sample_coverage": {
+        "ready/0": [
+          "ready",
+          810,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "ready/0_last": [
+          "ready",
+          810,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "growth-recovered/0": [
+          "growth-recovered",
+          850,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "growth-recovered/0_last": [
+          "growth-recovered",
+          850,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0": [
+          "login-idle",
+          2850,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0_last": [
+          "login-idle",
+          12850,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0": [
+          "active",
+          13100,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0_last": [
+          "active",
+          14100,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/1": [
+          "active",
+          15100,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7338800,
+          1
+        ],
+        "active/1_last": [
+          "active",
+          37110,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7345744,
+          1
+        ],
+        "active/2": [
+          "active",
+          17100,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7343832,
+          1
+        ],
+        "active/2_last": [
+          "active",
+          32100,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7345744,
+          1
+        ]
+      },
+      "managed_frames": 145377,
+      "pmm": {
+        "doc-idle": {
+          "free": 82305,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 82302
+        },
+        "doc-recovered": {
+          "free": 82305,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 69491
+        }
+      },
+      "growth_probe_pass": true
+    },
+    "bios-1024": {
+      "status": "passed",
+      "command_response_ms": {
+        "echo tabone": 152,
+        "echo tabtwo": 151,
+        "cat /etc/locale.gen": 152,
+        "cat /tests/cat-big": 152,
+        "echo tabonealive": 151,
+        "echo tabtwoalive": 152,
+        "echo recovered": 152
+      },
+      "boot_and_document": true,
+      "serial_path": "target/tty-adaptive/bios-1024/serial.log",
+      "heap_sample_coverage": {
+        "ready/0": [
+          "ready",
+          820,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "ready/0_last": [
+          "ready",
+          820,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "growth-recovered/0": [
+          "growth-recovered",
+          860,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "growth-recovered/0_last": [
+          "growth-recovered",
+          860,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0": [
+          "login-idle",
+          1860,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0_last": [
+          "login-idle",
+          12880,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0": [
+          "active",
+          13400,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0_last": [
+          "active",
+          14400,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/1": [
+          "active",
+          15400,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7338800,
+          1
+        ],
+        "active/1_last": [
+          "active",
+          37410,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7345744,
+          1
+        ],
+        "active/2": [
+          "active",
+          17400,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7343832,
+          1
+        ],
+        "active/2_last": [
+          "active",
+          32410,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7345744,
+          1
+        ]
+      },
+      "managed_frames": 210913,
+      "pmm": {
+        "doc-idle": {
+          "free": 147841,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 147839
+        },
+        "doc-recovered": {
+          "free": 147841,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 135027
+        }
+      },
+      "growth_probe_pass": true
+    },
+    "extended-768": {
+      "status": "failed",
+      "command_response_ms": [
+        {
+          "command": "echo tabone",
+          "wall_ms": 54
+        },
+        {
+          "command": "echo tabtwo",
+          "wall_ms": 88
+        },
+        {
+          "command": "cat /etc/locale.gen",
+          "wall_ms": 33
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 32
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 67
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 55
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 67
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 53
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 78
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 44
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 78
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 56
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 54
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 67
+        }
+      ],
+      "boot_and_document": true,
+      "error": "Guest timeout: [TTY]  exit: sshl --pty-liveness-tests -> 0",
+      "serial_path": "target/tty-adaptive/extended-768/serial.log",
+      "heap_sample_coverage": {
+        "ready/0": [
+          "ready",
+          510,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "ready/0_last": [
+          "ready",
+          510,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "growth-recovered/0": [
+          "growth-recovered",
+          520,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "growth-recovered/0_last": [
+          "growth-recovered",
+          520,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0": [
+          "login-idle",
+          1520,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "login-idle/0_last": [
+          "login-idle",
+          10520,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0": [
+          "active",
+          11890,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/0_last": [
+          "active",
+          12890,
+          0,
+          6553600,
+          6290112,
+          6290168,
+          7338800,
+          1
+        ],
+        "active/1": [
+          "active",
+          13890,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7338800,
+          1
+        ],
+        "active/1_last": [
+          "active",
+          14890,
+          1,
+          7077888,
+          6816720,
+          6817000,
+          7338800,
+          1
+        ],
+        "active/2": [
+          "active",
+          15890,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7343832,
+          1
+        ],
+        "active/2_last": [
+          "active",
+          103890,
+          2,
+          7602176,
+          7343328,
+          7343832,
+          7345744,
+          1
+        ]
+      },
+      "managed_frames": 145346,
+      "pmm": {
+        "doc-idle": {
+          "free": 82243,
+          "classes_2_to_15": [
+            32183,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 82241
+        },
+        "doc-recovered": {
+          "free": 82243,
+          "classes_2_to_15": [
+            32183,
+            0,
+            4096,
+            0,
+            346,
+            26456,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 69429
+        }
+      },
+      "growth_probe_pass": true,
+      "pty_64k_integrity_pass": true,
+      "pty_owner_death_cleanup_seen": true,
+      "pty_failure": "delayed TTY producer startup; test exited 1"
+    },
+    "baseline-timed": {
+      "status": "passed",
+      "command_response_ms": [
+        {
+          "command": "echo tabone",
+          "wall_ms": 77
+        },
+        {
+          "command": "echo tabtwo",
+          "wall_ms": 54
+        },
+        {
+          "command": "cat /etc/locale.gen",
+          "wall_ms": 55
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 77
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 32
+        },
+        {
+          "command": "echo tabonealive",
+          "wall_ms": 33
+        },
+        {
+          "command": "echo tabtwoalive",
+          "wall_ms": 45
+        },
+        {
+          "command": "echo recovered",
+          "wall_ms": 55
+        }
+      ],
+      "boot_and_document": true,
+      "serial_path": "target/tty-adaptive/baseline-timed/serial.log",
+      "heap_sample_coverage": {
+        "ready/0": [
+          "ready",
+          620,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "ready/0_last": [
+          "ready",
+          620,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "login-idle/0": [
+          "login-idle",
+          1620,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "login-idle/0_last": [
+          "login-idle",
+          11620,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "active/0": [
+          "active",
+          12210,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "active/0_last": [
+          "active",
+          13210,
+          0,
+          16777216,
+          6290112,
+          6290168,
+          6290168,
+          0
+        ],
+        "active/1": [
+          "active",
+          14210,
+          1,
+          16777216,
+          6816720,
+          6817000,
+          6817128,
+          0
+        ],
+        "active/1_last": [
+          "active",
+          36210,
+          1,
+          16777216,
+          6816720,
+          6817000,
+          7345744,
+          0
+        ],
+        "active/2": [
+          "active",
+          16210,
+          2,
+          16777216,
+          7343328,
+          7343832,
+          7343960,
+          0
+        ],
+        "active/2_last": [
+          "active",
+          31210,
+          2,
+          16777216,
+          7343328,
+          7343832,
+          7345744,
+          0
+        ]
+      },
+      "managed_frames": 79841,
+      "pmm": {
+        "doc-idle": {
+          "free": 14269,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            350,
+            28952,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 14268
+        },
+        "doc-recovered": {
+          "free": 14269,
+          "classes_2_to_15": [
+            32152,
+            0,
+            4096,
+            0,
+            350,
+            28952,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            17
+          ],
+          "balanced": true,
+          "boot_min_free": 1455
+        }
+      },
+      "growth_probe_pass": false
+    }
+  },
+  "heap_sample_columns": [
+    "stage",
+    "guest_ms",
+    "tabs",
+    "mapped_bytes",
+    "requested_bytes",
+    "backing_bytes",
+    "peak_backing_bytes",
+    "failures"
+  ],
+  "adaptive_512_bios_timed": {
+    "status": "passed",
+    "command_response_ms": [
+      {
+        "command": "echo tabone",
+        "wall_ms": 54
+      },
+      {
+        "command": "echo tabtwo",
+        "wall_ms": 33
+      },
+      {
+        "command": "cat /etc/locale.gen",
+        "wall_ms": 33
+      },
+      {
+        "command": "cat /tests/cat-big",
+        "wall_ms": 43
+      },
+      {
+        "command": "cat /tests/cat-big",
+        "wall_ms": 33
+      },
+      {
+        "command": "echo tabonealive",
+        "wall_ms": 33
+      },
+      {
+        "command": "echo tabtwoalive",
+        "wall_ms": 55
+      },
+      {
+        "command": "echo recovered",
+        "wall_ms": 33
+      }
+    ],
+    "boot_and_document": true,
+    "serial_path": "target/tty-adaptive/adaptive-timed/serial.log"
+  },
+  "limits": [
+    "Bounded guest runs only",
+    "Scrollback keys sent; viewport contents not asserted",
+    "PTY suite stopped after integrity pass",
+    "No kernel mmap ENOMEM injection",
+    "First matrix timing includes 150 ms input pacing"
+  ]
+}

@@ -5,6 +5,12 @@ use crate::mman;
 
 const PAGE: usize = 4096;
 const QUANTUM: usize = 256 * 1024;
+const INITIAL: usize =
+    if cfg!(feature = "adaptive-tty-heap") && !cfg!(feature = "adaptive-document-heap") {
+        25 * QUANTUM
+    } else {
+        QUANTUM
+    };
 const REGIONS: usize = HEAP_SIZE / QUANTUM;
 
 pub(super) struct ProcessHeap {
@@ -44,7 +50,12 @@ impl ProcessHeap {
         let available = HEAP_SIZE - self.committed;
         let padding = align.saturating_sub(PAGE);
         let required = align_up(size.checked_add(padding)?.max(FREE_BLOCK_SIZE), PAGE)?;
-        let length = required.max(QUANTUM).min(available);
+        let target = if self.committed == 0 {
+            INITIAL
+        } else {
+            QUANTUM
+        };
+        let length = required.max(target).min(available);
         if length < required {
             return None;
         }

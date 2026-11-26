@@ -681,13 +681,16 @@ edition = "2021"
 name = "sunlight-tty-server"
 path = "src/main.rs"
 
+[features]
+default = ["adaptive-heap"]
+adaptive-heap = ["sunlight-libc/adaptive-tty-heap"]
+heap-probe = []
+
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
 sunlight-fs  = { path = "../../sunlight-fs" }
 sunlight-tty = { path = "../../sunlight-tty" }
 sunlight-tui = { path = "../../sunlight-tui" }
-# 16 MiB: login SIMG decode needs ~width*height*4 (~6 MiB) and stays resident
-# for re-login redraws. Static 256 KiB heap always OOM'd → solid-color login.
 sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m"] }
 sunlight-telemetry = { path = "../../sunlight-telemetry" }
 sunlight-networkd = { path = "../sunlight-networkd" }

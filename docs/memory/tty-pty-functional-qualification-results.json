@@ -1,0 +1,900 @@
+{
+  "qemu": "11.1.3 TCG, 2 vCPUs, optical-only, no NIC",
+  "adaptive_iso_sha256": "889340565071cea06cb39285723c7d90547ee2f06d25d22e3d14c1f836367de7",
+  "compressed_module_sha256": "fc0d6989a11975da5d468a6bd04e93e5ee68cc474aa07d5f9fa659d6695872ba",
+  "original_adaptive_failure": "target/tty-pty-qualification/adaptive-before/serial.log",
+  "original_eager_control": {
+    "ram_mib": 512,
+    "firmware": "BIOS",
+    "iso_sha256": "a37483e02759ab258c3038f2aa4e4b454a74565e8bc2343c16a7973f7380df29",
+    "mapped_bytes": 16777216,
+    "original_65536_passed": true,
+    "guest_exit_status": 1,
+    "failure": "delayed TTY producer startup",
+    "serial": "target/tty-pty-qualification/eager-16m/serial.log"
+  },
+  "first_repair_double_wait_failure": "target/tty-pty-qualification/adaptive-final/serial.log",
+  "uefi_preboot_control": "target/tty-pty-qualification/uefi-512/qemu.log",
+  "runs": {
+    "512-bios": {
+      "status": "passed",
+      "command_response_ms": [
+        {
+          "command": "echo tabone",
+          "wall_ms": 64
+        },
+        {
+          "command": "echo tabtwo",
+          "wall_ms": 42
+        },
+        {
+          "command": "cat /etc/locale.gen",
+          "wall_ms": 32
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 33
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 33
+        },
+        {
+          "command": "echo ancient meadow",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 44
+        },
+        {
+          "command": "echo fresh garden",
+          "wall_ms": 32
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 53
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 53
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 54
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 55
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 44
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 55
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 54
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "sshl --pty-liveness-tests",
+          "wall_ms": 15170
+        },
+        {
+          "command": "echo tabonealive",
+          "wall_ms": 33
+        },
+        {
+          "command": "echo tabtwoalive",
+          "wall_ms": 46
+        },
+        {
+          "command": "echo recovered",
+          "wall_ms": 36
+        }
+      ],
+      "boot_and_document": true,
+      "rendered_scrollback": true,
+      "pty_liveness": true,
+      "serial": "target/tty-pty-qualification/adaptive-v2/serial.log",
+      "screen_captures": [
+        "target/tty-pty-qualification/adaptive-v2/scrollback-home.png",
+        "target/tty-pty-qualification/adaptive-v2/scrollback-end.png"
+      ],
+      "heap_mapped_by_tabs": {
+        "0": [
+          6553600
+        ],
+        "1": [
+          7077888
+        ],
+        "2": [
+          7602176
+        ]
+      },
+      "heap_peak_backing_bytes": 7345744,
+      "pty_streams": [
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 320
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 360
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1340
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 120
+        },
+        {
+          "bytes": 1024,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 70
+        },
+        {
+          "bytes": 4096,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 70
+        },
+        {
+          "bytes": 16384,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 90
+        },
+        {
+          "bytes": 65536,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 110
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 180
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 540
+        },
+        {
+          "bytes": 1024,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 50
+        },
+        {
+          "bytes": 4096,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 80
+        },
+        {
+          "bytes": 16384,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 110
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 340
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1310
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 5290
+        }
+      ],
+      "tab_reap": "[SCHED] process_reaped pid=40 name='sshl1' user_frames=905 page_tables=10 swap_blocks=0 ipc_cleared=0"
+    },
+    "512-uefi": {
+      "status": "passed",
+      "command_response_ms": [
+        {
+          "command": "echo tabone",
+          "wall_ms": 55
+        },
+        {
+          "command": "echo tabtwo",
+          "wall_ms": 33
+        },
+        {
+          "command": "cat /etc/locale.gen",
+          "wall_ms": 33
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 33
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 34
+        },
+        {
+          "command": "echo ancient meadow",
+          "wall_ms": 23
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 34
+        },
+        {
+          "command": "echo fresh garden",
+          "wall_ms": 32
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 34
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 34
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 35
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 48
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 35
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 34
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 60
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 97
+        },
+        {
+          "command": "sshl --pty-liveness-tests",
+          "wall_ms": 15656
+        },
+        {
+          "command": "echo tabonealive",
+          "wall_ms": 40
+        },
+        {
+          "command": "echo tabtwoalive",
+          "wall_ms": 25
+        },
+        {
+          "command": "echo recovered",
+          "wall_ms": 38
+        }
+      ],
+      "boot_and_document": true,
+      "rendered_scrollback": true,
+      "pty_liveness": true,
+      "serial": "target/tty-pty-qualification/uefi-512-combined/serial.log",
+      "screen_captures": [
+        "target/tty-pty-qualification/uefi-512-combined/scrollback-home.png",
+        "target/tty-pty-qualification/uefi-512-combined/scrollback-end.png"
+      ],
+      "heap_mapped_by_tabs": {
+        "0": [
+          6553600
+        ],
+        "1": [
+          7077888
+        ],
+        "2": [
+          7602176
+        ]
+      },
+      "heap_peak_backing_bytes": 7345744,
+      "pty_streams": [
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 320
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 350
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1360
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 110
+        },
+        {
+          "bytes": 1024,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 90
+        },
+        {
+          "bytes": 4096,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 100
+        },
+        {
+          "bytes": 16384,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 60
+        },
+        {
+          "bytes": 65536,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 120
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 190
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 720
+        },
+        {
+          "bytes": 1024,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 50
+        },
+        {
+          "bytes": 4096,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 60
+        },
+        {
+          "bytes": 16384,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 120
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 350
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1350
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 5500
+        }
+      ],
+      "tab_reap": "[SCHED] process_reaped pid=40 name='sshl1' user_frames=905 page_tables=10 swap_blocks=0 ipc_cleared=0"
+    },
+    "768-bios": {
+      "status": "passed",
+      "command_response_ms": [
+        {
+          "command": "echo tabone",
+          "wall_ms": 65
+        },
+        {
+          "command": "echo tabtwo",
+          "wall_ms": 43
+        },
+        {
+          "command": "cat /etc/locale.gen",
+          "wall_ms": 44
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 33
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 33
+        },
+        {
+          "command": "echo ancient meadow",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "echo fresh garden",
+          "wall_ms": 42
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 54
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 44
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 55
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 55
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 55
+        },
+        {
+          "command": "sshl --pty-liveness-tests",
+          "wall_ms": 15459
+        },
+        {
+          "command": "echo tabonealive",
+          "wall_ms": 34
+        },
+        {
+          "command": "echo tabtwoalive",
+          "wall_ms": 24
+        },
+        {
+          "command": "echo recovered",
+          "wall_ms": 24
+        }
+      ],
+      "boot_and_document": true,
+      "rendered_scrollback": true,
+      "pty_liveness": true,
+      "serial": "target/tty-pty-qualification/bios-768/serial.log",
+      "screen_captures": [
+        "target/tty-pty-qualification/bios-768/scrollback-home.png",
+        "target/tty-pty-qualification/bios-768/scrollback-end.png"
+      ],
+      "heap_mapped_by_tabs": {
+        "0": [
+          6553600
+        ],
+        "1": [
+          7077888
+        ],
+        "2": [
+          7602176
+        ]
+      },
+      "heap_peak_backing_bytes": 7345744,
+      "pty_streams": [
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 400
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 530
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1410
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 90
+        },
+        {
+          "bytes": 1024,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 30
+        },
+        {
+          "bytes": 4096,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 30
+        },
+        {
+          "bytes": 16384,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 80
+        },
+        {
+          "bytes": 65536,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 60
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 150
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 510
+        },
+        {
+          "bytes": 1024,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 40
+        },
+        {
+          "bytes": 4096,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 50
+        },
+        {
+          "bytes": 16384,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 140
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 430
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1460
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 5680
+        }
+      ],
+      "tab_reap": "[SCHED] process_reaped pid=40 name='sshl1' user_frames=905 page_tables=10 swap_blocks=0 ipc_cleared=0"
+    },
+    "1024-bios": {
+      "status": "passed",
+      "command_response_ms": [
+        {
+          "command": "echo tabone",
+          "wall_ms": 54
+        },
+        {
+          "command": "echo tabtwo",
+          "wall_ms": 32
+        },
+        {
+          "command": "cat /etc/locale.gen",
+          "wall_ms": 54
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 33
+        },
+        {
+          "command": "cat /tests/cat-big",
+          "wall_ms": 22
+        },
+        {
+          "command": "echo ancient meadow",
+          "wall_ms": 22
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 44
+        },
+        {
+          "command": "echo fresh garden",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 34
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 32
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 32
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 44
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 44
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 55
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 33
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 43
+        },
+        {
+          "command": "ls /bin",
+          "wall_ms": 66
+        },
+        {
+          "command": "sshl --pty-liveness-tests",
+          "wall_ms": 15517
+        },
+        {
+          "command": "echo tabonealive",
+          "wall_ms": 34
+        },
+        {
+          "command": "echo tabtwoalive",
+          "wall_ms": 35
+        },
+        {
+          "command": "echo recovered",
+          "wall_ms": 35
+        }
+      ],
+      "boot_and_document": true,
+      "rendered_scrollback": true,
+      "pty_liveness": true,
+      "serial": "target/tty-pty-qualification/bios-1024/serial.log",
+      "screen_captures": [
+        "target/tty-pty-qualification/bios-1024/scrollback-home.png",
+        "target/tty-pty-qualification/bios-1024/scrollback-end.png"
+      ],
+      "heap_mapped_by_tabs": {
+        "0": [
+          6553600
+        ],
+        "1": [
+          7077888
+        ],
+        "2": [
+          7602176
+        ]
+      },
+      "heap_peak_backing_bytes": 7345744,
+      "pty_streams": [
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 410
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 470
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1380
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 80
+        },
+        {
+          "bytes": 1024,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 40
+        },
+        {
+          "bytes": 4096,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 40
+        },
+        {
+          "bytes": 16384,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 40
+        },
+        {
+          "bytes": 65536,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 50
+        },
+        {
+          "bytes": 262144,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 120
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 4096,
+          "slow": false,
+          "elapsed_ms": 550
+        },
+        {
+          "bytes": 1024,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 30
+        },
+        {
+          "bytes": 4096,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 60
+        },
+        {
+          "bytes": 16384,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 110
+        },
+        {
+          "bytes": 65536,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 410
+        },
+        {
+          "bytes": 262144,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 1520
+        },
+        {
+          "bytes": 1048576,
+          "read_size": 257,
+          "slow": true,
+          "elapsed_ms": 5840
+        }
+      ],
+      "tab_reap": "[SCHED] process_reaped pid=40 name='sshl1' user_frames=905 page_tables=10 swap_blocks=0 ipc_cleared=0"
+    }
+  }
+}

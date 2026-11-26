@@ -24,7 +24,8 @@ VISIBLE = {
 
 
 class Guest:
-    def __init__(self, iso, out, vga="virtio", accel=None, serial_control=False, offline=False, qmp=True):
+    def __init__(self, iso, out, vga="virtio", accel=None, serial_control=False, offline=False,
+                 qmp=True, ram=4096, optical_firmware=None):
         self.out = out.resolve()
         self.out.mkdir(parents=True, exist_ok=True)
         self.serial = self.out / "serial.log"
@@ -34,12 +35,17 @@ class Guest:
         self.control = None
         code = Path(os.environ.get("SUNLIGHT_OVMF_CODE", "/usr/share/edk2/x64/OVMF_CODE.4m.fd"))
         variables = Path(os.environ.get("SUNLIGHT_OVMF_VARS", "/usr/share/edk2/x64/OVMF_VARS.4m.fd"))
-        shutil.copyfile(variables, self.out / "vars.fd")
         cmd = ["qemu-system-x86_64", "-cdrom", str(iso.resolve()),
-               "-drive", f"if=pflash,format=raw,readonly=on,file={code}",
-               "-drive", f"if=pflash,format=raw,file={self.out / 'vars.fd'}",
-               "-serial", f"file:{self.serial}", "-display", "none", "-m", "4096M", "-smp", "2",
+               "-serial", f"file:{self.serial}", "-display", "none", "-m", f"{ram}M", "-smp", "2",
                "-device", "virtio-rng-pci,disable-modern=on", "-no-reboot", "-no-shutdown"]
+        if optical_firmware is None:
+            shutil.copyfile(variables, self.out / "vars.fd")
+            cmd += ["-drive", f"if=pflash,format=raw,readonly=on,file={code}",
+                    "-drive", f"if=pflash,format=raw,file={self.out / 'vars.fd'}"]
+        else:
+            cmd += ["-device", "qemu-xhci,id=xhci", "-device", "usb-mouse,bus=xhci.0"]
+            if optical_firmware:
+                cmd += ["-bios", str(optical_firmware)]
         if qmp:
             cmd += ["-qmp", f"unix:{self.socket_path},server=on,wait=off"]
         cmd += (["-device", "virtio-vga,xres=1280,yres=800"] if vga == "virtio" else ["-vga", vga])

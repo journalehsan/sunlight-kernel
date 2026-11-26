@@ -5,7 +5,7 @@ extern crate alloc;
 
 use core::cell::RefCell;
 use sunlight_ipc::{
-    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout, ipc_recv,
+    debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout,
     ipc_reply_and_try_recv, kill,
     launch_trace::{LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
@@ -49,6 +49,9 @@ fn decode_login_bg() -> Option<(u32, u32, alloc::vec::Vec<u32>)> {
         }
     }
 }
+
+#[cfg(feature = "heap-probe")]
+mod heap_probe;
 
 fn login_bg_view(
     decoded: &Option<(u32, u32, alloc::vec::Vec<u32>)>,
@@ -1480,7 +1483,21 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         WelcomeWizardGateState::Disabled
     };
 
-    let mut msg = ipc_recv(ep);
+    #[cfg(feature = "heap-probe")]
+    heap_probe::sample("ready", 0);
+    #[cfg(feature = "heap-probe")]
+    heap_probe::check_growth();
+    #[cfg(feature = "heap-probe")]
+    let mut next_heap_sample = monotonic_millis().saturating_add(1000);
+    #[cfg(feature = "heap-probe")]
+    let mut msg = loop {
+        if let Some(message) = sunlight_ipc::ipc_recv_timeout(ep, 1000) {
+            break message;
+        }
+        heap_probe::sample("login-idle", 0);
+    };
+    #[cfg(not(feature = "heap-probe"))]
+    let mut msg = sunlight_ipc::ipc_recv(ep);
     let mut phase3_6_done = false;
     let mut session_keys = sunlight_tty::session_keys::SessionKeys::default();
     loop {
@@ -2305,6 +2322,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         // the title-bar clock current.
         let reply = IpcMsg::with_label(0);
         loop {
+            #[cfg(feature = "heap-probe")]
+            if monotonic_millis() >= next_heap_sample {
+                heap_probe::sample("active", tab_count);
+                next_heap_sample = monotonic_millis().saturating_add(1000);
+            }
             if let Some(m) = ipc_reply_and_try_recv(ep, reply) {
                 msg = m;
                 break;

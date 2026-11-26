@@ -114,7 +114,7 @@ impl Heap {
     }
 
     /// Initialize the sole bounded heap while the external lock is held.
-    #[cfg(not(feature = "adaptive-document-heap"))]
+    #[cfg(not(feature = "adaptive-heap"))]
     unsafe fn initialize(&mut self) -> bool {
         if self.initialized {
             return true;
@@ -426,15 +426,15 @@ impl Heap {
     }
 }
 
-#[cfg(not(feature = "adaptive-document-heap"))]
+#[cfg(not(feature = "adaptive-heap"))]
 type ProcessHeap = Heap;
 
-#[cfg(feature = "adaptive-document-heap")]
+#[cfg(feature = "adaptive-heap")]
 mod adaptive;
-#[cfg(feature = "adaptive-document-heap")]
+#[cfg(feature = "adaptive-heap")]
 use adaptive::ProcessHeap;
 
-#[cfg(not(feature = "adaptive-document-heap"))]
+#[cfg(not(feature = "adaptive-heap"))]
 impl Heap {
     unsafe fn allocate(&mut self, size: usize, align: usize) -> (*mut u8, usize) {
         if !self.initialize() {

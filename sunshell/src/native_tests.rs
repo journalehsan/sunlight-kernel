@@ -294,6 +294,7 @@ struct PtyRunner {
     service: CapabilityToken, master: CapabilityToken, control: CapabilityToken,
     id: u64, generation: u64, pid: u64, buffer: sunlight_ipc::pty::PtyBuffer,
     session_closed: bool,
+    child_waited: bool,
 }
 impl PtyRunner {
     fn new() -> Self {
@@ -312,7 +313,7 @@ impl PtyRunner {
             format!("--pty-service-cap={}", service.0), format!("--pty-slave-cap={}", reply.caps[0].0)];
         let argv: Vec<&[u8]> = args.iter().map(|s| s.as_bytes()).collect();
         let pid = libc::spawn(format!("/bin/sshl{tab}").as_bytes(), &argv, None).unwrap_or_else(|_| fail("pty shell spawn"));
-        let runner = Self { service, master, control, id, generation, pid, buffer: sunlight_ipc::pty::PtyBuffer::new().unwrap(), session_closed: false };
+        let runner = Self { service, master, control, id, generation, pid, buffer: sunlight_ipc::pty::PtyBuffer::new().unwrap(), session_closed: false, child_waited: false };
         runner.prompt();
         runner
     }
@@ -512,19 +513,9 @@ pub(super) fn pty_liveness_suite() -> ! {
     debug_log("[SSHL-PTY] original 65536 PASS");
     let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
     pty.send("sshl --probe pidpattern 65536 997\n");
-    let started = monotonic_millis();
-    while libc::stat(b"/tmp/sshl-pty-close-pid").is_err() {
-        if monotonic_millis() - started > 2000 {
-            fail("delayed TTY producer startup");
-        }
-        park_ms(10);
-    }
+    let child = wait_for_producer("delayed TTY producer startup");
+    debug_log(&format!("[SSHL-PTY] delayed producer ready pid={child}"));
     park_ms(30);
-    let child: u64 = core::str::from_utf8(&file("/tmp/sshl-pty-close-pid"))
-        .unwrap()
-        .trim()
-        .parse()
-        .unwrap();
     // A nonfatal signal interrupts the parked write. The retry must recheck
     // space and park again, without retaining a stale wait subscription.
     libc::kill(child, 17).unwrap();
@@ -570,20 +561,30 @@ pub(super) fn pty_liveness_suite() -> ! {
 
 // Producers publish a PID witness before blocking; interrupts follow that barrier.
 fn lifecycle_child() -> u64 {
+    wait_for_producer("lifecycle producer startup")
+}
+fn wait_for_producer(deadline_message: &str) -> u64 {
     let start = monotonic_millis();
     loop {
-        if let Ok(text) = core::str::from_utf8(&file_if_present("/tmp/sshl-pty-close-pid")) {
-            if let Ok(pid) = text.trim().parse() { return pid; }
+        match libc::open(b"/tmp/sshl-pty-close-pid") {
+            Ok(fd) => {
+                let mut bytes = [0; 32];
+                let len = libc::read(fd, &mut bytes).unwrap_or_else(|_| fail("producer marker read"));
+                libc::close(fd).unwrap();
+                if let Some(pid) = core::str::from_utf8(&bytes[..len])
+                    .ok()
+                    .and_then(|text| text.strip_suffix('\n'))
+                    .and_then(|text| text.parse::<u64>().ok())
+                    .filter(|pid| *pid != 0)
+                {
+                    return pid;
+                }
+            }
+            Err(libc::Errno::NoEntry) => {}
+            Err(error) => fail(&format!("producer marker open: {error:?}")),
         }
-        if monotonic_millis() - start > 2000 { fail("lifecycle producer startup"); }
+        if monotonic_millis() - start > 2000 { fail(deadline_message); }
         park_ms(10);
-    }
-}
-fn file_if_present(path: &str) -> Vec<u8> {
-    if libc::stat(path.as_bytes()).is_ok() {
-        file(path)
-    } else {
-        Vec::new()
     }
 }
 fn scope_counts(scope: u64) -> (u64, u64) {
@@ -875,7 +876,7 @@ fn interactive_lifecycle() {
         if monotonic_millis()-start > 2000 { fail("deferred substitution hangup"); }
         park_ms(10);
     }
-    if libc::waitpid(pty.pid).unwrap() != 129 {
+    if pty.wait_child() != 129 {
         fail("deferred hangup status");
     }
     debug_log(&format!(
@@ -884,7 +885,7 @@ fn interactive_lifecycle() {
     ));
     drop(pty);
     for _ in 0..8 {
-        let pty = PtyRunner::new();
+        let mut pty = PtyRunner::new();
         pty.send("exit\n");
         let start = monotonic_millis();
         while sunlight_ipc::process_is_alive(pty.pid) {
@@ -894,7 +895,7 @@ fn interactive_lifecycle() {
             process_yield();
         }
         pty.wait_counts((0, 0));
-        if libc::waitpid(pty.pid).unwrap() != 0 {
+        if pty.wait_child() != 0 {
             fail("normal shell exit status");
         }
         drop(pty);
@@ -909,22 +910,7 @@ fn foreground_closure_probe(close_session: bool, reading: bool) {
     let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
     let mut pty = PtyRunner::new();
     pty.send(if reading { "sshl --probe pidtake 4\n" } else { "sshl --probe pidpattern 1048576 4096\n" });
-    let start = monotonic_millis();
-    let child = loop {
-        if libc::stat(b"/tmp/sshl-pty-close-pid").is_ok() {
-            if let Ok(pid) = core::str::from_utf8(&file("/tmp/sshl-pty-close-pid"))
-                .unwrap()
-                .trim()
-                .parse::<u64>()
-            {
-                break pid;
-            }
-        }
-        if monotonic_millis() - start > 2000 {
-            fail("close producer startup deadline");
-        }
-        park_ms(10);
-    };
+    let child = wait_for_producer("close producer startup deadline");
     park_ms(30);
     trace_processes();
     if !sunlight_ipc::process_is_alive(child) {
@@ -965,7 +951,7 @@ fn foreground_closure_probe(close_session: bool, reading: bool) {
         }
         park_ms(10);
     }
-    if libc::waitpid(pty.pid).unwrap() != 129 {
+    if pty.wait_child() != 129 {
         fail("PTY shell hangup exit status");
     }
     drop(pty);
@@ -1268,14 +1254,8 @@ fn trace_processes() {
         break;
     }
 }
-impl Drop for PtyRunner {
-    fn drop(&mut self) {
-        debug_log(&format!("[SSHL-PTY] teardown pid={} kill begin", self.pid));
-        let killed = libc::kill(self.pid, 9);
-        debug_log(&format!(
-            "[SSHL-PTY] teardown pid={} kill returned",
-            self.pid
-        ));
+impl PtyRunner {
+    fn wait_child(&mut self) -> u64 {
         let code = libc::waitpid(self.pid).unwrap_or_else(|error| {
             trace_processes();
             fail(&format!(
@@ -1283,13 +1263,24 @@ impl Drop for PtyRunner {
                 self.pid
             ));
         });
-        if killed.is_ok() && code != 137 {
-            fail("PTY teardown SIGKILL exit status");
-        }
+        self.child_waited = true;
         debug_log(&format!(
             "[SSHL-PTY] teardown pid={} child waited status={code}",
             self.pid
         ));
+        code
+    }
+}
+
+impl Drop for PtyRunner {
+    fn drop(&mut self) {
+        if !self.child_waited {
+            let killed = libc::kill(self.pid, 9);
+            let code = self.wait_child();
+            if killed.is_ok() && code != 137 {
+                fail("PTY teardown SIGKILL exit status");
+            }
+        }
         if self.session_closed {
             debug_log(&format!(
                 "[SSHL-PTY] teardown pid={} session already closed",
