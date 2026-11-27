@@ -134,12 +134,16 @@ pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Res
     if info.operations & (FAT32 | WRITE) != FAT32 | WRITE {
         return Err(FsError::Unsupported);
     }
-    vfs.validate_runtime_target(target, device)?;
     let parent = if info.parent == 0 {
         info.id
     } else {
         info.parent
     };
+    #[cfg(feature = "vfs_c1e2_test")]
+    if crate::vfs_n1j_test::reserves_storage_parent(parent) {
+        return Err(FsError::Busy);
+    }
+    vfs.validate_runtime_target(target, device)?;
     let usb = parent == crate::usb_storage::DEVICE_ID.load(core::sync::atomic::Ordering::Acquire);
     let transport = if usb {
         crate::KernelBlkDev::Usb

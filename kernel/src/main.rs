@@ -982,6 +982,9 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    #[cfg(feature = "vfs_c1e2_test")]
+    process::fd_table::FdTable::qualify_retirement();
+
     #[cfg(feature = "vfs_c1e1_test")]
     for fixture_pid in ::sunlight_ipc::storage::FIXTURE_CALLER_PID
         ..=if cfg!(feature = "vfs_c1e2_test") {

@@ -56,7 +56,7 @@ pub(crate) enum FileOperation<'a> {
         token: u64,
         length: usize,
     },
-    #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+    #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
     Pread { token: u64, offset: u64, length: usize },
     Write {
         token: u64,
@@ -94,7 +94,7 @@ impl FileOperation<'_> {
             #[cfg(feature = "vfs_c1e2_test")]
             Self::InventoryStorage { index } => index,
             Self::Open { .. } => 0,
-            #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+            #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             Self::Pread { token, .. } => token,
             Self::Read { token, .. }
             | Self::Write { token, .. }
@@ -124,7 +124,7 @@ impl FileOperation<'_> {
             Self::UnmountStorage { .. } => api::UNMOUNT_STORAGE,
             Self::Open { .. } => api::OPEN,
             Self::Read { .. } => api::READ,
-            #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+            #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             Self::Pread { .. } => api::PREAD,
             Self::Write { .. } => api::WRITE,
             Self::Seek { .. } => api::SEEK,
@@ -252,7 +252,7 @@ impl Runtime {
 
     /// A late PREAD has no cursor side effect and its reply no longer names
     /// a publication. Keep this narrower than whole-image retirement.
-    #[cfg(any(test, all(debug_assertions, feature = "vfs_d2a_test")))]
+    #[cfg(any(test, all(debug_assertions, feature = "vfs_service_private_mmap")))]
     fn cancel_mapping_read(&mut self, caller: Caller, epoch: u64, token: u64) {
         if let Some(slot) = self.caller_publication(caller) {
             let publication = self.file_publications[slot].as_ref().unwrap();
@@ -356,7 +356,7 @@ impl Runtime {
             FileOperation::Read { token, length } => {
                 (api::READ, *token, 0, *length as u64, &[][..], None)
             }
-            #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+            #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             FileOperation::Pread { token, offset, length } => {
                 (api::PREAD, *token, *offset, *length as u64, &[][..], None)
             }
@@ -543,7 +543,7 @@ impl Runtime {
         output.copy_from_slice(&publication.buffer);
         let id = publication.id;
         #[cfg(feature = "vfs_c1e2_test")]
-        if publication.op == api::UNMOUNT_STORAGE {
+        if api::mount_mutation(publication.op) {
             for pending in self.file_publications.iter_mut().flatten() {
                 if pending.identity.registration == registration
                     && pending.replied && api::mount_observation(pending.op)
@@ -559,7 +559,7 @@ impl Runtime {
     pub(super) fn revalidate_storage_files(&mut self, sched: &mut Scheduler) {
         for publication in self.file_publications.iter_mut().flatten() {
             if !publication.replied
-                && matches!(publication.op, api::INVENTORY_STORAGE | api::UNMOUNT_STORAGE)
+                && (publication.op == api::INVENTORY_STORAGE || api::mount_mutation(publication.op))
                 && !storage_view_live(sched, publication.identity, publication.op)
             {
                 publication.replied = true;
@@ -593,7 +593,7 @@ impl Runtime {
             })
             .ok_or(Error::Identity)?;
         #[cfg(feature = "vfs_c1e2_test")]
-        if matches!(reply.op, api::INVENTORY_STORAGE | api::UNMOUNT_STORAGE)
+        if (reply.op == api::INVENTORY_STORAGE || api::mount_mutation(reply.op))
             && !storage_view_live(
                 sched, self.file_publications[slot].as_ref().unwrap().identity, reply.op,
             )
@@ -1007,7 +1007,7 @@ pub(crate) fn file_call(
         return Err(Error::Identity);
     }
     #[cfg(feature = "vfs_c1e2_test")]
-    if matches!(op, api::INVENTORY_STORAGE | api::UNMOUNT_STORAGE)
+    if (op == api::INVENTORY_STORAGE || api::mount_mutation(op))
         && !storage_view_live(sched, identity, op)
     {
         return Err(Error::Identity);
@@ -1054,7 +1054,7 @@ fn storage_view_live(sched: &Scheduler, identity: AdmissionIdentity, op: u64) ->
             && process_identity(process) == identity.caller
             && !sched.processes[sched.shared_process_index(index)].vfs_root_rebased
             && process.uid == identity.uid && process.gid == identity.gid
-            && (op != api::UNMOUNT_STORAGE
+            && (!api::mount_mutation(op)
                 || sunlight_ipc::storage::authorized(process.uid, process.service_lookup_restrictions))
     })
 }
@@ -1122,7 +1122,7 @@ pub(crate) fn retire_storage_fixture_caller(
 }
 
 /// Drop the exact cancelled mapping read without touching ordinary Close.
-#[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+#[cfg(all(not(test), debug_assertions, feature = "vfs_service_private_mmap"))]
 pub(crate) fn cancel_mapping_read(caller: Caller, epoch: u64, token: u64) {
     RUNTIME.lock().cancel_mapping_read(caller, epoch, token);
 }

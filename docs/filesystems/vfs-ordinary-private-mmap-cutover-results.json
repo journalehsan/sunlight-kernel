@@ -1,0 +1,74 @@
+{
+  "stage": "VFS-C1E7",
+  "status": "PARTIAL",
+  "production_boot": {"status": "NOT_RUN", "gate": "BLOCKED"},
+  "fat_publication": "BLOCKED",
+  "builds": {
+    "production_release_kernel": {"status": "PASS", "log": "target/vfs-c1e7/production-final.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e7/release-vfs.log"},
+    "candidate": {"status": "PASS", "log": "target/vfs-c1e7/candidate-e7.log"},
+    "embedded_fixture_service": {"status": "PASS", "log": "target/vfs-c1e7/service.log"}
+  },
+  "linux_ring3": {
+    "status": "PASS",
+    "syscall": 9,
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "harness": "target/vfs-c1e7/native-fat-final.log",
+    "serial": "target/vfs-n1o-qemu-mj54vrhs/serial.log",
+    "initial_harness": {"status": "FAIL", "log": "target/vfs-c1e7/native-fat.log", "reason": "StorageCtl attestation can precede caller reap"},
+    "commits": [
+      {"count": 4, "span": 8192, "file_bytes": 4105, "offset": 0, "protection": "RW"},
+      {"count": 1, "span": 4096, "file_bytes": 9, "offset": 4096, "protection": "RO"}
+    ],
+    "reap": {"pid": 39002, "user_frames": 22300, "page_tables": 50, "swap_blocks": 0, "ipc_cleared": 0},
+    "continued_operation_after_reap": "PASS",
+    "parked_withdrawal": "NOT_RUN",
+    "parked_caller_retirement": "NOT_RUN",
+    "smp": "NOT_RUN"
+  },
+  "native_ring3": {
+    "status": "PASS",
+    "syscall": 50,
+    "vcpus": [1, 2, 4],
+    "memory_mib": 2048,
+    "diskless": true,
+    "accounting": "target/vfs-c1e7/matrix.json",
+    "serial": ["target/vfs-c1e7/up.serial.log", "target/vfs-c1e7/smp2.serial.log", "target/vfs-c1e7/smp4.serial.log"],
+    "D1B": "PASS",
+    "D2A": "PASS",
+    "D2B": "PASS",
+    "parked_exec": "BLOCKED",
+    "D3_fault_restoration": "NOT_RUN",
+    "parked": {"staged_bytes": 4096, "owned_frames": 538, "regions": 4, "description_rows": 1, "description_references": 2},
+    "caller_settlement": {"owned_frames": 0, "description_rows": 0, "description_references": 0},
+    "service_reap": {"user_frames": 22264, "page_tables": 53},
+    "ordinary_namespace_publication": {"status": "PASS", "evidence": "target/vfs-c1e7/c1a-verification.json"}
+  },
+  "regressions": {
+    "C1E6B_candidate": {"status": "PASS", "stale_alias_consumed": false, "stack_capacity_changed": false, "disassembly": "target/vfs-c1e7/register-disassembly.log"},
+    "C1E6B_production_execution": "NOT_RUN",
+    "C1E2_through_C1E6": "PASS",
+    "standalone_C1E1": "NOT_RUN",
+    "N1P_closed_image_rechecks": {"status": "PASS", "logs": ["target/vfs-c1e7/n1p-populated.log", "target/vfs-c1e7/n1p-unknown.log"]},
+    "N1P_fresh_guest_cycles": "NOT_RUN",
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e7/registration.log"},
+    "read_progress": {"status": "PASS", "tests": 3, "log": "target/vfs-c1e7/read-progress.log"},
+    "descriptor_host_serial": {"status": "PASS", "tests": 20, "log": "target/vfs-c1e7/fd-host-serial.log"},
+    "descriptor_host_parallel": {"status": "FAIL", "log": "target/vfs-c1e7/fd-host.log", "reason": "Synthetic stale-alias test panicked; serial rerun passed"},
+    "direct_kernel_host_tests": {"status": "NOT_RUN", "prior_gate": "BLOCKED", "prior_reason": "Private ProcessState imports and duplicate language items"},
+    "workspace_library_tests": {"status": "NOT_RUN", "prior_status": "FAIL", "prior_reason": "Duplicate panic_impl in sunlight-ui-wayland"},
+    "secret_store": {"status": "NOT_RUN", "prior_status": "FAIL", "prior_reason": "Timed test run did not complete"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "log": "target/vfs-c1e7/guard.log",
+    "historical_findings": {
+      "private_mmap": {"status": "PARTIAL", "closed": false, "reason": "Kernel-owned Linux descriptors still use kernel FSTAT and positional reads"},
+      "procfs_mountinfo": {"status": "BLOCKED", "closed": false, "reason": "Kernel topology route remains"},
+      "linux_statfs": {"status": "BLOCKED", "closed": false, "reason": "Kernel FAT capacity route remains"},
+      "runtime_fat": {"status": "BLOCKED", "closed": false, "reason": "Kernel runtime mount construction remains"}
+    }
+  }
+}

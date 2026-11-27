@@ -322,8 +322,23 @@ impl Transaction {
     }
 }
 
-pub(crate) fn step(args: [u64; 6]) -> Result<Option<u64>, MmapError> {
+pub(crate) fn step_if_owned(
+    args: [u64; 6],
+) -> Option<(bool, Result<Option<u64>, MmapError>)> {
     let mut sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_process();
+    let caller = crate::ipc::vfs_process_identity(process);
+    let linux = process.is_linux_compat();
+    let replay = PENDING.lock().as_ref().is_some_and(|tx| tx.caller == caller);
+    let service_fd = sched.current_shared_process().fd_table.get(args[4] as i32)
+        .is_some_and(|entry| entry.handle.is_service());
+    if !replay && !service_fd {
+        return None;
+    }
+    Some((linux, step(args, &mut sched)))
+}
+
+fn step(args: [u64; 6], sched: &mut Scheduler) -> Result<Option<u64>, MmapError> {
     // A cross-core reply can mark the caller Ready before the owning CPU
     // has parked its syscall frame. Let dispatch restore Running before
     // consuming the reply or publishing another chunk.
@@ -332,7 +347,7 @@ pub(crate) fn step(args: [u64; 6]) -> Result<Option<u64>, MmapError> {
     }
     let caps = crate::capability::CAP_BROKER.lock();
     let caller = crate::ipc::vfs_process_identity(sched.current_process());
-    let epoch = crate::ipc::vfs_mapping_epoch(&sched, &caps);
+    let epoch = crate::ipc::vfs_mapping_epoch(sched, &caps);
     let previous = {
         let mut pending = PENDING.lock();
         match pending.as_ref() {
@@ -342,10 +357,10 @@ pub(crate) fn step(args: [u64; 6]) -> Result<Option<u64>, MmapError> {
     };
     let mut tx = match previous {
         Some(tx) => tx,
-        None => Transaction::new(args, caller, epoch.ok_or(MmapError::FileIo)?, &mut sched)?,
+        None => Transaction::new(args, caller, epoch.ok_or(MmapError::FileIo)?, sched)?,
     };
     let result = if epoch == Some(tx.file.epoch) && tx.args == args {
-        tx.populate(&mut sched, &caps)
+        tx.populate(sched, &caps)
     } else {
         crate::ipc::vfs_registration::cancel_mapping_read(caller, tx.file.epoch, tx.file.token);
         Err(MmapError::FileIo)
@@ -374,17 +389,18 @@ pub(crate) fn step(args: [u64; 6]) -> Result<Option<u64>, MmapError> {
                 caller,
                 tx.file.token,
                 tx.file.epoch,
-                &mut sched,
+                sched,
                 &caps,
             );
         }
         #[cfg(feature = "vfs_d2b_test")]
-        lifecycle::terminal(&tx, &sched, result);
+        lifecycle::terminal(&tx, sched, result);
     }
     result
 }
 
 /// Ring-3 fixture checkpoints. The syscall path remains the only installer.
+#[cfg(feature = "vfs_d2a_test")]
 pub(crate) fn checkpoint(mode: u64, arg: u64) -> u64 {
     let sched = crate::sched::SCHEDULER.lock();
     let process = sched.current_process();

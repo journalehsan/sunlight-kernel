@@ -67,8 +67,25 @@ fn mount(vfs: &mut Vfs<Cache>, disk: &Disk) {
 #[test]
 fn attached_fat_keeps_renamed_roots_and_descendants() {
     let (mut vfs, disk) = fixture();
-    let backend = || FatFs::new(Fat32::mount(Cache::new(disk.clone())).unwrap());
-    let id = vfs.publish_prepared_device("/mnt", backend()).unwrap();
+    let backend = || FatFs::new_attachment(Fat32::mount(Cache::new(disk.clone())).unwrap());
+    let mut retained = Some(backend());
+    let handle = retained.as_mut().unwrap().open("/HELLO.TXT").unwrap();
+    let object = retained.as_mut().unwrap().handle_object_id(handle).unwrap();
+    assert!(object.is_some());
+    retained.as_mut().unwrap().close(handle).unwrap();
+    assert_eq!(
+        vfs.publish_retained_device("/", 42, false, || retained.take().unwrap()),
+        Err(FsError::InvalidPath)
+    );
+    let id = vfs
+        .publish_retained_device("/mnt", 42, false, || retained.take().unwrap())
+        .unwrap();
+    assert!(retained.is_none());
+    let row = vfs.mount_info(1).unwrap();
+    assert_eq!((row.id, row.source, row.protected), (id, 42, false));
+    let opened = vfs.open("/mnt/hello.txt").unwrap();
+    assert_eq!(vfs.handle_object_id(opened).unwrap(), object);
+    vfs.close(opened).unwrap();
     let caller = crate::Credential { uid: 0, gid: 0 };
     let outer = vfs.open("/").unwrap();
     vfs.mkdir("/mnt/TREE", 0, 0, 0o755).unwrap();

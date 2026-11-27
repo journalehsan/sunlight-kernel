@@ -3396,10 +3396,35 @@ The publication gate stays closed. Legacy dependencies remain in the
 ownership guard, and successful ordinary FAT capacity requires committed
 publication. C1E6A fixes the reproduced post-probe retirement panic by making
 bulk exit cleanup consume an already-retired descriptor alias without a
-second description/backend release; the original 2 GiB QEMU scenario now
-reaps the Linux fixture completely with balanced storage and DMA accounting.
+second description/backend release. C1E6B proves that the alias was not a
+valid duplicate: `Ownership<64>::new` materialized a 6.5 KiB temporary below
+the kernel stack during VFS registration and overwrote empty fd 24 with a
+zero-filled copy of fd 0's identity, without retaining description row 0.
+Inlining that constructor initializes the caller's destination directly. The
+bulk defense remains, normal close/dup assertions stay strict, and the focused
+native gate verifies valid shared-description lifetime, exactly-once final
+release, reference-baseline restoration and the Linux fixture's complete reap
+with balanced frame, storage and DMA accounting. FAT publication remains
+closed.
 See the [C1E6 report](vfs-authoritative-procfs-statfs-routing.md)
 and [results](vfs-authoritative-procfs-statfs-routing-results.json).
+
+VFS-C1E7 routes ordinary private mmap on service-owned descriptions to the
+existing D2A/D2B continuation in the opt-in candidate. Native UP and SMP,
+Linux UP, and authenticated launch checks passed. The historical Linux
+kernel-owned descriptor route remains live. The unchanged guard still
+reports private mmap, ProcFS mountinfo, Linux statfs and runtime FAT, so
+production boot acceptance and FAT publication remain blocked.
+See the [C1E7 report](vfs-ordinary-private-mmap-cutover.md)
+and [results](vfs-ordinary-private-mmap-cutover-results.json).
+
+VFS-C1E8 adds a whole-device fence at legacy FAT construction, includes
+publication in the mount observation fence, and lets N1D take a retained
+FAT backend only after fallible insertion checks. Ordinary publication
+remains blocked on receipt consumption ordered with namespace commit and
+retirement, and on ordinary namespace mutation routing. See the
+[C1E8 report](vfs-runtime-fat-ownership-cutover.md) and
+[results](vfs-runtime-fat-ownership-cutover-results.json).
 
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact
@@ -3421,10 +3446,11 @@ and [results](vfs-authoritative-procfs-statfs-routing-results.json).
    installation, pinned-mount capacity, output ABI and copyout, and
    replacement, churn and retirement. Preserve fail-closed errors and
    verify that the two adapters agree with StorageCtl on attachment identity.
-4. Integrate eager private mmap with ordinary service descriptions in the
-   native and Linux adapters. Preserve the exact image, epoch, descriptor
+4. Extend the eager private mmap cutover to the remaining kernel-owned file
+   descriptions as their filesystem ownership migrates, then remove the
+   historical backend path. Preserve the exact image, epoch, descriptor
    rights, address-space commit and rollback rules. Gate on the D2A and D2B
-   matrices, plus all newly admitted sharing and lifecycle cases.
+   matrices, Linux lifecycle evidence, and every newly admitted sharing case.
 5. In one candidate remove the historical call sites and the obsolete
    runtime namespace owners. Run the unchanged ownership guard before an
    ordinary boot. Require the release builds, the native matrices, the

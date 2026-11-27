@@ -25,11 +25,15 @@ def main():
     parser.add_argument("--c1e4", action="store_true", help="verify ordinary VFS lookup during preparation")
     parser.add_argument("--c1e5", action="store_true", help="verify ordinary StorageCtl routing")
     parser.add_argument("--c1e6", action="store_true", help="verify Linux mountinfo and statfs routing")
+    parser.add_argument("--c1e6b", action="store_true", help="require descriptor retirement qualification")
+    parser.add_argument("--c1e7", action="store_true", help="require the ordinary Linux private mmap probe")
     parser.add_argument("--fsinfo", choices=("populated", "unknown"), default="unknown",
                         help="initial FSInfo hints for the native FAT32 probe")
     parser.add_argument("--check-n1o-artifacts", type=pathlib.Path,
                         help="verify a previously closed native FAT32 probe directory")
     args = parser.parse_args()
+    args.c1e6b = args.c1e6b or args.c1e7
+    args.c1e6 = args.c1e6 or args.c1e6b
     args.c1e5 = args.c1e5 or args.c1e6
     args.c1e4 = args.c1e4 or args.c1e5
     args.c1e3 = args.c1e3 or args.c1e4
@@ -163,6 +167,30 @@ def main():
                 assert output.count(b"[VFS-C1E6] ordinary Linux mountinfo and statfs fail closed after service loss") == 1
                 assert output.count(b"[SCHED] process_reaped pid=39002 name='storagectl-fixture'") == 1
                 assert b"[KERNEL PANIC]" not in output
+                if args.c1e6b:
+                    assert output.count(b"[VFS-C1E6B] descriptor retirement verified") == 1
+                    assert b"[VFS-C1E6B] stale descriptor alias consumed" not in output
+                    reap = (b"[SCHED] process_reaped pid=39002 name='storagectl-fixture' "
+                            b"user_frames=22299 page_tables=50 swap_blocks=0 ipc_cleared=0")
+                    if args.c1e7:
+                        reap, = re.findall(
+                            rb"\[SCHED\] process_reaped pid=39002 name='storagectl-fixture' "
+                            rb"user_frames=[1-9]\d* page_tables=[1-9]\d* swap_blocks=0 ipc_cleared=0",
+                            output,
+                        )
+                        mmap_pass = b"[VFS-C1E7] Linux private mmap checks passed"
+                        assert output.count(mmap_pass) == 1
+                        assert output.index(mmap_pass) < output.index(reap)
+                        commits = re.findall(
+                            rb"\[VFS-D2A\] committed pid=39002 .* span=(\d+) bytes=(\d+) offset=(\d+) prot=(\S+)",
+                            output,
+                        )
+                        assert commits == [(b"8192", b"4105", b"0", b"0x3")] * 4 + [
+                            (b"4096", b"9", b"4096", b"0x1"),
+                        ]
+                    assert reap in output
+                    if not args.c1e7:
+                        assert output.index(reap) < output.index(attestation)
         else:
             assert output.count(b"[VFS-C1E1] authenticated reply accepted; lease vacant; no publication") == 2
         releases = 5 if args.c1e2 else 2

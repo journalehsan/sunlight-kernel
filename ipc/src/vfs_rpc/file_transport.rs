@@ -36,6 +36,10 @@ pub fn mount_observation(op: u64) -> bool {
     matches!(op, MOUNTINFO | STATFS)
 }
 
+pub fn mount_mutation(op: u64) -> bool {
+    matches!(op, PUBLISH_STORAGE | UNMOUNT_STORAGE)
+}
+
 /// Kernel pull/reply operations on the copied retention syscall.
 pub const NEXT: u64 = 10;
 pub const REPLY: u64 = 11;

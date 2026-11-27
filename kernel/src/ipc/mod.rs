@@ -32,7 +32,7 @@ pub(crate) use vfs_registration::{
     FileCompletion, FileControl, FileOperation,
 };
 
-#[cfg(all(debug_assertions, feature = "vfs_d2a_test"))]
+#[cfg(all(debug_assertions, feature = "vfs_service_private_mmap"))]
 pub(crate) use vfs_registration::mapping_epoch as vfs_mapping_epoch;
 
 pub(crate) use vfs_registration::{

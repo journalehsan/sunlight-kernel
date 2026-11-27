@@ -170,21 +170,30 @@ impl<D: BlockDevice> Vfs<D> {
     pub fn publish_prepared_device_with_metadata(
         &mut self,
         target: &str,
-        mut fs: FatFs<D>,
+        fs: FatFs<D>,
         source: u64,
         protected: bool,
     ) -> Result<u64, FsError> {
-        let slot = self
-            .mounts
-            .iter()
-            .enumerate()
-            .position(|(slot, mount)| mount.is_none() && self.next_tags[slot] <= u16::from(u8::MAX))
-            .ok_or(FsError::TooManyOpenFiles)?;
-        let id = u64::from(self.next_tags[slot]) + 1;
-        fs.stable_objects = true;
-        self.mount_with_metadata(target, FsNode::Fat(fs), source, protected)?;
-        self.mounts[slot].as_mut().unwrap().device_attachment = Some(DeviceState::Active);
-        Ok(id)
+        self.publish_retained_device(target, source, protected, || fs)
+    }
+
+    /// Takes the retained backend only after all fallible namespace checks.
+    /// The caller must hold the reservation and device admission pin.
+    pub fn publish_retained_device(
+        &mut self,
+        target: &str,
+        source: u64,
+        protected: bool,
+        take_backend: impl FnOnce() -> FatFs<D>,
+    ) -> Result<u64, FsError> {
+        let slot = self.install_mount(target, source, protected, || {
+            let mut backend = take_backend();
+            backend.stable_objects = true;
+            FsNode::Fat(backend)
+        })?;
+        let mount = self.mounts[slot].as_mut().unwrap();
+        mount.device_attachment = Some(DeviceState::Active);
+        Ok(u64::from(mount.tag) + 1)
     }
 
     fn device_attachment_index(&self, id: u64) -> Result<usize, FsError> {

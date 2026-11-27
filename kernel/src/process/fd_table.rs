@@ -897,6 +897,11 @@ impl FdTable {
                     .get(descriptor.description as usize)
                     .is_some_and(Option::is_some)
                 {
+                    #[cfg(feature = "vfs_c1e2_test")]
+                    crate::serial_println!(
+                        "[VFS-C1E6B] stale descriptor alias consumed fd={}",
+                        idx
+                    );
                     return None;
                 }
                 let last = release_description(descriptor.description);
@@ -910,6 +915,48 @@ impl FdTable {
             });
         }
         handles
+    }
+
+    #[cfg(feature = "vfs_c1e2_test")]
+    pub(crate) fn qualify_retirement() {
+        let baseline = {
+            let pool = DESCRIPTIONS.lock();
+            (
+                pool.iter().flatten().count(),
+                pool.iter().flatten().map(|row| row.refs).sum::<usize>(),
+            )
+        };
+        let mut table = Self::new_boxed();
+        let ordinary = table.open(FileHandle::vfs(101), CapRights::all(), 0).unwrap();
+        let ordinary_description = table.get(ordinary).unwrap().description;
+        assert!(table.take(ordinary).unwrap().release_backend);
+        assert!(DESCRIPTIONS.lock()[ordinary_description as usize].is_none());
+
+        let handle = FileHandle::vfs(102);
+        let fd = table.open(handle, CapRights::all(), 0).unwrap();
+        let description = table.get(fd).unwrap().description;
+        let duplicate = table.dup(fd).unwrap();
+        table.get_mut(fd).unwrap().set_offset(42);
+        assert_eq!(table.get(duplicate).unwrap().current_offset(), 42);
+        assert!(!table.take(fd).unwrap().release_backend);
+        assert_eq!(table.get(duplicate).unwrap().current_offset(), 42);
+        table.dup2(duplicate, 24).unwrap();
+        let handles = table.take_all_handles();
+        assert_eq!(handles[duplicate as usize], None);
+        assert_eq!(handles[24], Some(handle));
+        assert_eq!(handles.iter().flatten().filter(|&&h| h == handle).count(), 1);
+        assert!(table.entries.iter().all(Option::is_none));
+        assert!(DESCRIPTIONS.lock()[description as usize].is_none());
+        assert!(table.take_all_handles().iter().all(Option::is_none));
+        let final_counts = {
+            let pool = DESCRIPTIONS.lock();
+            (
+                pool.iter().flatten().count(),
+                pool.iter().flatten().map(|row| row.refs).sum::<usize>(),
+            )
+        };
+        assert_eq!(final_counts, baseline);
+        crate::serial_println!("[VFS-C1E6B] descriptor retirement verified");
     }
 
     /// Get a file descriptor (for inspection)

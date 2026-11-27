@@ -31,6 +31,21 @@
     "c1e2_through_c1e5": {"status": "PASS", "reason": "All original harness assertions completed after caller retirement"},
     "preparation_settlement": {"status": "PASS", "explicit_releases": 5, "exact_service_retirements": 1, "pending": 0, "mapping_users": 0, "retained_dma_bytes": 20480},
     "backing_image_integrity": {"status": "PASS", "scope": "FAT partition byte identical, read-only fsck passed, KEEP.TXT unchanged", "log": "target/vfs-c1e6/image.log"},
+    "descriptor_reference_consistency": {
+      "status": "PASS",
+      "alias_origin": "Ownership<64>::new stack temporary overwrote empty fd 24 during VFS registration; no descriptor retain operation occurred",
+      "source_correction": "inline Ownership::new so the entries array is initialized in the caller destination",
+      "ordinary_open_dup_close": "PASS",
+      "shared_description_lifetime": "PASS",
+      "bulk_retirement": "PASS",
+      "final_backend_release_count": 1,
+      "description_reference_baseline_restored": true,
+      "real_fixture_stale_aliases": 0,
+      "qualification_log": "target/vfs-c1e6b/native-qualified.log",
+      "serial": "target/vfs-n1o-qemu-rawhijfk/serial.log",
+      "original_failure_serial": "target/vfs-c1e6a/historical-failure.serial.log",
+      "watchpoint_log": "target/vfs-c1e6b/slot.log"
+    },
     "c1e1_standalone_n1p_c1a_c1c_c1d_d1a_d1b_d2a_d2b_native_reruns": "NOT_RUN"
   },
   "ownership_guard": {

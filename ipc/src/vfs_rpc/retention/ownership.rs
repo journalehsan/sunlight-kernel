@@ -54,6 +54,7 @@ pub struct Ownership<const N: usize> {
     next_id: Option<u64>,
 }
 impl<const N: usize> Ownership<N> {
+    #[inline(always)]
     pub fn new(registration: Registration) -> Result<Self, ProtocolError> {
         // Reuse service registration validation without inventing a scope.
         super::Table::<(), 0>::new(registration).map_err(|_| ProtocolError::Encoding)?;

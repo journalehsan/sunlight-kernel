@@ -53,6 +53,11 @@ struct Qualification {
 
 static TEST: Mutex<Option<Qualification>> = Mutex::new(None);
 
+#[cfg(feature = "vfs_c1e2_test")]
+pub(crate) fn reserves_storage_parent(parent: u64) -> bool {
+    TEST.lock().as_ref().is_some_and(|test| test.physical.id == parent)
+}
+
 #[cfg(not(feature = "vfs_c1c_test"))]
 const WHOLE: Extent = Extent {
     offset: 0,

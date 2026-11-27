@@ -684,7 +684,7 @@ pub(crate) use file::{
     file_call as vfs_file_call, wake_file_callers as vfs_wake_file_callers, FileCall,
     FileCompletion, FileOperation,
 };
-#[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+#[cfg(all(not(test), debug_assertions, feature = "vfs_service_private_mmap"))]
 pub(crate) use file::cancel_mapping_read;
 #[cfg(all(not(test), debug_assertions, feature = "vfs_d2b_test"))]
 pub(crate) fn fixture_mapping_read(caller: Caller, service: Caller, id: u64) -> Option<(u64, u64)> {
@@ -702,7 +702,7 @@ pub(crate) use transport::{control, file_control, initial_cwd, FileControl};
 mod wakeup;
 pub(super) use wakeup::{take_control_wakeup, wake_control_receivers};
 
-#[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+#[cfg(all(not(test), debug_assertions, feature = "vfs_service_private_mmap"))]
 pub(crate) fn mapping_epoch(sched: &Scheduler, caps: &CapabilityBroker) -> Option<u64> {
     let identity = capture(sched.current_pid(), sched, caps).ok()?;
     RUNTIME.lock().caller_receipt(identity)?;
@@ -725,7 +725,7 @@ pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
 /// preparation. Remote ownership survives retirement. No synchronous IPC,
 /// remote drain or VM cleanup occurs here.
 pub(crate) fn retire_process(expected: Caller) {
-    #[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+    #[cfg(all(not(test), debug_assertions, feature = "vfs_service_private_mmap"))]
     crate::process::mmap::service::retire(expected);
     RUNTIME.lock().retire_process(expected);
 }

@@ -381,12 +381,59 @@ pub extern "C" fn _start() -> ! {
 
 #[cfg(feature = "vfs-c1e2-test")]
 fn linux_fixture_call(number: u64, arg0: u64, arg1: u64, arg2: u64) -> i64 {
+    linux_fixture_call6(number, [arg0, arg1, arg2, 0, 0, 0])
+}
+
+#[cfg(feature = "vfs-c1e2-test")]
+fn linux_fixture_call6(number: u64, args: [u64; 6]) -> i64 {
     let mut result = number;
     unsafe {
-        core::arch::asm!("syscall", inout("rax") result, in("rdi") arg0, in("rsi") arg1,
-            in("rdx") arg2, lateout("rcx") _, lateout("r11") _);
+        core::arch::asm!("syscall", inout("rax") result, in("rdi") args[0], in("rsi") args[1],
+            in("rdx") args[2], in("r10") args[3], in("r8") args[4], in("r9") args[5],
+            lateout("rcx") _, lateout("r11") _);
     }
     result as i64
+}
+
+#[cfg(feature = "vfs-c1e7-test")]
+fn linux_private_mmap_fixture() {
+    const PAGE: u64 = 4096;
+    const SPAN: u64 = 2 * PAGE;
+    let descriptor = linux_fixture_call(2, b"/tests/cat-hello\0".as_ptr() as u64, 2, 0);
+    assert!(descriptor >= 0);
+    let fd = descriptor as u64;
+    let seek = |offset, whence| linux_fixture_call(8, fd, offset, whence);
+    assert_eq!(seek(PAGE, 0), PAGE as i64);
+    assert_eq!(linux_fixture_call(1, fd, b"tail-data".as_ptr() as u64, 9), 9);
+    assert_eq!(seek(5, 0), 5);
+    let map = |length, prot, offset| {
+        linux_fixture_call6(9, [0, length, prot, 0x802, fd, offset])
+    };
+    assert_eq!(map(PAGE, 1, 1), -22);
+    for _ in 0..4 {
+        let address = map(SPAN, 3, 0);
+        assert!(address > 0);
+        let bytes = address as *mut u8;
+        unsafe {
+            assert_eq!(bytes.read_volatile(), b'h');
+            assert_eq!(bytes.add(PAGE as usize).read_volatile(), b't');
+            assert_eq!(bytes.add(PAGE as usize + 9).read_volatile(), 0);
+            assert_eq!(bytes.add(SPAN as usize - 1).read_volatile(), 0);
+            bytes.add(PAGE as usize).write_volatile(b'X');
+        }
+        assert_eq!(seek(0, 1), 5);
+        assert_eq!(linux_fixture_call(11, address as u64, SPAN, 0), 0);
+    }
+    let address = map(PAGE, 1, PAGE);
+    assert!(address > 0);
+    assert_eq!(linux_fixture_call(10, address as u64, PAGE, 0), 0);
+    assert_eq!(linux_fixture_call(10, address as u64, PAGE, 1), 0);
+    assert_eq!(seek(0, 1), 5);
+    assert_eq!(linux_fixture_call(3, fd, 0, 0), 0);
+    unsafe {
+        assert_eq!((address as *const u8).read_volatile(), b't');
+    }
+    assert_eq!(linux_fixture_call(11, address as u64, PAGE, 0), 0);
 }
 
 #[cfg(feature = "vfs-c1e2-test")]
@@ -416,6 +463,11 @@ fn linux_mount_fixture() -> ! {
                     break;
                 }
                 if !passed {
+                    #[cfg(feature = "vfs-c1e7-test")]
+                    {
+                        linux_private_mmap_fixture();
+                        log("[VFS-C1E7] Linux private mmap checks passed");
+                    }
                     log("[VFS-C1E6] ordinary Linux open/read/close and statfs reached retained view");
                 }
                 passed = true;

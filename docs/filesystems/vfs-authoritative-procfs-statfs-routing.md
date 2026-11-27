@@ -49,14 +49,41 @@ both entries, so the second call reached `expect("live description")` after
 the first had removed the row. Normal close, dup, exec and backend-release
 assertions were not involved.
 
-The fix is confined to bulk process-exit cleanup. It consumes an entry whose
-ordinary open-description row is already absent without attempting a second
-description or backend release. The strict `release_description` assertion
-remains unchanged for every normal ownership path. A focused fd-table
-regression constructs the observed fd-0/fd-24 alias and checks that the first
-entry owns the release, the stale alias returns no backend handle, and the
-table is empty. The QEMU harness now also requires exactly one PID 39002 reap
-and rejects any kernel panic.
+C1E6B traced the alias to VFS registration, not descriptor duplication. The
+fixture's raw Linux syscall 24 is `sched_yield`; the compatibility table maps
+it to native `ProcessYield`, which never reads or writes the fd table. A QEMU
+hardware watchpoint on the empty fd-24 slot instead fired in
+`Ownership<64>::new` while it initialized its 6.5 KiB entries array. The
+out-of-line constructor built that array in a temporary below the 32 KiB
+kernel stack and its initialization overlapped the adjacent heap-allocated fd
+table. The observed byte store changed fd 24's `Option<FileDescriptor>` tag
+from empty to present while leaving a zero-filled payload: handle 0 and
+open-description row 0, exactly matching fd 0. No `open_from`, `dup`, `dup2`,
+spawn inheritance or thread snapshot operation ran, so neither
+`retain_description` nor any backend retain could account for the alias.
+
+The descriptor contract remains unchanged: every installed descriptor owns
+one open-description reference; `dup`, `dup2`, spawn inheritance and committed
+thread snapshots explicitly retain it; each close or retirement drops one;
+only the final VFS reference returns a backend-release handle. C1E6B makes the
+smallest source correction by forcing `Ownership::new` inline, so its array is
+initialized directly in the caller's `RemoteRegistration` destination instead
+of materializing the oversized stack temporary. This is an upstream memory
+clobber correction, not a new descriptor ownership rule.
+
+The C1E6A defense remains confined to bulk process-exit cleanup. It consumes
+an entry whose ordinary open-description row is already absent without
+attempting a second description or backend release. The strict
+`release_description` assertion remains unchanged for every normal ownership
+path. A focused fd-table regression constructs the observed fd-0/fd-24 alias
+and checks that the first entry owns the release, the stale alias returns no
+backend handle, and the table is empty. The native qualification separately
+exercises an ordinary open/final close, a valid duplicate with shared offset
+and surviving lifetime, `dup2` to fd 24, bulk retirement, exactly one final
+backend release, an empty second retirement, and restoration of the exact
+description-row/reference baseline. The harness rejects any stale-alias
+diagnostic in the real fixture, requires exactly one PID 39002 reap, and
+rejects any kernel panic.
 
 The repaired single-vCPU, 2 GiB run at
 `target/vfs-n1o-qemu-644nz9cp/serial.log` passed the original C1E6 scenario.
@@ -72,3 +99,12 @@ existing host target fails on unrelated private `ProcessState` imports and
 duplicate `alloc_error_handler`/`panic_impl` items. Successful committed FAT
 capacity and withdrawal tests through ordinary syscalls require publication
 and are blocked.
+
+The final C1E6B single-vCPU, 2 GiB run at
+`target/vfs-n1o-qemu-rawhijfk/serial.log` passed the expanded qualification.
+It emitted the descriptor-retirement attestation once, emitted no stale-alias
+fallback, reaped PID 39002 with the same 22,299/50/0/0 resource counts, and
+continued through five preparation releases, exact service-image retirement,
+the C1E2 completion attestation, read-only fsck and payload recovery. SHA-256
+for both the initial and closed FAT images was
+`74cbf319149a80bab105c87cf43e1e7158f15da99f877db9515d299a838cf01e`.

@@ -13,7 +13,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
-#[cfg(all(debug_assertions, feature = "vfs_d2a_test"))]
+#[cfg(all(debug_assertions, feature = "vfs_service_private_mmap"))]
 pub(crate) mod service;
 
 const MMAP_REGION_BASE: u64 = 0x10_0000_0000;

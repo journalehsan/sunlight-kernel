@@ -10888,8 +10888,7 @@ fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
             }
         });
     }
-    frame.r10 = native_flags as u64;
-    sys_mmap(frame)
+    mmap_with_flags(frame, native_flags)
 }
 
 fn sys_linux_sigaltstack(frame: &mut SyscallFrame) -> u64 {
@@ -13221,34 +13220,34 @@ fn sys_fcntl(frame: &mut SyscallFrame) -> u64 {
 /// r8 = fd (-1 for anonymous)
 /// r9 = offset
 fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
+    mmap_with_flags(frame, frame.r10 as u32)
+}
+
+fn mmap_with_flags(frame: &mut SyscallFrame, flags: u32) -> u64 {
     let addr = frame.rdi;
     let length = frame.rsi;
     let prot = frame.rdx as u32;
-    let flags = frame.r10 as u32;
     let fd = frame.r8 as i32;
     let offset = frame.r9;
 
-    #[cfg(all(debug_assertions, feature = "vfs_d2a_test"))]
-    if flags & crate::process::mmap::MAP_ANONYMOUS == 0
-        && crate::sched::with_scheduler(|sched| {
-            let caller = sched.current_process();
-            caller.vfs_file_routed && !caller.is_linux_compat()
-                && (crate::ipc::vfs_registration::spawn::fixture::is_d2a_caller(caller.pid)
-                    || (cfg!(feature = "vfs_c1a_test") && caller.name_str() == "vfs-c1a-probe"))
-        })
-    {
-        return match crate::process::mmap::service::step([addr, length, prot as u64, flags as u64, fd as u64, offset]) {
-            Ok(Some(mapped)) => mapped,
-            Ok(None) => {
-                frame.rcx = frame.rcx.saturating_sub(2);
-                crate::sched::request_reschedule_after_sysret();
-                frame.rax
-            }
-            Err(error) => {
-                crate::serial_println!("[VFS-D2A] mmap rejected {:?}", error);
-                u64::MAX
-            }
-        };
+    #[cfg(all(debug_assertions, feature = "vfs_service_private_mmap"))]
+    if flags & crate::process::mmap::MAP_ANONYMOUS == 0 {
+        if let Some((linux, result)) = crate::process::mmap::service::step_if_owned([
+            addr, length, prot as u64, flags as u64, fd as u64, offset,
+        ]) {
+            return match result {
+                Ok(Some(mapped)) => mapped,
+                Ok(None) => {
+                    frame.rcx = frame.rcx.saturating_sub(2);
+                    crate::sched::request_reschedule_after_sysret();
+                    frame.rax
+                }
+                Err(error) => {
+                    crate::serial_println!("[VFS-D2A] mmap rejected {:?}", error);
+                    mmap_syscall_error(linux, error)
+                }
+            };
+        }
     }
 
     let pty_lock_start = if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
@@ -13348,22 +13347,26 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
                 free_frames,
                 heap_free
             );
-            if linux_compat {
-                match error {
-                    crate::process::mmap::MmapError::BadFd => linux_errno(9),
-                    crate::process::mmap::MmapError::Unsupported => linux_errno(19),
-                    crate::process::mmap::MmapError::FileIo => linux_errno(5),
-                    crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
-                    crate::process::mmap::MmapError::NoMemory => linux_errno(12),
-                    crate::process::mmap::MmapError::AlreadyMapped => linux_errno(17),
-                    crate::process::mmap::MmapError::Protected => linux_errno(1),
-                    _ => linux_errno(22),
-                }
-            } else {
-                u64::MAX
-            }
+            mmap_syscall_error(linux_compat, error)
         }
     }
+}
+
+fn mmap_syscall_error(linux_compat: bool, error: crate::process::mmap::MmapError) -> u64 {
+    use crate::process::mmap::MmapError;
+    if !linux_compat {
+        return u64::MAX;
+    }
+    linux_errno(match error {
+        MmapError::BadFd => 9,
+        MmapError::Unsupported => 19,
+        MmapError::FileIo => 5,
+        MmapError::PermissionDenied => 13,
+        MmapError::NoMemory => 12,
+        MmapError::AlreadyMapped => 17,
+        MmapError::Protected => 1,
+        _ => 22,
+    })
 }
 
 /// Syscall: munmap (51)

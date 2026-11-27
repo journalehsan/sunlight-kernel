@@ -1056,6 +1056,16 @@ impl<D: BlockDevice> Vfs<D> {
         source: u64,
         protected: bool,
     ) -> Result<(), FsError> {
+        self.install_mount(path, source, protected, || fs).map(|_| ())
+    }
+
+    fn install_mount(
+        &mut self,
+        path: &str,
+        source: u64,
+        protected: bool,
+        backend: impl FnOnce() -> FsNode<D>,
+    ) -> Result<usize, FsError> {
         path::validate_absolute(path)?;
         if self.count >= MAX_MOUNTS {
             return Err(FsError::TooManyOpenFiles);
@@ -1081,7 +1091,7 @@ impl<D: BlockDevice> Vfs<D> {
         self.next_tags[slot] += MAX_MOUNTS as u16;
         self.mounts[slot] = Some(Mount {
             path: mount_path,
-            fs,
+            fs: backend(),
             tag,
             source,
             protected,
@@ -1090,7 +1100,7 @@ impl<D: BlockDevice> Vfs<D> {
             device_attachment: None,
         });
         self.count += 1;
-        Ok(())
+        Ok(slot)
     }
 
     pub fn mount_tmpfs(&mut self, path: &str, fs: crate::Tmpfs) -> Result<(), FsError> {

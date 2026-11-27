@@ -1,0 +1,61 @@
+{
+  "stage": "VFS-C1E8",
+  "status": "PARTIAL",
+  "ordinary_publication": {
+    "status": "BLOCKED",
+    "committed_mounts": 0,
+    "dependencies": ["authorize and consume the exact receipt at N1D commit, ordered with retirement and compensation", "ordinary namespace mutation through the authenticated retained view"]
+  },
+  "committed_mount_acceptance": "NOT_RUN",
+  "guarded_ordinary_boot": "NOT_RUN",
+  "builds": {
+    "production_kernel_release": {"status": "PASS", "log": "target/vfs-c1e8/production.log"},
+    "vfs_release": {"status": "PASS", "log": "target/vfs-c1e8/release-vfs.log"},
+    "candidate_kernel": {"status": "PASS", "log": "target/vfs-c1e8/candidate.log"},
+    "embedded_service": {"status": "PASS", "log": "target/vfs-c1e8/service.log"}
+  },
+  "focused": {
+    "initial_identity_test": {"status": "FAIL", "log": "target/vfs-c1e8/focused.log", "reason": "Test used the legacy FAT constructor rather than the candidate's stable-object attachment constructor"},
+    "storage": {"status": "PASS", "tests": 12, "log": "target/vfs-c1e8/storage-tests.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e8/registration.log"}
+  },
+  "native_regression": {
+    "status": "PASS",
+    "scope": "isolated C1E7 preparation, refusal, abort and Linux regressions on updated candidate",
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "log": "target/vfs-c1e8/native.log",
+    "serial": "target/vfs-n1o-qemu-iaof_gqd/serial.log",
+    "lease_releases": 5,
+    "exact_service_image_retirement": "PASS",
+    "retained_dma_bytes": 20480,
+    "queue": "0x10bd000",
+    "bounce": "0x10c1000",
+    "outstanding_commands": 0,
+    "mapping_users": 0,
+    "retained_command_data": 0,
+    "pending_flush": false,
+    "caller_reap": {"pid": 39002, "user_frames": 22300, "page_tables": 50, "swap_blocks": 0, "ipc_entries": 0},
+    "closed_image_fsck": "PASS",
+    "exact_keep_payload": "PASS",
+    "byte_identical_fat_image": "PASS"
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "log": "target/vfs-c1e8/guard.log",
+    "findings": {
+      "runtime_kernel_fat": "legacy runtime FAT constructor remains for other devices",
+      "procfs_kernel_topology": "legacy caller mountinfo still samples kernel-owned topology",
+      "linux_statfs_kernel_backend": "legacy caller statfs still uses kernel FAT",
+      "private_mmap_kernel_fstat_and_pread": "kernel-owned descriptions still populate private mappings through the kernel"
+    }
+  },
+  "historical_checks_not_rerun": {
+    "parallel_host_fd": {"status": "FAIL", "passed": 19, "failed": 1, "log": "target/vfs-c1e7/fd-host.log"},
+    "serial_host_fd": {"status": "PASS", "passed": 20, "log": "target/vfs-c1e7/fd-host-serial.log"},
+    "direct_kernel_host": {"status": "BLOCKED", "reason": "Private ProcessState imports and duplicate language items"},
+    "workspace_library": {"status": "FAIL", "reason": "Duplicate panic_impl in sunlight-ui-wayland"},
+    "secret_store": {"status": "FAIL", "reason": "Separate run timed out during default_options_are_private_and_bounded"}
+  }
+}
