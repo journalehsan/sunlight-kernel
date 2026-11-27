@@ -19,3 +19,8 @@ kernel/src/ipc/mod.rs.backup
 # Durable local validation evidence; survives cargo clean.
 /.fastlane-evidence/
 /.kfp-2a*-evidence/
+
+# Oversized local SunFS audit artifacts
+/docs/audit/sunfs/sfs-5b4/raw/embedded-recovery-20261115T102807.072409Z/recovered-guest.elf.gz
+/docs/audit/sunfs/sfs-5b4/raw/recovered-native.iso.gz
+/docs/audit/sunfs/sfs-5b6/raw/20261115T142654.981094Z/diff.txt
