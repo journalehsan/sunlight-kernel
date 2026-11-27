@@ -483,7 +483,12 @@ fn build_exec_image(
     if fail_stack {
         pmm.fail_test_allocations_after(0);
     }
-    let stack_mapping = map_user_stack(process, pmm, hhdm_offset);
+    let stack_mapping = if cfg!(feature = "demand_main_stack") && !process.is_linux_compat() {
+        native_stack_seed(argv, envp)
+            .and_then(|seed| map_main_stack(process, pmm, hhdm_offset, Some(seed)))
+    } else {
+        map_user_stack(process, pmm, hhdm_offset)
+    };
     #[cfg(all(debug_assertions, feature = "helios_dynamic_elf_relocation_fixture"))]
     if fail_stack {
         pmm.clear_test_allocation_failure();
@@ -980,6 +985,39 @@ pub fn map_user_stack(
     pmm: &mut PhysicalMemoryManager,
     hhdm_offset: VirtAddr,
 ) -> Result<(), SpawnError> {
+    map_main_stack(process, pmm, hhdm_offset, None)
+}
+
+pub fn map_boot_user_stack(
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<(), SpawnError> {
+    map_main_stack(process, pmm, hhdm_offset, cfg!(feature = "demand_main_stack").then_some(4))
+}
+
+fn native_stack_seed(argv: &[&[u8]], envp: &[&[u8]]) -> Result<usize, SpawnError> {
+    let used = argv.iter().chain(envp).try_fold(16usize, |used, arg| {
+        used.checked_add(arg.len())?.checked_add(1)
+    }).ok_or(SpawnError::NoMemory)?;
+    let words = argv.len().checked_add(envp.len()).and_then(|count| count.checked_add(7))
+        .ok_or(SpawnError::NoMemory)?;
+    let table = words.checked_mul(8).ok_or(SpawnError::NoMemory)?;
+    let used = ((used.checked_add(7).ok_or(SpawnError::NoMemory)? & !7)
+        .checked_add(table).and_then(|used| used.checked_add(15))
+        .ok_or(SpawnError::NoMemory)?) & !15;
+    if used >= super::layout::USER_STACK_SIZE as usize {
+        return Err(SpawnError::NoMemory);
+    }
+    Ok(used.saturating_add(128).div_ceil(4096).clamp(4, 512))
+}
+
+fn map_main_stack(
+    process: &mut Process,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+    seed: Option<usize>,
+) -> Result<(), SpawnError> {
     use crate::process::region::{
         MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
     };
@@ -988,6 +1026,26 @@ pub fn map_user_stack(
     let stack_start = super::layout::USER_STACK_TOP
         .checked_sub(stack_pages as u64 * 4096)
         .ok_or(SpawnError::NoMemory)?;
+    let space = &process.address_space;
+    let identity = space.identity();
+    let demand = seed.is_some();
+    let policy = RegionPolicy::SYSTEM.union(RegionPolicy::OWNER_MANAGED);
+    let mut guards = [None, None];
+    if demand {
+        if !identity.is_valid() || !process.owns_address_space {
+            return Err(SpawnError::NoMemory);
+        }
+        for (index, address) in [stack_start - 4096, super::layout::USER_STACK_TOP].into_iter().enumerate() {
+            let page = Page::containing_address(VirtAddr::new(address));
+            let guard = MappingRegion::new(address, address + 4096, RegionProtection::NONE,
+                MappingKind::UserStackGuard, policy.union(RegionPolicy::NO_MERGE), RegionBacking::None)
+                .map_err(|_| SpawnError::NoMemory)?;
+            if unsafe { space.is_occupied(page, hhdm_offset) } {
+                return Err(SpawnError::NoMemory);
+            }
+            guards[index] = Some(space.preflight_region(guard).map_err(|_| SpawnError::NoMemory)?);
+        }
+    }
     for index in 0..stack_pages {
         let address = stack_start + index as u64 * 4096;
         let page =
@@ -1003,8 +1061,12 @@ pub fn map_user_stack(
         super::layout::USER_STACK_TOP,
         protection,
         MappingKind::UserStack,
-        RegionPolicy::SYSTEM.union(RegionPolicy::OWNER_MANAGED),
-        RegionBacking::None,
+        policy,
+        if demand {
+            RegionBacking::MainStack { owner: process.pid as u32, generation: identity.generation }
+        } else {
+            RegionBacking::None
+        },
     )
     .map_err(|_| SpawnError::NoMemory)?;
     let reservation = process
@@ -1014,8 +1076,16 @@ pub fn map_user_stack(
     let flags = crate::process::address_space::AddressSpace::protection_to_pte_flags(protection)
         .map_err(|_| SpawnError::NoMemory)?;
 
+    let committed = seed.unwrap_or(stack_pages);
+    let stack_start = super::layout::USER_STACK_TOP - committed as u64 * 4096;
+    if demand {
+        let floor = super::layout::USER_STACK_TOP - super::layout::USER_STACK_SIZE;
+        unsafe {
+            space.prepare_transaction_tables(Page::containing_address(VirtAddr::new(floor)), pmm, hhdm_offset)
+        }.map_err(|_| SpawnError::NoMemory)?;
+    }
     let mut installed = 0usize;
-    while installed < stack_pages {
+    while installed < committed {
         let address = stack_start + installed as u64 * 4096;
         let page =
             Page::from_start_address(VirtAddr::new(address)).map_err(|_| SpawnError::NoMemory)?;
@@ -1049,10 +1119,143 @@ pub fn map_user_stack(
         rollback_user_stack(process, stack_start, installed, pmm, hhdm_offset);
         return Err(SpawnError::NoMemory);
     }
+    for guard in guards.into_iter().flatten() {
+        process.address_space.commit_region(guard).map_err(|_| SpawnError::NoMemory)?;
+    }
     for _ in 0..installed {
         crate::memory::security::note_nx_stack_mapping();
     }
     Ok(())
+}
+
+pub(crate) fn demand_stack_owner(process: &Process, address: u64) -> Option<u32> {
+    use super::region::{MappingKind, RegionBacking, RegionPolicy, RegionProtection};
+    let top = super::layout::USER_STACK_TOP;
+    let floor = top - super::layout::USER_STACK_SIZE;
+    if !cfg!(feature = "demand_main_stack") || !(floor..top).contains(&address) {
+        return None;
+    }
+    let identity = process.address_space.identity();
+    let region = process.address_space.lookup_region(address)?;
+    let RegionBacking::MainStack { owner, generation } = region.backing else {
+        return None;
+    };
+    (identity.is_valid()
+        && generation == identity.generation
+        && region.start == floor
+        && region.end == top
+        && region.kind == MappingKind::UserStack
+        && region.protection == RegionProtection::READ_WRITE
+        && region.policy.contains(RegionPolicy::SYSTEM.union(RegionPolicy::OWNER_MANAGED))
+        && (!process.owns_address_space || process.pid == owner as usize))
+        .then_some(owner)
+}
+
+/// Caller serializes VM operations with SCHEDULER before PMM.
+pub(crate) fn commit_demand_stack_page(
+    process: &Process,
+    address: u64,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm: VirtAddr,
+) -> Result<bool, SpawnError> {
+    use x86_64::structures::paging::PageTableFlags as Flags;
+    let Some(owner) = demand_stack_owner(process, address) else {
+        return Ok(false);
+    };
+    let page = Page::containing_address(VirtAddr::new(address));
+    let required = Flags::PRESENT | Flags::USER_ACCESSIBLE | Flags::WRITABLE | Flags::NO_EXECUTE;
+    if let Some((frame, flags)) = unsafe { process.address_space.lookup_entry(page, hhdm) } {
+        return Ok(flags.contains(required) && pmm.owner_of(frame) == Some(owner));
+    }
+    let addr = pmm.alloc_frame_owned(owner).ok_or(SpawnError::NoMemory)?;
+    if !crate::memory::security::sanitize_user_frame(addr, hhdm) {
+        pmm.free_frame(addr);
+        return Err(SpawnError::NoMemory);
+    }
+    if unsafe { process.address_space.install_main_stack_leaf(page, addr, hhdm) }.is_err() {
+        pmm.free_frame(addr);
+        return Err(SpawnError::NoMemory);
+    }
+    crate::memory::security::note_nx_stack_mapping();
+    Ok(true)
+}
+
+#[cfg(feature = "main_stack_test")]
+pub(crate) fn test_main_stack(hhdm: VirtAddr) {
+    use x86_64::structures::paging::PageTableFlags as Flags;
+    let mut pmm = crate::PMM.lock();
+    let baseline = pmm.free_page_count();
+    let top = super::layout::USER_STACK_TOP;
+    let floor = top - super::layout::USER_STACK_SIZE;
+    {
+        let mut process = unsafe { Process::new(65000, 0, "stack-1-test", &mut pmm, hhdm) };
+        let large_argument = [b'x'; 17 * 1024];
+        let argv: &[&[u8]] = &[b"stack-probe", &large_argument];
+        let envp: &[&[u8]] = &[b"STACK=one"];
+        let seed = native_stack_seed(argv, envp).unwrap();
+        assert_eq!(seed, 5);
+        map_main_stack(&mut process, &mut pmm, hhdm, Some(seed)).unwrap();
+        let stack = setup_exec_stack(argv, envp, &[], &mut process, hhdm, floor, &mut || Ok(())).unwrap();
+        assert_eq!(stack.rsp % 16, 0);
+        let mut words = [0; 80];
+        crate::memory::user::copy_from_process_bytes(&process, hhdm, stack.rsp, &mut words).unwrap();
+        let word = |index: usize| u64::from_le_bytes(words[index * 8..(index + 1) * 8].try_into().unwrap());
+        assert_eq!([word(0), word(3), word(5), word(6), word(8), word(9)], [2, 0, 0, 25, 0, 0]);
+        assert_eq!(word(7), top - 16);
+        for (pointer, expected) in [(word(1), b"stack-probe\0".as_slice()), (word(4), b"STACK=one\0".as_slice())] {
+            let mut bytes = [0; 12];
+            let actual = &mut bytes[..expected.len()];
+            crate::memory::user::copy_from_process_bytes(&process, hhdm, pointer, actual).unwrap();
+            assert_eq!(actual, expected);
+        }
+        let mut terminator = [1];
+        crate::memory::user::copy_from_process_bytes(&process, hhdm, word(2) + large_argument.len() as u64, &mut terminator).unwrap();
+        assert_eq!(terminator, [0]);
+        let stats = unsafe { process.address_space.reclaim_user_space(&mut pmm, hhdm, true) };
+        assert_eq!(stats.user_frames, seed);
+        assert_eq!(pmm.free_page_count(), baseline);
+    }
+    for budget in 0..8 {
+        let mut process = unsafe { Process::new(65000, 0, "stack-1-test", &mut pmm, hhdm) };
+        pmm.fail_test_allocations_after(budget);
+        assert_eq!(map_main_stack(&mut process, &mut pmm, hhdm, Some(4)), Err(SpawnError::NoMemory));
+        pmm.clear_test_allocation_failure();
+        unsafe { process.address_space.reclaim_user_space(&mut pmm, hhdm, true) };
+        assert_eq!(pmm.free_page_count(), baseline);
+    }
+    for _ in 0..8 {
+        let mut process = unsafe { Process::new(65000, 0, "stack-1-test", &mut pmm, hhdm) };
+        map_main_stack(&mut process, &mut pmm, hhdm, Some(4)).unwrap();
+        for address in [floor - 4096, top, floor - 8192] {
+            assert_eq!(commit_demand_stack_page(&process, address, &mut pmm, hhdm), Ok(false));
+        }
+        for address in [floor - 4096, top] {
+            let region = process.address_space.lookup_region(address).unwrap();
+            assert_eq!(region.kind, super::region::MappingKind::UserStackGuard);
+            assert!(!region.policy.contains(super::region::RegionPolicy::MAY_REPLACE));
+        }
+        let before = pmm.free_page_count();
+        pmm.fail_test_allocations_after(0);
+        assert_eq!(commit_demand_stack_page(&process, floor, &mut pmm, hhdm), Err(SpawnError::NoMemory));
+        pmm.clear_test_allocation_failure();
+        assert_eq!(pmm.free_page_count(), before);
+        for address in [top - 5 * 4096, top - 6 * 4096, top - 180 * 4096, floor] {
+            let before = pmm.free_page_count();
+            assert_eq!(commit_demand_stack_page(&process, address, &mut pmm, hhdm), Ok(true));
+            assert_eq!(commit_demand_stack_page(&process, address, &mut pmm, hhdm), Ok(true));
+            assert_eq!(pmm.free_page_count(), before - 1);
+            let page = Page::containing_address(VirtAddr::new(address));
+            let (frame, flags) = unsafe { process.address_space.lookup_entry(page, hhdm) }.unwrap();
+            assert!(flags.contains(Flags::PRESENT | Flags::USER_ACCESSIBLE | Flags::WRITABLE | Flags::NO_EXECUTE));
+            assert_eq!(pmm.owner_of(frame), Some(65000));
+            let bytes = unsafe { core::slice::from_raw_parts((hhdm + frame.as_u64()).as_ptr::<u8>(), 4096) };
+            assert!(bytes.iter().all(|byte| *byte == 0));
+        }
+        let stats = unsafe { process.address_space.reclaim_user_space(&mut pmm, hhdm, true) };
+        assert_eq!(stats.user_frames, 8);
+        assert_eq!(pmm.free_page_count(), baseline);
+    }
+    crate::serial_println!("[STACK-1-TEST] startup ABI, rollback, bounds, zero, NX, duplicate, teardown PASS");
 }
 
 fn rollback_user_stack(

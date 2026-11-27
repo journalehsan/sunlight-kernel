@@ -709,6 +709,7 @@ dynamic-heap-128m = ["dynamic-heap"]
 adaptive-heap = ["dynamic-heap"]
 adaptive-document-heap = ["adaptive-heap", "dynamic-heap-128m"]
 adaptive-tty-heap = ["adaptive-heap", "dynamic-heap-16m"]
+adaptive-tls-heap = ["adaptive-heap", "dynamic-heap-8m"]
 # Link the native Rust std platform ABI and startup entry point.
 native-std = ["dynamic-heap"]
 # C main-return/exit callbacks; keep Rust's raw std exit contract unchanged.

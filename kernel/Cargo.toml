@@ -710,6 +710,9 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+demand_main_stack = []
+main_stack_census = ["boot_resources"]
+main_stack_test = ["demand_main_stack", "mm2a_test_injection"]
 boot_resources = ["sunlight-fs/boot-resources"]
 zram_lifecycle_test = []
 zram_fault_test = ["zram_lifecycle_test"]

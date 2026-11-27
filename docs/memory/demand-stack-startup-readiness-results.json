@@ -1,0 +1,62 @@
+{
+  "status": "PARTIAL",
+  "base_revision": "631e547e4dce627c8d98a9480a2fb69f38897156",
+  "guest": {"ram_mib": 1024, "firmware": "BIOS", "cpus": 2, "qemu": "11.1.3", "acceleration": "TCG", "diskless": true, "timeout_seconds_per_marker": 180},
+  "fixture": {
+    "bytes": 9304,
+    "elf_sha256": "dcde9dcc96af8f7f572e4b44f176bff3e5758c98144457671901915164f4b761",
+    "archive_sha256_both_isos": "8d24ea00884396e3ec3598539f89379310de4d7d4c42038cb8a63227b4db6a1a",
+    "preserved": true
+  },
+  "historical_timeout": {
+    "status": "FAIL",
+    "fresh_reproduction": "NOT_REPRODUCED",
+    "cause": "UNRESOLVED",
+    "serial": "target/stack-2a/demand-packaged/serial.log",
+    "service_ready": true,
+    "eligible_bundles": false,
+    "first_confirmed_divergence": "No sessiond routed stat publication or bundle discovery witness in the failing run; earlier VFS and service gates passed."
+  },
+  "short_matched_pair": {
+    "eager": {
+      "serial": "target/stack-2b/eager-repeat/serial.log",
+      "readiness": "PASS",
+      "stat_exit": 0,
+      "startup_abi": "PASS",
+      "pid": 42,
+      "incarnation": 83,
+      "vm": 93,
+      "terminal_results": 1,
+      "exit": 0,
+      "stack_frames_from_reap": 512,
+      "stack_committed_bytes": 2097152,
+      "reap": {"user_frames": 515, "elf_user_frames": 3, "page_tables": 8, "swap_blocks": 0, "ipc_entries_cleared": 0},
+      "independent_full_resource_inventory": "NOT_RUN"
+    },
+    "demand": {
+      "serial": "target/stack-2b/demand-repeat/serial.log",
+      "readiness": "PASS",
+      "stat_exit": 1,
+      "first_confirmed_divergence": "Packaged stat failed without a logged routed stat publication from the utility.",
+      "startup_abi": "BLOCKED",
+      "stack_committed_bytes": "BLOCKED",
+      "fixture_terminal_status": "BLOCKED",
+      "fixture_reclamation": "BLOCKED"
+    },
+    "document_recovery": {
+      "leaders_each": 32,
+      "eager": {"stack_frames": 16384, "free_frames": 150334, "minimum_free_frames": 137520, "stored_swap_blocks": 0},
+      "demand": {"stack_frames": 478, "free_frames": 166238, "minimum_free_frames": 153424, "stored_swap_blocks": 0}
+    }
+  },
+  "initial_matched_pair_after_longer_tls_sequence": {
+    "eager": {"serial": "target/stack-2b/eager/serial.log", "readiness": "PASS", "stat_exit": 1, "fixture_startup": "BLOCKED"},
+    "demand": {"serial": "target/stack-2b/demand/serial.log", "readiness": "PASS", "stat_exit": 1, "fixture_startup": "BLOCKED"}
+  },
+  "isolated_demand_retry": {"serial": "target/stack-2b/demand-third/serial.log", "readiness": "PASS", "stat_exit": 1, "fixture_startup": "BLOCKED"},
+  "downloaded_executable_visibility": "UNRESOLVED_SEPARATE_VFS_ISSUE",
+  "implementation_changes": [],
+  "deep_growth": "NOT_RUN",
+  "sustained_512_mib": "NOT_RUN",
+  "full_stack_2_qualified": false
+}

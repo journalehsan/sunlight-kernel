@@ -1,0 +1,134 @@
+{
+  "status": "PARTIAL",
+  "qemu": "11.1.3 TCG",
+  "vcpus": 2,
+  "compressed_boot": true,
+  "historical_bundle_discovery": {
+    "status": "FAIL",
+    "evidence": [
+      "target/tls-heap/adaptive-bios-1024/serial.log",
+      "target/tls-heap/adaptive-bios-1024-retry/serial.log"
+    ],
+    "cause": "Unresolved; fresh guests passed without a production change"
+  },
+  "fresh_eager_1024": {
+    "bundle_discovery": "PASS",
+    "document": "PASS",
+    "bundle_free_frames": 153479,
+    "serial": "target/tls-closure/eager-1024/serial.log"
+  },
+  "shared_resource_sha256": "fc0d6989a11975da5d468a6bd04e93e5ee68cc474aa07d5f9fa659d6695872ba",
+  "runs": {
+    "bios-1024": {
+      "status": "PASS",
+      "serial": "target/tls-closure/final-bios-1024/serial.log",
+      "boot_tty_document": "PASS",
+      "bundle_free_frames": 153474,
+      "document_recovered_free_frames": 150328,
+      "verified_tls_sessions": 2,
+      "client_exits": [
+        0,
+        0
+      ],
+      "payload_checks": "PASS",
+      "peak_overlap_live_bytes": 14846,
+      "peak_overlap_backing_bytes": 17384,
+      "mapped_capacity_bytes": 262144,
+      "final_active_sessions": 0,
+      "final_live_bytes": 4503,
+      "final_backing_bytes": 5776,
+      "reaped_frames_per_client": {
+        "user": 1047,
+        "page_table": 9
+      }
+    },
+    "bios-512": {
+      "status": "PASS",
+      "serial": "target/tls-closure/final-bios-512/serial.log",
+      "boot_tty_document": "PASS",
+      "bundle_free_frames": 22407,
+      "document_recovered_free_frames": 19256,
+      "verified_tls_sessions": 2,
+      "client_exits": [
+        0,
+        0
+      ],
+      "payload_checks": "PASS",
+      "peak_overlap_live_bytes": 14845,
+      "peak_overlap_backing_bytes": 17384,
+      "mapped_capacity_bytes": 262144,
+      "final_active_sessions": 0,
+      "final_live_bytes": 4503,
+      "final_backing_bytes": 5776,
+      "reaped_frames_per_client": {
+        "user": 1047,
+        "page_table": 9
+      }
+    },
+    "uefi-512": {
+      "status": "PASS",
+      "serial": "target/tls-closure/final-uefi-512/serial.log",
+      "boot_tty_document": "PASS",
+      "bundle_free_frames": 24765,
+      "document_recovered_free_frames": 17671,
+      "verified_tls_sessions": 2,
+      "client_exits": [
+        0,
+        0
+      ],
+      "payload_checks": "PASS",
+      "peak_overlap_live_bytes": 14842,
+      "peak_overlap_backing_bytes": 17384,
+      "mapped_capacity_bytes": 262144,
+      "final_active_sessions": 0,
+      "final_live_bytes": 4502,
+      "final_backing_bytes": 5776,
+      "reaped_frames_per_client": {
+        "user": 1047,
+        "page_table": 9
+      }
+    },
+    "bios-768": {
+      "status": "PASS",
+      "serial": "target/tls-closure/final-bios-768/serial.log",
+      "boot_tty_document": "PASS",
+      "bundle_free_frames": 87320,
+      "document_recovered_free_frames": 84792,
+      "verified_tls_sessions": 2,
+      "client_exits": [
+        0,
+        0
+      ],
+      "payload_checks": "PASS",
+      "peak_overlap_live_bytes": 14847,
+      "peak_overlap_backing_bytes": 17392,
+      "mapped_capacity_bytes": 262144,
+      "final_active_sessions": 0,
+      "final_live_bytes": 4502,
+      "final_backing_bytes": 5776,
+      "reaped_frames_per_client": {
+        "user": 1047,
+        "page_table": 9
+      }
+    }
+  },
+  "allocation_probe": {
+    "startup": "PASS",
+    "rejected_budget_reservation_bytes": 8388608,
+    "growth_capacity_bytes": 1314816,
+    "trimmed_capacity_bytes": 262144,
+    "active_request": "BLOCKED",
+    "reason": "Existing failure injection runs only at startup"
+  },
+  "recovery": {
+    "client_reap": "PASS",
+    "post_close_tls_heap": "PASS",
+    "tls_attributed_pmm_delta": "NOT_RUN"
+  },
+  "certificate_checks": {
+    "verified_after_startup_probe": "PASS",
+    "fresh_adaptive_negative_overlap_checks": "NOT_RUN"
+  },
+  "sustained_512_mib": "NOT_RUN",
+  "ordinary_non_compressed_boot": "NOT_RUN"
+}

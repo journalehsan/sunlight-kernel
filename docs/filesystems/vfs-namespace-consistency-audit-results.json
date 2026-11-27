@@ -1,0 +1,75 @@
+{
+  "date": "2026-11-27",
+  "scope": "source audit and guarded validation",
+  "fresh": {
+    "ownership_guard": {
+      "status": "FAIL",
+      "exit": 1,
+      "references": 71,
+      "unmatched": [
+        {"site": "kernel/src/arch/x86_64/syscall.rs:6309", "owner": "kernel", "operation": "FAT capacity"},
+        {"site": "kernel/src/linux_procfs.rs:173", "owner": "kernel", "operation": "mount topology snapshot"},
+        {"site": "kernel/src/main.rs:2567", "owner": "kernel", "operation": "existing root constructor with changed seed expression"},
+        {"site": "kernel/src/process/mmap.rs:272", "owner": "kernel", "operation": "private mmap positional file read"},
+        {"site": "kernel/src/storage.rs:123", "owner": "kernel", "operation": "runtime FAT construction"}
+      ],
+      "log": "target/vfs-namespace-audit/ownership.log"
+    },
+    "ordinary_boot": {
+      "status": "BLOCKED",
+      "exit": 1,
+      "last_stage": "ownership guard before build and QEMU",
+      "log": "target/vfs-namespace-audit/boot-gate.log"
+    },
+    "registration_host": {
+      "status": "PASS",
+      "passed": 107,
+      "scope": "registration components only",
+      "log": "target/vfs-namespace-audit/registration-host.log"
+    },
+    "matched_native": {
+      "status": "NOT_RUN",
+      "blocked_by": "ordinary_boot",
+      "operations": ["create", "lookup", "path stat", "fstat", "enumerate", "chdir", "open/read", "executable discovery and launch", "downloaded byte verification"]
+    }
+  },
+  "historical": {
+    "downloaded_path_stat": {
+      "status": "FAIL",
+      "write_owner": "kernel",
+      "stat_owner": "service",
+      "service_errno": 2,
+      "stored_bytes_verified": false,
+      "evidence": ["target/stack-2a/eager-stat/serial.log:2100", "target/stack-2a/demand-stat/serial.log:2097"]
+    },
+    "pty_marker": {
+      "status": "CONFIRMED_SPLIT",
+      "create_and_read_owner": "kernel",
+      "stat_owner": "service",
+      "evidence": "docs/memory/tty-pty-functional-qualification.md"
+    },
+    "git_mkdir_chdir": {
+      "status": "CONFIRMED_SPLIT",
+      "mkdir_owner": "kernel",
+      "chdir_owner": "service",
+      "separate_prepare_eagain": "binding admission failure; exact reason unresolved",
+      "evidence": "docs/Helios_LinuxCompat/filesystem-namespace.md"
+    },
+    "packaged_path_stat": {
+      "status": "UNRESOLVED",
+      "short_eager": "validated service success and foreground execution",
+      "short_demand": "utility exit 1 without corresponding parked request or reply",
+      "isolated_demand": "utility exit 1 without corresponding parked request or reply",
+      "long_pair": "utility exit 1 in both configurations",
+      "evidence": "docs/memory/demand-stack-startup-readiness.md"
+    },
+    "original_demand_session_catalog_timeout": {"status": "UNRESOLVED", "recurred_in_fresh_historical_pair": false}
+  },
+  "migration": {
+    "l1c_3": "BLOCKED",
+    "vfs_d1": "DEFERRED",
+    "stack_2": "NOT_QUALIFIED",
+    "preferred_next_slice": "One bounded service-owned nonpersistent mount with all exposed operations switched together",
+    "production_changes": false
+  }
+}

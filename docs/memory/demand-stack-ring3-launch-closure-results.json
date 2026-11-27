@@ -1,0 +1,61 @@
+{
+  "status": "PARTIAL",
+  "production_qualified": false,
+  "sustained_512_mib": "NOT_RUN",
+  "base_revision": "631e547e4dce627c8d98a9480a2fb69f38897156",
+  "guest": {"ram_mib": 1024, "firmware": "BIOS", "cpus": 2, "acceleration": "TCG", "compressed_boot": true},
+  "fixture": {
+    "bytes": 9304,
+    "sha256_host": "dcde9dcc96af8f7f572e4b44f176bff3e5758c98144457671901915164f4b761",
+    "format": "Static ELF64 x86-64 System V ET_EXEC",
+    "entry": "0x401000",
+    "guest_download_hash": "NOT_RUN"
+  },
+  "download_eager_and_demand": {
+    "fetch": "PASS",
+    "stat": "FAIL",
+    "stat_exit": 1,
+    "foreground_launch": "BLOCKED",
+    "first_confirmed_boundary": "Downloaded path not visible to stat; no fixture loader or scheduler record in either control.",
+    "eager_serial": "target/stack-2a/eager-stat/serial.log",
+    "demand_serial": "target/stack-2a/demand-stat/serial.log"
+  },
+  "packaged_eager": {
+    "baseline": "PASS",
+    "startup": "Ring-3 serial witness after ABI checks",
+    "pid": 42,
+    "incarnation": 83,
+    "vm": 93,
+    "terminal_results_observed": 1,
+    "exit": 0,
+    "reaped": {"user_frames": 515, "page_tables": 8, "swap_blocks": 0, "ipc_messages_cleared": 0},
+    "serial": "target/stack-2a/eager-packaged/serial.log"
+  },
+  "packaged_demand": {
+    "readiness": "FAIL",
+    "missing_marker": "[BOOT-RES] stage=session-bundles",
+    "baseline": "BLOCKED",
+    "serial": "target/stack-2a/demand-packaged/serial.log",
+    "runner": "target/stack-2a/demand-packaged.log"
+  },
+  "checks": {
+    "fixture_build_historical": "PASS",
+    "host_ledger_historical": "PASS",
+    "eager_and_demand_release_builds_historical": "PASS",
+    "fresh_production_default_build": "NOT_RUN",
+    "matched_startup": "BLOCKED",
+    "eager_deep_control": "NOT_RUN",
+    "demand_deep_growth_and_contents": "BLOCKED",
+    "fixture_hardware_fault_and_continuation": "BLOCKED",
+    "demand_commitment_and_reclamation": "BLOCKED",
+    "repeated_teardown": "NOT_RUN",
+    "guard_execute_allocation_failure_and_concurrency": "NOT_RUN"
+  },
+  "historical_measurements": {
+    "stack_1_bios_1024_document_idle": {"eager_stack_frames": 16384, "demand_stack_frames": 476, "leaders": 32},
+    "stack_2_bios_1024_demand": {"document_idle_stack_frames": 476, "document_recovery_stack_frames": 478},
+    "prior_workload_depth_kib": 616
+  },
+  "production_code_changed_by_stack_2a": false,
+  "next_milestone": "Resolve packaged demand readiness; confirm the matched baseline before running growth and retirement qualification."
+}

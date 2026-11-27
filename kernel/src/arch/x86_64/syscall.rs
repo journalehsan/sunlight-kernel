@@ -3232,6 +3232,10 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
             "[DOC-HEAP] idle" => crate::boot_resources::checkpoint("doc-idle"),
             "[DOC-HEAP] rpc" => crate::boot_resources::checkpoint("doc-rpc"),
             "[DOC-HEAP] recovered" => crate::boot_resources::checkpoint("doc-recovered"),
+            #[cfg(feature = "main_stack_census")]
+            line if line.starts_with("[TLS-HEAP] stage=reply") && line.contains(" sessions=2 ") => {
+                crate::boot_resources::checkpoint("tls-overlap");
+            }
             _ => {}
         }
         if cfg!(debug_assertions)

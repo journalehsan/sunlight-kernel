@@ -704,6 +704,9 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    #[cfg(feature = "main_stack_test")]
+    process::spawn::test_main_stack(hhdm_offset);
+
     // 4.5. MADT — enumerate logical processors now that the heap is available.
     // acpi::init() (step 2.5) runs before the heap and only handles power
     // management; MADT parsing needs Vec so it lives here.
@@ -947,7 +950,7 @@ pub extern "C" fn _start() -> ! {
         );
         let entry = process::elf_loader::load_elf(INIT_ELF_BYTES, &mut init, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
-            process::spawn::map_user_stack(&mut init, &mut pmm, hhdm_offset)
+            process::spawn::map_boot_user_stack(&mut init, &mut pmm, hhdm_offset)
                 .expect("init stack mapping failed");
             init.init_context(entry, layout::USER_STACK_TOP);
             // Explicit image-scoped migration pilot: root and cwd are the
@@ -991,7 +994,7 @@ pub extern "C" fn _start() -> ! {
         let entry =
             process::elf_loader::load_elf(VFS_SERVER_ELF_BYTES, &mut vfs, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
-            process::spawn::map_user_stack(&mut vfs, &mut pmm, hhdm_offset)
+            process::spawn::map_boot_user_stack(&mut vfs, &mut pmm, hhdm_offset)
                 .expect("vfs stack mapping failed");
 
             // Map the FAT32 share page (read-only) at FAT_SHARE_VADDR in the vfs_server.
@@ -1072,7 +1075,7 @@ pub extern "C" fn _start() -> ! {
         let entry =
             process::elf_loader::load_elf(TTY_SERVER_ELF_BYTES, &mut tty, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
-            process::spawn::map_user_stack(&mut tty, &mut pmm, hhdm_offset)
+            process::spawn::map_boot_user_stack(&mut tty, &mut pmm, hhdm_offset)
                 .expect("tty stack mapping failed");
             map_tty_framebuffer(
                 &mut tty,

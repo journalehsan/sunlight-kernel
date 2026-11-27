@@ -15,6 +15,7 @@ pub enum MappingKind {
     Anonymous,
     Brk,
     UserStack,
+    UserStackGuard,
     ElfSegment,
     SharedMemory,
     Framebuffer,
@@ -101,6 +102,7 @@ impl RegionPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionBacking {
     None,
+    MainStack { owner: u32, generation: u64 },
     AnonymousOwner(u32),
     ElfImage(u64),
     SharedMemory(u64),

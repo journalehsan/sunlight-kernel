@@ -19,11 +19,23 @@ pub const DUP: u64 = 7;
 /// Kernel-origin ownership transfer for a surviving non-CLOEXEC descriptor.
 /// The request caller is the old owner; the payload names the new owner.
 pub const TRANSFER: u64 = 8;
+/// Bounded positional read on the retained description. `arg0` is the explicit
+/// file offset and `arg1` the length; the shared cursor is never consulted or
+/// advanced. Kernel origin is required exactly as for every other operation,
+/// so this codec entry alone grants no routing authority.
+pub const PREAD: u64 = 9;
 
 /// Kernel pull/reply operations on the copied retention syscall.
 pub const NEXT: u64 = 10;
 pub const REPLY: u64 = 11;
 pub const EMPTY: u64 = 1;
+
+/// Operations that name a service-owned description. `PREAD` sits outside the
+/// historical contiguous range, so both decoders use this predicate instead of
+/// the range alone.
+fn is_file_op(op: u64) -> bool {
+    (OPEN..=TRANSFER).contains(&op) || op == PREAD
+}
 
 pub const HEADER_WORDS: usize = 22;
 pub const HEADER_BYTES: usize = HEADER_WORDS * 8;
@@ -106,7 +118,7 @@ impl<'a> Request<'a> {
         for (word, chunk) in w.iter_mut().zip(bytes[..HEADER_BYTES].chunks_exact(8)) {
             *word = u64::from_le_bytes(chunk.try_into().unwrap());
         }
-        if w[0] != VERSION || !(OPEN..=TRANSFER).contains(&w[1]) {
+        if w[0] != VERSION || !is_file_op(w[1]) {
             return Err(ProtocolError::Operation);
         }
         if w[3..11].contains(&0) || w[15] != 0 {
@@ -176,6 +188,23 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
         READ => {
             if request.token == 0
                 || request.arg0 != 0
+                || request.arg1 == 0
+                || request.arg1 > IO_BYTES as u64
+                || request.length != 0
+                || request.namespace_id != 0
+                || request.namespace_generation != 0
+                || request.receipt_id != 0
+                || request.receipt_generation != 0
+                || request.uid != 0
+                || request.gid != 0
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        PREAD => {
+            // `arg0` is an arbitrary explicit offset; the service, not the
+            // codec, decides whether offset plus length is representable.
+            if request.token == 0
                 || request.arg1 == 0
                 || request.arg1 > IO_BYTES as u64
                 || request.length != 0
@@ -337,7 +366,7 @@ impl<'a> Reply<'a> {
         for (word, chunk) in w.iter_mut().zip(bytes[..HEADER_BYTES].chunks_exact(8)) {
             *word = u64::from_le_bytes(chunk.try_into().unwrap());
         }
-        if w[0] != VERSION || !(OPEN..=TRANSFER).contains(&w[1]) {
+        if w[0] != VERSION || !is_file_op(w[1]) {
             return Err(ProtocolError::Operation);
         }
         if w[3..11].contains(&0) || w[15..22].iter().any(|word| *word != 0) {
@@ -391,7 +420,7 @@ fn validate_reply(reply: &Reply<'_>) -> Result<(), ProtocolError> {
                 return Err(ProtocolError::Encoding);
             }
         }
-        READ => {
+        READ | PREAD => {
             if reply.result0 as usize != reply.length
                 || reply.result1 != 0
                 || reply.length > IO_BYTES
@@ -705,5 +734,93 @@ mod tests {
         let mut invalid = reply;
         invalid.result0 = 0;
         assert!(invalid.encode().is_err());
+    }
+
+    #[test]
+    fn positional_read_carries_an_explicit_offset_and_no_payload() {
+        let read = Request {
+            request_id: 1,
+            op: PREAD,
+            token: 2,
+            arg0: 4096,
+            arg1: 16,
+            length: 0,
+            namespace_id: 0,
+            namespace_generation: 0,
+            receipt_id: 0,
+            receipt_generation: 0,
+            uid: 0,
+            gid: 0,
+            payload: &[],
+            ..open_request()
+        };
+        let bytes = read.encode().unwrap();
+        assert_eq!(Request::decode(&bytes), Ok(read));
+        assert_eq!(Request::decode(&bytes).unwrap().arg0, 4096);
+
+        // Offset zero is an ordinary offset, and the codec does not bound the
+        // upper end: only the service can decide if offset plus length fits.
+        let mut at_start = read;
+        at_start.arg0 = 0;
+        assert!(at_start.encode().is_ok());
+        let mut top = read;
+        top.arg0 = u64::MAX;
+        assert_eq!(
+            Request::decode(&top.encode().unwrap()).unwrap().arg0,
+            u64::MAX
+        );
+
+        for invalid in [
+            Request { arg1: 0, ..read },
+            Request {
+                arg1: IO_BYTES as u64 + 1,
+                ..read
+            },
+            Request {
+                token: 0,
+                ..read
+            },
+            Request {
+                namespace_id: 1,
+                ..read
+            },
+            Request {
+                receipt_id: 1,
+                ..read
+            },
+            Request { uid: 1, ..read },
+            Request { gid: 1, ..read },
+        ] {
+            assert!(invalid.encode().is_err());
+        }
+        let mut with_payload = read;
+        with_payload.length = 1;
+        with_payload.payload = b"x";
+        assert!(with_payload.encode().is_err());
+
+        let reply = Reply {
+            registration: read.registration,
+            caller: read.caller,
+            request_id: read.request_id,
+            op: PREAD,
+            errno: 0,
+            result0: 2,
+            result1: 0,
+            length: 2,
+            payload: b"ef",
+        };
+        let bytes = reply.encode().unwrap();
+        assert_eq!(Reply::decode(&bytes).unwrap().payload, b"ef");
+        let mut short = reply;
+        short.result0 = 1;
+        assert!(short.encode().is_err());
+        let mut eof = reply;
+        eof.result0 = 0;
+        eof.length = 0;
+        eof.payload = &[];
+        assert!(eof.encode().is_ok());
+        let mut failed = eof;
+        failed.errno = 22;
+        assert!(failed.encode().is_ok());
     }
 }

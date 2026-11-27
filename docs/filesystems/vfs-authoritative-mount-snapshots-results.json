@@ -1,0 +1,30 @@
+{
+  "stage": "VFS-N1A",
+  "date": "2026-11-27",
+  "base_commit": "631e547e4dce627c8d98a9480a2fb69f38897156",
+  "source": "primary working tree including pre-existing local changes",
+  "status": "PARTIAL",
+  "finding_resolved": false,
+  "production_routing_changed": false,
+  "live_source": "kernel VFS mount table plus kernel block source validation",
+  "cutover": {
+    "status": "BLOCKED",
+    "missing": ["one authoritative attachment publication used by live mounts and caller path crossing", "caller-visible topology revision and validation through FD installation"],
+    "protocol": "design only; single retained caller view, at most 8 rows, 16384 wire bytes and 8192 formatted bytes"
+  },
+  "compilation": [
+    {"status":"PASS","command":"cargo build -p sunlight-kernel","log":"target/vfs-n1a/kernel.log"},
+    {"status":"PASS","command":"RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' cargo build --release -p sunlight-vfs-server","log":"target/vfs-n1a/service.log"}
+  ],
+  "host": [
+    {"status":"PASS","command":"cargo test --lib -p sunlight-fs --target x86_64-unknown-linux-gnu mountinfo","passed":2,"covers":["nearest parent and escaping","tmpfs and registered FAT wire-to-text fields from local VFS","exact byte limit and overflow","absent FAT source fails closed","detach and remount slot generation","immutable earlier sample"],"log":"target/vfs-n1a/format.log"},
+    {"status":"PASS","command":"python3 tools/test_vfs_registration_host.py","passed":108,"covers":["all 107 prior registration tests","two caller bindings and rejection of a foreign caller","withdrawal invalidates retained binding","only withdrawn receipt queued after local pin drop","registration loss fences remaining caller"],"log":"target/vfs-n1a/registration-final.log"}
+  ],
+  "service_snapshot_transaction": {"status":"NOT_RUN","reason":"no production provider or ABI; component tests do not exercise wire decoding, snapshot FD installation, cancellation or guest reads"},
+  "ownership_guard": {"status":"FAIL","command":"python3 tools/audit_vfs_cutover.py --no-growth","exit":1,"references":71,"unmatched":4,"sites":["sys_linux_statfs","linux_procfs::mountinfo_snapshot","private mmap","storage::mount"],"inventory_changed_by_stage":false,"log":"target/vfs-n1a/guard-final.log"},
+  "ordinary_boot": {"status":"BLOCKED","command":"./tools/test.sh","exit":1,"qemu_started":false,"guard_bypass":false,"log":"target/vfs-n1a/ordinary-final.log"},
+  "native_validation": "NOT_RUN",
+  "l1c_3": "BLOCKED",
+  "production_vfs_d1": "DEFERRED",
+  "scratch_activated": false
+}

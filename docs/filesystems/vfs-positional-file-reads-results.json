@@ -1,0 +1,55 @@
+{
+  "stage": "VFS-N1B",
+  "date": "2026-11-27",
+  "base_commit": "631e547e4dce627c8d98a9480a2fb69f38897156",
+  "source": "primary working tree including pre-existing local changes",
+  "status": "SERVICE_PRIMITIVE_QUALIFIED_HOST_ONLY",
+  "mmap_ownership_finding_resolved": false,
+  "production_routing_changed": false,
+  "production_mmap_integration": "NOT_RUN",
+  "live_dependency": {
+    "site": "kernel/src/process/mmap.rs:272",
+    "description": "sys_mmap private file mapping still holds KERNEL_VFS and reads through the kernel VFS under the scheduler and PMM locks"
+  },
+  "contract": {
+    "opcode": "PREAD=9",
+    "offset": "arg0, explicit absolute u64; unrepresentable offset or offset+length is EINVAL before any backend call",
+    "length": "arg1, 1..=4096; zero or larger is a codec error",
+    "payload_and_namespace_words": "must be zero",
+    "rights": "Access::Read or ReadWrite; otherwise EACCES",
+    "identity": "owner and token select the retained description; mismatch is EBADF",
+    "cursor": "never read, written or restored; no seek is issued",
+    "eof": "at or past EOF returns zero bytes with errno 0; short reads reported unchanged"
+  },
+  "changed_files": [
+    "ipc/src/vfs_rpc/file_transport.rs",
+    "services/vfs_server/src/open.rs",
+    "services/vfs_server/src/runtime.rs",
+    "services/vfs_server/src/runtime/tests.rs",
+    "services/vfs_server/src/runtime/tests/positional_reads.rs"
+  ],
+  "compilation": [
+    {"status":"PASS","command":"CARGO_INCREMENTAL=0 cargo build -p sunlight-kernel","log":"target/vfs-n1b/kernel.log","note":"an earlier attempt was killed by SIGTERM and left a stale incremental object that failed to link; rebuilt without source change"},
+    {"status":"PASS","command":"RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' cargo build --release -p sunlight-vfs-server","log":"target/vfs-n1b/service.log"}
+  ],
+  "host": [
+    {"status":"PASS","command":"cargo test -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline","passed":54,"new":7,"log":"target/vfs-n1b/service-tests.log",
+     "covers":["explicit offsets","cursor preservation across read, seek and SEEK_CURRENT","duplicates share one cursor with independent positional reads","EOF and partial reads","unrepresentable offsets","rights denial","foreign caller, incarnation and address space","stale registration epoch dropped","closed token","rename and unlink retention with replacement at the old path","retire_caller keeps the description","retire_file_owner releases it and the backend pin","epoch withdrawal releases and fails old tokens"]},
+    {"status":"PASS","command":"cargo test -p sunlight-ipc --lib --target x86_64-unknown-linux-gnu --offline","passed":169,"new":1,"log":"target/vfs-n1b/ipc-tests.log"},
+    {"status":"PASS","command":"python3 tools/test_vfs_registration_host.py","passed":108,"log":"target/vfs-n1b/registration.log"}
+  ],
+  "ownership_guard": {"status":"FAIL","command":"python3 tools/audit_vfs_cutover.py --no-growth","exit":1,"references":71,"unmatched":4,"sites":["sys_linux_statfs","linux_procfs::mountinfo_snapshot","private mmap","storage::mount"],"inventory_changed_by_stage":false,"log":"target/vfs-n1b/guard.log"},
+  "ordinary_boot": {"status":"BLOCKED","command":"./tools/test.sh","exit":1,"qemu_started":false,"guard_bypass":false,"log":"target/vfs-n1b/ordinary.log"},
+  "native_validation": "NOT_RUN",
+  "remaining_dependencies": [
+    "VFS-D1 descriptor epoch validation on lookup (deferred)",
+    "VFS-D1 compensating Close on failed installation (deferred)",
+    "kernel client that parks for the reply outside SCHEDULER, PMM and KERNEL_VFS",
+    "staged unpublished frame population with rollback and cancellation",
+    "N1 historical owners and N1A topology snapshot (ordinary boot blocked)"
+  ],
+  "l1c_3": "BLOCKED",
+  "production_vfs_d1": "DEFERRED",
+  "scratch_activated": false,
+  "procfs_snapshot_activated": false
+}

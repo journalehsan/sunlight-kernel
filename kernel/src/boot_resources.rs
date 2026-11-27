@@ -91,6 +91,8 @@ pub fn initial_accounting(map: &[&Entry], managed: usize, free: usize) {
 }
 
 pub fn checkpoint(stage: &str) {
+    #[cfg(feature = "main_stack_census")]
+    stack_census(stage);
     use core::sync::atomic::Ordering;
     use crate::memory::accounting::{class_frame_count, PhysicalMemoryClass};
     let (free, minimum, classes) = x86_64::instructions::interrupts::without_interrupts(|| {
@@ -124,4 +126,47 @@ pub fn checkpoint(stage: &str) {
         reclaim.watermark_activations, reclaim.candidate_scans, reclaim.pages_reclaimed,
         reclaim.no_progress_events, reclaim.candidate_count
     );
+}
+
+#[cfg(feature = "main_stack_census")]
+fn stack_census(stage: &str) {
+    use crate::process::{layout::*, ProcessState};
+    use x86_64::structures::paging::PageTableFlags as Flags;
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().unwrap().offset);
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let sched = crate::sched::SCHEDULER.lock();
+        let pmm = crate::PMM.lock();
+        let mut leaders = 0;
+        let mut total = 0;
+        for process in &sched.processes {
+            if !process.owns_address_space
+                || matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+                || !process.address_space.lookup_region(USER_STACK_TOP - 4096)
+                    .is_some_and(|region| region.kind == MappingKind::UserStack)
+            {
+                continue;
+            }
+            let mut pages = 0;
+            let mut depth = 0;
+            for offset in (4096..=USER_STACK_SIZE).step_by(4096) {
+                let page = Page::containing_address(VirtAddr::new(USER_STACK_TOP - offset));
+                if let Some((frame, flags)) = unsafe { process.address_space.lookup_entry(page, hhdm) } {
+                    if flags.contains(Flags::PRESENT) && pmm.owner_of(frame) == Some(process.pid as u32) {
+                        pages += 1;
+                        if flags.contains(Flags::ACCESSED) {
+                            depth = offset / 4096;
+                        }
+                    }
+                }
+            }
+            leaders += 1;
+            total += pages;
+            if process.name_str() == "sunlightd" {
+                crate::serial_println!("[STACK-1] stage={} sunlightd_pages={} sunlightd_depth={}", stage, pages, depth);
+            }
+        }
+        let (count, cycles, max) = crate::arch::x86_64::interrupts::main_stack_fault_cycles();
+        crate::serial_println!("[STACK-1] stage={} leaders={} pages={} count={} cycles={} max={}",
+            stage, leaders, total, count, cycles, max);
+    });
 }

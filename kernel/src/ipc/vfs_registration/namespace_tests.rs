@@ -477,6 +477,40 @@ fn late_prepared_receipt_across_replacement_releases_only_old_epoch() {
 }
 
 #[test]
+fn snapshot_prerequisite_rejects_foreign_and_withdrawn_namespace_pins() {
+    let (mut kernel, first, mut service, namespace) = runtime();
+    let mut second = first;
+    second.caller.pid += 1;
+    let first_receipt = provision(&mut kernel, first, &mut service, &namespace);
+    install(&mut kernel, first, first_receipt);
+    let second_receipt = provision(&mut kernel, second, &mut service, &namespace);
+    install(&mut kernel, second, second_receipt);
+    let old = kernel.namespaces.lookup(first).unwrap();
+    let other = kernel.namespaces.lookup(second).unwrap();
+    assert_ne!(
+        old.validate(first).unwrap(),
+        other.validate(second).unwrap()
+    );
+    assert_eq!(old.validate(second), Err(ResourceError::StaleNamespace));
+    kernel.namespaces.withdraw(first).unwrap();
+    assert_eq!(old.validate(first), Err(ResourceError::StaleNamespace));
+    assert!(other.validate(second).is_ok());
+    drop(old);
+    kernel.reconcile_namespaces();
+    assert_eq!(
+        kernel
+            .remote_owner(first.registration)
+            .unwrap()
+            .releases()
+            .collect::<alloc::vec::Vec<_>>(),
+        [Frame::Release(first_receipt)]
+    );
+    kernel.retire_registration(second.registration);
+    assert_eq!(other.validate(second), Err(ResourceError::StaleNamespace));
+    assert!(kernel.namespaces.lookup(second).is_err());
+}
+
+#[test]
 fn explicit_withdrawal_waits_for_retained_preparation_reference() {
     let (mut kernel, identity, mut service, namespace) = runtime();
     let receipt = provision(&mut kernel, identity, &mut service, &namespace);

@@ -609,6 +609,13 @@ extern "x86-interrupt" fn page_fault_handler(
         );
     }
 
+    if is_user_frame(&_stack_frame)
+        && matches!(error_code.bits(), 4 | 6)
+        && handle_main_stack_fault(vaddr)
+    {
+        return;
+    }
+
     // Not-present fault: check whether this page was swapped out to ZRAM.
     if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
         && handle_swap_page_fault(vaddr)
@@ -655,6 +662,63 @@ extern "x86-interrupt" fn page_fault_handler(
     loop {
         x86_64::instructions::hlt();
     }
+}
+
+fn handle_main_stack_fault(address: u64) -> bool {
+    if !cfg!(feature = "demand_main_stack") {
+        return false;
+    }
+    #[cfg(feature = "main_stack_census")]
+    let start = stack_fault_tsc();
+    let Some(hhdm) = crate::HHDM_REQ.response().map(|r| x86_64::VirtAddr::new(r.offset)) else {
+        return false;
+    };
+    let sched = crate::sched::SCHEDULER.lock();
+    let current = sched.current_process();
+    let owner = sched.current_memory_owner();
+    let identity = current.address_space.identity();
+    if !owner.owns_address_space || owner.address_space.identity() != identity
+        || x86_64::registers::control::Cr3::read().0.start_address().as_u64() != identity.pml4_phys
+        || crate::process::spawn::demand_stack_owner(owner, address).is_none()
+    {
+        return false;
+    }
+    let mut pmm = crate::PMM.lock();
+    if crate::process::spawn::commit_demand_stack_page(owner, address, &mut pmm, hhdm) != Ok(true) {
+        return false;
+    }
+    x86_64::instructions::tlb::flush(x86_64::VirtAddr::new(address));
+    #[cfg(feature = "main_stack_census")]
+    {
+        use core::sync::atomic::Ordering::Relaxed;
+        let elapsed = stack_fault_tsc().wrapping_sub(start);
+        STACK_FAULT_CYCLES[0].fetch_add(1, Relaxed);
+        STACK_FAULT_CYCLES[1].fetch_add(elapsed, Relaxed);
+        STACK_FAULT_CYCLES[2].fetch_max(elapsed, Relaxed);
+    }
+    true
+}
+
+#[cfg(feature = "main_stack_census")]
+static STACK_FAULT_CYCLES: [core::sync::atomic::AtomicU64; 3] =
+    [const { core::sync::atomic::AtomicU64::new(0) }; 3];
+
+#[cfg(feature = "main_stack_census")]
+fn stack_fault_tsc() -> u64 {
+    unsafe {
+        core::arch::x86_64::_mm_lfence();
+        let cycles = core::arch::x86_64::_rdtsc();
+        core::arch::x86_64::_mm_lfence();
+        cycles
+    }
+}
+
+#[cfg(feature = "main_stack_census")]
+pub(crate) fn main_stack_fault_cycles() -> (u64, u64, u64) {
+    let [count, sum, max] = core::array::from_fn(|index| {
+        STACK_FAULT_CYCLES[index].load(core::sync::atomic::Ordering::Relaxed)
+    });
+    (count, sum, max)
 }
 
 /// Allocate the first frame for an absent Linux anonymous mapping page.

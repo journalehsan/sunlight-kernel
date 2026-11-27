@@ -255,7 +255,7 @@
     {
       "path": "kernel/src/main.rs",
       "category": "filesystem backend construction",
-      "code": ".mount_tmpfs(\"/\", sunlight_fs::Tmpfs::new(BOOT_INITRAMFS))"
+      "code": ".mount_tmpfs(\"/\", sunlight_fs::Tmpfs::new(seed))"
     },
     {
       "path": "kernel/src/main.rs",

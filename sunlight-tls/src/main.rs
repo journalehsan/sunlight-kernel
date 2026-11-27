@@ -43,7 +43,6 @@ mod sunlightos_impl {
     use alloc::vec::Vec;
     use core::time::Duration;
 
-    use linked_list_allocator::LockedHeap;
     use rustls::client::UnbufferedClientConnection;
     use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
     use rustls::time_provider::TimeProvider;
@@ -87,19 +86,34 @@ mod sunlightos_impl {
         ipc_call_timeout(cap, msg, 1000).unwrap_or_else(|_| IpcMsg::with_label(0))
     }
 
-    // ── allocator ─────────────────────────────────────────────────────────────
-    // rustls + RustCrypto allocate and free heavily during a handshake; the old
-    // never-freeing bump allocator would leak and OOM. Use a real freeing heap.
-    #[global_allocator]
-    static ALLOCATOR: LockedHeap = LockedHeap::empty();
+    #[cfg(feature = "heap-probe")]
+    fn heap_sample(stage: &str, request: u64, elapsed_ms: u64) {
+        let stats = sunlight_libc::alloc::heap_stats();
+        let sessions = unsafe { &*core::ptr::addr_of!(SESSIONS) };
+        use core::fmt::Write;
+        let mut line = heapless::String::<256>::new();
+        let _ = write!(
+            line,
+            "[TLS-HEAP] stage={} request={:#x} ms={} sessions={} capacity={} live={} backing={} peak={} allocations={} failures={}",
+            stage, request, elapsed_ms, sessions.iter().flatten().count(),
+            stats.heap_capacity, stats.requested_user_bytes, stats.allocated_backing_bytes,
+            stats.high_water_allocated_bytes, stats.live_allocation_count, stats.failed_allocation_count
+        );
+        debug_log(&line);
+    }
 
-    const HEAP_SIZE: usize = 8 * 1024 * 1024; // 8 MiB
-    static mut HEAP_MEM: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
-
-    unsafe fn init_heap() {
-        ALLOCATOR
-            .lock()
-            .init(core::ptr::addr_of_mut!(HEAP_MEM) as *mut u8, HEAP_SIZE);
+    #[cfg(feature = "heap-probe")]
+    fn heap_probe() {
+        let baseline = sunlight_libc::alloc::heap_stats();
+        let mut buffer = Vec::<u8>::new();
+        assert!(buffer.try_reserve_exact(8 * 1024 * 1024).is_err());
+        heap_sample("budget-rejected", 0, 0);
+        if buffer.try_reserve_exact(1024 * 1024).is_ok() {
+            heap_sample("growth", 0, 0);
+            drop(buffer);
+            assert_eq!(sunlight_libc::alloc::heap_stats().heap_capacity, baseline.heap_capacity);
+            heap_sample("trimmed", 0, 0);
+        }
     }
 
     // ── randomness: route getrandom -> rand_service via libc ───────────────────
@@ -1126,9 +1140,8 @@ mod sunlightos_impl {
 
     // ── main ─────────────────────────────────────────────────────────────────
     pub fn run() -> ! {
-        unsafe {
-            init_heap();
-        }
+        #[cfg(feature = "heap-probe")]
+        heap_sample("startup", 0, 0);
         debug_log("[SUNLIGHT-TLS] main() reached (no_std)\n");
         serial_println!("[SUNLIGHT-TLS] Starting sunlight-tls (real rustls)");
 
@@ -1138,10 +1151,17 @@ mod sunlightos_impl {
 
         // Build the client config (seeds + loads trust from sunlight-kv).
         rebuild_config();
+        #[cfg(feature = "heap-probe")]
+        {
+            heap_sample("ready", 0, 0);
+            heap_probe();
+        }
         serial_println!("[SUNLIGHT-TLS] Entering IPC loop");
 
         let mut msg = ipc_recv(ep);
         loop {
+            #[cfg(feature = "heap-probe")]
+            let started = monotonic_millis();
             unsafe {
                 REQUEST_DEADLINE = 0;
             }
@@ -1400,6 +1420,8 @@ mod sunlightos_impl {
                 }
                 reply = IpcMsg::with_label(TLS_ERROR).word(0, 60);
             }
+            #[cfg(feature = "heap-probe")]
+            heap_sample("reply", msg.label, monotonic_millis().saturating_sub(started));
             msg = ipc_reply_and_wait(ep, reply);
         }
     }

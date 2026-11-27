@@ -620,3 +620,5 @@ mod root_transition;
 mod file_channel;
 #[path = "tests/open_files.rs"]
 mod open_files;
+#[path = "tests/positional_reads.rs"]
+mod positional_reads;

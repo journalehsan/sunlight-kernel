@@ -668,12 +668,14 @@ path = "src/main.rs"
 [features]
 default = ["host"]
 host = []
+heap-probe = []
 sunlightos = [
     "dep:sunlight-net",
     "dep:sunlight-ipc",
     "dep:sunlight-libc",
     "dep:heapless",
-    "dep:linked_list_allocator",
+    "sunlight-libc/global-alloc",
+    "sunlight-libc/adaptive-tls-heap",
     "dep:rustls",
     "dep:webpki-roots",
     "dep:rustls-rustcrypto",
@@ -688,7 +690,6 @@ sunlight-net = { path = "../sunlight-net", optional = true }
 sunlight-ipc  = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true }
 heapless      = { version = "0.8", optional = true }
-linked_list_allocator = { version = "0.10", optional = true }
 
 # Pure-Rust TLS stack for x86_64-unknown-none (no std / no ring). See the proven
 # Phase-0 recipe: rustls + rustcrypto provider + force-soft crypto via RUSTFLAGS.

@@ -1,0 +1,880 @@
+{
+  "source_revision": "631e547e4",
+  "budget_bytes": 8388608,
+  "initial_extent_bytes": 262144,
+  "page_bytes": 4096,
+  "runs": {
+    "adaptive-bios-1024": {
+      "serial": "target/tls-heap/adaptive-bios-1024/serial.log",
+      "status": "failed",
+      "bundle_discovery": false,
+      "tls_ready": true,
+      "tty_shell_ready": false,
+      "tty_adaptive_probe": true,
+      "document_pass": true,
+      "issuer_rejected": false,
+      "verified_handshake_markers": 0,
+      "command_cases": {
+        "redirect_batches": 0,
+        "large_transfers": 0,
+        "delayed_transfers": 0,
+        "wrong_hostname_rejections": 0
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          172055,
+          210914,
+          2488
+        ],
+        "doc-idle": [
+          150328,
+          210914,
+          23949
+        ],
+        "doc-recovered": [
+          150328,
+          210914,
+          23949
+        ]
+      },
+      "error": "RuntimeError: Timed out waiting for [BOOT-RES] stage=session-bundles; see /home/ehsantor/Projects/sunlightos-kernel/target/tls-heap/adaptive-bios-1024/serial.log",
+      "heap_checkpoints": {
+        "startup": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 0,
+          "live": 0,
+          "backing": 0,
+          "peak": 0,
+          "allocations": 0,
+          "failures": 0
+        },
+        "ready": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 0
+        },
+        "budget-rejected": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 1
+        },
+        "growth": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 1314816,
+          "live": 1052578,
+          "backing": 1053728,
+          "peak": 1053728,
+          "allocations": 20,
+          "failures": 1
+        },
+        "trimmed": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 1053728,
+          "allocations": 19,
+          "failures": 1
+        }
+      }
+    },
+    "adaptive-bios-1024-retry": {
+      "serial": "target/tls-heap/adaptive-bios-1024-retry/serial.log",
+      "status": "failed",
+      "bundle_discovery": false,
+      "tls_ready": true,
+      "tty_shell_ready": false,
+      "tty_adaptive_probe": true,
+      "document_pass": true,
+      "issuer_rejected": false,
+      "verified_handshake_markers": 0,
+      "command_cases": {
+        "redirect_batches": 0,
+        "large_transfers": 0,
+        "delayed_transfers": 0,
+        "wrong_hostname_rejections": 0
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          172077,
+          210936,
+          2488
+        ],
+        "doc-idle": [
+          150350,
+          210936,
+          23949
+        ],
+        "doc-recovered": [
+          150350,
+          210936,
+          23949
+        ]
+      },
+      "error": "RuntimeError: Timed out waiting for [BOOT-RES] stage=session-bundles; see /home/ehsantor/Projects/sunlightos-kernel/target/tls-heap/adaptive-bios-1024-retry/serial.log",
+      "heap_checkpoints": {
+        "startup": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 0,
+          "live": 0,
+          "backing": 0,
+          "peak": 0,
+          "allocations": 0,
+          "failures": 0
+        },
+        "ready": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 0
+        },
+        "budget-rejected": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 1
+        },
+        "growth": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 1314816,
+          "live": 1052578,
+          "backing": 1053728,
+          "peak": 1053728,
+          "allocations": 20,
+          "failures": 1
+        },
+        "trimmed": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 1053728,
+          "allocations": 19,
+          "failures": 1
+        }
+      }
+    },
+    "adaptive-bios-512": {
+      "serial": "target/tls-heap/adaptive-bios-512/serial.log",
+      "status": "passed",
+      "bundle_discovery": true,
+      "tls_ready": true,
+      "tty_shell_ready": true,
+      "tty_adaptive_probe": true,
+      "document_pass": true,
+      "issuer_rejected": true,
+      "verified_handshake_markers": 292,
+      "command_cases": {
+        "redirect_batches": 12,
+        "large_transfers": 8,
+        "delayed_transfers": 3,
+        "wrong_hostname_rejections": 1
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          40983,
+          79842,
+          2488
+        ],
+        "session-bundles": [
+          22404,
+          79842,
+          20840
+        ],
+        "doc-idle": [
+          19256,
+          79842,
+          23949
+        ],
+        "doc-recovered": [
+          19256,
+          79842,
+          23949
+        ]
+      },
+      "heap_checkpoints": {
+        "startup": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 0,
+          "live": 0,
+          "backing": 0,
+          "peak": 0,
+          "allocations": 0,
+          "failures": 0
+        },
+        "ready": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 0
+        },
+        "budget-rejected": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 1
+        },
+        "growth": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 1314816,
+          "live": 1052578,
+          "backing": 1053728,
+          "peak": 1053728,
+          "allocations": 20,
+          "failures": 1
+        },
+        "trimmed": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 1053728,
+          "allocations": 19,
+          "failures": 1
+        }
+      },
+      "completed_close_samples": 266,
+      "reply_max": {
+        "capacity": 262144,
+        "live": 57878,
+        "backing": 59776,
+        "allocations": 34,
+        "sessions": 1,
+        "failures": 1
+      },
+      "last_close": {
+        "stage": "reply",
+        "request": 21509,
+        "ms": 10,
+        "sessions": 0,
+        "capacity": 262144,
+        "live": 4502,
+        "backing": 5776,
+        "peak": 1053728,
+        "allocations": 22,
+        "failures": 1
+      },
+      "guest_request_ms": {
+        "send": [
+          146,
+          0,
+          0.0,
+          20
+        ],
+        "receive": [
+          548,
+          0,
+          0.0,
+          3030
+        ],
+        "close": [
+          266,
+          0,
+          0.0,
+          30
+        ],
+        "connect": [
+          149,
+          20,
+          50,
+          190
+        ]
+      }
+    },
+    "adaptive-bios-768": {
+      "serial": "target/tls-heap/adaptive-bios-768/serial.log",
+      "status": "passed",
+      "bundle_discovery": true,
+      "tls_ready": true,
+      "tty_shell_ready": true,
+      "tty_adaptive_probe": true,
+      "document_pass": true,
+      "issuer_rejected": true,
+      "verified_handshake_markers": 292,
+      "command_cases": {
+        "redirect_batches": 12,
+        "large_transfers": 8,
+        "delayed_transfers": 3,
+        "wrong_hostname_rejections": 1
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          106519,
+          145378,
+          2488
+        ],
+        "session-bundles": [
+          92867,
+          145378,
+          15963
+        ],
+        "doc-idle": [
+          84792,
+          145378,
+          23949
+        ],
+        "doc-recovered": [
+          84792,
+          145378,
+          23949
+        ]
+      },
+      "heap_checkpoints": {
+        "startup": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 0,
+          "live": 0,
+          "backing": 0,
+          "peak": 0,
+          "allocations": 0,
+          "failures": 0
+        },
+        "ready": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 0
+        },
+        "budget-rejected": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 1
+        },
+        "growth": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 1314816,
+          "live": 1052578,
+          "backing": 1053728,
+          "peak": 1053728,
+          "allocations": 20,
+          "failures": 1
+        },
+        "trimmed": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 1053728,
+          "allocations": 19,
+          "failures": 1
+        }
+      },
+      "completed_close_samples": 266,
+      "reply_max": {
+        "capacity": 262144,
+        "live": 57879,
+        "backing": 59776,
+        "allocations": 34,
+        "sessions": 1,
+        "failures": 1
+      },
+      "last_close": {
+        "stage": "reply",
+        "request": 21509,
+        "ms": 20,
+        "sessions": 0,
+        "capacity": 262144,
+        "live": 4502,
+        "backing": 5776,
+        "peak": 1053728,
+        "allocations": 22,
+        "failures": 1
+      },
+      "guest_request_ms": {
+        "send": [
+          146,
+          0,
+          0.0,
+          20
+        ],
+        "receive": [
+          548,
+          0,
+          0.0,
+          3020
+        ],
+        "close": [
+          266,
+          0,
+          0.0,
+          50
+        ],
+        "connect": [
+          149,
+          20,
+          50,
+          230
+        ]
+      }
+    },
+    "adaptive-uefi-512": {
+      "serial": "target/tls-heap/adaptive-uefi-512/serial.log",
+      "status": "passed",
+      "bundle_discovery": true,
+      "tls_ready": true,
+      "tty_shell_ready": true,
+      "tty_adaptive_probe": true,
+      "document_pass": true,
+      "issuer_rejected": true,
+      "verified_handshake_markers": 292,
+      "command_cases": {
+        "redirect_batches": 12,
+        "large_transfers": 8,
+        "delayed_transfers": 3,
+        "wrong_hostname_rejections": 1
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          39398,
+          78257,
+          2488
+        ],
+        "session-bundles": [
+          20197,
+          78257,
+          21452
+        ],
+        "doc-idle": [
+          17671,
+          78257,
+          23949
+        ],
+        "doc-recovered": [
+          17671,
+          78257,
+          23949
+        ]
+      },
+      "heap_checkpoints": {
+        "startup": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 0,
+          "live": 0,
+          "backing": 0,
+          "peak": 0,
+          "allocations": 0,
+          "failures": 0
+        },
+        "ready": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 0
+        },
+        "budget-rejected": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 1
+        },
+        "growth": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 1314816,
+          "live": 1052578,
+          "backing": 1053728,
+          "peak": 1053728,
+          "allocations": 20,
+          "failures": 1
+        },
+        "trimmed": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 1053728,
+          "allocations": 19,
+          "failures": 1
+        }
+      },
+      "completed_close_samples": 266,
+      "reply_max": {
+        "capacity": 262144,
+        "live": 57878,
+        "backing": 59776,
+        "allocations": 34,
+        "sessions": 1,
+        "failures": 1
+      },
+      "last_close": {
+        "stage": "reply",
+        "request": 21509,
+        "ms": 10,
+        "sessions": 0,
+        "capacity": 262144,
+        "live": 4502,
+        "backing": 5776,
+        "peak": 1053728,
+        "allocations": 22,
+        "failures": 1
+      },
+      "guest_request_ms": {
+        "send": [
+          146,
+          0,
+          0.0,
+          20
+        ],
+        "receive": [
+          548,
+          0,
+          0.0,
+          3020
+        ],
+        "close": [
+          266,
+          0,
+          0.0,
+          30
+        ],
+        "connect": [
+          149,
+          10,
+          50,
+          130
+        ]
+      }
+    },
+    "eager-1024": {
+      "serial": "target/tls-heap/eager-1024/serial.log",
+      "status": "passed",
+      "bundle_discovery": true,
+      "tls_ready": true,
+      "tty_shell_ready": true,
+      "tty_adaptive_probe": false,
+      "document_pass": true,
+      "issuer_rejected": true,
+      "verified_handshake_markers": 292,
+      "command_cases": {
+        "redirect_batches": 12,
+        "large_transfers": 8,
+        "delayed_transfers": 3,
+        "wrong_hostname_rejections": 1
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          172051,
+          210912,
+          2488
+        ],
+        "session-bundles": [
+          150970,
+          210912,
+          23336
+        ],
+        "doc-idle": [
+          145836,
+          210912,
+          28431
+        ],
+        "doc-recovered": [
+          145836,
+          210912,
+          28431
+        ]
+      }
+    },
+    "eager-512": {
+      "serial": "target/tls-heap/eager-512/serial.log",
+      "status": "failed",
+      "bundle_discovery": true,
+      "tls_ready": true,
+      "tty_shell_ready": false,
+      "tty_adaptive_probe": false,
+      "document_pass": false,
+      "issuer_rejected": false,
+      "verified_handshake_markers": 0,
+      "command_cases": {
+        "redirect_batches": 0,
+        "large_transfers": 0,
+        "delayed_transfers": 0,
+        "wrong_hostname_rejections": 0
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          40979,
+          79840,
+          2488
+        ],
+        "session-bundles": [
+          19822,
+          79840,
+          23417
+        ],
+        "doc-idle": [
+          2086,
+          79840,
+          39757
+        ]
+      },
+      "error": "RuntimeError: Timed out waiting for [TTY]  Built-in shell ready; see /home/ehsantor/Projects/sunlightos-kernel/target/tls-heap/eager-512/serial.log"
+    },
+    "eager-tls-adaptive-tty-512": {
+      "serial": "target/tls-heap/eager-tls-adaptive-tty-512/serial.log",
+      "status": "passed",
+      "bundle_discovery": true,
+      "tls_ready": true,
+      "tty_shell_ready": true,
+      "tty_adaptive_probe": true,
+      "document_pass": true,
+      "issuer_rejected": true,
+      "verified_handshake_markers": 292,
+      "command_cases": {
+        "redirect_batches": 12,
+        "large_transfers": 8,
+        "delayed_transfers": 3,
+        "wrong_hostname_rejections": 1
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          40979,
+          79840,
+          2488
+        ],
+        "session-bundles": [
+          21778,
+          79840,
+          21452
+        ],
+        "doc-idle": [
+          17264,
+          79840,
+          25935
+        ],
+        "doc-recovered": [
+          17264,
+          79840,
+          25935
+        ]
+      }
+    },
+    "overlap-768": {
+      "serial": "target/tls-heap/overlap-768/serial.log",
+      "status": "failed",
+      "error": "Two live sessions and return to zero observed; timed out waiting for the first tab's successful exit marker.",
+      "bundle_discovery": true,
+      "tls_ready": true,
+      "tty_shell_ready": true,
+      "tty_adaptive_probe": true,
+      "document_pass": false,
+      "issuer_rejected": false,
+      "verified_handshake_markers": 4,
+      "command_cases": {
+        "redirect_batches": 0,
+        "large_transfers": 0,
+        "delayed_transfers": 0,
+        "wrong_hostname_rejections": 0
+      },
+      "pmm_free_total_user_private_frames": {
+        "pre-scheduler": [
+          106519,
+          145378,
+          2488
+        ],
+        "session-bundles": [
+          92867,
+          145378,
+          15963
+        ],
+        "doc-idle": [
+          84792,
+          145378,
+          23949
+        ]
+      },
+      "heap_checkpoints": {
+        "startup": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 0,
+          "live": 0,
+          "backing": 0,
+          "peak": 0,
+          "allocations": 0,
+          "failures": 0
+        },
+        "ready": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 0
+        },
+        "budget-rejected": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 5168,
+          "allocations": 19,
+          "failures": 1
+        },
+        "growth": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 1314816,
+          "live": 1052578,
+          "backing": 1053728,
+          "peak": 1053728,
+          "allocations": 20,
+          "failures": 1
+        },
+        "trimmed": {
+          "request": 0,
+          "ms": 0,
+          "sessions": 0,
+          "capacity": 262144,
+          "live": 4002,
+          "backing": 5096,
+          "peak": 1053728,
+          "allocations": 19,
+          "failures": 1
+        }
+      },
+      "both_clients_passed": false,
+      "completed_close_samples": 2,
+      "reply_max": {
+        "capacity": 262144,
+        "live": 14425,
+        "backing": 16736,
+        "allocations": 40,
+        "sessions": 2,
+        "failures": 1
+      },
+      "last_close": {
+        "stage": "reply",
+        "request": 21509,
+        "ms": 0,
+        "sessions": 0,
+        "capacity": 262144,
+        "live": 4502,
+        "backing": 5776,
+        "peak": 1053728,
+        "allocations": 22,
+        "failures": 1
+      },
+      "guest_request_ms": {
+        "connect": [
+          2,
+          50,
+          85.0,
+          120
+        ],
+        "send": [
+          2,
+          10,
+          15.0,
+          20
+        ],
+        "receive": [
+          3,
+          0,
+          0,
+          8010
+        ],
+        "close": [
+          2,
+          0,
+          5.0,
+          10
+        ]
+      }
+    }
+  },
+  "notes": {
+    "eager_512_and_eager_1024": "Mixed profile controls: eager TTY as well as eager TLS",
+    "eager_tls_adaptive_tty_512": "Eager TLS comparator with adaptive TTY",
+    "guest_request_ms": "Count, minimum, median, maximum; includes failed requests",
+    "reply_max": "Largest reply-boundary observations; synthetic growth excluded"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "milestone": "VFS-N1",
+  "date": "2026-11-27",
+  "base_commit": "631e547e4dce627c8d98a9480a2fb69f38897156",
+  "source": "primary working tree with local changes",
+  "fresh": {
+    "guard_before": {"status":"FAIL","exit":1,"references":71,"unmatched":5,"log":"target/vfs-n1/guard-before.log"},
+    "exact_inventory_substitution": {"status":"PASS","rows_before":68,"rows_after":68,"rows_replaced":1,"duplicate_new_expression_rejected":true,"obsolete_expression_rejected":true},
+    "guard_after": {"status":"FAIL","exit":1,"references":71,"unmatched":4,"log":"target/vfs-n1/guard-after.log"},
+    "ordinary_boot": {"status":"BLOCKED","command":"./tools/test.sh","exit":1,"qemu_started":false,"log":"target/vfs-n1/ordinary.log"},
+    "native": {"blocked_by":"ordinary_boot","downloaded_file":"NOT_RUN","git_mkdir_chdir":"NOT_RUN","pty_marker":"NOT_RUN","packaged_stat":"NOT_RUN","service_delivery_observed":null}
+  },
+  "findings": [
+    {"site":"kernel/src/arch/x86_64/syscall.rs:6309","historical":true,"origin":"ca178af0c","class":"transitional consumer","operation":"FAT capacity","status":"OPEN","required":"authorized generation-bound capacity lookup"},
+    {"site":"kernel/src/linux_procfs.rs:173","historical":true,"origin":"ca178af0c","class":"transitional consumer","operation":"procfs topology","status":"OPEN","required":"caller-visible topology snapshot and validated installation"},
+    {"site":"kernel/src/process/mmap.rs:272","historical":true,"origin":"b79f7e4d8","class":"live ownership dependency","operation":"private mapping population","status":"OPEN","required":"pinned readable description and positional reads outside scheduler and PMM locks"},
+    {"site":"kernel/src/storage.rs:123","historical":true,"origin":"ca178af0c","constructor_origin":"6c77f3cc2","class":"live ownership dependency","operation":"runtime FAT mount with capacity sampling","status":"OPEN","required":"atomic authorized FAT ownership and device handoff"},
+    {"site":"kernel/src/main.rs:2567","historical":false,"origin":"611ff358a","class":"bootstrap requirement","added_reference":"demonstrated audit artifact","operation":"existing root mount with selected seed","status":"INVENTORY_RESOLVED","runtime_owner":"kernel"}
+  ],
+  "historical_only": {
+    "downloaded_file":{"create":"kernel","stat":"service validated ENOENT","stored_bytes_verified":false},
+    "git_mkdir_chdir":{"mkdir":"kernel","chdir":"service validated ENOENT","separate_prepare_eagain":"not delivered; exact binding failure unknown"},
+    "pty_marker":{"create_read":"kernel","stat":"routed metadata ENOENT per fixture report","receipt_in_report":false},
+    "packaged_stat":{"status":"UNRESOLVED","short_eager":"service validated success","short_and_isolated_demand":"utility exit 1; delivery unproven","long_pair":"failed in both modes"}
+  },
+  "mount_design":{"target":"/vfs-scratch","type":"volatile bounded data-only","authority":"userspace VFS","activated":false,"transition":"atomic mount generation publication","host_acceptance":"NOT_RUN","native_acceptance":"NOT_RUN"},
+  "l1c_3":"BLOCKED",
+  "production_vfs_d1":"DEFERRED"
+}

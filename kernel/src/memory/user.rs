@@ -164,6 +164,13 @@ fn validate_pages(
         let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(page_address))
             .map_err(|_| UserMemoryError::InvalidAddress)?;
         if unsafe { process.address_space.lookup_entry(page, hhdm) }.is_none()
+            && crate::process::spawn::demand_stack_owner(process, page_address).is_some()
+        {
+            let mut pmm = crate::PMM.lock();
+            crate::process::spawn::commit_demand_stack_page(process, page_address, &mut pmm, hhdm)
+                .map_err(|_| UserMemoryError::AllocationFailed)?;
+        }
+        if unsafe { process.address_space.lookup_entry(page, hhdm) }.is_none()
             && process
                 .address_space
                 .lookup_region(page_address)

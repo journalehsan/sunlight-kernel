@@ -65,6 +65,36 @@ fn mount(vfs: &mut Vfs<Cache>, disk: &Disk) {
 }
 
 #[test]
+fn mountinfo_samples_one_fat_incarnation_and_requires_its_source() {
+    let (mut vfs, disk) = fixture();
+    let root = "1 1 0:0 / / rw - tmpfs tmpfs rw\n";
+    mount(&mut vfs, &disk);
+    let first = vfs.mount_info(1).unwrap().id;
+    let expected = alloc::format!("{first} 1 240:42 / /mnt rw - vfat helios-block:42 rw\n{root}");
+    let bytes = vfs.linux_mountinfo(expected.len(), |id| id == 42).unwrap();
+    assert_eq!(bytes, expected);
+    assert_eq!(
+        vfs.linux_mountinfo(8192, |_| false),
+        Err(FsError::Unsupported)
+    );
+    assert_eq!(
+        vfs.linux_mountinfo(bytes.len() - 1, |_| true),
+        Err(FsError::NoMemory)
+    );
+    vfs.unmount(first).unwrap();
+    assert_eq!(vfs.linux_mountinfo(8192, |_| false).unwrap(), root);
+    mount(&mut vfs, &disk);
+    let second = vfs.mount_info(1).unwrap().id;
+    assert_eq!(second, first + MAX_MOUNTS as u64);
+    assert_eq!(vfs.unmount(first), Err(FsError::NotFound));
+    assert_eq!(
+        vfs.linux_mountinfo(8192, |id| id == 42).unwrap(),
+        alloc::format!("{second} 1 240:42 / /mnt rw - vfat helios-block:42 rw\n{root}")
+    );
+    assert_eq!(bytes, expected);
+}
+
+#[test]
 fn rejects_invalid_system_occupied_and_duplicate_targets() {
     let (mut vfs, disk) = fixture();
     for path in ["/", "/state", "/boot", "/etc", "/state/users"] {

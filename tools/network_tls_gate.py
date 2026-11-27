@@ -27,6 +27,7 @@ import time
 
 
 class Fixture(http.server.BaseHTTPRequestHandler):
+    stack_fixture = None
     ca_der = b""
     codes = {}
     authorizations = 0
@@ -39,14 +40,22 @@ class Fixture(http.server.BaseHTTPRequestHandler):
         pass
 
     def respond(self, send_body):
-        if self.path == "/ca.der":
+        if self.path == "/stackprobe" and self.stack_fixture is not None:
+            data = self.stack_fixture
+        elif self.path == "/ca.der":
             data = self.ca_der
         elif self.path == "/large":
             data = LARGE_BODY
+        elif self.path == "/overlap":
+            data = b"overlap-alpha-payload\n"
+        elif self.path == "/overlap-b":
+            data = b"overlap-bravo-payload\n"
         else:
             data = b"SUNLIGHT TLS FIXTURE OK\n"
         # Keep TCP alive while timed/resolved exercise their UDP poll paths.
         if self.path == "/slow":
+            time.sleep(3)
+        if self.path == "/overlap":
             time.sleep(3)
         self.send_response(200)
         self.send_header("Content-Length", str(len(data)))
@@ -275,7 +284,7 @@ def gate(args, root):
         qmp_path = root / "qmp.sock"
         command = [
             "qemu-system-x86_64", "-cdrom", str(Path(args.iso).resolve()),
-            "-display", "none", "-serial", f"file:{serial}", "-m", "4096M",
+            "-display", "none", "-serial", f"file:{serial}", "-m", f"{args.ram}M",
             "-smp", str(args.cpus), "-qmp", f"unix:{qmp_path},server=on,wait=off",
             "-netdev", "user,id=net0", "-device", "virtio-net-pci,netdev=net0,disable-modern=on",
             "-object", f"filter-dump,id=dump,netdev=net0,file={output / 'network.pcap'}",
@@ -293,6 +302,9 @@ def gate(args, root):
                 raise RuntimeError("Cannot find 4 MiB OVMF firmware")
             command += ["-drive", f"if=pflash,format=raw,readonly=on,file={firmware / 'OVMF_CODE.4m.fd'}",
                         "-drive", f"if=pflash,format=raw,snapshot=on,file={firmware / 'OVMF_VARS.4m.fd'}"]
+        if args.stack_fixture:
+            Fixture.stack_fixture = Path(args.stack_fixture).read_bytes()
+            command += ["-d", "int", "-D", str(output / "interrupts.log")]
 
         with (output / "qemu.log").open("w") as qemu_log:
             process = subprocess.Popen(command, stdout=qemu_log, stderr=qemu_log)
@@ -310,6 +322,10 @@ def gate(args, root):
                 time.sleep(0.2)
             raise RuntimeError(f"Timed out waiting for {marker}; see {serial}")
 
+        if args.compressed_boot:
+            from qualify_boot_resource_prototype import GATES
+            for marker in (*GATES, "[PTY] registered", "[DOC-HEAP] workload PASS"):
+                wait_for(marker)
         wait_for("[LOGIN-TUI] input ready")
         with socket.socket(socket.AF_UNIX) as connection:
             connection.settimeout(10)
@@ -331,7 +347,7 @@ def gate(args, root):
                         return
 
             def type_text(text):
-                keys = {" ": "spc", "/": "slash", ":": "shift-semicolon",
+                keys = {" ": "spc", "\t": "tab", "/": "slash", ":": "shift-semicolon",
                         ".": "dot", "-": "minus", "\n": "ret"}
                 for character in text:
                     request("human-monitor-command", {
@@ -339,7 +355,7 @@ def gate(args, root):
                     time.sleep(0.13)
 
             request("qmp_capabilities")
-            type_text("\nroot\n")
+            type_text("\nroot\t \n" if args.compressed_boot else "\nroot\n")
             wait_for("[TTY]  Built-in shell ready")
             wait_for("[SUNLIGHT-TLS] Entering IPC loop")
             http_url = f"http://10.0.2.2:{servers[0].server_port}"
@@ -386,19 +402,75 @@ def gate(args, root):
                 cases.append((f"fetch --resolve archlinux.org:443:{args.arch_resolve} -o /tmp/arch-direct.html https://archlinux.org", 0))
             if args.arch_proxy:
                 cases.append((f"fetch --socks5-hostname {args.arch_proxy} -o /tmp/archlinux.html https://archlinux.org", 0))
-            if args.ui_only:
+            if args.ui_only or args.heap_overlap:
                 cases = [(f"fetch -o /tmp/ca.der {http_url}/ca.der", 0),
                          ("certificatectl install ca testca /tmp/ca.der", 0)]
             if args.content_shield_only:
                 cases = []
             for command, expected in cases:
                 start = len(serial.read_text(errors="replace"))
+                started = time.monotonic()
                 type_text(command + "\n")
                 text = wait_for(f"[TTY]  exit: {command} ->", start)
                 if f"[TTY]  exit: {command} -> {expected}\n" not in text:
                     raise RuntimeError(f"Unexpected exit status: {command}; see {serial}")
-                print(f"PASS (exit {expected}): {command}", flush=True)
-            if not args.ui_only and not args.content_shield_only:
+                print(f"PASS (exit {expected}, {time.monotonic() - started:.3f}s): {command}", flush=True)
+            if args.stack_fixture:
+                for command in [
+                    f"fetch -o /tmp/stackprobe {http_url}/stackprobe",
+                    *(f"/tmp/stackprobe {mode}" for mode in "bsdsd"),
+                ]:
+                    start = len(serial.read_text(errors="replace"))
+                    type_text(command + "\n")
+                    marker = f"[TTY]  exit: {command} ->"
+                    window = wait_for(marker, start)[start:]
+                    if f"{marker} 0\n" not in window or (
+                        command.startswith("/tmp/stackprobe ")
+                        and "[STACK-2] Ring-3 checks passed" not in window
+                    ):
+                        raise RuntimeError(f"Unexpected stack fixture result: {command}; see {serial}")
+                    print(f"PASS (exit 0): {command}", flush=True)
+            if args.heap_overlap:
+                slow = f"fetch -o /tmp/overlap-a {https_url}/overlap"
+                fast = f"fetch -o /tmp/overlap-b {https_url}/overlap-b"
+
+                def shortcut(key):
+                    request("human-monitor-command", {"command-line": f"sendkey ctrl-{key} 60"})
+                    time.sleep(0.25)
+
+                shortcut("t")
+                wait_for("[TTY]  New authenticated shell tab OK")
+                type_text(fast)
+                shortcut("1")
+                start = len(serial.read_text(errors="replace"))
+                type_text(slow + "\n")
+                wait_for("[SUNLIGHT-TLS] hs_OK", start)
+                shortcut("2")
+                type_text("\n")
+                wait_for(f"[TTY]  exit: {fast} ->", start)
+                shortcut("1")
+                text = wait_for(f"[TTY]  exit: {slow} ->", start)
+                if not any(line.startswith("[TLS-HEAP] ") and " sessions=2 " in line
+                           for line in text[start:].splitlines()):
+                    raise RuntimeError("Both fetches succeeded but TLS session overlap was not observed")
+                exits = text[start:].splitlines()
+                for command in (slow, fast):
+                    prefix = f"[TTY]  exit: {command} -> "
+                    if [line for line in exits if line.startswith(prefix)] != [prefix + "0"]:
+                        raise RuntimeError(f"Expected one successful exit for {command}")
+                heap = [line for line in exits if line.startswith("[TLS-HEAP] stage=reply")]
+                if not heap or " sessions=0 " not in heap[-1]:
+                    raise RuntimeError("TLS sessions did not return to zero")
+                for suffix, payload in (("a", "overlap-alpha-payload"),
+                                        ("b", "overlap-bravo-payload")):
+                    command = f"cat /tmp/overlap-{suffix}"
+                    offset = len(serial.read_text(errors="replace"))
+                    type_text(command + "\n")
+                    result = wait_for(f"[TTY]  exit: {command} -> 0", offset)
+                    if f"[TTY]  cmd: {command} -> {payload}\\n\n" not in result[offset:]:
+                        raise RuntimeError(f"Payload mismatch for {command}")
+                print("PASS: two live TLS sessions, both payloads verified and sessions closed", flush=True)
+            if not args.ui_only and not args.content_shield_only and not args.heap_overlap:
                 expected_connections = CONNECTION_BATCHES * (CONNECTION_REDIRECTS + 1)
                 if Fixture.connection_requests != expected_connections:
                     raise RuntimeError(f"Connection soak incomplete: {Fixture.connection_requests}/{expected_connections}")
@@ -463,8 +535,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iso", default="target/sunlightos.iso")
     parser.add_argument("--cpus", type=int, default=12)
+    parser.add_argument("--ram", type=int, default=4096, help="Guest RAM in MiB")
+    parser.add_argument("--compressed-boot", action="store_true",
+                        help="Check compressed resource and document probe boot gates")
+    parser.add_argument("--heap-overlap", action="store_true",
+                        help="Run only CA setup and overlapping TLS sessions with a heap-probe image")
     parser.add_argument("--uefi", action="store_true")
     parser.add_argument("--tcg", action="store_true", help="Use software emulation even when /dev/kvm is accessible")
+    parser.add_argument("--stack-fixture", help="Run the native Ring-3 stack fixture ELF")
     parser.add_argument("--content-shield", action="store_true", help="Verify the opt-in native Shield probe and capture browser screenshots")
     parser.add_argument("--content-shield-only", action="store_true", help="Run only the Content Shield native fixture (requires --content-shield)")
     parser.add_argument("--timeout", type=int, default=180)

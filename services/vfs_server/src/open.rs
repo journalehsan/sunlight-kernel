@@ -185,6 +185,36 @@ impl<const N: usize> Table<N> {
         d.offset += count;
         Ok(count)
     }
+    /// Bounded positional read on the retained description. The explicit
+    /// offset selects the bytes and never observes or advances the shared
+    /// cursor, so duplicates keep one cursor and independent offsets. Access
+    /// rights, the open backend pin and its rename/unlink identity are the
+    /// same ones ordinary `read` uses; an unrepresentable range fails before
+    /// any backend call and a short or empty count is reported unchanged.
+    pub(crate) fn read_at(
+        &self,
+        owner: Caller,
+        token: u64,
+        offset: u64,
+        output: &mut [u8],
+    ) -> Result<usize, FsError> {
+        let d = self.description(owner, token)?.lock();
+        if !d.access.read() {
+            return Err(FsError::PermissionDenied);
+        }
+        let offset = usize::try_from(offset).map_err(|_| FsError::InvalidPath)?;
+        offset
+            .checked_add(output.len())
+            .ok_or(FsError::InvalidPath)?;
+        let count = d
+            .file
+            .filesystem
+            .lock()
+            .read(d.file.handle, offset, output)?;
+        // The shared cursor is deliberately not updated: the caller asked for
+        // an independent positional read on this description.
+        Ok(count)
+    }
     pub(crate) fn write(&self, owner: Caller, token: u64, input: &[u8]) -> Result<usize, FsError> {
         let mut d = self.description(owner, token)?.lock();
         if !d.access.write() {

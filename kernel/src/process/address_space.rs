@@ -478,11 +478,17 @@ impl AddressSpace {
                     valid = false;
                     continue;
                 };
+                if region.kind == MappingKind::UserStackGuard {
+                    valid &= !self.is_occupied(page, hhdm_offset);
+                    continue;
+                }
                 let Some((_frame, flags)) = self.lookup_entry(page, hhdm_offset) else {
-                    if region.kind == crate::process::region::MappingKind::Anonymous
+                    if matches!(region.backing, RegionBacking::MainStack { generation, .. }
+                        if region.kind == MappingKind::UserStack && generation == self.identity.generation)
+                        || (region.kind == MappingKind::Anonymous
                         && region
                             .policy
-                            .contains(crate::process::region::RegionPolicy::DEMAND)
+                            .contains(RegionPolicy::DEMAND))
                     {
                         continue;
                     }
@@ -1237,6 +1243,22 @@ impl AddressSpace {
         }
         let p1_table = &*((hhdm_offset + p2_entry.addr().as_u64()).as_ptr::<PageTable>());
         Some(&p1_table[page.p1_index()] as *const _ as *mut _)
+    }
+
+    pub(crate) unsafe fn install_main_stack_leaf(
+        &self,
+        page: Page<Size4KiB>,
+        frame: PhysAddr,
+        hhdm: VirtAddr,
+    ) -> Result<(), MappingError> {
+        let entry = self.p1_entry_ptr(page, hhdm).ok_or(MappingError::NotMapped)?;
+        if !(*entry).is_unused() {
+            return Err(MappingError::AlreadyMapped);
+        }
+        core::sync::atomic::fence(Ordering::Release);
+        (*entry).set_addr(frame, PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE
+            | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE);
+        Ok(())
     }
 
     /// If `page`'s leaf entry is a swapped marker (not present, non-zero

@@ -1,5 +1,54 @@
 # Userspace VFS migration
 
+## Namespace consistency staging (2026-11-27)
+
+The [namespace audit](vfs-namespace-consistency-audit.md) found five unmatched
+references. [VFS-N1 ownership closure](vfs-ownership-closure.md) reconciles
+the existing bootstrap constructor; the four historical dependencies still
+stop ordinary validation before QEMU. Historical component and candidate
+results do not clear this gate.
+
+[N1A: authoritative ProcFS mount snapshots](vfs-authoritative-mount-snapshots.md)
+leaves the ProcFS finding open. Before switching its reader, make mount
+publication, source changes and withdrawal advance one caller-visible topology
+revision at the live owner. Bind that revision to a retained caller view and
+validate it through FD installation. Registration alone cannot publish the
+kernel's FAT mounts. [Qualification results](vfs-authoritative-mount-snapshots-results.json)
+separate existing host contracts from the unimplemented snapshot request.
+
+[N1B: retained positional file reads](vfs-positional-file-reads.md) adds a
+bounded `PREAD` on the service-owned description, qualified on the host with
+the shared cursor, rights, rename/unlink identity and retirement cleanup
+preserved ([results](vfs-positional-file-reads-results.json)). It is a service
+primitive only. Private mmap still reads through `KERNEL_VFS` at
+`mmap.rs:272`, so that finding stays open. Production mmap routing needs the
+VFS-D1 epoch and compensating-Close repairs, a kernel client that parks outside
+the scheduler, PMM and VFS locks, and staged frame population with rollback.
+
+1. **Establish the baseline.** Close the FAT capacity/topology/runtime mount
+   contracts and retained positional mmap source without hiding the existing
+   owners. Reproduce the matched native matrix through ordinary
+   interfaces; distinguish pre-publication errors from authenticated ENOENT.
+2. **Close launch and descriptor prerequisites.** Keep L1C-3 blocked until
+   both ordinary adapters can commit authenticated binding before publication
+   with exact rollback and lifecycle settlement. Keep VFS-D1 deferred pending
+   that closure and its descriptor epoch and compensating Close repairs.
+3. **Qualify /vfs-scratch, a new volatile data-only mount.** Build a complete service operation
+   contract off the production launch path. Switch all exposed operations for
+   the mount together, with one live mount generation and no kernel fallback.
+   Require ordinary native and Helios agreement after mutation, including
+   across processes and IPC; require consistent execution rejection for a
+   data-only fixture or authoritative loader and mapping support for an
+   executable mount. Verify retirement fails closed.
+4. **Expand by mount.** Move root only when its policy, directory, loader and
+   mapping consumers are covered. Move FAT only with one live storage owner
+   and capacity, topology, sync and retirement contracts. Keep immutable
+   bootstrap and virtual endpoints explicit. Remove obsolete engines only
+   after acceptance on the primary tree.
+
+Preserve the compressed boot module, adaptive document/TTY/TLS heaps,
+eager default main stacks, 16 MiB kernel heap, PMM accounting and ZRAM policy.
+
 ## Active cutover plan (2026-11-16)
 
 This plan supersedes the sequencing below where it makes later hardening a

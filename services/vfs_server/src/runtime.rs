@@ -291,6 +291,21 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
             .read(caller, token, output)
             .map_err(Error::Filesystem)
     }
+    /// Bounded positional read on the same retained description as `read_file`.
+    /// The shared cursor is neither consulted nor advanced.
+    pub fn read_at_file(
+        &mut self,
+        registration: Registration,
+        caller: Caller,
+        token: u64,
+        offset: u64,
+        output: &mut [u8],
+    ) -> Result<usize, Error> {
+        self.file_entry_mut(registration)?
+            .files
+            .read_at(caller, token, offset, output)
+            .map_err(Error::Filesystem)
+    }
     pub fn write_file(
         &mut self,
         registration: Registration,
@@ -458,6 +473,20 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
                     authenticated,
                     request.caller,
                     request.token,
+                    &mut buffer[..count],
+                ) {
+                    Ok(read) => reply(0, read as u64, 0, &buffer[..read]),
+                    Err(error) => failed(&error),
+                }
+            }
+            api::PREAD => {
+                let mut buffer = [0; api::IO_BYTES];
+                let count = request.arg1 as usize;
+                match self.read_at_file(
+                    authenticated,
+                    request.caller,
+                    request.token,
+                    request.arg0,
                     &mut buffer[..count],
                 ) {
                     Ok(read) => reply(0, read as u64, 0, &buffer[..read]),

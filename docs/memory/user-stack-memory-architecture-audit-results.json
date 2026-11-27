@@ -1,0 +1,1392 @@
+{
+  "status": "PARTIAL",
+  "scope": "Eager user-stack measurement and design; production behavior unchanged",
+  "revision": "631e547e4dce627c8d98a9480a2fb69f38897156",
+  "qemu": "11.1.3 TCG, 2 vCPUs, optical compressed module, user-mode fixture NIC",
+  "frame_bytes": 4096,
+  "baseline": {
+    "source": "system-services-memory-footprint-results.json",
+    "bios_idle_leaders": 33,
+    "main_stack_pages_per_leader": 512,
+    "main_stack_mib": 66,
+    "kernel_stack_bytes_per_task": 32768,
+    "kernel_heap_mib": 16
+  },
+  "images": {
+    "census": {
+      "sha256": "373b176560f65ac47bd1bf6b325d8e43bdba796d8aea98d255130776400dce24",
+      "audit_patch": "target/user-stack-audit/census.patch"
+    },
+    "extended": {
+      "sha256": "c006b784d8343072b3579657d30c51b09f0ad7b373431d4c28990681fa5d4d06",
+      "audit_patch": "target/user-stack-audit/extended.patch"
+    },
+    "final": {
+      "sha256": "31ebeb108284118eb016327d6cd923d18c85129f679e0cc4060bf3ca7dadbe32",
+      "audit_patch": "target/user-stack-audit/final.patch"
+    },
+    "helios": {
+      "sha256": "501565452147ed428e200e2c3e59441c33c76dd42c2ea9b15b04147593bfe6fc",
+      "audit_patch": "target/user-stack-audit/helios.patch"
+    }
+  },
+  "resource_sha256": "fc0d6989a11975da5d468a6bd04e93e5ee68cc474aa07d5f9fa659d6695872ba",
+  "fixture": "target/user-stack-audit/extended_gate.py",
+  "measurement": {
+    "counts": "Unique sampled tuples per phase, preserving first appearance; raw logs retain repeats and timing",
+    "touch_depth": "Deepest user PTE with accessed bit; no exact RSP or live byte claim",
+    "limitations": "Direct-map copies invisible to A/D bits; worker PTE swaps/exit can lose history; sibling execution can continue during samples",
+    "stack_columns": [
+      "task_pid",
+      "name",
+      "owner_pid",
+      "reserved_pages",
+      "present_user_pages",
+      "owner_private_frames",
+      "accessed_pages",
+      "deepest_accessed_page",
+      "dirty_pages"
+    ]
+  },
+  "conditional_savings_not_measured": [
+    {
+      "leaders": 33,
+      "mean_committed_kib": 16,
+      "gross_saved_mib": 65.484375
+    },
+    {
+      "leaders": 33,
+      "mean_committed_kib": 64,
+      "gross_saved_mib": 63.9375
+    },
+    {
+      "leaders": 33,
+      "mean_committed_kib": 256,
+      "gross_saved_mib": 57.75
+    }
+  ],
+  "not_run": [
+    "active logged-in compositor stack workload",
+    "full VFS workload stack isolation",
+    "Helios worker stack census",
+    "demand-driven stack correctness",
+    "sustained 512 MiB qualification"
+  ],
+  "runs": {
+    "bios-512": {
+      "serial": "target/user-stack-audit/extended-bios-512/serial.log",
+      "runner": "target/user-stack-audit/extended-bios-512.log",
+      "checks": {
+        "vfs_shared_read": true,
+        "compositor_initialized": true,
+        "document_rpc": true,
+        "tty_and_verified_tls_overlap": true,
+        "tls_overlap_observed": true,
+        "helios_exit_codes": {
+          "/bin/linux-echo stackaudit": 0,
+          "/bin/linux-thread-probe": 0
+        }
+      },
+      "managed_frames": 79842,
+      "initial_free_frames": 47661,
+      "minimum_free_through_last_kernel_checkpoint": 6442,
+      "pmm_by_phase": {
+        "pre-scheduler": {
+          "free_min": 40983,
+          "free_max": 40983,
+          "samples": 1,
+          "reconciled": true
+        },
+        "phase-3": {
+          "free_min": 39374,
+          "free_max": 39374,
+          "samples": 1,
+          "reconciled": true
+        },
+        "namespace": {
+          "free_min": 39371,
+          "free_max": 39371,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-ready": {
+          "free_min": 23497,
+          "free_max": 23497,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-ready": {
+          "free_min": 22946,
+          "free_max": 22946,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-bundles": {
+          "free_min": 21787,
+          "free_max": 21787,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-idle": {
+          "free_min": 19256,
+          "free_max": 19256,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-rpc": {
+          "free_min": 14982,
+          "free_max": 19252,
+          "samples": 36,
+          "reconciled": true
+        },
+        "doc-recovered": {
+          "free_min": 19256,
+          "free_max": 19256,
+          "samples": 1,
+          "reconciled": true
+        },
+        "tls-overlap": {
+          "free_min": 15043,
+          "free_max": 15046,
+          "samples": 6,
+          "reconciled": true
+        }
+      },
+      "idle_leaders": {
+        "count": 32,
+        "private_frames": 16384,
+        "accessed_pages": 417,
+        "depth_pages_sum": 423
+      },
+      "stack_observations_by_phase": {
+        "pre-scheduler": [
+          [1, "init", 1, 512, 512, 512, 0, 0, 0],
+          [3, "vfs_server", 3, 512, 512, 512, 0, 0, 0],
+          [4, "tty_server", 4, 512, 512, 512, 0, 0, 0]
+        ],
+        "phase-3": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "namespace": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "doc-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "timezone_service", 16, 512, 512, 512, 1, 1, 1],
+          [17, "thermald", 17, 512, 512, 512, 1, 1, 1],
+          [18, "audiod", 18, 512, 512, 512, 27, 27, 27],
+          [19, "niced", 19, 512, 512, 512, 42, 42, 42],
+          [20, "sunlight-display", 20, 512, 512, 512, 5, 5, 5],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "pty_server", 22, 512, 512, 512, 77, 77, 77],
+          [23, "gcd", 23, 512, 512, 512, 3, 3, 3],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1]
+        ],
+        "session-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "timezone_service", 16, 512, 512, 512, 1, 1, 1],
+          [17, "thermald", 17, 512, 512, 512, 1, 1, 1],
+          [18, "audiod", 18, 512, 512, 512, 27, 27, 27],
+          [19, "niced", 19, 512, 512, 512, 42, 42, 42],
+          [20, "sunlight-display", 20, 512, 512, 512, 5, 5, 5],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "pty_server", 22, 512, 512, 512, 77, 77, 77],
+          [23, "gcd", 23, 512, 512, 512, 3, 3, 3],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 18, 18, 18]
+        ],
+        "session-bundles": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "timezone_service", 16, 512, 512, 512, 1, 1, 1],
+          [17, "thermald", 17, 512, 512, 512, 1, 1, 1],
+          [18, "audiod", 18, 512, 512, 512, 27, 27, 27],
+          [19, "niced", 19, 512, 512, 512, 42, 42, 42],
+          [20, "sunlight-display", 20, 512, 512, 512, 5, 5, 5],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "pty_server", 22, 512, 512, 512, 77, 77, 77],
+          [23, "gcd", 23, 512, 512, 512, 3, 3, 3],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1]
+        ],
+        "doc-idle": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "timezone_service", 16, 512, 512, 512, 1, 1, 1],
+          [17, "thermald", 17, 512, 512, 512, 1, 1, 1],
+          [18, "audiod", 18, 512, 512, 512, 27, 27, 27],
+          [19, "niced", 19, 512, 512, 512, 42, 42, 42],
+          [20, "sunlight-display", 20, 512, 512, 512, 5, 5, 5],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "pty_server", 22, 512, 512, 512, 77, 77, 77],
+          [23, "gcd", 23, 512, 512, 512, 3, 3, 3],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "doc-rpc": [
+          [29, "sunlight-docserv", 29, 512, 512, 512, 2, 2, 2],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6]
+        ],
+        "doc-recovered": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "timezone_service", 16, 512, 512, 512, 1, 1, 1],
+          [17, "thermald", 17, 512, 512, 512, 1, 1, 1],
+          [18, "audiod", 18, 512, 512, 512, 27, 27, 27],
+          [19, "niced", 19, 512, 512, 512, 42, 42, 42],
+          [20, "sunlight-display", 20, 512, 512, 512, 5, 5, 5],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "pty_server", 22, 512, 512, 512, 77, 77, 77],
+          [23, "gcd", 23, 512, 512, 512, 3, 3, 3],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "tls-overlap": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 28, 28, 28],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "timezone_service", 16, 512, 512, 512, 1, 1, 1],
+          [17, "thermald", 17, 512, 512, 512, 1, 1, 1],
+          [18, "audiod", 18, 512, 512, 512, 27, 27, 27],
+          [19, "niced", 19, 512, 512, 512, 42, 42, 42],
+          [20, "sunlight-display", 20, 512, 512, 512, 5, 5, 5],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "pty_server", 22, 512, 512, 512, 77, 77, 77],
+          [23, "gcd", 23, 512, 512, 512, 3, 3, 3],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 17, 17, 17],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [38, "sshl", 38, 512, 512, 512, 3, 3, 3],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 5, 5, 5],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2],
+          [41, "sshl1", 41, 512, 512, 512, 3, 3, 3],
+          [42, "fetch", 42, 512, 512, 512, 3, 3, 3],
+          [43, "fetch", 43, 512, 512, 512, 3, 3, 3]
+        ]
+      }
+    },
+    "uefi-512": {
+      "serial": "target/user-stack-audit/extended-uefi-512/serial.log",
+      "runner": "target/user-stack-audit/extended-uefi-512.log",
+      "checks": {
+        "vfs_shared_read": true,
+        "compositor_initialized": true,
+        "document_rpc": true,
+        "tty_and_verified_tls_overlap": true,
+        "tls_overlap_observed": true,
+        "helios_exit_codes": {
+          "/bin/linux-echo stackaudit": 0,
+          "/bin/linux-thread-probe": 1
+        }
+      },
+      "managed_frames": 78257,
+      "initial_free_frames": 46076,
+      "minimum_free_through_last_kernel_checkpoint": 4857,
+      "pmm_by_phase": {
+        "pre-scheduler": {
+          "free_min": 39398,
+          "free_max": 39398,
+          "samples": 1,
+          "reconciled": true
+        },
+        "phase-3": {
+          "free_min": 37789,
+          "free_max": 37789,
+          "samples": 1,
+          "reconciled": true
+        },
+        "namespace": {
+          "free_min": 37786,
+          "free_max": 37786,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-ready": {
+          "free_min": 22443,
+          "free_max": 22443,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-ready": {
+          "free_min": 21361,
+          "free_max": 21361,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-bundles": {
+          "free_min": 20817,
+          "free_max": 20817,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-idle": {
+          "free_min": 17671,
+          "free_max": 17671,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-rpc": {
+          "free_min": 13397,
+          "free_max": 17667,
+          "samples": 36,
+          "reconciled": true
+        },
+        "doc-recovered": {
+          "free_min": 17671,
+          "free_max": 17671,
+          "samples": 1,
+          "reconciled": true
+        },
+        "tls-overlap": {
+          "free_min": 13458,
+          "free_max": 13461,
+          "samples": 7,
+          "reconciled": true
+        }
+      },
+      "idle_leaders": {
+        "count": 32,
+        "private_frames": 16384,
+        "accessed_pages": 417,
+        "depth_pages_sum": 423
+      },
+      "stack_observations_by_phase": {
+        "pre-scheduler": [
+          [1, "init", 1, 512, 512, 512, 0, 0, 0],
+          [3, "vfs_server", 3, 512, 512, 512, 0, 0, 0],
+          [4, "tty_server", 4, 512, 512, 512, 0, 0, 0]
+        ],
+        "phase-3": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "namespace": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "doc-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "timezone_service", 18, 512, 512, 512, 1, 1, 1],
+          [19, "sunlight-display", 19, 512, 512, 512, 5, 5, 5],
+          [20, "niced", 20, 512, 512, 512, 42, 42, 42],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "gcd", 22, 512, 512, 512, 3, 3, 3],
+          [23, "pty_server", 23, 512, 512, 512, 77, 77, 77],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1]
+        ],
+        "session-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "timezone_service", 18, 512, 512, 512, 1, 1, 1],
+          [19, "sunlight-display", 19, 512, 512, 512, 5, 5, 5],
+          [20, "niced", 20, 512, 512, 512, 42, 42, 42],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "gcd", 22, 512, 512, 512, 3, 3, 3],
+          [23, "pty_server", 23, 512, 512, 512, 77, 77, 77],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [31, "timed", 31, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 18, 18, 18]
+        ],
+        "session-bundles": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "timezone_service", 18, 512, 512, 512, 1, 1, 1],
+          [19, "sunlight-display", 19, 512, 512, 512, 5, 5, 5],
+          [20, "niced", 20, 512, 512, 512, 42, 42, 42],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "gcd", 22, 512, 512, 512, 3, 3, 3],
+          [23, "pty_server", 23, 512, 512, 512, 77, 77, 77],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [31, "timed", 31, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1]
+        ],
+        "doc-idle": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "timezone_service", 18, 512, 512, 512, 1, 1, 1],
+          [19, "sunlight-display", 19, 512, 512, 512, 5, 5, 5],
+          [20, "niced", 20, 512, 512, 512, 42, 42, 42],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "gcd", 22, 512, 512, 512, 3, 3, 3],
+          [23, "pty_server", 23, 512, 512, 512, 77, 77, 77],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [31, "timed", 31, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "doc-rpc": [
+          [29, "sunlight-docserv", 29, 512, 512, 512, 2, 2, 2],
+          [30, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6]
+        ],
+        "doc-recovered": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "timezone_service", 18, 512, 512, 512, 1, 1, 1],
+          [19, "sunlight-display", 19, 512, 512, 512, 5, 5, 5],
+          [20, "niced", 20, 512, 512, 512, 42, 42, 42],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "gcd", 22, 512, 512, 512, 3, 3, 3],
+          [23, "pty_server", 23, 512, 512, 512, 77, 77, 77],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [30, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [31, "timed", 31, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "tls-overlap": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 28, 28, 28],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "timezone_service", 18, 512, 512, 512, 1, 1, 1],
+          [19, "sunlight-display", 19, 512, 512, 512, 5, 5, 5],
+          [20, "niced", 20, 512, 512, 512, 42, 42, 42],
+          [21, "mezzo", 21, 512, 512, 512, 1, 1, 1],
+          [22, "gcd", 22, 512, 512, 512, 3, 3, 3],
+          [23, "pty_server", 23, 512, 512, 512, 77, 77, 77],
+          [24, "net_server", 24, 512, 512, 512, 4, 4, 4],
+          [25, "uac_service", 25, 512, 512, 512, 17, 17, 17],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [38, "sshl", 38, 512, 512, 512, 3, 3, 3],
+          [31, "timed", 31, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 5, 5, 5],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2],
+          [41, "sshl1", 41, 512, 512, 512, 3, 3, 3],
+          [42, "fetch", 42, 512, 512, 512, 3, 3, 3],
+          [43, "fetch", 43, 512, 512, 512, 3, 3, 3]
+        ]
+      }
+    },
+    "bios-768": {
+      "serial": "target/user-stack-audit/extended-bios-768/serial.log",
+      "runner": "target/user-stack-audit/extended-bios-768.log",
+      "checks": {
+        "vfs_shared_read": true,
+        "compositor_initialized": true,
+        "document_rpc": true,
+        "tty_and_verified_tls_overlap": true,
+        "tls_overlap_observed": true,
+        "helios_exit_codes": {
+          "/bin/linux-echo stackaudit": 0,
+          "/bin/linux-thread-probe": 0
+        }
+      },
+      "managed_frames": 145378,
+      "initial_free_frames": 113197,
+      "minimum_free_through_last_kernel_checkpoint": 71978,
+      "pmm_by_phase": {
+        "pre-scheduler": {
+          "free_min": 106519,
+          "free_max": 106519,
+          "samples": 1,
+          "reconciled": true
+        },
+        "phase-3": {
+          "free_min": 104910,
+          "free_max": 104910,
+          "samples": 1,
+          "reconciled": true
+        },
+        "namespace": {
+          "free_min": 104907,
+          "free_max": 104907,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-ready": {
+          "free_min": 89033,
+          "free_max": 89033,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-ready": {
+          "free_min": 88482,
+          "free_max": 88482,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-bundles": {
+          "free_min": 87940,
+          "free_max": 87940,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-idle": {
+          "free_min": 84792,
+          "free_max": 84792,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-rpc": {
+          "free_min": 80518,
+          "free_max": 84788,
+          "samples": 36,
+          "reconciled": true
+        },
+        "doc-recovered": {
+          "free_min": 84792,
+          "free_max": 84792,
+          "samples": 1,
+          "reconciled": true
+        },
+        "tls-overlap": {
+          "free_min": 80579,
+          "free_max": 80582,
+          "samples": 6,
+          "reconciled": true
+        }
+      },
+      "idle_leaders": {
+        "count": 32,
+        "private_frames": 16384,
+        "accessed_pages": 417,
+        "depth_pages_sum": 423
+      },
+      "stack_observations_by_phase": {
+        "pre-scheduler": [
+          [1, "init", 1, 512, 512, 512, 0, 0, 0],
+          [3, "vfs_server", 3, 512, 512, 512, 0, 0, 0],
+          [4, "tty_server", 4, 512, 512, 512, 0, 0, 0]
+        ],
+        "phase-3": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "namespace": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "doc-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "timezone_service", 15, 512, 512, 512, 1, 1, 1],
+          [16, "powerd", 16, 512, 512, 512, 1, 1, 1],
+          [17, "niced", 17, 512, 512, 512, 42, 42, 42],
+          [18, "gcd", 18, 512, 512, 512, 3, 3, 3],
+          [19, "thermald", 19, 512, 512, 512, 1, 1, 1],
+          [20, "uac_service", 20, 512, 512, 512, 9, 9, 9],
+          [21, "audiod", 21, 512, 512, 512, 27, 27, 27],
+          [22, "sunlight-display", 22, 512, 512, 512, 5, 5, 5],
+          [23, "sunlight-sm", 23, 512, 512, 512, 1, 1, 1],
+          [24, "mezzo", 24, 512, 512, 512, 1, 1, 1],
+          [25, "pty_server", 25, 512, 512, 512, 77, 77, 77],
+          [26, "net_server", 26, 512, 512, 512, 4, 4, 4],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1]
+        ],
+        "session-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "timezone_service", 15, 512, 512, 512, 1, 1, 1],
+          [16, "powerd", 16, 512, 512, 512, 1, 1, 1],
+          [17, "niced", 17, 512, 512, 512, 42, 42, 42],
+          [18, "gcd", 18, 512, 512, 512, 3, 3, 3],
+          [19, "thermald", 19, 512, 512, 512, 1, 1, 1],
+          [20, "uac_service", 20, 512, 512, 512, 9, 9, 9],
+          [21, "audiod", 21, 512, 512, 512, 27, 27, 27],
+          [22, "sunlight-display", 22, 512, 512, 512, 5, 5, 5],
+          [23, "sunlight-sm", 23, 512, 512, 512, 1, 1, 1],
+          [24, "mezzo", 24, 512, 512, 512, 1, 1, 1],
+          [25, "pty_server", 25, 512, 512, 512, 77, 77, 77],
+          [26, "net_server", 26, 512, 512, 512, 4, 4, 4],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 18, 18, 18]
+        ],
+        "session-bundles": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "timezone_service", 15, 512, 512, 512, 1, 1, 1],
+          [16, "powerd", 16, 512, 512, 512, 1, 1, 1],
+          [17, "niced", 17, 512, 512, 512, 42, 42, 42],
+          [18, "gcd", 18, 512, 512, 512, 3, 3, 3],
+          [19, "thermald", 19, 512, 512, 512, 1, 1, 1],
+          [20, "uac_service", 20, 512, 512, 512, 9, 9, 9],
+          [21, "audiod", 21, 512, 512, 512, 27, 27, 27],
+          [22, "sunlight-display", 22, 512, 512, 512, 5, 5, 5],
+          [23, "sunlight-sm", 23, 512, 512, 512, 1, 1, 1],
+          [24, "mezzo", 24, 512, 512, 512, 1, 1, 1],
+          [25, "pty_server", 25, 512, 512, 512, 77, 77, 77],
+          [26, "net_server", 26, 512, 512, 512, 4, 4, 4],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1]
+        ],
+        "doc-idle": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "timezone_service", 15, 512, 512, 512, 1, 1, 1],
+          [16, "powerd", 16, 512, 512, 512, 1, 1, 1],
+          [17, "niced", 17, 512, 512, 512, 42, 42, 42],
+          [18, "gcd", 18, 512, 512, 512, 3, 3, 3],
+          [19, "thermald", 19, 512, 512, 512, 1, 1, 1],
+          [20, "uac_service", 20, 512, 512, 512, 9, 9, 9],
+          [21, "audiod", 21, 512, 512, 512, 27, 27, 27],
+          [22, "sunlight-display", 22, 512, 512, 512, 5, 5, 5],
+          [23, "sunlight-sm", 23, 512, 512, 512, 1, 1, 1],
+          [24, "mezzo", 24, 512, 512, 512, 1, 1, 1],
+          [25, "pty_server", 25, 512, 512, 512, 77, 77, 77],
+          [26, "net_server", 26, 512, 512, 512, 4, 4, 4],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "doc-rpc": [
+          [29, "sunlight-docserv", 29, 512, 512, 512, 2, 2, 2],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6]
+        ],
+        "doc-recovered": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "timezone_service", 15, 512, 512, 512, 1, 1, 1],
+          [16, "powerd", 16, 512, 512, 512, 1, 1, 1],
+          [17, "niced", 17, 512, 512, 512, 42, 42, 42],
+          [18, "gcd", 18, 512, 512, 512, 3, 3, 3],
+          [19, "thermald", 19, 512, 512, 512, 1, 1, 1],
+          [20, "uac_service", 20, 512, 512, 512, 9, 9, 9],
+          [21, "audiod", 21, 512, 512, 512, 27, 27, 27],
+          [22, "sunlight-display", 22, 512, 512, 512, 5, 5, 5],
+          [23, "sunlight-sm", 23, 512, 512, 512, 1, 1, 1],
+          [24, "mezzo", 24, 512, 512, 512, 1, 1, 1],
+          [25, "pty_server", 25, 512, 512, 512, 77, 77, 77],
+          [26, "net_server", 26, 512, 512, 512, 4, 4, 4],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "tls-overlap": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 28, 28, 28],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "timezone_service", 15, 512, 512, 512, 1, 1, 1],
+          [16, "powerd", 16, 512, 512, 512, 1, 1, 1],
+          [17, "niced", 17, 512, 512, 512, 42, 42, 42],
+          [18, "gcd", 18, 512, 512, 512, 3, 3, 3],
+          [19, "thermald", 19, 512, 512, 512, 1, 1, 1],
+          [20, "uac_service", 20, 512, 512, 512, 17, 17, 17],
+          [21, "audiod", 21, 512, 512, 512, 27, 27, 27],
+          [22, "sunlight-display", 22, 512, 512, 512, 5, 5, 5],
+          [23, "sunlight-sm", 23, 512, 512, 512, 1, 1, 1],
+          [24, "mezzo", 24, 512, 512, 512, 1, 1, 1],
+          [25, "pty_server", 25, 512, 512, 512, 77, 77, 77],
+          [26, "net_server", 26, 512, 512, 512, 4, 4, 4],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [38, "sshl", 38, 512, 512, 512, 3, 3, 3],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 5, 5, 5],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2],
+          [41, "sshl1", 41, 512, 512, 512, 3, 3, 3],
+          [42, "fetch", 42, 512, 512, 512, 3, 3, 3],
+          [43, "fetch", 43, 512, 512, 512, 3, 3, 3]
+        ]
+      }
+    },
+    "bios-1024": {
+      "serial": "target/user-stack-audit/extended-bios-1024/serial.log",
+      "runner": "target/user-stack-audit/extended-bios-1024.log",
+      "checks": {
+        "vfs_shared_read": true,
+        "compositor_initialized": true,
+        "document_rpc": true,
+        "tty_and_verified_tls_overlap": true,
+        "tls_overlap_observed": true,
+        "helios_exit_codes": {
+          "/bin/linux-echo stackaudit": 0,
+          "/bin/linux-thread-probe": 0
+        }
+      },
+      "managed_frames": 210914,
+      "initial_free_frames": 178733,
+      "minimum_free_through_last_kernel_checkpoint": 137514,
+      "pmm_by_phase": {
+        "pre-scheduler": {
+          "free_min": 172055,
+          "free_max": 172055,
+          "samples": 1,
+          "reconciled": true
+        },
+        "phase-3": {
+          "free_min": 170446,
+          "free_max": 170446,
+          "samples": 1,
+          "reconciled": true
+        },
+        "namespace": {
+          "free_min": 170443,
+          "free_max": 170443,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-ready": {
+          "free_min": 154569,
+          "free_max": 154569,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-ready": {
+          "free_min": 153479,
+          "free_max": 153479,
+          "samples": 1,
+          "reconciled": true
+        },
+        "session-bundles": {
+          "free_min": 152859,
+          "free_max": 152859,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-idle": {
+          "free_min": 150328,
+          "free_max": 150328,
+          "samples": 1,
+          "reconciled": true
+        },
+        "doc-rpc": {
+          "free_min": 146054,
+          "free_max": 150324,
+          "samples": 36,
+          "reconciled": true
+        },
+        "doc-recovered": {
+          "free_min": 150328,
+          "free_max": 150328,
+          "samples": 1,
+          "reconciled": true
+        },
+        "tls-overlap": {
+          "free_min": 146051,
+          "free_max": 146054,
+          "samples": 6,
+          "reconciled": true
+        }
+      },
+      "idle_leaders": {
+        "count": 32,
+        "private_frames": 16384,
+        "accessed_pages": 417,
+        "depth_pages_sum": 423
+      },
+      "stack_observations_by_phase": {
+        "pre-scheduler": [
+          [1, "init", 1, 512, 512, 512, 0, 0, 0],
+          [3, "vfs_server", 3, 512, 512, 512, 0, 0, 0],
+          [4, "tty_server", 4, 512, 512, 512, 0, 0, 0]
+        ],
+        "phase-3": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "namespace": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16]
+        ],
+        "doc-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "sunlight-display", 18, 512, 512, 512, 5, 5, 5],
+          [19, "mezzo", 19, 512, 512, 512, 1, 1, 1],
+          [20, "pty_server", 20, 512, 512, 512, 77, 77, 77],
+          [21, "timezone_service", 21, 512, 512, 512, 1, 1, 1],
+          [22, "net_server", 22, 512, 512, 512, 4, 4, 4],
+          [23, "niced", 23, 512, 512, 512, 42, 42, 42],
+          [24, "gcd", 24, 512, 512, 512, 3, 3, 3],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1]
+        ],
+        "session-ready": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "sunlight-display", 18, 512, 512, 512, 5, 5, 5],
+          [19, "mezzo", 19, 512, 512, 512, 1, 1, 1],
+          [20, "pty_server", 20, 512, 512, 512, 77, 77, 77],
+          [21, "timezone_service", 21, 512, 512, 512, 1, 1, 1],
+          [22, "net_server", 22, 512, 512, 512, 4, 4, 4],
+          [23, "niced", 23, 512, 512, 512, 42, 42, 42],
+          [24, "gcd", 24, 512, 512, 512, 3, 3, 3],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 18, 18, 18],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1]
+        ],
+        "session-bundles": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "sunlight-display", 18, 512, 512, 512, 5, 5, 5],
+          [19, "mezzo", 19, 512, 512, 512, 1, 1, 1],
+          [20, "pty_server", 20, 512, 512, 512, 77, 77, 77],
+          [21, "timezone_service", 21, 512, 512, 512, 1, 1, 1],
+          [22, "net_server", 22, 512, 512, 512, 4, 4, 4],
+          [23, "niced", 23, 512, 512, 512, 42, 42, 42],
+          [24, "gcd", 24, 512, 512, 512, 3, 3, 3],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1]
+        ],
+        "doc-idle": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "sunlight-display", 18, 512, 512, 512, 5, 5, 5],
+          [19, "mezzo", 19, 512, 512, 512, 1, 1, 1],
+          [20, "pty_server", 20, 512, 512, 512, 77, 77, 77],
+          [21, "timezone_service", 21, 512, 512, 512, 1, 1, 1],
+          [22, "net_server", 22, 512, 512, 512, 4, 4, 4],
+          [23, "niced", 23, 512, 512, 512, 42, 42, 42],
+          [24, "gcd", 24, 512, 512, 512, 3, 3, 3],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "doc-rpc": [
+          [29, "sunlight-docserv", 29, 512, 512, 512, 2, 2, 2],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6]
+        ],
+        "doc-recovered": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 16, 16, 16],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "sunlight-display", 18, 512, 512, 512, 5, 5, 5],
+          [19, "mezzo", 19, 512, 512, 512, 1, 1, 1],
+          [20, "pty_server", 20, 512, 512, 512, 77, 77, 77],
+          [21, "timezone_service", 21, 512, 512, 512, 1, 1, 1],
+          [22, "net_server", 22, 512, 512, 512, 4, 4, 4],
+          [23, "niced", 23, 512, 512, 512, 42, 42, 42],
+          [24, "gcd", 24, 512, 512, 512, 3, 3, 3],
+          [25, "uac_service", 25, 512, 512, 512, 9, 9, 9],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [31, "sunlight-docserv", 29, 512, 512, 512, 1, 1, 1],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 3, 3, 3],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2]
+        ],
+        "tls-overlap": [
+          [1, "init", 1, 512, 512, 512, 3, 3, 3],
+          [3, "vfs_server", 3, 512, 512, 512, 29, 29, 29],
+          [4, "tty_server", 4, 512, 512, 512, 28, 28, 28],
+          [6, "timer_server", 6, 512, 512, 512, 1, 1, 1],
+          [7, "sunlight-kbd", 7, 512, 512, 512, 1, 1, 1],
+          [8, "sunlight-mouse", 8, 512, 512, 512, 1, 1, 1],
+          [11, "deviced", 11, 512, 512, 512, 1, 1, 1],
+          [12, "sunlightd", 12, 512, 512, 512, 154, 154, 154],
+          [13, "networkd", 13, 512, 512, 512, 1, 1, 1],
+          [14, "resolved", 14, 512, 512, 512, 1, 1, 1],
+          [15, "powerd", 15, 512, 512, 512, 1, 1, 1],
+          [16, "thermald", 16, 512, 512, 512, 1, 1, 1],
+          [17, "audiod", 17, 512, 512, 512, 27, 27, 27],
+          [18, "sunlight-display", 18, 512, 512, 512, 5, 5, 5],
+          [19, "mezzo", 19, 512, 512, 512, 1, 1, 1],
+          [20, "pty_server", 20, 512, 512, 512, 77, 77, 77],
+          [21, "timezone_service", 21, 512, 512, 512, 1, 1, 1],
+          [22, "net_server", 22, 512, 512, 512, 4, 4, 4],
+          [23, "niced", 23, 512, 512, 512, 42, 42, 42],
+          [24, "gcd", 24, 512, 512, 512, 3, 3, 3],
+          [25, "uac_service", 25, 512, 512, 512, 17, 17, 17],
+          [26, "sunlight-sm", 26, 512, 512, 512, 1, 1, 1],
+          [27, "sunlight-dialogd", 27, 512, 512, 512, 2, 8, 2],
+          [28, "rand_service", 28, 512, 512, 512, 1, 1, 1],
+          [29, "sunlight-docserv", 29, 512, 512, 512, 6, 9, 6],
+          [30, "timed", 30, 512, 512, 512, 1, 1, 1],
+          [38, "sshl", 38, 512, 512, 512, 3, 3, 3],
+          [32, "sunlight-sessiond", 32, 512, 512, 512, 24, 24, 24],
+          [33, "sunlight-kv", 33, 512, 512, 512, 1, 1, 1],
+          [34, "wiseowl-memorydb", 34, 512, 512, 512, 1, 1, 1],
+          [35, "sunlight-tls", 35, 512, 512, 512, 5, 5, 5],
+          [36, "sunlight-clipd", 36, 512, 512, 512, 1, 1, 1],
+          [37, "sunlight-account-broker", 37, 512, 512, 512, 2, 2, 2],
+          [41, "sshl1", 41, 512, 512, 512, 3, 3, 3],
+          [42, "fetch", 42, 512, 512, 512, 3, 3, 3],
+          [43, "fetch", 43, 512, 512, 512, 3, 3, 3]
+        ]
+      }
+    }
+  },
+  "run_image": "extended",
+  "previous_thread_probe_exit_codes": {
+    "extended": {
+      "bios-512": 0,
+      "uefi-512": 1,
+      "bios-768": 0,
+      "bios-1024": 0
+    },
+    "final": {
+      "bios-512": 1,
+      "uefi-512": 0,
+      "bios-768": 0,
+      "bios-1024": 0
+    }
+  },
+  "helios_followup": {
+    "bios-512": {
+      "serial": "target/user-stack-audit/helios-bios-512/serial.log",
+      "runner": "target/user-stack-audit/helios-bios-512.log",
+      "exit_codes": {
+        "/bin/linux-echo stackaudit": 0,
+        "/bin/linux-thread-probe": 0
+      },
+      "exit_observations": [
+        [39, "linux-echo", 39, 512, 512, 512, 1, 1, 1],
+        [40, "linux-thread-probe", 40, 512, 512, 512, 1, 1, 1]
+      ],
+      "exit_pmm": {
+        "free_min": 17684,
+        "free_max": 17688,
+        "samples": 3,
+        "reconciled": true
+      }
+    },
+    "uefi-512": {
+      "serial": "target/user-stack-audit/helios-uefi-512/serial.log",
+      "runner": "target/user-stack-audit/helios-uefi-512.log",
+      "exit_codes": {
+        "/bin/linux-echo stackaudit": 0,
+        "/bin/linux-thread-probe": 0
+      },
+      "exit_observations": [
+        [39, "linux-echo", 39, 512, 512, 512, 1, 1, 1],
+        [40, "linux-thread-probe", 40, 512, 512, 512, 1, 1, 1]
+      ],
+      "exit_pmm": {
+        "free_min": 16099,
+        "free_max": 16103,
+        "samples": 3,
+        "reconciled": true
+      }
+    },
+    "bios-768": {
+      "serial": "target/user-stack-audit/helios-bios-768/serial.log",
+      "runner": "target/user-stack-audit/helios-bios-768.log",
+      "exit_codes": {
+        "/bin/linux-echo stackaudit": 0,
+        "/bin/linux-thread-probe": 0
+      },
+      "exit_observations": [
+        [39, "linux-echo", 39, 512, 512, 512, 1, 1, 1],
+        [40, "linux-thread-probe", 40, 512, 512, 512, 1, 1, 1]
+      ],
+      "exit_pmm": {
+        "free_min": 83220,
+        "free_max": 83224,
+        "samples": 3,
+        "reconciled": true
+      }
+    },
+    "bios-1024": {
+      "serial": "target/user-stack-audit/helios-bios-1024/serial.log",
+      "runner": "target/user-stack-audit/helios-bios-1024.log",
+      "exit_codes": {
+        "/bin/linux-echo stackaudit": 0,
+        "/bin/linux-thread-probe": 0
+      },
+      "exit_observations": [
+        [39, "linux-echo", 39, 512, 512, 512, 1, 1, 1],
+        [40, "linux-thread-probe", 40, 512, 512, 512, 1, 1, 1]
+      ],
+      "exit_pmm": {
+        "free_min": 148756,
+        "free_max": 148760,
+        "samples": 3,
+        "reconciled": true
+      }
+    }
+  }
+}
