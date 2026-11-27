@@ -360,7 +360,10 @@ impl Runtime {
     }
 
     fn complete_private_exec(&mut self, proof: PrivateVfsExecRetired) {
-        self.settle_private_backing(proof.image());
+        let image = proof.image();
+        self.settle_private_backing(image);
+        #[cfg(feature = "vfs-n1j-test")]
+        crate::vfs_n1j_test::image_retired(image);
     }
 
     fn settle_private_backing(&mut self, image: crate::capability::delivery::RecipientIdentity) {
@@ -471,6 +474,8 @@ impl Runtime {
         if !self.registry.retire(expected) {
             return;
         }
+        #[cfg(feature = "vfs-n1j-test")]
+        crate::vfs_n1j_test::withdraw(expected);
         for c in self.chdirs.iter_mut().flatten() {
             if c.identity.registration == expected && c.result.is_none() {
                 c.result = Some(5);
@@ -646,6 +651,8 @@ static RUNTIME: spin::Mutex<Runtime> = spin::Mutex::new(Runtime::new());
 /// Scheduler exit delivers synchronously, before the process slot can be reused.
 pub(crate) fn complete_image_exit(proof: PrivateImageRetired) {
     RUNTIME.lock().complete_image_exit(proof);
+    #[cfg(feature = "vfs-n1j-test")]
+    crate::vfs_n1j_test::image_retired(proof.image());
     #[cfg(all(not(test), debug_assertions, feature = "vfs_l1c_r1_test"))]
     spawn::fixture::observe_service_exit(proof.image());
 }
@@ -961,10 +968,11 @@ fn register_service(
         address_space_generation: process.address_space.identity().generation,
     };
     live_registration(runtime, sched, caps);
-    runtime
-        .register(candidate)
-        .map(|_| ())
-        .map_err(|_| IpcError::InvalidCapability)
+    let registration = runtime.register(candidate)?;
+    #[cfg(feature = "vfs-n1j-test")]
+    crate::vfs_n1j_test::bind(registration);
+    let _ = registration;
+    Ok(())
 }
 
 pub(super) fn register(

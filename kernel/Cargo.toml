@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.9090-alpha.2"
+version = "0.2.9485-alpha.2"
+
 
 
 
@@ -723,6 +724,10 @@ vfs_stat_failure_test = []
 sfs5a-test = []
 sfs5b1-test = ["sfs5a-test"]
 sfs5b2-test = ["sfs5a-test"]
+vfs-n1h-test = []
+vfs-n1i-test = ["vfs-n1h-test"]
+vfs-n1j-test = ["vfs-n1i-test"]
+vfs-n1m-test = ["vfs-n1j-test"]
 sfs5b3-test = ["sfs5a-test"]
 sfs5b4-test = ["sfs5a-test"]
 # Bounded PMM-backed filesystem regression gate; off in ordinary boots.

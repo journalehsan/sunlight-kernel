@@ -1,0 +1,63 @@
+{
+  "stage": "VFS-N1J",
+  "date": "2026-11-27",
+  "base_commit": "eab8ee857",
+  "status": "PARTIAL",
+  "native": {
+    "status": "PASS",
+    "command": "python3 tools/test_vfs_n1h.py --n1j",
+    "build_log": "target/vfs-n1j/probe-final.log",
+    "log": "target/vfs-n1j/native-final.log",
+    "serial": "target/vfs-n1j-qemu-fwwf8aum/serial.log",
+    "registration_source": "kernel-authenticated ring-3 VFS registration",
+    "registration": {"endpoint": 1, "pid": 3, "incarnation": 43, "address_space_generation": 18, "epoch": 1},
+    "vcpus": 1,
+    "release_reacquire_cycles": 64,
+    "cross_lease_reads_same_service": 64,
+    "admitted_reads": 64,
+    "admitted_writes": 65,
+    "virtual_barriers": 129,
+    "caller_credits_at_withdrawal": 0,
+    "retained_data_at_withdrawal": 1,
+    "service_exit_and_exact_image_retirement": "PASS",
+    "retained_data_at_end": 0,
+    "mapping_users_at_end": 0,
+    "full_backing_image_matches": true,
+    "live_cross_service_handoff": "NOT_RUN",
+    "fault_injection": "NOT_RUN",
+    "exec_and_endpoint_only_revocation": "NOT_RUN"
+  },
+  "dma": {
+    "reset": "VerifiedRetained",
+    "accounting": "PASS",
+    "queue_pages": 4,
+    "bounce_pages": 1,
+    "bytes_pinned_for_guest_lifetime": 20480,
+    "physical_reclamation": "BLOCKED",
+    "allocator_handback": "NOT_RUN",
+    "physical_hardware": "NOT_RUN"
+  },
+  "regressions": {
+    "baseline": {"status": "PASS", "passed": 481, "matched_by_name": 481, "logs": ["target/vfs-n1j/host.log", "target/vfs-n1j/registration.log"]},
+    "n1h": {"status": "PASS", "passed": 59, "matched_by_name": 59, "logs": ["target/vfs-n1j/transport.log", "target/vfs-n1j/lease.log"]},
+    "n1d": {"status": "PASS", "passed": 7, "matched_by_name": 7, "log": "target/vfs-n1j/n1d.log"}
+  },
+  "production_kernel_build": {"status": "PASS", "log": "target/vfs-n1j/kernel.log"},
+  "release_service_build": {"status": "PASS", "log": "target/vfs-n1j/service.log"},
+  "ownership_guard": {
+    "status": "FAIL",
+    "command": "python3 tools/audit_vfs_cutover.py --no-growth",
+    "log": "target/vfs-n1j/guard.log",
+    "exit": 1,
+    "references": 71,
+    "unmatched": ["statfs", "procfs_mountinfo", "private_mmap", "runtime_fat_mount"]
+  },
+  "ordinary_native_cutover": "NOT_RUN",
+  "n1d_device_attachment": "BLOCKED",
+  "production_routing_changed": false,
+  "mount_publication": false,
+  "scratch_activated": false,
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

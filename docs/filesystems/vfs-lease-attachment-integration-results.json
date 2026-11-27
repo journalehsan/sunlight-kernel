@@ -1,0 +1,73 @@
+{
+  "stage": "VFS-N1K",
+  "date": "2026-11-27",
+  "status": "BLOCKED",
+  "runtime_connections_added": [],
+  "blockers": {
+    "authenticated_device_backend": "BLOCKED",
+    "reservation_bound_readiness_and_publication_pin": "BLOCKED",
+    "device_mount_retirement_and_release_integration": "BLOCKED",
+    "native_caller_view_and_fd_install_fence": "BLOCKED"
+  },
+  "integrated_lifecycle": {
+    "host": "NOT_RUN",
+    "isolated_qemu": "NOT_RUN",
+    "attachment_withdrawal_and_repeat_cycles": "NOT_RUN",
+    "mount_identity_and_topology_revisions": "NOT_RUN",
+    "backend_operations_and_data_integrity": "NOT_RUN",
+    "service_retirement_and_request_accounting": "NOT_RUN",
+    "mount_cycle_dma_stability": "NOT_RUN"
+  },
+  "component_readiness": "PARTIAL",
+  "n1j_preserved_evidence": {
+    "status": "PASS",
+    "rerun": false,
+    "results": "docs/filesystems/vfs-live-endpoint-lease-binding-results.json",
+    "serial": "target/vfs-n1j-qemu-fwwf8aum/serial.log",
+    "image_verification": "target/vfs-n1j/native-final.log",
+    "authenticated_registrations": 1,
+    "exact_image_retirement": "PASS",
+    "release_reacquire_cycles": 64,
+    "reads": 64,
+    "writes": 65,
+    "confirmed_virtual_barriers": 129,
+    "retained_at_registration_withdrawal": 1,
+    "caller_credits_at_registration_withdrawal": 0,
+    "retained_at_end": 0,
+    "mapping_users_at_end": 0,
+    "full_backing_image_matches": true,
+    "native_cross_service_handoff": "NOT_RUN",
+    "fault_injection": "NOT_RUN"
+  },
+  "dma": {
+    "live_transport_reuse_across_lease_cycles": "PASS",
+    "queue_pages": 4,
+    "bounce_pages": 1,
+    "retained_bytes": 20480,
+    "terminal_reset": "VerifiedRetained",
+    "physical_reclamation": "BLOCKED",
+    "allocator_handback": "NOT_RUN"
+  },
+  "regressions": {
+    "name_reference": "target/vfs-n1j",
+    "baseline": {"status": "PASS", "passed": 481, "matched_by_name": 481, "logs": ["target/vfs-n1k/host.log", "target/vfs-n1k/registration.log"]},
+    "n1h": {"status": "PASS", "passed": 59, "matched_by_name": 59, "logs": ["target/vfs-n1k/transport.log", "target/vfs-n1k/lease.log"]},
+    "n1d": {"status": "PASS", "passed": 7, "matched_by_name": 7, "log": "target/vfs-n1k/n1d.log"}
+  },
+  "production_kernel_build": {"status": "PASS", "log": "target/vfs-n1k/kernel.log"},
+  "release_service_build": {"status": "PASS", "log": "target/vfs-n1k/service.log"},
+  "ownership_guard": {
+    "status": "FAIL",
+    "command": "python3 tools/audit_vfs_cutover.py --no-growth",
+    "log": "target/vfs-n1k/guard.log",
+    "exit": 1,
+    "references": 71,
+    "unmatched": ["statfs", "procfs_mountinfo", "private_mmap", "runtime_fat_mount"]
+  },
+  "coordinated_cutover": "BLOCKED",
+  "production_routing_changed": false,
+  "scratch_activated": false,
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

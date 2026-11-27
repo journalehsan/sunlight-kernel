@@ -19,6 +19,22 @@ pub enum FatError {
 }
 
 impl<D: BlockDevice> Fat32<D> {
+    /// Check that the root has an allocated, bounded chain before attachment.
+    pub fn validate_root_chain(&mut self) -> Result<(), FatError> {
+        let mut cluster = self.rc;
+        for _ in 0..self.cluster_count {
+            let next = self.read_fat_entry(cluster)?;
+            if next >= FAT_EOC {
+                return Ok(());
+            }
+            if !(2..0x0FFF_FFF0).contains(&next) {
+                return Err(FatError::Io);
+            }
+            cluster = next;
+        }
+        Err(FatError::Io)
+    }
+
     fn read_fat_entry(&mut self, cluster: u32) -> Result<u32, FatError> {
         if cluster >= self.cluster_count.saturating_add(2) {
             return Err(FatError::Io);

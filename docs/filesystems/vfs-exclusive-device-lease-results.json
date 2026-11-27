@@ -1,0 +1,87 @@
+{
+  "stage": "VFS-N1E",
+  "date": "2026-11-27",
+  "base_commit": "eab8ee857ceb0cbafff0851e0ad813a5565eee9a",
+  "status": "QUALIFIED_HOST_ONLY",
+  "authority": "One host lease authority per whole fake device, independent of N1D mount publication",
+  "focused": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline device_lease",
+    "passed": 14,
+    "log": "target/vfs-n1e/focused.log"
+  },
+  "host": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-fs -p sunlight-ipc -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline",
+    "passed": {
+      "sunlight-fs": 118,
+      "sunlight-ipc": 169,
+      "sunlight-vfs-server": 74
+    },
+    "log": "target/vfs-n1e/host.log"
+  },
+  "registration": {
+    "status": "PASS",
+    "command": "python3 tools/test_vfs_registration_host.py",
+    "passed": 108,
+    "log": "target/vfs-n1e/registration.log"
+  },
+  "prior_host_baseline": 455,
+  "baseline_tests_missing_by_name": 0,
+  "host_total": 469,
+  "evidence": {
+    "drain": "New reads and writes rejected at quiesce. Accepted work settled before barrier admission.",
+    "durability": "Visible fake writes precede durable writes. Commit gated on matching confirmed barrier.",
+    "failure": "Definite normal flush failure restores the incumbent generation. Cancellation waits for a submitted flush to settle. Ambiguous outcomes and transport loss fence acquisition and commit.",
+    "stale_completion": "Consumed and foreign tokens cannot change media, credits, or a new generation.",
+    "concurrency": "Barrier-driven acquisition, transfer reservation, and transfer commit races each have one winner.",
+    "retirement": "Admission closes immediately. Confirmed old operations settle. Durable completion reclaims the device. Definite barrier failure keeps retirement closed for retry.",
+    "accounting": {
+      "max_data_credits": 4,
+      "max_flush_credits": 1,
+      "cycles": 64,
+      "end_data_credits": 0,
+      "end_flush_credits": 0,
+      "ambiguity_fence_retained_after_settlement": true
+    }
+  },
+  "compilation": {
+    "kernel": {
+      "status": "PASS",
+      "command": "CARGO_INCREMENTAL=0 cargo build -p sunlight-kernel --offline",
+      "log": "target/vfs-n1e/kernel.log"
+    },
+    "service": {
+      "status": "PASS",
+      "command": "RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' cargo build --release -p sunlight-vfs-server --offline",
+      "log": "target/vfs-n1e/service.log"
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "command": "python3 tools/audit_vfs_cutover.py --no-growth",
+    "exit": 1,
+    "references": 71,
+    "unmatched": 4,
+    "script_changed": false,
+    "inventory_changed": false,
+    "output_identical_to_n1d": true,
+    "log": "target/vfs-n1e/guard.log"
+  },
+  "historical_findings": {
+    "sys_linux_statfs": "OPEN",
+    "linux_procfs::mountinfo_snapshot": "OPEN",
+    "private_mmap": "OPEN",
+    "storage::mount": "OPEN"
+  },
+  "ordinary_native_validation": "NOT_RUN_GUARD_BLOCKED",
+  "n1d_device_attachment_integration": "CONTRACT_ONLY",
+  "fake_transport_qualification": "PASS",
+  "real_storage_transfer": "NOT_RUN",
+  "production_routing_changed": false,
+  "scratch_activated": false,
+  "production_snapshot_install_fence": "NOT_IMPLEMENTED",
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

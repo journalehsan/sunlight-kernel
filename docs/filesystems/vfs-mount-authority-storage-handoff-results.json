@@ -1,0 +1,82 @@
+{
+  "stage": "VFS-N1C",
+  "date": "2026-11-27",
+  "base_commit": "eab8ee857ceb0cbafff0851e0ad813a5565eee9a",
+  "status": "EXISTING_PUBLICATION_PRIMITIVE_QUALIFIED_HOST_ONLY",
+  "authority": {
+    "ordinary_root_and_runtime_fat": "kernel Vfs owns topology and FAT/cache state",
+    "selected_service_views": "independent seeded service Vfs with retained caller views",
+    "legacy_boot_share": "read-only BootFs adapter",
+    "target": "one service-owned runtime attachment graph with kernel-enforced admission and exclusive extent leases"
+  },
+  "implementation": {
+    "runtime_fat": "initialize backend, tag, source and protection together at insertion under the existing VFS lock",
+    "focused_tests": [
+      "failed staging preserves slot identity and visibility",
+      "published source, policy and capacity share one incarnation",
+      "sync failure preserves live capacity and successful withdrawal invalidates it across remount",
+      "global and restricted retained roots see different mount crossings and release all pins"
+    ],
+    "production_routing_changed": false,
+    "topology_revision_implemented": false,
+    "snapshot_commit_fence_implemented": false,
+    "device_lease_implemented": false
+  },
+  "compilation": [
+    {
+      "status": "PASS",
+      "command": "CARGO_INCREMENTAL=0 cargo build -p sunlight-kernel",
+      "exit": 0,
+      "log": "target/vfs-n1c/kernel.log"
+    },
+    {
+      "status": "PASS",
+      "command": "RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' cargo build --release -p sunlight-vfs-server",
+      "exit": 0,
+      "log": "target/vfs-n1c/service.log"
+    }
+  ],
+  "host": [
+    {
+      "status": "PASS",
+      "command": "cargo test -p sunlight-fs -p sunlight-ipc -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline",
+      "exit": 0,
+      "passed": {"sunlight-fs": 116, "sunlight-ipc": 169, "sunlight-vfs-server": 55},
+      "log": "target/vfs-n1c/host-final.log"
+    },
+    {
+      "status": "PASS",
+      "command": "python3 tools/test_vfs_registration_host.py",
+      "exit": 0,
+      "passed": 108,
+      "log": "target/vfs-n1c/registration.log"
+    }
+  ],
+  "ownership_guard": {
+    "status": "FAIL",
+    "command": "python3 tools/audit_vfs_cutover.py --no-growth",
+    "exit": 1,
+    "references": 71,
+    "unmatched": 4,
+    "script_changed": false,
+    "inventory_changed": false,
+    "log": "target/vfs-n1c/guard.log"
+  },
+  "historical_findings": {
+    "sys_linux_statfs": "OPEN",
+    "linux_procfs::mountinfo_snapshot": "OPEN",
+    "private_mmap": "OPEN",
+    "storage::mount": "OPEN"
+  },
+  "ordinary_native_validation": {
+    "status": "NOT_RUN",
+    "reason": "unchanged guard returned nonzero before the native gate",
+    "qemu_started": false,
+    "guard_bypass": false
+  },
+  "next_milestone": "Host-only attachment transaction at the existing service VFS owner with retained-view and topology fencing, plus independent fake-transport lease/drain qualification.",
+  "l1c_3": "BLOCKED",
+  "production_vfs_d1": "DEFERRED",
+  "scratch_activated": false,
+  "production_mmap_activated": false
+}

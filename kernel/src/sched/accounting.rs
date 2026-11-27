@@ -105,6 +105,8 @@ pub fn idle_loop() -> ! {
     loop {
         x86_64::instructions::interrupts::disable();
         enter_idle(cpu);
+        #[cfg(feature = "vfs-n1j-test")]
+        crate::vfs_n1j_test::settle_retired();
         #[cfg(feature = "native_c_guest")]
         crate::native_c_guest::idle();
         #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]

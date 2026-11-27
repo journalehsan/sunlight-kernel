@@ -296,3 +296,30 @@ fn mounted_pins_share_legacy_state_and_account_for_open_handles() {
         Err(FsError::OperationNotPermitted)
     );
 }
+
+#[test]
+fn retained_views_disagree_on_visibility_of_the_same_mount() {
+    let mut vfs = Vfs::new();
+    vfs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();
+    vfs.mkdir("/restricted", 0, 0, mode::DIR_755).unwrap();
+    vfs.mkdir("/volume", 0, 0, mode::DIR_755).unwrap();
+    let namespace = DirectoryNamespace::mounted(vfs).unwrap();
+    let global = namespace.pin("/", "/").unwrap();
+    let restricted = namespace.pin("/restricted", "/restricted").unwrap();
+    let caller = sunlight_fs::Credential { uid: 42, gid: 42 };
+    let before = global.stat("/volume", caller).unwrap();
+    namespace
+        .shared()
+        .lock()
+        .mount_tmpfs("/volume", Tmpfs::new(&[]))
+        .unwrap();
+    let after = global.stat("/volume", caller).unwrap();
+    assert_ne!(before.mount_id, after.mount_id);
+    assert_eq!(restricted.stat("/volume", caller), Err(FsError::NotFound));
+    assert_eq!(
+        restricted.stat("/../volume", caller),
+        Err(FsError::NotFound)
+    );
+    drop((restricted, global));
+    assert_eq!(namespace.shared().lock().open_handle_count(), 0);
+}

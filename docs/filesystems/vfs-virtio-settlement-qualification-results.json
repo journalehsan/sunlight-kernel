@@ -1,0 +1,43 @@
+{
+  "stage": "VFS-N1H",
+  "date": "2026-11-27",
+  "base_commit": "eab8ee857",
+  "status": "ISOLATED_ORDINARY_SETTLEMENT_PASS",
+  "checks": {
+    "transport": {
+      "command": "cargo test -p sunlight-virtio --lib --target x86_64-unknown-linux-gnu --offline",
+      "passed": 33,
+      "log": "target/vfs-n1h/transport.log"
+    },
+    "lease": {
+      "command": "cargo test -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline device_lease::",
+      "passed": 26,
+      "by_stage": {"N1E": 14, "N1F": 8, "N1G": 4},
+      "log": "target/vfs-n1h/lease.log"
+    },
+    "probe_build": {"status": "PASS", "log": "target/vfs-n1h/build-final.log"},
+    "qemu": {
+      "status": "PASS",
+      "command": "python3 tools/test_vfs_n1h.py",
+      "log": "target/vfs-n1h/qemu-run-2.log",
+      "serial": "target/vfs-n1h-qemu-685fkvks/serial.log",
+      "first_attempt": {"status": "NO_SERIAL", "memory_mib": 512, "log": "target/vfs-n1h/qemu-run.log"},
+      "memory_mib": 1024,
+      "vcpus": 1,
+      "cycles": 64,
+      "validated_completions": 193,
+      "confirmed_virtual_barriers": 64,
+      "pending_at_end": 0,
+      "mapping_users_at_end": 0,
+      "full_backing_image_matches": true
+    },
+    "cutover_guard": {"status": "FAIL", "references": 71, "unmatched": 4, "log": "target/vfs-n1h/guard.log"}
+  },
+  "physical_dma_reclamation": "NOT_RUN",
+  "guest_failure_paths": "NOT_RUN",
+  "ordinary_native_boot_gate": "NOT_RUN",
+  "live_authenticated_lease": "NOT_WIRED",
+  "n1d_attachment": "BLOCKED",
+  "mount_publication": false,
+  "fat_ownership_transfer": false
+}

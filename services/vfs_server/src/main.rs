@@ -205,6 +205,14 @@ pub extern "C" fn _start() -> ! {
     let ep = endpoint_create();
     assert!(nameserver_register("vfs", ep), "VFS registration rejected");
     debug_log("[VFS]  Registered as 'vfs'");
+    #[cfg(feature = "vfs-n1m-block-test")]
+    if core::hint::black_box(true) {
+        qualify_native_block();
+    }
+    #[cfg(feature = "vfs-n1j-exit-test")]
+    if core::hint::black_box(true) {
+        sunlight_ipc::ProcessExit::exit(0);
+    }
 
     // Root filesystem (RamFs)
     let mut vfs = Vfs::new();
@@ -300,6 +308,47 @@ pub extern "C" fn _start() -> ! {
         let reply = handle_request(&mut state, msg);
         msg = ipc_reply_and_wait(ep, reply);
     }
+}
+
+#[cfg(feature = "vfs-n1m-block-test")]
+fn qualify_native_block() -> ! {
+    fn call(op: u64, ptr: u64, lba: u64, generation: u64) -> u64 {
+        let result;
+        unsafe {
+            core::arch::asm!(
+                "syscall",
+                inlateout("rax") 180u64 => result,
+                in("rdi") op, in("rsi") ptr, in("rdx") lba, in("r8") generation,
+                in("r9") 0u64, in("r10") 0u64, in("r12") 0u64,
+                lateout("rcx") _, lateout("r11") _,
+            );
+        }
+        result
+    }
+    let mut previous = 0;
+    for cycle in 0..64u8 {
+        let generation = call(0x100, 0, 0, 0);
+        assert!(generation > previous && generation != u64::MAX);
+        let lba = 128 + u64::from(cycle);
+        let payload: [u8; 512] = core::array::from_fn(|index| cycle ^ index as u8);
+        let mut readback = [0u8; 512];
+        let out = readback.as_mut_ptr() as u64;
+        assert_eq!(call(0x101, out, lba, previous), u64::MAX);
+        assert_eq!(call(0x101, out, 192, generation), u64::MAX);
+        assert_eq!(call(0x102, payload.as_ptr() as u64, lba, generation), 0);
+        assert_eq!(call(0x103, 0, 0, generation), 0);
+        assert_eq!(call(0x101, out, lba, generation), 0);
+        assert_eq!(readback, payload);
+        assert_eq!(call(0x104, 0, 0, generation), 0);
+        previous = generation;
+    }
+    let generation = call(0x100, 0, 0, 0);
+    assert!(generation > previous && generation != u64::MAX);
+    let payload: [u8; 512] = core::array::from_fn(|index| 63 ^ index as u8);
+    let accepted = call(0x105, payload.as_ptr() as u64, 191, generation);
+    assert!(accepted != 0 && accepted != u64::MAX);
+    debug_log("[VFS-N1M] ring3 readback and release cycles complete; exiting with accepted write");
+    sunlight_ipc::ProcessExit::exit(0)
 }
 
 /// Bound the work per ordinary IPC turn or payload-free kernel receive hint.

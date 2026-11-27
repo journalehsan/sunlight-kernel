@@ -8,3 +8,6 @@ pub mod namespace;
 pub mod open;
 pub mod policy;
 pub mod runtime;
+
+#[cfg(not(target_os = "none"))]
+pub mod device_lease;

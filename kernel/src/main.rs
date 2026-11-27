@@ -118,11 +118,13 @@ static SUNLIGHT_USB_MOUSE_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-usb-mouse");
 static DEVICED_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/deviced");
-#[cfg(not(feature = "boot_resources"))]
+#[cfg(not(any(feature = "boot_resources", feature = "vfs-n1j-test")))]
 static VFS_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
-#[cfg(feature = "boot_resources")]
+#[cfg(all(feature = "boot_resources", not(feature = "vfs-n1j-test")))]
 static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(env!("SUNLIGHT_BOOT_RESOURCE_VFS"));
+#[cfg(feature = "vfs-n1j-test")]
+static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(env!("SUNLIGHT_VFS_N1J_ELF"));
 static TTY_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
 static PTY_SERVER_ELF_BYTES: &[u8] =
@@ -2031,6 +2033,16 @@ mod sfs5a_test;
 mod sfs5b1_test;
 #[cfg(feature = "sfs5b2-test")]
 mod sfs5b2_test;
+#[cfg(feature = "vfs-n1h-test")]
+mod vfs_n1h_test;
+#[cfg(feature = "vfs-n1i-test")]
+mod vfs_n1i_test;
+#[cfg(feature = "vfs-n1j-test")]
+mod vfs_n1j_test;
+#[cfg(feature = "vfs-n1i-test")]
+#[path = "../../services/vfs_server/src/device_lease.rs"]
+#[allow(dead_code)]
+mod device_lease;
 #[cfg(feature = "sfs5b3-test")]
 mod sfs5b3_test;
 #[cfg(feature = "sfs5b4-test")]
@@ -2263,6 +2275,7 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
 /// was found; vfs_server checks the magic and skips the boot mount gracefully.
 ///
 /// Logs [BLK] and [FAT] gate lines to the serial port.
+#[cfg_attr(feature = "vfs-n1h-test", allow(unreachable_code))]
 fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     serial_println!("[BLK]  Scanning PCI...");
 
@@ -2337,6 +2350,17 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
             return share_phys;
         }
     };
+
+    #[cfg(feature = "vfs-n1h-test")]
+    {
+        #[cfg(feature = "vfs-n1j-test")]
+        vfs_n1j_test::install(blk, queue_phys, req_phys);
+        #[cfg(all(feature = "vfs-n1i-test", not(feature = "vfs-n1j-test")))]
+        vfs_n1i_test::run(blk);
+        #[cfg(not(feature = "vfs-n1i-test"))]
+        vfs_n1h_test::run(blk);
+        return share_phys;
+    }
 
     #[cfg(feature = "sfs5b4-test")]
     let blk = sfs5b4_test::run(blk, queue_phys.as_u64(), req_phys.as_u64());

@@ -72,6 +72,17 @@ struct RamOpen {
 }
 
 impl Tmpfs {
+    #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+    pub fn validate_attachment_backend(&mut self) -> Result<(), FsError> {
+        if self.handles.iter().any(Option::is_some) {
+            return Err(FsError::Busy);
+        }
+        if self.stat("/")?.file_type != FileType::Directory {
+            return Err(FsError::NotDir);
+        }
+        Ok(())
+    }
+
     /// Allocation-free mount of a trusted boot seed using the live defaults.
     /// For untrusted seeds or configurable quotas use `with_limits`.
     pub fn new(entries: &'static [RamEntry]) -> Self {

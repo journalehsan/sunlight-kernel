@@ -95,6 +95,46 @@ fn mountinfo_samples_one_fat_incarnation_and_requires_its_source() {
 }
 
 #[test]
+fn runtime_publication_keeps_capacity_and_source_bound_to_one_incarnation() {
+    let (mut vfs, disk) = fixture();
+    let mut fat = Fat32::mount(Cache::new(disk.clone())).unwrap();
+    fat.sample_capacity(1024).unwrap();
+    let capacity = fat.capacity().unwrap();
+    assert_eq!(
+        vfs.mount_runtime_fat("/state", 42, fat),
+        Err(FsError::OperationNotPermitted)
+    );
+    assert!(vfs.mount_info(1).is_none());
+
+    let mut fat = Fat32::mount(Cache::new(disk.clone())).unwrap();
+    fat.sample_capacity(1024).unwrap();
+    vfs.mount_runtime_fat("/mnt", 42, fat).unwrap();
+    let published = vfs.mount_info(1).unwrap();
+    assert_eq!(published.id, 2); // Failed staging did not consume the slot tag.
+    assert_eq!(published.source, 42);
+    assert!(!published.protected);
+    assert_eq!(published.path, "/mnt");
+    let first = published.id;
+    let resolved = vfs
+        .resolve_existing("/", "/mnt/HELLO.TXT", &crate::Credential { uid: 0, gid: 0 })
+        .unwrap();
+    assert_eq!(resolved.metadata.mount_id, first);
+    assert_eq!(vfs.fat_capacity(first), Ok(capacity));
+
+    disk.fail_sync.set(true);
+    assert_eq!(vfs.unmount(first), Err(FsError::Io));
+    assert_eq!(vfs.fat_capacity(first), Ok(capacity));
+    disk.fail_sync.set(false);
+    vfs.unmount(first).unwrap();
+    assert!(vfs.mount_info(1).is_none());
+    mount(&mut vfs, &disk);
+    let second = vfs.mount_info(1).unwrap().id;
+    assert_eq!(second, first + MAX_MOUNTS as u64);
+    assert_eq!(vfs.fat_capacity(first), Err(FsError::NotFound));
+    assert_eq!(vfs.fat_capacity(second), Err(FsError::Unsupported));
+}
+
+#[test]
 fn rejects_invalid_system_occupied_and_duplicate_targets() {
     let (mut vfs, disk) = fixture();
     for path in ["/", "/state", "/boot", "/etc", "/state/users"] {

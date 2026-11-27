@@ -1,0 +1,65 @@
+{
+  "stage": "VFS-N1D",
+  "date": "2026-11-27",
+  "base_commit": "eab8ee857ceb0cbafff0851e0ad813a5565eee9a",
+  "status": "QUALIFIED_HOST_ONLY",
+  "authority": "Existing mounted DirectoryNamespace and shared Vfs mount slots",
+  "focused": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-fs -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline attachment",
+    "passed": 7,
+    "log": "target/vfs-n1d/focused.log"
+  },
+  "host": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-fs -p sunlight-ipc -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline",
+    "passed": {"sunlight-fs": 118, "sunlight-ipc": 169, "sunlight-vfs-server": 60},
+    "log": "target/vfs-n1d/host-final.log"
+  },
+  "registration": {
+    "status": "PASS",
+    "command": "python3 tools/test_vfs_registration_host.py",
+    "passed": 108,
+    "log": "target/vfs-n1d/registration.log"
+  },
+  "host_total": 455,
+  "prior_host_baseline": 448,
+  "compilation": {
+    "kernel": {
+      "status": "PASS",
+      "command": "CARGO_INCREMENTAL=0 cargo build -p sunlight-kernel",
+      "log": "target/vfs-n1d/kernel.log"
+    },
+    "service": {
+      "status": "PASS",
+      "command": "RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' cargo build --release -p sunlight-vfs-server",
+      "log": "target/vfs-n1d/service.log"
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "command": "python3 tools/audit_vfs_cutover.py --no-growth",
+    "exit": 1,
+    "references": 71,
+    "unmatched": 4,
+    "script_changed": false,
+    "inventory_changed": false,
+    "log": "target/vfs-n1d/guard.log"
+  },
+  "historical_findings": {
+    "sys_linux_statfs": "OPEN",
+    "linux_procfs::mountinfo_snapshot": "OPEN",
+    "private_mmap": "OPEN",
+    "storage::mount": "OPEN"
+  },
+  "ordinary_native_validation": "NOT_RUN_GUARD_BLOCKED",
+  "production_routing_changed": false,
+  "production_snapshot_install_fence": "NOT_IMPLEMENTED",
+  "scratch_activated": false,
+  "real_storage_transfer": "NOT_RUN",
+  "device_lease": "CONTRACT_ONLY",
+  "fake_transport_qualification": "DEFERRED_TO_INDEPENDENT_MILESTONE",
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

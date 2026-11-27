@@ -1727,6 +1727,13 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     {
         sched.wake_pid(target_owner);
     }
+    #[cfg(all(feature = "vfs-n1j-test", not(feature = "vfs-n1m-test")))]
+    {
+        let caller = crate::ipc::vfs_registration::process_identity(sched.current_process());
+        drop(caps);
+        drop(sched);
+        crate::vfs_n1j_test::run_registered(caller);
+    }
     result
 }
 
@@ -6851,6 +6858,31 @@ fn sys_vfs_stat(frame: &mut SyscallFrame) -> u64 {
 /// Syscall 180: service-only, exact-size copied retention frames. User copies never occur
 /// under scheduler/broker/runtime locks. No user-selected target or capability.
 fn sys_vfs_retention(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(feature = "vfs-n1m-test")]
+    if (0x100..=0x105).contains(&frame.rdi) {
+        let op = frame.rdi;
+        let lba = frame.rdx;
+        if frame.r9 != 0 || frame.r10 != 0 || frame.r12 != 0
+            || (matches!(op, 0x100 | 0x103 | 0x104) && (frame.rsi != 0 || lba != 0))
+        {
+            return u64::MAX;
+        }
+        let caller = {
+            let sched = sched::SCHEDULER.lock();
+            crate::ipc::vfs_registration::process_identity(sched.current_process())
+        };
+        let mut bytes = [0; 512];
+        if matches!(op, 0x102 | 0x105) && copy_from_user(frame.rsi, &mut bytes).is_err() {
+            return u64::MAX;
+        }
+        let Ok(result) = crate::vfs_n1j_test::native_block(caller, op, lba, frame.r8, &mut bytes) else {
+            return u64::MAX;
+        };
+        if op == 0x101 && copy_to_user(frame.rsi, &bytes).is_err() {
+            return u64::MAX;
+        }
+        return result;
+    }
     use ::sunlight_ipc::vfs_rpc::retention::{transport as api, wire::FRAME_BYTES};
     let length = match api::copy_length(
         frame.rdi,

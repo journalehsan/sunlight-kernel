@@ -25,14 +25,71 @@ primitive only. Private mmap still reads through `KERNEL_VFS` at
 VFS-D1 epoch and compensating-Close repairs, a kernel client that parks outside
 the scheduler, PMM and VFS locks, and staged frame population with rollback.
 
-1. **Establish the baseline.** Close the FAT capacity/topology/runtime mount
-   contracts and retained positional mmap source without hiding the existing
-   owners. Reproduce the matched native matrix through ordinary
-   interfaces; distinguish pre-publication errors from authenticated ENOENT.
-2. **Close launch and descriptor prerequisites.** Keep L1C-3 blocked until
-   both ordinary adapters can commit authenticated binding before publication
-   with exact rollback and lifecycle settlement. Keep VFS-D1 deferred pending
-   that closure and its descriptor epoch and compensating Close repairs.
+[N1C mount authority and coordinated storage handoff](vfs-mount-authority-storage-handoff.md)
+defines one service-owned attachment graph and a kernel-enforced device lease.
+Runtime FAT initializes the complete existing mount record at insertion.
+The four historical findings remain open.
+
+1. **Qualify service attachment and exclusive extent ownership separately.**
+   [N1D](vfs-service-attachment-transaction.md) qualifies volatile attachment,
+   withdrawal, retained views and the snapshot installation fence at the
+   existing service owner ([results](vfs-service-attachment-transaction-results.json)).
+   [N1E](vfs-exclusive-device-lease.md) qualifies whole-device acquisition,
+   drain, flush, transfer, release and fail-closed retirement using a host fake
+   transport ([results](vfs-exclusive-device-lease-results.json)).
+   [N1F](vfs-authenticated-device-admission.md) qualifies host admission
+   through live registration bindings, bounded byte extents, operation
+   rights and media generations while retaining whole-device exclusivity
+   ([results](vfs-authenticated-device-admission-results.json)).
+   [N1G](vfs-transport-dma-settlement.md) qualifies separate caller credits,
+   retained transport buffers, and confirmed barriers in the host fixture
+   ([results](vfs-transport-dma-settlement-results.json)).
+   [N1H](vfs-virtio-settlement-qualification.md) qualifies ordinary typed
+   settlement and buffer reuse on one isolated QEMU VirtIO device.
+   [N1I](vfs-live-virtio-lease-integration.md) binds ordinary I/O and
+   handoff on that device to the existing lease authority with fixture
+   registrations ([results](vfs-live-virtio-lease-integration-results.json)).
+   [N1J](vfs-live-endpoint-lease-binding.md) qualifies one live authenticated
+   endpoint, repeated lease generations and exact image exit with transport
+   settlement on the disposable queue
+   ([results](vfs-live-endpoint-lease-binding-results.json)).
+   [N1K](vfs-lease-attachment-integration.md) locates the next integration
+   boundary: give the existing N1D transaction an authenticated device
+   backend with readiness pinned to the exact reservation through
+   publication, then couple mount retirement to drain, confirmed flush
+   and lease release ([results](vfs-lease-attachment-integration-results.json)).
+   [N1L](vfs-device-backed-attachment.md) connects N1D to FAT32 over the
+   existing authenticated lease authority on a disposable, RAM-resident host
+   sector image ([results](vfs-device-backed-attachment-results.json)).
+   Actual FAT operations and host withdrawal pass.
+   [N1M](vfs-native-authenticated-block-io.md) qualifies copied block commands
+   from the registered ring-3 service on the isolated VirtIO device
+   ([results](vfs-native-authenticated-block-io-results.json)).
+   [N1N](vfs-native-fat32-attachment.md) separates FAT sync and transport
+   settlement from the topology lock on the host and makes N1D transaction
+   validation available to the native service behind an opt-in feature.
+   Native FAT publication remains blocked on a disposable FAT grant and a
+   native readiness pin through N1D publication. The copied interface also
+   needs separate settlement and lease release commands before the native
+   withdrawal can keep ownership through topology removal.
+   Live successor handoff is a
+   coordinated cutover gate; physical DMA reclamation is a transport
+   destruction gate. Neither is needed for the isolated cycle while the
+   live transport retains its fixed allocation and uncertain ownership
+   stays fenced. Production still needs authenticated submission, alias
+   and media fencing, fault settlement, FAT retained objects and capacity
+   pinning, and the kernel FD installation fence. Production routes remain
+   disabled.
+2. **Stage the cutover prerequisites before ordinary native acceptance.**
+   The unchanged guard blocks ordinary boot on live FAT, statfs, ProcFS
+   and mmap dependencies. Host-qualify unpublished child binding for both
+   adapters and the descriptor epoch and compensating Close contracts.
+   Keep broad L1C-3 blocked and production VFS-D1 deferred at this boundary. In a
+   future coordinated candidate, remove the FAT/ProcFS/statfs dependencies
+   together and remove the mmap dependency through retained positional I/O.
+   Run the unchanged guard before ordinary boot. Reproduce the matched native
+   matrix only after the guard permits it, distinguishing pre-publication
+   errors from authenticated ENOENT.
 3. **Qualify /vfs-scratch, a new volatile data-only mount.** Build a complete service operation
    contract off the production launch path. Switch all exposed operations for
    the mount together, with one live mount generation and no kernel fallback.

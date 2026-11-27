@@ -1,0 +1,40 @@
+{
+  "stage": "VFS-N1N",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "host": {
+    "readiness_publication_and_compensation": "PASS",
+    "split_withdrawal_and_lock_availability_at_sync_boundary": "PASS",
+    "duplicate_and_premature_completion_rejection": "PASS",
+    "retained_handles_and_fencing": "PASS",
+    "cycles": 4,
+    "mount_cycle_medium": "disposable RAM sector image",
+    "logs": ["target/vfs-n1n/named-host.log", "target/vfs-n1n/registration-final.log"]
+  },
+  "native": {
+    "transaction_feature_build": "PASS",
+    "transaction_feature_build_log": "target/vfs-n1n/native-transaction-build.log",
+    "fat_adapter_and_publication": "BLOCKED",
+    "blocker": "No disposable FAT grant or native readiness pin through publication; syscall 180 release combines settlement with vacancy.",
+    "direct_ring3_mount_lifecycle": "NOT_RUN",
+    "persistent_data_and_untouched_sectors": "NOT_RUN",
+    "fat_cycle_dma_accounting": "NOT_RUN",
+    "physical_dma_reclamation": "BLOCKED",
+    "unchanged_historical_block_evidence": "vfs-native-authenticated-block-io-results.json"
+  },
+  "regressions": {
+    "baseline": {"status": "PASS", "matched_by_name": 481},
+    "n1h": {"status": "PASS", "matched_by_name": 59},
+    "n1d": {"status": "PASS", "matched_by_name": 7},
+    "n1l": {"status": "PASS", "matched_by_name": 3},
+    "host_workspace_sweep": {"status": "FAIL", "reason": "sunlight-ui-wayland duplicate panic_impl", "log": "target/vfs-n1n/host-lib.log"},
+    "production_kernel_build": {"status": "PASS", "log": "target/vfs-n1n/kernel-final.log"},
+    "release_service_build": {"status": "PASS", "log": "target/vfs-n1n/service.log"}
+  },
+  "ownership_guard": {"status": "FAIL", "references": 71, "unmatched": 4, "log": "target/vfs-n1n/guard.log"},
+  "production_routing_changed": false,
+  "scratch_activated": false,
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

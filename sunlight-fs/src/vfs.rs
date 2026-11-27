@@ -880,6 +880,8 @@ pub struct Mount<D: BlockDevice = NullDevice> {
     source: u64,
     protected: bool,
     open_handles: usize,
+    #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+    device_attachment: Option<attachment::DeviceState>,
 }
 
 pub struct MountInfo<'a> {
@@ -892,6 +894,8 @@ pub struct MountInfo<'a> {
 pub struct Vfs<D: BlockDevice = NullDevice> {
     mounts: [Option<Mount<D>>; MAX_MOUNTS],
     count: usize,
+    #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+    topology_revision: u64,
     // Upper handle byte: 3 slot bits and 5 incarnation bits. Retire a slot
     // instead of wrapping; closed handles must never alias a remounted volume.
     next_tags: [u16; MAX_MOUNTS],
@@ -902,6 +906,8 @@ impl<D: BlockDevice> Vfs<D> {
         Self {
             mounts: [const { None }; MAX_MOUNTS],
             count: 0,
+            #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+            topology_revision: 0,
             next_tags: [0, 1, 2, 3, 4, 5, 6, 7],
         }
     }
@@ -909,6 +915,16 @@ impl<D: BlockDevice> Vfs<D> {
     /// Mount a filesystem at `path`. Path resolution picks the
     /// longest-prefix mount, so nested mounts shadow their parents.
     pub fn mount(&mut self, path: &str, fs: FsNode<D>) -> Result<(), FsError> {
+        self.mount_with_metadata(path, fs, 0, true)
+    }
+
+    fn mount_with_metadata(
+        &mut self,
+        path: &str,
+        fs: FsNode<D>,
+        source: u64,
+        protected: bool,
+    ) -> Result<(), FsError> {
         path::validate_absolute(path)?;
         if self.count >= MAX_MOUNTS {
             return Err(FsError::TooManyOpenFiles);
@@ -929,14 +945,18 @@ impl<D: BlockDevice> Vfs<D> {
             .try_reserve_exact(path.len())
             .map_err(|_| FsError::NoMemory)?;
         mount_path.push_str(path);
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        self.advance_topology()?;
         self.next_tags[slot] += MAX_MOUNTS as u16;
         self.mounts[slot] = Some(Mount {
             path: mount_path,
             fs,
             tag,
-            source: 0,
-            protected: true,
+            source,
+            protected,
             open_handles: 0,
+            #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+            device_attachment: None,
         });
         self.count += 1;
         Ok(())
@@ -959,12 +979,23 @@ impl<D: BlockDevice> Vfs<D> {
 
     /// Record the registry identity on a protected boot mount.
     pub fn set_mount_source(&mut self, path: &str, source: u64) -> Result<(), FsError> {
-        let mount = self
+        let index = self
             .mounts
-            .iter_mut()
-            .flatten()
-            .find(|m| m.path == path)
+            .iter()
+            .position(|m| m.as_ref().is_some_and(|m| m.path == path))
             .ok_or(FsError::NotFound)?;
+        let mount = self.mounts[index].as_ref().unwrap();
+        if mount.source == source {
+            return Ok(());
+        }
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        {
+            if !mount.protected && matches!(mount.fs, FsNode::Ram(_)) {
+                return Err(FsError::Unsupported);
+            }
+            self.advance_topology()?;
+        }
+        let mount = self.mounts[index].as_mut().unwrap();
         mount.source = source;
         Ok(())
     }
@@ -1004,6 +1035,10 @@ impl<D: BlockDevice> Vfs<D> {
     /// A narrow runtime namespace keeps root, boot, state and service state
     /// policy outside the authority conveyed by an ordinary mount request.
     pub fn validate_runtime_target(&mut self, path: &str, source: u64) -> Result<(), FsError> {
+        self.validate_attachment_target(path, Some(source))
+    }
+
+    fn validate_attachment_target(&mut self, path: &str, source: Option<u64>) -> Result<(), FsError> {
         path::validate_absolute(path)?;
         if path.len() >= 128 || path.contains("//") {
             return Err(FsError::InvalidPath);
@@ -1011,14 +1046,14 @@ impl<D: BlockDevice> Vfs<D> {
         if path != "/mnt" && !path.starts_with("/mnt/") {
             return Err(FsError::OperationNotPermitted);
         }
-        if source == 0 {
+        if source == Some(0) {
             return Err(FsError::NotFound);
         }
         if self
             .mounts
             .iter()
             .flatten()
-            .any(|m| m.path == path || m.source == source)
+            .any(|m| m.path == path || Some(m.source) == source)
         {
             return Err(FsError::AlreadyExists);
         }
@@ -1057,16 +1092,7 @@ impl<D: BlockDevice> Vfs<D> {
         fat: Fat32<D>,
     ) -> Result<(), FsError> {
         self.validate_runtime_target(path, source)?;
-        self.mount_fat(path, fat)?;
-        let mount = self
-            .mounts
-            .iter_mut()
-            .flatten()
-            .find(|m| m.path == path)
-            .ok_or(FsError::NotFound)?;
-        mount.source = source;
-        mount.protected = false;
-        Ok(())
+        self.mount_with_metadata(path, FsNode::Fat(FatFs::new(fat)), source, false)
     }
 
     pub fn is_runtime_path(&self, path: &str) -> bool {
@@ -1082,17 +1108,33 @@ impl<D: BlockDevice> Vfs<D> {
             .iter()
             .position(|m| m.as_ref().is_some_and(|m| u64::from(m.tag) + 1 == id))
             .ok_or(FsError::NotFound)?;
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        let revision = self.next_topology_revision()?;
         let mount = self.mounts[index].as_mut().ok_or(FsError::NotFound)?;
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        if mount.device_attachment.is_some() {
+            return Err(FsError::OperationNotPermitted);
+        }
         if mount.protected {
             return Err(FsError::OperationNotPermitted);
         }
         if mount.open_handles != 0 {
             return Err(FsError::Busy);
         }
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        let volatile = matches!(mount.fs, FsNode::Ram(_));
+        #[cfg(target_os = "none")]
+        let volatile = false;
         // Keep the complete mount/cache installed on any barrier failure.
-        mount.fs.sync_dir("/")?;
+        if !volatile {
+            mount.fs.sync_dir("/")?;
+        }
         self.mounts[index] = None;
         self.count -= 1;
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        {
+            self.topology_revision = revision;
+        }
         Ok(())
     }
 
@@ -1295,6 +1337,8 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     pub fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        self.check_attachment_ancestor(path)?;
         let (mount_idx, local_path) = self.resolve_mount(path)?;
         self.mounts[mount_idx]
             .as_mut()
@@ -1314,6 +1358,11 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     pub fn rename(&mut self, old_path: &str, new_path: &str) -> Result<(), FsError> {
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        {
+            self.check_attachment_ancestor(old_path)?;
+            self.check_attachment_ancestor(new_path)?;
+        }
         let (old_mount, old_local) = self.resolve_mount(old_path)?;
         let (new_mount, new_local) = self.resolve_mount_for_create(new_path)?;
         if old_mount != new_mount {
@@ -1434,8 +1483,18 @@ impl<D: BlockDevice> Vfs<D> {
                 best = Some((idx, len, local_path));
             }
         }
-        best.map(|(idx, _, local)| (idx, local))
-            .ok_or(FsError::NotFound)
+        let (index, _, local) = best.ok_or(FsError::NotFound)?;
+        #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+        if self.mounts[index]
+            .as_ref()
+            .unwrap()
+            .device_attachment
+            .as_ref()
+            .is_some_and(attachment::DeviceState::closed)
+        {
+            return Err(FsError::Busy);
+        }
+        Ok((index, local))
     }
 
     fn resolve_mount_for_create<'a>(&self, path: &'a str) -> Result<(usize, &'a str), FsError> {
@@ -1847,4 +1906,8 @@ mod tests {
 }
 
 mod anchored;
+#[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+mod attachment;
+#[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+pub use attachment::{AttachmentRow, DeviceWithdrawal};
 pub use anchored::ObjectMetadata;

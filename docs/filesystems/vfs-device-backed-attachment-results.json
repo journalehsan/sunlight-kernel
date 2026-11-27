@@ -1,0 +1,67 @@
+{
+  "stage": "VFS-N1L",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "backend": "Existing writable Fat32 and FatFs over the existing authenticated lease sector interface",
+  "host": {
+    "status": "PASS",
+    "device": "Disposable RAM-resident sector image with modeled barrier",
+    "authenticated_fixture_registrations_per_device": 1,
+    "successful_cycles": 4,
+    "new_tests_passed": 3,
+    "root_readiness_and_publication_pin": "PASS",
+    "create_lookup_metadata_positional_read_and_write": "PASS",
+    "caller_scoped_rows_and_snapshot_fencing": "PASS",
+    "ordinary_closure_and_withdrawal": "PASS",
+    "failed_probe_and_publication_compensation": "PASS",
+    "unsettled_withdrawal_fencing": "PASS",
+    "terminal_outstanding_operations": 0,
+    "terminal_retained_operations": 0,
+    "terminal_flush_pending": false,
+    "data_integrity_across_remount": "PASS",
+    "complete_persistent_backing_image_integrity": "NOT_RUN",
+    "log": "target/vfs-n1l/host.log"
+  },
+  "native": {
+    "authenticated_service_block_interface": "BLOCKED",
+    "fat_retained_service_objects": "BLOCKED",
+    "caller_snapshot_fd_installation": "BLOCKED",
+    "qemu_integrated_attachment": "NOT_RUN",
+    "mount_cycle_dma_stability": "NOT_RUN",
+    "physical_dma_reclamation": "BLOCKED"
+  },
+  "historical_n1j": {
+    "status": "PASS",
+    "rerun": false,
+    "results": "docs/filesystems/vfs-live-endpoint-lease-binding-results.json",
+    "authenticated_registration_and_exact_image_retirement": "PASS",
+    "lease_cycles": 64,
+    "queue_pages": 4,
+    "bounce_pages": 1,
+    "retained_bytes": 20480,
+    "terminal_retained_commands": 0,
+    "terminal_mapping_users": 0,
+    "full_backing_image_matches": true
+  },
+  "regressions": {
+    "reference": "target/vfs-n1j",
+    "baseline": {"status": "PASS", "matched_by_name": 481, "logs": ["target/vfs-n1l/host.log", "target/vfs-n1l/registration.log"]},
+    "n1h": {"status": "PASS", "matched_by_name": 59, "logs": ["target/vfs-n1l/transport.log", "target/vfs-n1l/host.log"]},
+    "n1d": {"status": "PASS", "matched_by_name": 7, "log": "target/vfs-n1l/host.log"},
+    "production_kernel_build": {"status": "PASS", "log": "target/vfs-n1l/kernel.log"},
+    "release_service_build": {"status": "PASS", "log": "target/vfs-n1l/service.log"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "exit": 1,
+    "references": 71,
+    "unmatched": ["statfs", "procfs_mountinfo", "private_mmap", "runtime_fat_mount"],
+    "log": "target/vfs-n1l/guard.log"
+  },
+  "coordinated_cutover": "BLOCKED",
+  "production_routing_changed": false,
+  "scratch_activated": false,
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

@@ -19,7 +19,7 @@ const LOOKUP_PATH_MAX: usize = crate::tmpfs::TMPFS_PATH_MAX;
 /// Fixed backing matters for services whose allocator cannot reclaim temporary
 /// heap allocations. Every append checks capacity before writing.
 #[derive(Clone)]
-struct LookupPath {
+pub(super) struct LookupPath {
     bytes: [u8; LOOKUP_PATH_MAX],
     len: usize,
 }
@@ -30,7 +30,7 @@ impl LookupPath {
             len: 0,
         }
     }
-    fn as_str(&self) -> &str {
+    pub(super) fn as_str(&self) -> &str {
         core::str::from_utf8(&self.bytes[..self.len]).expect("only UTF-8 components appended")
     }
     fn append(&mut self, value: &str) -> Result<(), FsError> {
@@ -269,7 +269,7 @@ impl<D: BlockDevice> Vfs<D> {
         Ok((current, result))
     }
 
-    fn lookup_anchor(&mut self, handle: FileHandle) -> Result<LookupPath, FsError> {
+    pub(super) fn lookup_anchor(&mut self, handle: FileHandle) -> Result<LookupPath, FsError> {
         let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         let mount = self.mounts[mount_idx].as_mut().ok_or(FsError::BadHandle)?;
         // FatOpen stores a historical spelling. Never treat it as an anchor.
@@ -316,14 +316,15 @@ impl<D: BlockDevice> Vfs<D> {
         Ok(absolute)
     }
 
-    fn lookup_metadata(&mut self, path: &str) -> Result<ObjectMetadata, FsError> {
+    pub(super) fn lookup_metadata(&mut self, path: &str) -> Result<ObjectMetadata, FsError> {
         let (index, local) = self.resolve_mount(path)?;
         let mount = self.mounts[index].as_mut().ok_or(FsError::NotFound)?;
-        let FsNode::Ram(fs) = &mut mount.fs else {
-            return Err(FsError::Unsupported);
+        let (id, stat) = match &mut mount.fs {
+            FsNode::Ram(fs) => (fs.object_id(local)?.ok_or(FsError::Unsupported)?, fs.stat(local)?),
+            #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+            FsNode::Fat(fs) if mount.device_attachment.is_some() && local == "/" => (0, fs.stat(local)?),
+            _ => return Err(FsError::Unsupported),
         };
-        let id = fs.object_id(local)?.ok_or(FsError::Unsupported)?;
-        let stat = fs.stat(local)?;
         Ok(ObjectMetadata {
             stat,
             mount_id: index as u64 + 1,

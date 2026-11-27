@@ -2,28 +2,37 @@
 //! never decoded object numbers or application cwd strings.
 use alloc::sync::Arc;
 use spin::Mutex;
+use sunlight_fs::{BlockDevice, NullDevice};
 use sunlight_fs::{FileHandle, FileStat, FileSystem, FileType, FsError, Tmpfs, Vfs};
 
 /// Owns the backend independently of a service's mount-table lifetime. Each pin
 /// owns generation-tagged backend handles; rename does not change their object.
 /// The separate boot share-page adapter is not part of this mount table.
-pub struct DirectoryNamespace {
-    filesystem: Backend,
+pub struct DirectoryNamespace<D: BlockDevice = NullDevice> {
+    filesystem: Backend<D>,
 }
 
 /// Root and relative starting directory acquired in one serialized operation.
 /// Handles and backend access stay private so callers cannot close/reuse them.
 /// Store this value in `retention::Table`; Drop closes both handles exactly once.
-pub struct DirectoryPair {
-    filesystem: Backend,
+pub struct DirectoryPair<D: BlockDevice = NullDevice> {
+    filesystem: Backend<D>,
     root: FileHandle,
     directory: FileHandle,
 }
 
-#[derive(Clone)]
-enum Backend {
+enum Backend<D: BlockDevice> {
     Isolated(Arc<Mutex<Tmpfs>>),
-    Mounted(Arc<Mutex<Vfs>>),
+    Mounted(Arc<Mutex<Vfs<D>>>),
+}
+
+impl<D: BlockDevice> Clone for Backend<D> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Isolated(fs) => Self::Isolated(fs.clone()),
+            Self::Mounted(fs) => Self::Mounted(fs.clone()),
+        }
+    }
 }
 
 impl DirectoryNamespace {
@@ -38,6 +47,12 @@ impl DirectoryNamespace {
     }
 
     pub fn mounted(filesystem: Vfs) -> Result<Self, FsError> {
+        Self::mount_owner(filesystem)
+    }
+}
+
+impl<D: BlockDevice> DirectoryNamespace<D> {
+    fn mount_owner(filesystem: Vfs<D>) -> Result<Self, FsError> {
         Ok(Self {
             filesystem: Backend::Mounted(
                 Arc::try_new(Mutex::new(filesystem)).map_err(|_| FsError::NoMemory)?,
@@ -45,7 +60,7 @@ impl DirectoryNamespace {
         })
     }
 
-    pub fn shared(&self) -> Arc<Mutex<Vfs>> {
+    pub fn shared(&self) -> Arc<Mutex<Vfs<D>>> {
         match &self.filesystem {
             Backend::Mounted(fs) => Arc::clone(fs),
             Backend::Isolated(_) => panic!("isolated fixture has no mounted VFS"),
@@ -63,7 +78,7 @@ impl DirectoryNamespace {
     /// Resolve canonical filesystem-local policy paths, rejecting escapes and
     /// non-directories before ownership is returned. This does not grant search
     /// permission, bind a caller/scope, or implement request path traversal.
-    pub fn pin(&self, root: &str, directory: &str) -> Result<DirectoryPair, FsError> {
+    pub fn pin(&self, root: &str, directory: &str) -> Result<DirectoryPair<D>, FsError> {
         canonical(root)?;
         canonical(directory)?;
         if root != "/"
@@ -96,7 +111,7 @@ impl DirectoryNamespace {
     }
 }
 
-impl DirectoryPair {
+impl<D: BlockDevice> DirectoryPair<D> {
     pub fn cwd(&self) -> Result<alloc::string::String, FsError> {
         let mut bytes = [0; 4096];
         let len = match &self.filesystem {
@@ -168,7 +183,9 @@ impl DirectoryPair {
             Backend::Isolated(_) => Err(FsError::Unsupported),
         }
     }
+}
 
+impl DirectoryPair {
     pub(crate) fn open_file(
         &self,
         path: &str,
@@ -191,7 +208,9 @@ impl DirectoryPair {
             Backend::Isolated(_) => Err(FsError::Unsupported),
         }
     }
+}
 
+impl<D: BlockDevice> DirectoryPair<D> {
     /// Observe the retained objects under one backend lock, without pathname
     /// relookup. IDs are backend-local diagnostics, never wire lease identities.
     pub fn metadata(&self) -> Result<[(u64, FileStat); 2], FsError> {
@@ -216,7 +235,7 @@ impl DirectoryPair {
     }
 }
 
-impl Drop for DirectoryPair {
+impl<D: BlockDevice> Drop for DirectoryPair<D> {
     fn drop(&mut self) {
         match &self.filesystem {
             Backend::Isolated(fs) => {
@@ -259,7 +278,10 @@ fn open_directory(fs: &mut Tmpfs, path: &str) -> Result<FileHandle, FsError> {
     fs.open(path)
 }
 
-fn open_mounted_directory(fs: &mut Vfs, path: &str) -> Result<FileHandle, FsError> {
+fn open_mounted_directory<D: BlockDevice>(
+    fs: &mut Vfs<D>,
+    path: &str,
+) -> Result<FileHandle, FsError> {
     if fs.stat(path)?.file_type != FileType::Directory {
         return Err(FsError::NotDir);
     }
@@ -282,3 +304,6 @@ fn canonical(path: &str) -> Result<(), FsError> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+pub mod attachment;

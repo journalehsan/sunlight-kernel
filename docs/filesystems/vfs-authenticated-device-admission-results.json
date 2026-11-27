@@ -1,0 +1,96 @@
+{
+  "stage": "VFS-N1F",
+  "date": "2026-11-27",
+  "base_commit": "eab8ee857ceb0cbafff0851e0ad813a5565eee9a",
+  "status": "QUALIFIED_HOST_ONLY",
+  "authority": "Existing N1E whole-device lease authority; opaque live host session and media bindings",
+  "extent_policy": "Checked aligned byte ranges, one logical block per data operation, whole-device exclusivity",
+  "focused": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline device_lease::admission",
+    "passed": 8,
+    "log": "target/vfs-n1f/focused.log"
+  },
+  "n1e_regressions": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline device_lease::tests",
+    "passed": 14,
+    "log": "target/vfs-n1f/n1e.log"
+  },
+  "n1d_regressions": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-fs -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline attachment",
+    "passed": 7,
+    "log": "target/vfs-n1f/n1d.log"
+  },
+  "host": {
+    "status": "PASS",
+    "command": "cargo test -p sunlight-fs -p sunlight-ipc -p sunlight-vfs-server --lib --target x86_64-unknown-linux-gnu --offline",
+    "passed": {"sunlight-fs": 118, "sunlight-ipc": 169, "sunlight-vfs-server": 82},
+    "log": "target/vfs-n1f/host.log"
+  },
+  "registration": {
+    "status": "PASS",
+    "command": "python3 tools/test_vfs_registration_host.py",
+    "passed": 108,
+    "log": "target/vfs-n1f/registration.log"
+  },
+  "prior_host_baseline": 469,
+  "baseline_tests_missing_by_name": 0,
+  "host_total": 477,
+  "accounting": {
+    "max_live_registration_bindings": 16,
+    "max_data_credits": 4,
+    "max_flush_credits": 1,
+    "cycles": 64,
+    "end_registration_bindings": 0,
+    "end_data_credits": 0,
+    "end_flush_credits": 0,
+    "end_lease": null,
+    "rejected_admission_consumes_credit": false,
+    "ambiguity_fence_retained_after_settlement": true
+  },
+  "media": {
+    "planned_replacement": "Fresh generation after drain, durable release and removal",
+    "unplanned_removal": "Old work settles against retained generation; replacement stays fenced",
+    "delayed_old_completion_after_replacement": "Rejected duplicate without consuming current data or flush credit"
+  },
+  "compilation": {
+    "kernel": {
+      "status": "PASS",
+      "command": "CARGO_INCREMENTAL=0 cargo build -p sunlight-kernel --offline",
+      "log": "target/vfs-n1f/kernel.log"
+    },
+    "service": {
+      "status": "PASS",
+      "command": "RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' cargo build --release -p sunlight-vfs-server --offline",
+      "log": "target/vfs-n1f/service.log"
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "command": "python3 tools/audit_vfs_cutover.py --no-growth",
+    "exit": 1,
+    "references": 71,
+    "unmatched": 4,
+    "script_changed": false,
+    "inventory_changed": false,
+    "output_identical_to_n1e": true,
+    "log": "target/vfs-n1f/guard.log"
+  },
+  "historical_findings": {
+    "sys_linux_statfs": "OPEN",
+    "linux_procfs::mountinfo_snapshot": "OPEN",
+    "private_mmap": "OPEN",
+    "storage::mount": "OPEN"
+  },
+  "fake_transport_qualification": "PASS",
+  "real_storage_transfer": "NOT_RUN",
+  "ordinary_native_validation": "NOT_RUN_GUARD_BLOCKED",
+  "n1d_device_attachment_integration": "CONTRACT_ONLY",
+  "production_routing_changed": false,
+  "scratch_activated": false,
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

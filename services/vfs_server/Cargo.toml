@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-vfs-server"
-version = "0.2.9090-alpha.2"
+version = "0.2.9485-alpha.2"
+
 
 
 
@@ -691,11 +692,15 @@ sunlight-fat = { path = "../../sunlight-fat" }
 heapless = "0.8"
 
 [features]
+attachment-transactions = ["sunlight-fs/attachment-transactions"]
 boot-resources = ["sunlight-fs/boot-resources"]
 # Fault injection only in the dedicated native stat failure gate.
 stat-failure-test = ["sunlight-ipc/stat-failure-test"]
 # Bounded rendezvous on real authorization requests; absent in normal images.
 production-grant-test = []
+vfs-n1j-exit-test = []
+vfs-n1m-block-test = []
 
 [dev-dependencies]
+sunlight-fat = { path = "../../sunlight-fat", features = ["testutil"] }
 sunlight-mm = { path = "../../sunlight-mm", features = ["testutil"] }
