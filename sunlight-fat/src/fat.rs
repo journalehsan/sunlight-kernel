@@ -29,6 +29,8 @@ pub struct Fat32<D: BlockDevice> {
     pub(super) rc: u32,  // root cluster number
     pub(super) cluster_count: u32,
     pub(super) free_clusters: Option<u32>,
+    fsinfo_sectors: [Option<u32>; 2],
+    fsinfo_invalidated: bool,
 }
 
 /// Result of a path lookup: enough to read the object later.
@@ -78,6 +80,8 @@ impl<D: BlockDevice> Fat32<D> {
         let fat16_size = u16::from_le_bytes([s[22], s[23]]);
         let fat32_size = u32::from_le_bytes([s[36], s[37], s[38], s[39]]);
         let root_cluster = u32::from_le_bytes([s[44], s[45], s[46], s[47]]);
+        let info = u32::from(u16::from_le_bytes([s[48], s[49]]));
+        let backup = u32::from(u16::from_le_bytes([s[50], s[51]]));
         let total16 = u16::from_le_bytes([s[19], s[20]]) as u32;
         let total32 = u32::from_le_bytes([s[32], s[33], s[34], s[35]]);
         let total_sectors = if total16 != 0 { total16 } else { total32 };
@@ -111,6 +115,11 @@ impl<D: BlockDevice> Fat32<D> {
         {
             return None;
         }
+        let primary_info = (info != 0 && info < reserved && info != backup).then_some(info);
+        let backup_info = primary_info
+            .filter(|_| backup != 0 && backup < reserved)
+            .map(|sector| backup + sector)
+            .filter(|&sector| sector < reserved);
         Some(Fat32 {
             dev,
             spc,
@@ -121,6 +130,8 @@ impl<D: BlockDevice> Fat32<D> {
             rc: root_cluster,
             cluster_count,
             free_clusters: None,
+            fsinfo_sectors: [primary_info, backup_info],
+            fsinfo_invalidated: false,
         })
     }
 

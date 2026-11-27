@@ -1,0 +1,45 @@
+{
+  "stage": "VFS-D1A",
+  "date": "2026-11-27",
+  "status": "HOST_COMPONENT_PASS",
+  "host": {
+    "registration": {"passed": 111, "log": "target/vfs-d1a/registration.log"},
+    "library_suites": {"passed": 411, "log": "target/vfs-d1a/host.log"},
+    "focused": [
+      "successful_install_consumes_open_and_retired_epoch_cannot_install",
+      "failed_install_retries_exact_close_until_ack_without_slot_growth",
+      "caller_retirement_preserves_uninstalled_open_cleanup_until_epoch_withdrawal",
+      "rejected_open_reply_and_repeated_close_restore_backend_baseline"
+    ],
+    "successful_install_uses_host_installer_callback": true,
+    "repeated_compensation_cycles": 100,
+    "repeated_backend_lifecycles": 100,
+    "shared_cursor_and_pread": "PASS",
+    "exit_and_exec": "HOST_COMPONENT_PASS"
+  },
+  "regressions_by_name": {
+    "baseline": {"passed": 481, "references": ["target/vfs-n1g/host.log", "target/vfs-n1g/registration.log"]},
+    "n1h": {"passed": 59, "references": ["target/vfs-n1h/transport.log", "target/vfs-n1h/lease.log"]},
+    "n1d": {"passed": 7, "reference": "target/vfs-n1d/focused.log"},
+    "n1l": {"passed": 3, "reference": "target/vfs-n1l/focused.log"},
+    "fat": {"passed": 14, "log": "target/vfs-d1a/fat.log", "reference": "target/vfs-n1p/fat-host-final.log"},
+    "n1n_split_and_unsettled_withdrawal": "PASS"
+  },
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-d1a/kernel.log"},
+    "release_service": {"status": "PASS", "log": "target/vfs-d1a/service.log"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched": ["statfs", "ProcFS mountinfo", "private mmap", "runtime FAT mount"],
+    "logs": ["target/vfs-d1a/guard.log", "target/vfs-d1a/guard-no-growth.log"]
+  },
+  "historical_native_n1p": "vfs-fat32-fsinfo-consistency-results.json",
+  "native_descriptor_execution": "NOT_RUN",
+  "production_descriptor_routing": "BLOCKED",
+  "broad_l1c_3": "BLOCKED",
+  "production_mmap_activated": false,
+  "vfs_scratch_activated": false,
+  "demand_backed_main_stacks_default": false
+}

@@ -1,0 +1,49 @@
+{
+  "stage": "VFS-N1O",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "prerequisites": {
+    "bounded_disposable_grant": {"status": "PASS", "absolute_lba_inclusive": [2048, 131071], "copied_bytes": 512},
+    "exact_reservation_and_native_readiness": {"status": "PASS", "scope": "single CPU, single registered service owner"},
+    "split_settlement_and_release": {"status": "PASS", "settle_opcode": "0x106", "release_opcode": "0x107"}
+  },
+  "native": {
+    "status": "PASS",
+    "cycles": 4,
+    "persistent_remounts": 3,
+    "lease_generations": [3, 50, 72, 94],
+    "pending_per_settlement": 0,
+    "mapping_users_per_settlement": 0,
+    "retained_dma_bytes": 20480,
+    "fixed_queue_base": "0x10bd000",
+    "fixed_bounce_base": "0x10c1000",
+    "serial": "target/vfs-n1o-qemu-6wc71hkx/serial.log",
+    "run": "target/vfs-n1o/native-4.log",
+    "isolated_kernel_build": "target/vfs-n1o/probe-kernel-3.log",
+    "isolated_service_build": "target/vfs-n1o/probe-service-3.log",
+    "fault_injection": "NOT_RUN",
+    "physical_dma_reclamation": {"status": "BLOCKED", "execution": "NOT_RUN"}
+  },
+  "image_integrity": {
+    "unknown_fsinfo": {"status": "PASS", "fsck_exit": 0, "unchanged_prefix_bytes": 1048576, "changed_volume_lbas": [32, 1025, 2018, 2020], "files": {"NEW.TXT": "native FAT32 attachment", "KEEP.TXT": "untouched"}},
+    "populated_fsinfo": {"status": "FAIL", "native_cycles": "PASS", "file_contents": "PASS", "fsck_exit": 1, "stored_free_clusters": 127004, "actual_free_clusters": 127003, "run": "target/vfs-n1o/native-3.log", "serial": "target/vfs-n1o-qemu-uzktr8hg/serial.log", "remaining_prerequisite": "Maintain or durably invalidate FSInfo allocation summaries in the FAT writer."},
+    "earlier_probe_attempts": ["target/vfs-n1o/native.log", "target/vfs-n1o/native-2.log"]
+  },
+  "regressions": {
+    "baseline": {"status": "PASS", "matched_by_name": 481},
+    "n1h": {"status": "PASS", "matched_by_name": 59},
+    "n1d": {"status": "PASS", "matched_by_name": 7},
+    "n1l": {"status": "PASS", "matched_by_name": 3},
+    "n1n_split_withdrawal": "PASS",
+    "logs": ["target/vfs-n1o/host.log", "target/vfs-n1o/registration.log"],
+    "production_kernel": {"status": "PASS", "log": "target/vfs-n1o/kernel.log"},
+    "release_service": {"status": "PASS", "log": "target/vfs-n1o/service.log"}
+  },
+  "ownership_guard": {"status": "FAIL", "references": 71, "unmatched": 4, "logs": ["target/vfs-n1o/guard.log", "target/vfs-n1o/guard-no-growth.log"]},
+  "native_application_fd_installation": "BLOCKED",
+  "production_routing_changed": false,
+  "scratch_activated": false,
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

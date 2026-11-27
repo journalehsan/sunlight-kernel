@@ -226,6 +226,8 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
                     sunlight_libc::yield_now();
                 }
             }
+            #[cfg(feature = "vfs-d1b-test")]
+            run_native_descriptor_probe();
             #[cfg(feature = "vfs-l1c-file-ipc-test")]
             run_file_ipc_accounting();
             #[cfg(all(feature = "vfs-l1c-parent-lifecycle-test", not(feature = "vfs-l1c-file-ipc-test")))]
@@ -1028,6 +1030,26 @@ fn verify_file_caller(cap: CapabilityToken) {
     )
     .expect("native file caller");
     assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
+}
+
+#[cfg(feature = "vfs-d1b-test")]
+fn run_native_descriptor_probe() {
+    for cycle in 0..(3 + u64::from(cfg!(feature = "vfs-d2a-test"))) {
+        assert_eq!(unsafe { sunlight_libc::sys::syscall2(0xf1c1, 21, 0) }, 1);
+        let pid = unsafe { sunlight_libc::sys::syscall2(0xf1c1, 0, cycle) };
+        assert!(pid != 0 && pid != u64::MAX);
+        assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
+        assert!(sunlight_libc::waitpid(pid).is_err());
+        let start = sunlight_ipc::monotonic_millis();
+        while unsafe { sunlight_libc::sys::syscall2(0xf1c1, 22, pid) } == 0 {
+            assert!(sunlight_ipc::monotonic_millis() - start < 5000);
+            sunlight_libc::yield_now();
+        }
+    }
+    debug_log("[VFS-D1B] complete");
+    loop {
+        sunlight_libc::yield_now();
+    }
 }
 
 #[cfg(feature = "vfs-l1c-file-ipc-test")]

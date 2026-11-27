@@ -15,6 +15,7 @@ pub use share::{FatShareFile, FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 
 #[cfg(test)]
 mod tests {
+    mod fsinfo;
     use crate::testimg::FatImageBuilder;
     use crate::Fat32;
     use alloc::vec;

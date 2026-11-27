@@ -188,7 +188,15 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
     /// delivers exit/exec teardown; local adapters must authenticate it likewise.
     pub fn retire_file_owner(&mut self, caller: Caller) {
         for entry in self.entries.iter_mut().flatten() {
+            #[cfg(feature = "vfs-d1b-test")]
+            let before = entry.files.len();
             entry.files.retire_caller(caller);
+            #[cfg(feature = "vfs-d1b-test")]
+            sunlight_ipc::debug_log(&alloc::format!(
+                "[VFS-D1B] owner retirement pid={} incarnation={} image={} epoch={} handles={}->{}",
+                caller.pid, caller.incarnation, caller.address_space_generation,
+                entry.registration.epoch, before, entry.files.len(),
+            ));
         }
     }
 
@@ -392,6 +400,40 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
             .files
             .transfer(caller, token, new_caller)
             .map_err(Error::Filesystem)
+    }
+
+    pub fn dispatch_file(
+        &mut self,
+        control: &mut impl control::Control,
+        registration: Registration,
+        bytes: &[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES],
+    ) -> bool {
+        use sunlight_ipc::vfs_rpc::file_transport as api;
+        let Some(reply_bytes) = self.file_request(control, registration, bytes) else {
+            return false;
+        };
+        let accepted = control.file_reply(registration.epoch, &reply_bytes);
+        #[cfg(feature = "vfs-d1b-test")]
+        {
+            let request = api::Request::decode(bytes).unwrap();
+            let reply = api::Reply::decode(&reply_bytes).unwrap();
+            sunlight_ipc::debug_log(&alloc::format!(
+                "[VFS-D1B] service pid={} incarnation={} image={} epoch={} id={} op={} token={} result={} errno={} handles={} ack={}",
+                request.caller.pid, request.caller.incarnation, request.caller.address_space_generation,
+                registration.epoch, request.request_id, request.op, request.token, reply.result0,
+                reply.errno, self.entries.iter().flatten().find(|entry| entry.registration == registration)
+                    .map_or(0, |entry| entry.files.len()), u8::from(accepted),
+            ));
+        }
+        if accepted {
+            return true;
+        }
+        if let Ok(reply) = api::Reply::decode(&reply_bytes) {
+            if reply.op == api::OPEN && reply.errno == 0 {
+                let _ = self.close_file(registration, reply.caller, reply.result0);
+            }
+        }
+        false
     }
 
     /// Dispatch one independently authenticated copied file request. Ordinary

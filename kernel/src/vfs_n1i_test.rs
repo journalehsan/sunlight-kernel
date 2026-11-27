@@ -101,14 +101,19 @@ pub(crate) fn sector(lba: u64) -> Extent {
 }
 
 pub(crate) fn initialize(mut device: VirtioBlk) -> Probe {
-    assert_eq!(device.block_count(), 8192);
+    let (blocks, marker_prefix): (u64, &[u8]) = if cfg!(feature = "vfs-n1o-test") {
+        (131072, b"VFS-N1O-DISPOSABLE-ONLY!")
+    } else {
+        (8192, b"VFS-N1H-DISPOSABLE-ONLY!")
+    };
+    assert_eq!(device.block_count(), blocks);
     assert_eq!(device.geometry().logical_block, 512);
     assert!(device.supports_write() && device.supports_flush());
     let mut marker = [0; 512];
     let receipt = unsafe { device.read_typed(0, &mut marker) };
     let mut previous = None;
     verify(&device, &mut previous, receipt, WireOp::Read, 0);
-    assert!(marker.starts_with(b"VFS-N1H-DISPOSABLE-ONLY!"));
+    assert!(marker.starts_with(marker_prefix));
 
     Probe {
         device,

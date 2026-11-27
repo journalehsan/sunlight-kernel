@@ -18,6 +18,8 @@ struct Binding {
     image_retired: bool,
     #[cfg(feature = "vfs-n1m-test")]
     active: Option<Lease>,
+    #[cfg(feature = "vfs-n1m-test")]
+    settled: Option<Transition>,
 }
 
 struct Qualification {
@@ -33,7 +35,12 @@ static TEST: Mutex<Option<Qualification>> = Mutex::new(None);
 
 const WHOLE: Extent = Extent {
     offset: 0,
-    length: 8192 * 512,
+    length: BLOCKS * 512,
+};
+const BLOCKS: u64 = if cfg!(feature = "vfs-n1o-test") {
+    131072
+} else {
+    8192
 };
 const READ_WRITE: Rights = Rights {
     read: true,
@@ -49,7 +56,7 @@ pub(crate) fn install(device: VirtioBlk, queue: PhysAddr, bounce: PhysAddr) {
     let media = probe
         .authority
         .register_media(Geometry {
-            blocks: 8192,
+            blocks: BLOCKS,
             block_bytes: 512,
         })
         .unwrap();
@@ -85,6 +92,8 @@ pub(crate) fn bind(registration: Registration) {
         image_retired: false,
         #[cfg(feature = "vfs-n1m-test")]
         active: None,
+        #[cfg(feature = "vfs-n1m-test")]
+        settled: None,
     });
     crate::serial_println!("[VFS-N1J] authenticated {:?}", registration);
 }
@@ -177,7 +186,10 @@ pub(crate) fn native_block(
     bytes: &mut Block,
 ) -> Result<u64, Error> {
     let mut slot = TEST.lock();
-    let test = slot.as_mut().filter(|test| !test.done).ok_or(Error::Unauthorized)?;
+    let test = slot
+        .as_mut()
+        .filter(|test| !test.done)
+        .ok_or(Error::Unauthorized)?;
     let binding = test.binding.as_mut().ok_or(Error::Unauthorized)?;
     let owner = binding.registration.owner;
     if owner.pid != caller.pid
@@ -194,25 +206,44 @@ pub(crate) fn native_block(
             return Err(Error::Busy);
         }
         let lease = probe.authority.acquire_authenticated(
-            &test.media, &binding.session, WHOLE, READ_WRITE,
+            &test.media,
+            &binding.session,
+            WHOLE,
+            READ_WRITE,
         )?;
         let generation = lease.generation();
         binding.active = Some(lease);
         return Ok(generation);
     }
-    let lease = binding.active.as_ref().filter(|lease| lease.generation() == generation)
+    let lease = binding
+        .active
+        .as_ref()
+        .filter(|lease| lease.generation() == generation)
         .ok_or(Error::Stale)?;
+    if cfg!(feature = "vfs-n1o-test") && matches!(op, 0x104 | 0x105) {
+        return Err(Error::Unauthorized);
+    }
     match op {
         0x101..=0x102 | 0x105 => {
-            if !(128..192).contains(&lba) || (op == 0x105 && lba != 191) {
+            let window = if cfg!(feature = "vfs-n1o-test") {
+                2048..BLOCKS
+            } else {
+                128..192
+            };
+            if !window.contains(&lba) || (op == 0x105 && lba != 191) {
                 return Err(Error::Unauthorized);
             }
             let range = sector(lba);
             if op == 0x101 {
-                let ticket = probe.authority.read_authenticated(&binding.session, lease, range)?;
+                let ticket = probe
+                    .authority
+                    .read_authenticated(&binding.session, lease, range)?;
                 *bytes = probe.execute(ticket);
             } else {
-                let ticket = probe.authority.write_authenticated(&binding.session, lease, range, *bytes)?;
+                let ticket =
+                    probe
+                        .authority
+                        .write_authenticated(&binding.session, lease, range, *bytes)?;
                 if op == 0x105 {
                     let (lba, payload) = probe.authority.command(&ticket)?;
                     let id = unsafe { probe.device.start_write(lba, &payload.unwrap()) }
@@ -236,6 +267,39 @@ pub(crate) fn native_block(
             probe.authority.finish(&release)?;
             binding.active = None;
         }
+        0x106 => {
+            let release = probe.authority.begin_release(lease)?;
+            probe.barrier(&release);
+            let snapshot = probe.authority.snapshot();
+            assert_eq!(
+                (
+                    snapshot.outstanding,
+                    snapshot.retained_data,
+                    snapshot.flush_pending
+                ),
+                (0, 0, false)
+            );
+            assert_eq!(probe.device.outstanding(), None);
+            assert_eq!(probe.device.mapping_users(), Some(0));
+            binding.settled = Some(release);
+            crate::serial_println!(
+                "[VFS-N1O] settled lease={} pending=0 mapping_users=0 queue={:#x} bounce={:#x} retained_bytes={}",
+                generation, test.queue.as_u64(), test.bounce.as_u64(), (QUEUE_PAGES + 1) * 4096
+            );
+        }
+        0x107 => {
+            probe
+                .authority
+                .finish(binding.settled.as_ref().ok_or(Error::Stale)?)?;
+            assert_eq!(probe.authority.snapshot().status, Status::Vacant);
+            binding.settled = None;
+            binding.active = None;
+            crate::serial_println!("[VFS-N1O] released lease={}", generation);
+        }
+        0x108 => probe.authority.transport_lost(lease)?,
+        0x109 => probe
+            .authority
+            .with_attachment_pin(&binding.session, lease, || ())?,
         _ => return Err(Error::Unauthorized),
     }
     Ok(0)
@@ -255,7 +319,11 @@ pub(crate) fn withdraw(registration: Registration) {
     authority.withdraw_registration(&binding.session).unwrap();
     #[cfg(feature = "vfs-n1m-test")]
     if let Some(lease) = binding.active.take() {
-        binding.retirement = Some(authority.retire(&lease).unwrap());
+        if binding.settled.is_some() || matches!(authority.snapshot().status, Status::Fenced(_)) {
+            let _ = authority.transport_lost(&lease);
+        } else {
+            binding.retirement = Some(authority.retire(&lease).unwrap());
+        }
         return;
     }
     let Some((lease, write, _)) = &binding.pending else {

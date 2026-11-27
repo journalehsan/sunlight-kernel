@@ -13,6 +13,11 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
+#[cfg(all(debug_assertions, feature = "vfs_d2a_test"))]
+pub(crate) mod service;
+
+const MMAP_REGION_BASE: u64 = 0x10_0000_0000;
+
 // mmap flags
 pub const MAP_PRIVATE: u32 = 0x02;
 pub const MAP_SHARED: u32 = 0x01;
@@ -311,6 +316,7 @@ pub fn sys_mmap(
             MappingKind::Anonymous,
             false,
             Some(&mut populate),
+            false,
         );
     }
     if fd != -1 || offset != 0 {
@@ -334,7 +340,7 @@ pub fn sys_mmap(
         };
         let before = counts(sched, pmm);
         let result = map_private_kind(
-            addr, length, prot, flags, pmm, sched, MappingKind::Anonymous, false, None,
+            addr, length, prot, flags, pmm, sched, MappingKind::Anonymous, false, None, false,
         );
         assert!(result.is_err());
         assert_eq!(before, counts(sched, pmm));
@@ -354,6 +360,7 @@ pub fn sys_mmap(
         MappingKind::Anonymous,
         demand_backed,
         None,
+        false,
     )
 }
 
@@ -490,6 +497,7 @@ pub fn map_brk(
         MappingKind::Brk,
         false,
         None,
+        false,
     )
 }
 
@@ -505,6 +513,7 @@ fn map_private_kind(
     kind: MappingKind,
     demand_backed: bool,
     mut populate: Option<&mut PagePopulator<'_>>,
+    record_fixed_tables: bool,
 ) -> Result<u64, MmapError> {
     let protection = match normalize_protection(prot) {
         Err(MmapError::PermissionDenied) => {
@@ -531,9 +540,6 @@ fn map_private_kind(
     if flags & MAP_PRIVATE == 0 || (flags & MAP_ANONYMOUS == 0 && populate.is_none()) {
         return Err(MmapError::InvalidFlags);
     }
-
-    // Base of the anonymous mmap region for hint-less mappings.
-    const MMAP_REGION_BASE: u64 = 0x10_0000_0000u64;
 
     let (page_count, span) = checked_page_layout(length).map_err(|_| MmapError::InvalidAddress)?;
 
@@ -640,6 +646,7 @@ fn map_private_kind(
             .map_err(mapping_error)?;
         return map_fixed_transaction(
             map_addr, page_count, page_flags, plan, pid, pmm, sched, hhdm_offset, populate,
+            record_fixed_tables,
         );
     }
     let reservation = Some(sched.current_process().address_space.preflight_region(region)
@@ -1030,6 +1037,7 @@ fn map_fixed_transaction(
     sched: &mut Scheduler,
     hhdm: VirtAddr,
     mut populate: Option<&mut PagePopulator<'_>>,
+    record_fixed_tables: bool,
 ) -> Result<u64, MmapError> {
     use crate::memory::retirement::{Backing, MappingPage, OWNERS};
     let count = usize::try_from(count).map_err(|_| MmapError::NoMemory)?;
@@ -1061,6 +1069,10 @@ fn map_fixed_transaction(
             None => {}
         }
     }
+    let mut created_tables = Vec::new();
+    if record_fixed_tables {
+        created_tables.try_reserve_exact(count).map_err(|_| MmapError::NoMemory)?;
+    }
     let token = {
         let mut owners = OWNERS.lock();
         if populate.is_some() {
@@ -1075,8 +1087,16 @@ fn map_fixed_transaction(
         crate::memory::swap::reserve_candidates(count).map_err(|_| MmapError::NoMemory)?;
         for (index, mapping) in pages.iter().enumerate() {
             let page = Page::from_start_address(VirtAddr::new(mapping.address)).map_err(|_| MmapError::InvalidAddress)?;
-            unsafe { sched.process_mut_by_pid(pid).ok_or(MmapError::InternalInvariant)?
-                .address_space.prepare_transaction_tables(page, pmm, hhdm).map_err(mapping_error)?; }
+            let space = &sched.process_mut_by_pid(pid).ok_or(MmapError::InternalInvariant)?.address_space;
+            unsafe {
+                if record_fixed_tables {
+                    created_tables.push((page, [None; 3]));
+                    let (_, created) = created_tables.last_mut().unwrap();
+                    space.prepare_recorded_transaction_tables(page, pmm, hhdm, created)
+                } else {
+                    space.prepare_transaction_tables(page, pmm, hhdm)
+                }.map_err(mapping_error)?;
+            }
             let frame = pmm.alloc_frame_owned(pid as u32).ok_or(MmapError::NoMemory)?;
             assert!(OWNERS.lock().prepare_mapping_frame(&token, index, frame.as_u64()));
             if !crate::memory::security::sanitize_user_frame(frame, hhdm) { return Err(MmapError::NoMemory); }
@@ -1087,7 +1107,7 @@ fn map_fixed_transaction(
         Ok(())
     })();
     if let Err(error) = preparation {
-        cancel_fixed_transaction(&token, pid, pmm, sched, hhdm);
+        cancel_fixed_transaction(&token, pid, pmm, sched, hhdm, &mut created_tables);
         return Err(error);
     }
     assert!(OWNERS.lock().begin_mapping(&token));
@@ -1096,13 +1116,13 @@ fn map_fixed_transaction(
     for index in 0..count {
         #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
         if crate::memory::transaction_gate::fail_install(index) {
-            cancel_fixed_transaction(&token, pid, pmm, sched, hhdm);
+            cancel_fixed_transaction(&token, pid, pmm, sched, hhdm, &mut created_tables);
             return Err(MmapError::NoMemory);
         }
         let result = unsafe { sched.process_mut_by_pid(pid).expect("mapping owner process lost")
             .address_space.write_transaction_page(&token, index, false, hhdm) };
         if let Err(error) = result {
-            cancel_fixed_transaction(&token, pid, pmm, sched, hhdm);
+            cancel_fixed_transaction(&token, pid, pmm, sched, hhdm, &mut created_tables);
             return Err(mapping_error(error));
         }
         assert!(OWNERS.lock().mapping_installed(&token, index));
@@ -1127,6 +1147,7 @@ fn cancel_fixed_transaction(
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
     hhdm: VirtAddr,
+    created_tables: &mut [(Page<Size4KiB>, crate::process::address_space::CreatedMappingTables)],
 ) {
     use crate::memory::retirement::OWNERS;
     let installed = OWNERS.lock().cancel_mapping(token).expect("mapping cancellation state");
@@ -1156,6 +1177,12 @@ fn cancel_fixed_transaction(
     #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
     crate::memory::retirement::mapping_receipt(token, "rolled-back", false);
     resolve_fixed_transaction(token, pmm, hhdm);
+    // The completed fixed retirement releases its slot before table rollback.
+    // Reverse preparation order keeps each recorded parent valid until all
+    // children attached by this attempt have been withdrawn.
+    for (page, created) in created_tables.iter_mut().rev() {
+        super::address_space::AddressSpace::rollback_created_tables(created, identity, *page, pmm);
+    }
 }
 
 fn resolve_fixed_transaction(

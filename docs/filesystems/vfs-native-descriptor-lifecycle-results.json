@@ -1,0 +1,497 @@
+{
+  "stage": "VFS-D1B",
+  "date": "2026-11-27",
+  "status": "PASS",
+  "scope": "isolated single-vCPU native qualification",
+  "native": {
+    "feature": "vfs_d1b_test",
+    "elf": {
+      "path": "target/vfs-d1b/lifecycle.elf",
+      "sha256": "7945a167c7fcb148431b9939acc5c7bb5914a64e89c533fbcad36489eaf0f81b"
+    },
+    "iso": {
+      "path": "target/vfs-d1b/lifecycle.iso",
+      "sha256": "0e081910ae559ebfb68744e684ffce537f6733cc030d4369b0443cb1b8e59ae0"
+    },
+    "serial": "target/vfs-d1b/final.serial.log",
+    "qemu_args": "target/vfs-d1b/final.args",
+    "cycles": [
+      {
+        "identity": {
+          "pid": 5,
+          "incarnation": 683,
+          "image": 1351,
+          "namespace": 1,
+          "generation": 2,
+          "epoch": 1
+        },
+        "pre_enqueue_line": 1902,
+        "ring3_line": 1910,
+        "baseline": {
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "line": 1876,
+          "service_handles": 0,
+          "backend_handles": 2
+        },
+        "kernel_fd_full": {
+          "pid": 5,
+          "image": 1351,
+          "slots": 256,
+          "service_rows": 1,
+          "service_refs": 256,
+          "owned_frames": 535
+        },
+        "fd_full_lines": [
+          1928,
+          1932
+        ],
+        "final_close": {
+          "pid": 5,
+          "incarnation": 683,
+          "image": 1351,
+          "epoch": 1,
+          "id": 13,
+          "op": 6,
+          "token": 1,
+          "result": 0,
+          "errno": 0,
+          "handles": 0,
+          "ack": 1,
+          "line": 1926
+        },
+        "compensation": {
+          "open_line": 1929,
+          "install_failure_line": 1931,
+          "first_close_line": 1934,
+          "uncertain_line": 1933,
+          "confirmed_retry_line": 1937,
+          "request_id": 15,
+          "token": 3,
+          "service_handles": [
+            1,
+            2,
+            1,
+            1
+          ]
+        },
+        "backend_handle_transitions": [
+          {
+            "line": 1912,
+            "before": 2,
+            "after": 3
+          },
+          {
+            "line": 1930,
+            "before": 3,
+            "after": 4
+          },
+          {
+            "line": 1935,
+            "before": 4,
+            "after": 3
+          },
+          {
+            "line": 1949,
+            "before": 3,
+            "after": 2
+          }
+        ],
+        "exec": {
+          "status": "NOT_RUN"
+        },
+        "file_owner_retirement_lines": [
+          1948
+        ],
+        "settled": {
+          "pid": 5,
+          "incarnation": 683,
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "owned_frames": 0,
+          "line": 1950,
+          "service_handles": 0,
+          "backend_handles": 2
+        }
+      },
+      {
+        "identity": {
+          "pid": 6,
+          "incarnation": 685,
+          "image": 1355,
+          "namespace": 1,
+          "generation": 4,
+          "epoch": 1
+        },
+        "pre_enqueue_line": 1974,
+        "ring3_line": 1984,
+        "baseline": {
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "line": 1951,
+          "service_handles": 0,
+          "backend_handles": 2
+        },
+        "kernel_fd_full": {
+          "pid": 6,
+          "image": 1355,
+          "slots": 256,
+          "service_rows": 1,
+          "service_refs": 256,
+          "owned_frames": 535
+        },
+        "fd_full_lines": [
+          2001,
+          2005
+        ],
+        "final_close": {
+          "pid": 6,
+          "incarnation": 685,
+          "image": 1355,
+          "epoch": 1,
+          "id": 29,
+          "op": 6,
+          "token": 4,
+          "result": 0,
+          "errno": 0,
+          "handles": 0,
+          "ack": 1,
+          "line": 1999
+        },
+        "compensation": {
+          "open_line": 2002,
+          "install_failure_line": 2004,
+          "first_close_line": 2007,
+          "uncertain_line": 2006,
+          "confirmed_retry_line": 2010,
+          "request_id": 31,
+          "token": 6,
+          "service_handles": [
+            1,
+            2,
+            1,
+            1
+          ]
+        },
+        "backend_handle_transitions": [
+          {
+            "line": 1986,
+            "before": 2,
+            "after": 3
+          },
+          {
+            "line": 2003,
+            "before": 3,
+            "after": 4
+          },
+          {
+            "line": 2008,
+            "before": 4,
+            "after": 3
+          },
+          {
+            "line": 2014,
+            "before": 3,
+            "after": 4
+          },
+          {
+            "line": 2030,
+            "before": 4,
+            "after": 3
+          },
+          {
+            "line": 2041,
+            "before": 3,
+            "after": 2
+          }
+        ],
+        "exec": {
+          "status": "PASS",
+          "transfer_line": 2026,
+          "replacement": {
+            "pid": 6,
+            "image": 1358,
+            "slots": 2,
+            "service_rows": 1,
+            "service_refs": 2,
+            "owned_frames": 535,
+            "line": 2025
+          },
+          "userspace_assertions_line": 2031
+        },
+        "file_owner_retirement_lines": [
+          2028,
+          2040
+        ],
+        "settled": {
+          "pid": 6,
+          "incarnation": 685,
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "owned_frames": 0,
+          "line": 2042,
+          "service_handles": 0,
+          "backend_handles": 2
+        }
+      },
+      {
+        "identity": {
+          "pid": 8,
+          "incarnation": 687,
+          "image": 1360,
+          "namespace": 1,
+          "generation": 7,
+          "epoch": 1
+        },
+        "pre_enqueue_line": 2069,
+        "ring3_line": 2077,
+        "baseline": {
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "line": 2043,
+          "service_handles": 0,
+          "backend_handles": 2
+        },
+        "kernel_fd_full": {
+          "pid": 8,
+          "image": 1360,
+          "slots": 256,
+          "service_rows": 1,
+          "service_refs": 256,
+          "owned_frames": 535
+        },
+        "fd_full_lines": [
+          2094,
+          2098
+        ],
+        "final_close": {
+          "pid": 8,
+          "incarnation": 687,
+          "image": 1360,
+          "epoch": 1,
+          "id": 49,
+          "op": 6,
+          "token": 8,
+          "result": 0,
+          "errno": 0,
+          "handles": 0,
+          "ack": 1,
+          "line": 2092
+        },
+        "compensation": {
+          "open_line": 2095,
+          "install_failure_line": 2097,
+          "first_close_line": 2100,
+          "uncertain_line": 2099,
+          "confirmed_retry_line": 2103,
+          "request_id": 51,
+          "token": 10,
+          "service_handles": [
+            1,
+            2,
+            1,
+            1
+          ]
+        },
+        "backend_handle_transitions": [
+          {
+            "line": 2079,
+            "before": 2,
+            "after": 3
+          },
+          {
+            "line": 2096,
+            "before": 3,
+            "after": 4
+          },
+          {
+            "line": 2101,
+            "before": 4,
+            "after": 3
+          },
+          {
+            "line": 2107,
+            "before": 3,
+            "after": 4
+          },
+          {
+            "line": 2123,
+            "before": 4,
+            "after": 3
+          },
+          {
+            "line": 2134,
+            "before": 3,
+            "after": 2
+          }
+        ],
+        "exec": {
+          "status": "PASS",
+          "transfer_line": 2119,
+          "replacement": {
+            "pid": 8,
+            "image": 1363,
+            "slots": 2,
+            "service_rows": 1,
+            "service_refs": 2,
+            "owned_frames": 535,
+            "line": 2118
+          },
+          "userspace_assertions_line": 2124
+        },
+        "file_owner_retirement_lines": [
+          2121,
+          2133
+        ],
+        "settled": {
+          "pid": 8,
+          "incarnation": 687,
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "owned_frames": 0,
+          "line": 2135,
+          "service_handles": 0,
+          "backend_handles": 2
+        }
+      }
+    ],
+    "authenticated_caller_readiness": "PASS",
+    "descriptor_syscalls": "PASS",
+    "shared_cursor_and_positional_read": "PASS",
+    "final_close": "PASS",
+    "full_table_compensation": "PASS",
+    "exit": "PASS",
+    "exec": "PASS",
+    "resource_accounting": "PASS",
+    "retry_beyond_timeout_or_requester_retirement": "NOT_RUN"
+  },
+  "earlier_native_attempts": {
+    "readiness_smoke": {
+      "status": "PARTIAL",
+      "log": "target/vfs-d1b/native.serial.log"
+    },
+    "invalid_qemu_device_argument": {
+      "status": "NOT_RUN",
+      "log": "target/vfs-d1b/lifecycle.qemu.log"
+    },
+    "pre_fix_final_close": {
+      "status": "FAIL",
+      "log": "target/vfs-d1b/lifecycle-2.serial.log"
+    }
+  },
+  "regressions_by_name": {
+    "baseline": {
+      "status": "PASS",
+      "matched_by_name": 481,
+      "references": [
+        "target/vfs-n1g/host.log",
+        "target/vfs-n1g/registration.log"
+      ]
+    },
+    "N1H": {
+      "status": "PASS",
+      "matched_by_name": 59,
+      "references": [
+        "target/vfs-n1h/transport.log",
+        "target/vfs-n1h/lease.log"
+      ]
+    },
+    "N1D": {
+      "status": "PASS",
+      "matched_by_name": 7,
+      "references": [
+        "target/vfs-n1d/focused.log"
+      ]
+    },
+    "N1L": {
+      "status": "PASS",
+      "matched_by_name": 3,
+      "references": [
+        "target/vfs-n1l/focused.log"
+      ]
+    },
+    "FAT": {
+      "status": "PASS",
+      "matched_by_name": 14,
+      "references": [
+        "target/vfs-n1p/fat-host-final.log"
+      ]
+    },
+    "D1A": {
+      "status": "PASS",
+      "matched_by_name": 522,
+      "references": [
+        "target/vfs-d1a/host.log",
+        "target/vfs-d1a/registration.log"
+      ]
+    }
+  },
+  "regression_logs": [
+    "target/vfs-d1b/host.log",
+    "target/vfs-d1b/registration.log",
+    "target/vfs-d1b/names.log"
+  ],
+  "fd_description_host": {
+    "status": "PASS",
+    "passed": 19,
+    "log": "target/vfs-d1b/fd-description.log"
+  },
+  "N1N_split_and_unsettled_withdrawal": {
+    "status": "PASS",
+    "log": "target/vfs-d1b/host.log"
+  },
+  "N1P": {
+    "status": "PASS",
+    "evidence": "historical",
+    "reference": "vfs-fat32-fsinfo-consistency-results.json",
+    "rerun": "NOT_RUN"
+  },
+  "builds": {
+    "production_kernel": {
+      "status": "PASS",
+      "log": "target/vfs-d1b/kernel.log"
+    },
+    "release_service": {
+      "status": "PASS",
+      "log": "target/vfs-d1b/service.log"
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched": [
+      "statfs",
+      "ProcFS mountinfo",
+      "private mmap",
+      "runtime FAT mount"
+    ],
+    "logs": [
+      "target/vfs-d1b/guard.log",
+      "target/vfs-d1b/guard-no-growth.log"
+    ]
+  },
+  "production_routing": "BLOCKED",
+  "broad_L1C_3": "BLOCKED",
+  "ordinary_production_boot": "BLOCKED",
+  "cross_caller_handoff": "NOT_RUN",
+  "production_mmap_activated": false,
+  "vfs_scratch_activated": false,
+  "demand_backed_main_stacks_default": false,
+  "remaining_prerequisites": {
+    "ordinary_launch_adapters": "authenticated namespace publication before dispatch on both launch adapters",
+    "shared_tables": "exact owner handoff across threads and fork",
+    "historical_ownership": "remove the four live dependencies before ordinary boot"
+  }
+}

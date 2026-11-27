@@ -54,10 +54,38 @@ impl<D: BlockDevice> Fat32<D> {
         ]) & FAT_ENTRY_MASK)
     }
 
+    fn invalidate_fsinfo(&mut self) -> Result<(), FatError> {
+        if self.fsinfo_invalidated {
+            return Ok(());
+        }
+        let mut barrier_needed = false;
+        for lba in self.fsinfo_sectors.into_iter().flatten().map(u64::from) {
+            let mut sector = [0; BLOCK_SIZE];
+            self.dev.read_block(lba, &mut sector).map_err(|_| FatError::Io)?;
+            if &sector[..4] != b"RRaA"
+                || &sector[484..488] != b"rrAa"
+                || sector[508..] != [0, 0, 0x55, 0xaa]
+            {
+                continue;
+            }
+            barrier_needed = true;
+            if sector[488..496] != [0xff; 8] {
+                sector[488..496].fill(0xff);
+                self.dev.write_block(lba, &sector).map_err(|_| FatError::Io)?;
+            }
+        }
+        if barrier_needed {
+            self.dev.flush().map_err(|_| FatError::Io)?;
+        }
+        self.fsinfo_invalidated = true;
+        Ok(())
+    }
+
     fn write_fat_entry(&mut self, cluster: u32, value: u32) -> Result<(), FatError> {
         if cluster >= self.cluster_count.saturating_add(2) {
             return Err(FatError::Io);
         }
+        self.invalidate_fsinfo()?;
         let byte = cluster as u64 * 4;
         let sector_in_fat = byte / BLOCK_SIZE as u64;
         let offset = (byte % BLOCK_SIZE as u64) as usize;

@@ -611,3 +611,7 @@ mod exec_authority;
 #[cfg(test)]
 #[path = "memory/retirement.rs"]
 mod retirement;
+
+#[cfg(test)]
+#[path = "process/mmap/read_progress.rs"]
+mod private_mmap_read_progress;

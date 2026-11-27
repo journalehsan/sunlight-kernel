@@ -1246,7 +1246,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         180 => sys_vfs_retention(frame),
         #[cfg(all(debug_assertions, feature = "vfs_l1c_1_test"))]
         0xf1c1 if !linux_compat => {
-            match crate::ipc::vfs_registration::spawn::fixture::run(frame.rdi) {
+            match crate::ipc::vfs_registration::spawn::fixture::run(frame.rdi, frame.rsi) {
                 Some(code) => code,
                 None => {
                     frame.rcx = frame.rcx.saturating_sub(2);
@@ -1271,6 +1271,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         0xf1c4 if !linux_compat => {
             crate::memory::zram_lifecycle::checkpoint(frame.rdi, frame.rsi)
         }
+        #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
+        0xf1c5 if !linux_compat => descriptor_probe_pread(frame),
         181 => sys_vfs_stat(frame),
         182 => sys_service_directory_transition(frame, true),
         // Hardware identity + thermal sensors (read-only; gated by process name).
@@ -6573,16 +6575,26 @@ fn username_for_uid(uid: u32) -> &'static str {
 /// owns admission, parking and completion; the service owns the description,
 /// offset and backend lifetime. Only validated, initialized bytes reach user
 /// memory, and a failed user copy never retransmits an executed operation.
+type ServiceFdAuthority = (::sunlight_ipc::vfs_rpc::lifecycle::Caller, u64);
+
 fn service_file(
     frame: &mut SyscallFrame,
     operation: crate::ipc::FileOperation<'_>,
+    descriptor: Option<ServiceFdAuthority>,
+    open_flags: Option<(u64, u32)>,
     complete: impl FnOnce(&mut SyscallFrame, crate::ipc::FileCompletion) -> u64,
 ) -> u64 {
     let result = {
         let mut sched = crate::sched::SCHEDULER.lock();
         let caps = crate::capability::CAP_BROKER.lock();
         let pid = sched.current_pid();
-        let result = crate::ipc::vfs_file_call(pid, operation, &mut sched, &caps);
+        let result = crate::ipc::vfs_file_call(
+            pid, operation, descriptor, &mut sched, &caps,
+            |sched, token, epoch| {
+                let (access, flags) = open_flags.ok_or(5u64)?;
+                install_service_fd(sched, token, epoch, access, flags)
+            },
+        );
         if matches!(result, Ok(crate::ipc::FileCall::Pending)) {
             sched.account_and_apply_churn_penalty();
             let tick = sched.global_tick;
@@ -6604,20 +6616,57 @@ fn service_file(
     }
 }
 
+#[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
+fn descriptor_probe_pread(frame: &mut SyscallFrame) -> u64 {
+    use crate::process::fd_table::CapRights;
+    use ::sunlight_ipc::vfs_rpc::file_transport::IO_BYTES;
+
+    if !crate::sched::with_scheduler(|sched| sched.current_process().vfs_file_routed) {
+        return ERR_EACCES;
+    }
+    let Some((token, authority, rights)) = service_fd(frame.rdi as i32) else {
+        return ERR_EBADF;
+    };
+    if !rights.contains(CapRights::new(CapRights::READ)) {
+        return ERR_EACCES;
+    }
+    if frame.rdx == 0 {
+        return 0;
+    }
+    if frame.rdx > isize::MAX as u64 || frame.r10 > i64::MAX as u64 {
+        return ERR_EINVAL;
+    }
+    let operation = crate::ipc::FileOperation::Pread {
+        token,
+        offset: frame.r10,
+        length: (frame.rdx as usize).min(IO_BYTES),
+    };
+    service_file(frame, operation, Some(authority), None, |frame, completion| {
+        if completion.errno != 0 {
+            return service_errno_raw(completion.errno, false);
+        }
+        match copy_to_user(frame.rsi, &completion.payload) {
+            Ok(()) => completion.result0,
+            Err(error) => error,
+        }
+    })
+}
+
 fn current_is_linux() -> bool {
     crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat())
 }
 
 /// Resolve the opaque token for a service-backed descriptor without exposing
 /// the backend handle. Returns the caller's rights for capability checks.
-fn service_fd(fd: i32) -> Option<(u64, crate::process::fd_table::CapRights)> {
+fn service_fd(fd: i32) -> Option<(u64, ServiceFdAuthority, crate::process::fd_table::CapRights)> {
     let sched = crate::sched::SCHEDULER.lock();
     let entry = sched.current_shared_process().fd_table.get(fd)?;
     if !entry.handle.is_service() {
         return None;
     }
-    let (token, _) = crate::process::fd_table::service_description(entry.handle.service_index())?;
-    Some((token, entry.rights))
+    let (token, epoch) = crate::process::fd_table::service_description(entry.handle.service_index())?;
+    let caller = crate::ipc::vfs_process_identity(sched.current_process());
+    Some((token, (caller, epoch), entry.rights))
 }
 
 fn service_errno_raw(errno: u64, is_linux: bool) -> u64 {
@@ -6637,8 +6686,14 @@ fn service_errno_raw(errno: u64, is_linux: bool) -> u64 {
     }
 }
 
-fn install_service_fd(token: u64, epoch: u64, access: u64, flags: u32, is_linux: bool) -> u64 {
-    use crate::process::fd_table::{CapRights, FileHandle};
+fn install_service_fd(
+    sched: &mut crate::sched::Scheduler,
+    token: u64,
+    epoch: u64,
+    access: u64,
+    flags: u32,
+) -> Result<u64, u64> {
+    use crate::process::fd_table::CapRights;
     use ::sunlight_ipc::vfs_rpc::file_transport as api;
     let mut rights = CapRights::FSTAT;
     if access & api::ACCESS_READ != 0 {
@@ -6647,15 +6702,14 @@ fn install_service_fd(token: u64, epoch: u64, access: u64, flags: u32, is_linux:
     if access & api::ACCESS_WRITE != 0 {
         rights |= CapRights::WRITE;
     }
-    let mut sched = crate::sched::SCHEDULER.lock();
     match sched.current_shared_process_mut().fd_table.open_service(
         token,
         epoch,
         CapRights::new(rights),
         flags,
     ) {
-        Ok(fd) => fd as u64,
-        Err(_) => service_errno_raw(24, is_linux),
+        Ok(fd) => Ok(fd as u64),
+        Err(_) => Err(24),
     }
 }
 
@@ -6701,17 +6755,13 @@ fn service_open(frame: &mut SyscallFrame, path: &str, flags: u64, is_linux: bool
     service_file(
         frame,
         crate::ipc::FileOperation::Open { path, access },
+        None,
+        Some((access, descriptor_flags)),
         move |_frame, completion| {
             if completion.errno != 0 {
                 return service_errno_raw(completion.errno, is_linux);
             }
-            install_service_fd(
-                completion.result0,
-                completion.registration_epoch,
-                access,
-                descriptor_flags,
-                is_linux,
-            )
+            completion.result0
         },
     )
 }
@@ -6859,11 +6909,14 @@ fn sys_vfs_stat(frame: &mut SyscallFrame) -> u64 {
 /// under scheduler/broker/runtime locks. No user-selected target or capability.
 fn sys_vfs_retention(frame: &mut SyscallFrame) -> u64 {
     #[cfg(feature = "vfs-n1m-test")]
-    if (0x100..=0x105).contains(&frame.rdi) {
+    if (0x100..=0x105).contains(&frame.rdi)
+        || (cfg!(feature = "vfs-n1o-test") && (0x106..=0x109).contains(&frame.rdi))
+    {
         let op = frame.rdi;
         let lba = frame.rdx;
         if frame.r9 != 0 || frame.r10 != 0 || frame.r12 != 0
-            || (matches!(op, 0x100 | 0x103 | 0x104) && (frame.rsi != 0 || lba != 0))
+            || (matches!(op, 0x100 | 0x103 | 0x104 | 0x106..=0x109)
+                && (frame.rsi != 0 || lba != 0))
         {
             return u64::MAX;
         }
@@ -7873,12 +7926,12 @@ fn sys_linux_dup3(frame: &mut SyscallFrame) -> u64 {
             if let Some(handle) = result.displaced {
                 close_file_handle(handle);
             }
-            if let Some((token, _epoch)) = result.service_close {
+            if let Some((token, epoch)) = result.service_close {
                 // The displaced descriptor is already gone; publish the close
                 // without parking so a re-executed dup3 cannot resend it.
                 let mut sched = crate::sched::SCHEDULER.lock();
                 let caps = crate::capability::CAP_BROKER.lock();
-                crate::ipc::close_vfs_file_owner(caller, token, &mut sched, &caps);
+                crate::ipc::close_vfs_file_owner(caller, token, epoch, &mut sched, &caps);
             }
             result.fd as u64
         }
@@ -11663,12 +11716,12 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
         // already consumed, so this must not park the caller: a re-executed
         // close(2) would find the descriptor gone. Publish the exact token and
         // let the service own the teardown.
-        let Some((token, _epoch)) = service else {
+        let Some((token, epoch)) = service else {
             return 0;
         };
         let mut sched = crate::sched::SCHEDULER.lock();
         let caps = crate::capability::CAP_BROKER.lock();
-        crate::ipc::close_vfs_file_owner(caller, token, &mut sched, &caps);
+        crate::ipc::close_vfs_file_owner(caller, token, epoch, &mut sched, &caps);
         return 0;
     } else if handle.is_pipe() {
         close_file_handle(handle);
@@ -11736,7 +11789,7 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
         return 0;
     }
 
-    if let Some((token, rights)) = service_fd(fd) {
+    if let Some((token, authority, rights)) = service_fd(fd) {
         use ::sunlight_ipc::vfs_rpc::file_transport as api;
         if !rights.contains(crate::process::fd_table::CapRights::new(
             crate::process::fd_table::CapRights::READ,
@@ -11748,6 +11801,8 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
         return service_file(
             frame,
             crate::ipc::FileOperation::Read { token, length },
+            Some(authority),
+            None,
             move |frame, completion| {
                 if completion.errno != 0 {
                     return service_errno_raw(completion.errno, is_linux);
@@ -12064,7 +12119,7 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
         return 0;
     }
 
-    if let Some((token, rights)) = service_fd(fd) {
+    if let Some((token, authority, rights)) = service_fd(fd) {
         use ::sunlight_ipc::vfs_rpc::file_transport as api;
         if !rights.contains(crate::process::fd_table::CapRights::new(
             crate::process::fd_table::CapRights::WRITE,
@@ -12093,6 +12148,8 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                 token,
                 payload: &buffer[..length],
             },
+            Some(authority),
+            None,
             move |_frame, completion| {
                 if completion.errno != 0 {
                     return service_errno_raw(completion.errno, is_linux);
@@ -12432,7 +12489,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
     let offset = frame.rsi as i64;
     let whence = frame.rdx as i32;
 
-    if let Some((token, _rights)) = service_fd(fd) {
+    if let Some((token, authority, _rights)) = service_fd(fd) {
         let is_linux = current_is_linux();
         if !(0..=2).contains(&whence) {
             return if is_linux {
@@ -12448,6 +12505,8 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
                 whence: whence as u64,
                 offset,
             },
+            Some(authority),
+            None,
             move |_frame, completion| {
                 if completion.errno != 0 {
                     return service_errno_raw(completion.errno, is_linux);
@@ -12575,12 +12634,12 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
             if let Some(handle) = result.displaced {
                 close_file_handle(handle);
             }
-            if let Some((token, _epoch)) = result.service_close {
+            if let Some((token, epoch)) = result.service_close {
                 // The displaced descriptor is already gone; publish the close
                 // without parking so a re-executed dup2 cannot resend it.
                 let mut sched = crate::sched::SCHEDULER.lock();
                 let caps = crate::capability::CAP_BROKER.lock();
-                crate::ipc::close_vfs_file_owner(caller, token, &mut sched, &caps);
+                crate::ipc::close_vfs_file_owner(caller, token, epoch, &mut sched, &caps);
             }
             result.fd as u64
         }
@@ -12678,12 +12737,19 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
         return procfs::native_result(result);
     }
 
-    if let Some((token, _rights)) = service_fd(fd) {
+    if let Some((token, authority, rights)) = service_fd(fd) {
         use ::sunlight_ipc::vfs_rpc::file_transport as api;
         let is_linux = current_is_linux();
+        if !rights.contains(crate::process::fd_table::CapRights::new(
+            crate::process::fd_table::CapRights::FSTAT,
+        )) {
+            return service_errno_raw(13, is_linux);
+        }
         return service_file(
             frame,
             crate::ipc::FileOperation::Stat { token },
+            Some(authority),
+            None,
             move |frame, completion| {
                 if completion.errno != 0 {
                     return service_errno_raw(completion.errno, is_linux);
@@ -12872,6 +12938,28 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
     let flags = frame.r10 as u32;
     let fd = frame.r8 as i32;
     let offset = frame.r9;
+
+    #[cfg(all(debug_assertions, feature = "vfs_d2a_test"))]
+    if flags & crate::process::mmap::MAP_ANONYMOUS == 0
+        && crate::sched::with_scheduler(|sched| {
+            let caller = sched.current_process();
+            caller.vfs_file_routed && !caller.is_linux_compat()
+                && crate::ipc::vfs_registration::spawn::fixture::is_d2a_caller(caller.pid)
+        })
+    {
+        return match crate::process::mmap::service::step([addr, length, prot as u64, flags as u64, fd as u64, offset]) {
+            Ok(Some(mapped)) => mapped,
+            Ok(None) => {
+                frame.rcx = frame.rcx.saturating_sub(2);
+                crate::sched::request_reschedule_after_sysret();
+                frame.rax
+            }
+            Err(error) => {
+                crate::serial_println!("[VFS-D2A] mmap rejected {:?}", error);
+                u64::MAX
+            }
+        };
+    }
 
     let pty_lock_start = if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
         now_ns()

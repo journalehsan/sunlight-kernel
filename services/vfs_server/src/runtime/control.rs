@@ -193,10 +193,7 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
                 let Ok(Some(bytes)) = control.file_next(registration.epoch) else {
                     break;
                 };
-                let Some(reply) = self.file_request(control, registration, &bytes) else {
-                    break;
-                };
-                if !control.file_reply(registration.epoch, &reply) {
+                if !self.dispatch_file(control, registration, &bytes) {
                     break;
                 }
             }

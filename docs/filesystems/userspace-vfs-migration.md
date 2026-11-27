@@ -19,11 +19,11 @@ separate existing host contracts from the unimplemented snapshot request.
 [N1B: retained positional file reads](vfs-positional-file-reads.md) adds a
 bounded `PREAD` on the service-owned description, qualified on the host with
 the shared cursor, rights, rename/unlink identity and retirement cleanup
-preserved ([results](vfs-positional-file-reads-results.json)). It is a service
-primitive only. Private mmap still reads through `KERNEL_VFS` at
-`mmap.rs:272`, so that finding stays open. Production mmap routing needs the
-VFS-D1 epoch and compensating-Close repairs, a kernel client that parks outside
-the scheduler, PMM and VFS locks, and staged frame population with rollback.
+preserved ([results](vfs-positional-file-reads-results.json)). D2A consumes
+that primitive in the isolated native fixture. The historical private mmap
+still reads through [the kernel VFS](../../kernel/src/process/mmap.rs#L277),
+so the ownership finding stays open. Production routing still requires
+ordinary descriptor admission and coordinated cutover.
 
 [N1C mount authority and coordinated storage handoff](vfs-mount-authority-storage-handoff.md)
 defines one service-owned attachment graph and a kernel-enforced device lease.
@@ -68,10 +68,19 @@ The four historical findings remain open.
    [N1N](vfs-native-fat32-attachment.md) separates FAT sync and transport
    settlement from the topology lock on the host and makes N1D transaction
    validation available to the native service behind an opt-in feature.
-   Native FAT publication remains blocked on a disposable FAT grant and a
-   native readiness pin through N1D publication. The copied interface also
-   needs separate settlement and lease release commands before the native
-   withdrawal can keep ownership through topology removal.
+   [N1O](vfs-native-fat32-adapter-completion.md) adds the bounded disposable
+   FAT grant, native readiness through N1D publication, and separate copied
+   settlement and release. The ring-3 service passes four isolated QEMU mount
+   cycles with persistent contents and a fixed retained DMA allocation
+   ([results](vfs-native-fat32-adapter-completion-results.json)). The closed
+   image passes with optional FSInfo hints unknown.
+   [N1P](vfs-fat32-fsinfo-consistency.md) closes ordinary native FAT32
+   qualification on disposable storage. The writer durably invalidates
+   primary and backup FSInfo hints before FAT mutation. Populated and
+   unknown fixtures each pass four native cycles, read-only filesystem
+   checks and full image comparison
+   ([results](vfs-fat32-fsinfo-consistency-results.json)). Production
+   ownership cutover and crash recovery remain separate gates.
    Live successor handoff is a
    coordinated cutover gate; physical DMA reclamation is a transport
    destruction gate. Neither is needed for the isolated cycle while the
@@ -82,8 +91,20 @@ The four historical findings remain open.
    disabled.
 2. **Stage the cutover prerequisites before ordinary native acceptance.**
    The unchanged guard blocks ordinary boot on live FAT, statfs, ProcFS
-   and mmap dependencies. Host-qualify unpublished child binding for both
-   adapters and the descriptor epoch and compensating Close contracts.
+   and mmap dependencies. [VFS-D1A](vfs-service-descriptor-lifetime.md)
+   host-qualifies the epoch and compensating Close components.
+   [VFS-D1B](vfs-native-descriptor-lifecycle.md) qualifies authenticated
+   pre-dispatch binding, native FD installation, duplicated cursor and
+   positional reads, exact full-table compensation, and exit and exec
+   cleanup in the isolated caller. Kernel and service resources returned
+   to baseline after each cycle
+   ([results](vfs-native-descriptor-lifecycle-results.json)).
+   [VFS-D2A](vfs-service-private-mmap.md) qualifies eager private mmap
+   in the isolated native caller on one, two, and four vCPUs using the
+   retained description and bounded PREAD. Live retirement during a pending
+   native mmap and the historical kernel ownership finding remain open.
+   Authenticated pre-dispatch binding for both ordinary launch adapters
+   and cross-caller descriptor handoff remain open.
    Keep broad L1C-3 blocked and production VFS-D1 deferred at this boundary. In a
    future coordinated candidate, remove the FAT/ProcFS/statfs dependencies
    together and remove the mmap dependency through retained positional I/O.
@@ -3244,6 +3265,18 @@ Both ordinary spawn adapters still lack authenticated publication.
 full-capacity local PID retention coverage. Authenticated private-child
 publication and VFS-L1Q readiness remain open. VFS-D1 remains blocked.
 
+### VFS-D2A: Service-owned private mmap
+
+The [isolated D2A route](vfs-service-private-mmap.md) uses authenticated
+D1B admission, stages positional reads outside PMM and kernel VFS locks,
+and commits eager private mappings after exact image, epoch, and address
+revalidation. Native qualification on one, two, and four vCPUs covers
+permissions, private writes, source close, shared cursor preservation,
+repeated unmap, rollback and process exit. Live retirement during a
+pending native mapping remains open. The historical Linux-compatible eager path still depends on the
+kernel backend. Keep that ownership finding open and production routing
+blocked pending coordinated cutover.
+
 ### VFS-D3: ZRAM independence and private mappings
 
 Keep ZRAM swap-out, compression, decompression, page-table updates and
@@ -3260,8 +3293,9 @@ scheduler progress during pressure independently. A kernel fixture that calls
 the restore routine directly does not exercise the fault handler. Host and
 compile checks do not count as native swap activity.
 
-VFS-D3 compatibility is **BLOCKED** until private mappings can be populated
-from authenticated service-owned descriptors. The required native gate is:
+VFS-D3 compatibility is **BLOCKED** pending native reclaim and fault
+restoration of service-populated private pages. D2A provides the isolated population prerequisite. The required
+native gate is:
 
 1. Open a real file through the authoritative userspace VFS and populate a
    private mapping with bounded positional reads on a retained description.
@@ -3284,5 +3318,5 @@ and TLB synchronization when committing or cancelling the mapping.
 
 Track three separate limitations: restored pages are not re-enrolled in
 reclaim, tmpfs backing frames are outside the anonymous candidate filter, and
-service-backed descriptors cannot yet populate private mappings. Moving tmpfs
+ordinary production descriptors still lack the service-backed population route. Moving tmpfs
 to ring 3 does not make its backing pages swappable.

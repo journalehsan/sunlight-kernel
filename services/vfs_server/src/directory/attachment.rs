@@ -198,3 +198,8 @@ mod tests;
 mod device;
 #[cfg(not(target_os = "none"))]
 pub use device::*;
+
+#[cfg(all(target_os = "none", feature = "vfs-n1o-fat-test"))]
+mod native;
+#[cfg(all(target_os = "none", feature = "vfs-n1o-fat-test"))]
+pub use native::qualify_native_fat;

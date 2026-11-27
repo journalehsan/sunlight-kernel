@@ -558,7 +558,7 @@ fn new_service_description(token: u64, epoch: u64) -> Option<u32> {
     Some(idx as u32)
 }
 
-fn retain_service(handle: FileHandle) {
+pub(crate) fn retain_service(handle: FileHandle) {
     if handle.is_service() {
         SERVICE_DESCRIPTIONS.lock()[handle.service_index() as usize]
             .as_mut()
@@ -569,7 +569,7 @@ fn retain_service(handle: FileHandle) {
 
 /// Release one kernel reference. Returns true when it was the final reference
 /// and the caller now owns a service close for the returned token.
-fn release_service(handle: FileHandle) -> bool {
+pub(crate) fn release_service(handle: FileHandle) -> bool {
     if !handle.is_service() {
         return true;
     }
@@ -723,9 +723,15 @@ impl FdTable {
         self.entries[fd as usize] = Some(source);
     }
 
-    #[cfg(all(debug_assertions, feature = "vfs_l1p_test"))]
+    #[cfg(all(debug_assertions, any(feature = "vfs_l1p_test", feature = "vfs_d1b_test")))]
     pub(crate) fn description_counts() -> (usize, usize) {
         let pool = DESCRIPTIONS.lock();
+        (pool.iter().flatten().count(), pool.iter().flatten().map(|row| row.refs).sum())
+    }
+
+    #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
+    pub(crate) fn service_description_counts() -> (usize, usize) {
+        let pool = SERVICE_DESCRIPTIONS.lock();
         (pool.iter().flatten().count(), pool.iter().flatten().map(|row| row.refs).sum())
     }
 
@@ -839,7 +845,7 @@ impl FdTable {
         let mut entry = self.entries[fd as usize].take().ok_or(FdError::InvalidFd)?;
         let last = release_description(entry.description);
         entry.release_backend = if entry.handle.is_service() {
-            last && release_service(entry.handle)
+            release_service(entry.handle)
         } else {
             !entry.handle.is_vfs() || last
         };
@@ -914,7 +920,7 @@ impl FdTable {
             let Some(description) = service_description(entry.handle.service_index()) else {
                 continue;
             };
-            if out[..count].iter().any(|known| known.0 == description.0) {
+            if out[..count].contains(&description) {
                 continue;
             }
             out[count] = description;
@@ -1440,6 +1446,18 @@ mod tests {
             0x0008_0000
         );
         assert_eq!(table.get(old).unwrap().flags & 0x0008_0000, 0);
+    }
+
+    #[test]
+    fn closing_each_service_duplicate_releases_its_reference() {
+        let mut table = FdTable::new();
+        let fd = table.open_service(71, 81, CapRights::new(CapRights::READ), 0).unwrap();
+        let duplicate = table.dup(fd).unwrap();
+        let index = table.get(fd).unwrap().handle.service_index();
+        assert!(!table.take(fd).unwrap().release_backend);
+        assert_eq!(service_description(index), Some((71, 81)));
+        assert!(table.take(duplicate).unwrap().release_backend);
+        assert_ne!(service_description(index), Some((71, 81)));
     }
 
     #[test]

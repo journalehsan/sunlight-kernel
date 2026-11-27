@@ -7,6 +7,7 @@ const OWNER: Credential = Credential { uid: 42, gid: 43 };
 
 struct Channel {
     current: Option<[u8; api::FRAME_BYTES]>,
+    reject_reply: bool,
 }
 impl Control for Channel {
     fn snapshot(&mut self) -> Option<Registration> {
@@ -25,7 +26,7 @@ impl Control for Channel {
         Ok(self.current)
     }
     fn file_reply(&mut self, _: u64, _: &[u8; api::FRAME_BYTES]) -> bool {
-        true
+        !self.reject_reply
     }
 }
 
@@ -46,7 +47,10 @@ fn fixture<const N: usize>() -> (Runtime<2, N, 2>, DirectoryNamespace, Channel, 
         .install(registration(), scope(), &namespace, "/jail", "/jail/cwd")
         .unwrap();
     let receipt = acquire(&mut runtime, registration(), scope(), 1);
-    let channel = Channel { current: None };
+    let channel = Channel {
+        current: None,
+        reject_reply: false,
+    };
     (runtime, namespace, channel, receipt)
 }
 
@@ -72,6 +76,49 @@ fn io(op: u64, token: u64, arg0: u64, arg1: u64, payload: &[u8]) -> api::Request
 
 fn pread(token: u64, offset: u64, length: u64) -> api::Request<'static> {
     io(api::PREAD, token, offset, length, &[])
+}
+
+#[test]
+fn rejected_open_reply_and_repeated_close_restore_backend_baseline() {
+    let (mut runtime, namespace, mut channel, receipt) = fixture::<1>();
+    let baseline = namespace.shared().lock().open_handle_count();
+    let open = api::Request {
+        namespace_id: scope().namespace_id,
+        namespace_generation: scope().namespace_generation,
+        receipt_id: receipt.request_id(),
+        receipt_generation: receipt.generation(),
+        uid: OWNER.uid,
+        gid: OWNER.gid,
+        ..io(api::OPEN, 0, api::ACCESS_READ, 0, b"data")
+    };
+    for _ in 0..100 {
+        let bytes = open.encode().unwrap();
+        channel.current = Some(bytes);
+        channel.reject_reply = true;
+        assert!(!runtime.dispatch_file(&mut channel, registration(), &bytes));
+        assert_eq!(namespace.shared().lock().open_handle_count(), baseline);
+
+        let result = drive(&mut runtime, &mut channel, open);
+        assert_eq!(result.errno, 0);
+        assert_eq!(namespace.shared().lock().open_handle_count(), baseline + 1);
+        let close = io(api::CLOSE, result.result0, 0, 0, &[]);
+        assert_eq!(drive(&mut runtime, &mut channel, close).errno, 0);
+        let next = drive(&mut runtime, &mut channel, open);
+        assert_eq!(next.errno, 0);
+        assert_ne!(result.result0, next.result0);
+        assert_eq!(drive(&mut runtime, &mut channel, close).errno, 9);
+        assert_eq!(namespace.shared().lock().open_handle_count(), baseline + 1);
+        assert_eq!(
+            drive(
+                &mut runtime,
+                &mut channel,
+                io(api::CLOSE, next.result0, 0, 0, &[])
+            )
+            .errno,
+            0
+        );
+        assert_eq!(namespace.shared().lock().open_handle_count(), baseline);
+    }
 }
 
 struct Reply {
@@ -197,14 +244,9 @@ fn duplicates_keep_one_cursor_and_independent_positional_reads() {
 fn eof_partial_and_unrepresentable_offsets_report_exactly() {
     let (mut rt, _ns, mut channel, receipt) = fixture::<4>();
     let token = rt
-        .open_file(
-            registration(),
-            receipt,
-            "data",
-            OWNER,
-            Access::Read,
-            || true,
-        )
+        .open_file(registration(), receipt, "data", OWNER, Access::Read, || {
+            true
+        })
         .unwrap();
 
     let at = drive(&mut rt, &mut channel, pread(token, 6, 4));
@@ -233,14 +275,9 @@ fn eof_partial_and_unrepresentable_offsets_report_exactly() {
 fn rights_identity_and_stale_tokens_are_rechecked_per_request() {
     let (mut rt, _ns, mut channel, receipt) = fixture::<4>();
     let read = rt
-        .open_file(
-            registration(),
-            receipt,
-            "data",
-            OWNER,
-            Access::Read,
-            || true,
-        )
+        .open_file(registration(), receipt, "data", OWNER, Access::Read, || {
+            true
+        })
         .unwrap();
     let write = rt
         .open_file(
@@ -339,14 +376,9 @@ fn retained_positional_source_survives_rename_and_unlink() {
     assert_eq!(&stat.payload[..8], &6u64.to_le_bytes());
     // The replacement is a different object on the ordinary path.
     let fresh = rt
-        .open_file(
-            registration(),
-            receipt,
-            "data",
-            OWNER,
-            Access::Read,
-            || true,
-        )
+        .open_file(registration(), receipt, "data", OWNER, Access::Read, || {
+            true
+        })
         .unwrap();
     let at = drive(&mut rt, &mut channel, pread(fresh, 0, 2));
     assert_eq!(at.payload.as_slice(), b"re");
@@ -361,14 +393,9 @@ fn caller_and_file_owner_retirement_release_descriptions_and_backend_pins() {
     let (mut rt, ns, mut channel, receipt) = fixture::<4>();
     let baseline = ns.shared().lock().open_handle_count();
     let token = rt
-        .open_file(
-            registration(),
-            receipt,
-            "data",
-            OWNER,
-            Access::Read,
-            || true,
-        )
+        .open_file(registration(), receipt, "data", OWNER, Access::Read, || {
+            true
+        })
         .unwrap();
     rt.duplicate_file(registration(), scope().caller, token)
         .unwrap();
@@ -395,14 +422,9 @@ fn epoch_withdrawal_releases_descriptions_and_refuses_the_old_epoch() {
     let (mut rt, ns, mut channel, receipt) = fixture::<4>();
     let baseline = ns.shared().lock().open_handle_count();
     let token = rt
-        .open_file(
-            registration(),
-            receipt,
-            "data",
-            OWNER,
-            Access::Read,
-            || true,
-        )
+        .open_file(registration(), receipt, "data", OWNER, Access::Read, || {
+            true
+        })
         .unwrap();
     assert_eq!(ns.shared().lock().open_handle_count(), baseline + 1);
     assert_eq!(drive(&mut rt, &mut channel, pread(token, 0, 1)).errno, 0);

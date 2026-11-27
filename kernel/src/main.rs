@@ -118,11 +118,13 @@ static SUNLIGHT_USB_MOUSE_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-usb-mouse");
 static DEVICED_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/deviced");
-#[cfg(not(any(feature = "boot_resources", feature = "vfs-n1j-test")))]
+#[cfg(not(any(feature = "boot_resources", feature = "vfs-n1j-test", all(debug_assertions, feature = "vfs_d1b_test"))))]
 static VFS_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
-#[cfg(all(feature = "boot_resources", not(feature = "vfs-n1j-test")))]
+#[cfg(all(feature = "boot_resources", not(feature = "vfs-n1j-test"), not(all(debug_assertions, feature = "vfs_d1b_test"))))]
 static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(env!("SUNLIGHT_BOOT_RESOURCE_VFS"));
+#[cfg(all(debug_assertions, feature = "vfs_d1b_test", not(feature = "vfs-n1j-test")))]
+static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight-vfs-server"));
 #[cfg(feature = "vfs-n1j-test")]
 static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(env!("SUNLIGHT_VFS_N1J_ELF"));
 static TTY_SERVER_ELF_BYTES: &[u8] =

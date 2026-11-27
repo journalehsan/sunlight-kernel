@@ -37,7 +37,10 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             exiting: false,
             uid: 1000,
             gid: 100,
-            foreground: Foreground { incarnation: 11, ..Default::default() },
+            foreground: Foreground {
+                incarnation: 11,
+                ..Default::default()
+            },
             address_space: AddressSpace { generation: 12 },
             state: ProcessState::Running,
             pending_call: None,
@@ -302,6 +305,162 @@ fn open_requires_a_retained_receipt_and_carries_exact_correlation() {
     );
 }
 
+fn complete_open(runtime: &mut Runtime, sched: &mut Scheduler, identity: AdmissionIdentity) -> u64 {
+    let receipt = Receipt::from_parts(
+        identity.registration,
+        Scope {
+            caller: identity.caller,
+            namespace_id: 21,
+            namespace_generation: 22,
+        },
+        31,
+        32,
+    )
+    .unwrap();
+    sched.processes[0].state = ProcessState::Running;
+    runtime
+        .publish_file(
+            identity,
+            FileOperation::Open {
+                path: "data",
+                access: api::ACCESS_READ,
+            },
+            Some(receipt),
+            sched,
+        )
+        .unwrap();
+    let mut bytes = [0; api::FRAME_BYTES];
+    let id = runtime
+        .next_file(identity.registration, &mut bytes)
+        .unwrap()
+        .unwrap();
+    runtime
+        .reply_file(
+            identity.registration,
+            &reply_frame(identity, id, api::OPEN, 0, id, &[]),
+            sched,
+        )
+        .unwrap();
+    id
+}
+
+#[test]
+fn successful_install_consumes_open_and_retired_epoch_cannot_install() {
+    let (mut runtime, mut sched, identity) = setup();
+    let id = complete_open(&mut runtime, &mut sched, identity);
+    let authority = Some((identity.caller, identity.registration.epoch));
+    assert_eq!(runtime.check_descriptor(identity, authority), Ok(()));
+    let wrong_image = Caller {
+        address_space_generation: identity.caller.address_space_generation + 1,
+        ..identity.caller
+    };
+    assert_eq!(
+        runtime.check_descriptor(identity, Some((wrong_image, identity.registration.epoch))),
+        Err(Error::NotReady)
+    );
+    let slot = runtime.caller_publication(identity.caller).unwrap();
+    let installed = runtime
+        .finish_open(slot, |token, epoch| {
+            assert_eq!((token, epoch), (id, identity.registration.epoch));
+            Ok(3)
+        })
+        .unwrap();
+    assert_eq!((installed.errno, installed.result0), (0, 3));
+    assert!(runtime.file_publications.iter().all(Option::is_none));
+
+    complete_open(&mut runtime, &mut sched, identity);
+    let slot = runtime.caller_publication(identity.caller).unwrap();
+    runtime.retire_registration(identity.registration);
+    let new = runtime.register(identity.registration.owner).unwrap();
+    assert_ne!(new.epoch, identity.registration.epoch);
+    assert_eq!(
+        runtime.check_descriptor(identity, authority),
+        Err(Error::NotReady)
+    );
+    assert_eq!(
+        runtime.check_descriptor(
+            AdmissionIdentity {
+                registration: new,
+                ..identity
+            },
+            authority
+        ),
+        Err(Error::NotReady)
+    );
+    assert_eq!(
+        runtime
+            .finish_open(slot, |_, _| panic!("retired OPEN installed"))
+            .unwrap()
+            .errno,
+        5
+    );
+    assert!(runtime.file_publications.iter().all(Option::is_none));
+}
+
+#[test]
+fn failed_install_retries_exact_close_until_ack_without_slot_growth() {
+    let (mut runtime, mut sched, identity) = setup();
+    for _ in 0..100 {
+        let id = complete_open(&mut runtime, &mut sched, identity);
+        let slot = runtime.caller_publication(identity.caller).unwrap();
+        assert_eq!(runtime.finish_open(slot, |_, _| Err(24)).unwrap().errno, 24);
+        assert!(runtime.caller_publication(identity.caller).is_none());
+        let mut bytes = [0; api::FRAME_BYTES];
+        assert_eq!(
+            runtime.next_file(identity.registration, &mut bytes),
+            Ok(Some(id))
+        );
+        let close = api::Request::decode(&bytes).unwrap();
+        assert_eq!(
+            (close.registration, close.caller, close.op, close.token),
+            (identity.registration, identity.caller, api::CLOSE, id)
+        );
+        let refused = reply_frame(identity, id, api::CLOSE, 5, 0, &[]);
+        assert_eq!(
+            runtime.reply_file(identity.registration, &refused, &mut sched),
+            Err(Error::Protocol)
+        );
+        sched.global_tick += TIMEOUT_TICKS;
+        runtime.expire_files(sched.global_tick);
+        let mut retry = [0; api::FRAME_BYTES];
+        assert_eq!(
+            runtime.next_file(identity.registration, &mut retry),
+            Ok(Some(id))
+        );
+        assert_eq!(retry, bytes);
+        let absent = reply_frame(identity, id, api::CLOSE, 9, 0, &[]);
+        runtime
+            .reply_file(identity.registration, &absent, &mut sched)
+            .unwrap();
+        assert!(runtime.file_publications.iter().all(Option::is_none));
+        assert_eq!(
+            runtime.reply_file(identity.registration, &absent, &mut sched),
+            Err(Error::Identity)
+        );
+    }
+}
+
+#[test]
+fn caller_retirement_preserves_uninstalled_open_cleanup_until_epoch_withdrawal() {
+    let (mut runtime, mut sched, identity) = setup();
+    let id = complete_open(&mut runtime, &mut sched, identity);
+    runtime.retire_process(identity.caller);
+    let mut bytes = [0; api::FRAME_BYTES];
+    assert_eq!(
+        runtime.next_file(identity.registration, &mut bytes),
+        Ok(Some(id))
+    );
+    let close = api::Request::decode(&bytes).unwrap();
+    assert_eq!(
+        (close.caller, close.op, close.token),
+        (identity.caller, api::CLOSE, id)
+    );
+    runtime.retire_registration(identity.registration);
+    let new = runtime.register(identity.registration.owner).unwrap();
+    assert_eq!(runtime.next_file(new, &mut bytes), Ok(None));
+    assert!(runtime.file_publications.iter().all(Option::is_none));
+}
+
 #[test]
 fn file_owner_barrier_waits_for_transfer_publication_and_reply() {
     let (mut runtime, mut sched, identity) = setup();
@@ -533,4 +692,42 @@ fn close_timeout_frees_the_slot_without_a_caller_wake() {
         runtime.reply_file(identity.registration, &bytes, &mut sched),
         Err(Error::Identity)
     );
+}
+
+#[test]
+fn cancelled_mapping_read_rejects_late_reply_and_preserves_exact_close() {
+    let (mut runtime, mut sched, identity) = setup();
+    let caller = identity.caller;
+    let epoch = identity.registration.epoch;
+    let token = 7;
+    runtime.publish_file_close(identity.registration, caller, token, 0).unwrap();
+    runtime.publish_file(identity, FileOperation::Pread {
+        token, offset: 4096, length: 16,
+    }, None, &mut sched).unwrap();
+    let read_slot = runtime.caller_publication(caller).unwrap();
+    let request_id = runtime.file_publications[read_slot].as_ref().unwrap().id;
+
+    runtime.cancel_mapping_read(caller, epoch + 1, token);
+    runtime.cancel_mapping_read(caller, epoch, token + 1);
+    assert_eq!(runtime.caller_publication(caller), Some(read_slot));
+
+    runtime.retire_file_registration(identity.registration);
+    // Epoch withdrawal independently discharges copied Close. The terminal
+    // PREAD publication remains until the mapping replay rejects its epoch.
+    assert_eq!(runtime.caller_publication(caller), Some(read_slot));
+    runtime.cancel_mapping_read(caller, epoch, token);
+    assert!(runtime.caller_publication(caller).is_none());
+    let late = reply_frame(identity, request_id, api::PREAD, 0, 4, b"late");
+    assert!(runtime.reply_file(identity.registration, &late, &mut sched).is_err());
+
+    sched.processes[0].state = ProcessState::Running;
+    runtime.publish_file_close(identity.registration, caller, token, 0).unwrap();
+    runtime.publish_file(identity, FileOperation::Pread {
+        token, offset: 0, length: 16,
+    }, None, &mut sched).unwrap();
+    runtime.cancel_mapping_read(caller, epoch, token);
+    let mut frame = [0; api::FRAME_BYTES];
+    assert!(runtime.next_file(identity.registration, &mut frame).unwrap().is_some());
+    let close = api::Request::decode(&frame).unwrap();
+    assert_eq!((close.op, close.token), (api::CLOSE, token));
 }

@@ -69,6 +69,11 @@ impl<const N: usize> Table<N> {
             ids: RequestIds::new(),
         }
     }
+    #[cfg(feature = "vfs-d1b-test")]
+    pub(crate) fn len(&self) -> usize {
+        self.entries.iter().flatten().count()
+    }
+
     pub(crate) fn capacity(&self) -> Result<(), FsError> {
         if self.entries.iter().any(Option::is_none) {
             Ok(())

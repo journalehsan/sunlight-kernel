@@ -1,0 +1,80 @@
+{
+  "stage": "VFS-N1P",
+  "date": "2026-11-27",
+  "status": "PASS",
+  "scope": "Ordinary native FAT32 attachment on isolated disposable QEMU storage",
+  "confirmed_n1o_defect": {"stored_free_clusters": 127004, "actual_free_clusters": 127003, "fsck_exit": 1},
+  "strategy": {
+    "primary_and_recognized_backup": "Set both optional FSInfo hints to 0xffffffff",
+    "ordering": "Confirm device barrier before first FAT copy mutation; retry requires a confirmed barrier",
+    "capacity_source": "FAT entries"
+  },
+  "host_fat": {
+    "status": "PASS",
+    "tests": 14,
+    "faults": ["primary FSInfo write", "backup FSInfo write", "FSInfo barrier", "directory entry write with allocation rollback"],
+    "log": "target/vfs-n1p/fat-host-final.log"
+  },
+  "native": {
+    "status": "PASS",
+    "cycles_per_fixture": 4,
+    "persistent_reattachments_per_fixture": 3,
+    "operations": ["create", "extend", "truncate", "unlink", "stat", "reopen", "read", "positional read through retained handle", "close"],
+    "withdrawal_order": ["close admission", "drain retained handle", "synchronize FAT", "confirm transport settlement", "remove topology", "release lease"],
+    "outstanding_commands_per_settlement": 0,
+    "mapping_users_per_settlement": 0,
+    "retained_dma_bytes": 20480,
+    "queue_base": "0x10bd000",
+    "bounce_base": "0x10c1000",
+    "build_logs": ["target/vfs-n1p/probe-service.log", "target/vfs-n1p/probe-kernel.log"],
+    "populated": {
+      "lease_generations": [3, 150, 172, 194],
+      "serial": "target/vfs-n1o-qemu-iyl1yxad/serial.log",
+      "closed_disk": "target/vfs-n1o-qemu-iyl1yxad/disposable.raw",
+      "initial_and_final_fsck_exit": [0, 0],
+      "changed_volume_lbas": [1, 7, 32, 1025, 2018, 2020, 2021],
+      "verification_log": "target/vfs-n1p/image-populated.log"
+    },
+    "unknown": {
+      "lease_generations": [3, 148, 170, 192],
+      "serial": "target/vfs-n1o-qemu-s_q143nw/serial.log",
+      "closed_disk": "target/vfs-n1o-qemu-s_q143nw/disposable.raw",
+      "initial_and_final_fsck_exit": [0, 0],
+      "changed_volume_lbas": [32, 1025, 2018, 2020, 2021],
+      "verification_log": "target/vfs-n1p/image-unknown.log"
+    },
+    "image_checks": {
+      "status": "PASS",
+      "unchanged_prefix_bytes": 1048576,
+      "initial_free_clusters": 127004,
+      "final_free_clusters": 127003,
+      "external_repair": false,
+      "files": {"NEW.TXT": "native FAT32 attachment", "KEEP.TXT": "untouched"},
+      "comparison": "Byte exact against expected FAT mirrors, directory, FSInfo fields and data including the freed temporary cluster"
+    },
+    "other_attempts": {
+      "original_checker_failed_on_formatter_eoc_assumption": ["target/vfs-n1p/native-populated.log", "target/vfs-n1p/native-unknown.log"],
+      "separate_repeat_no_serial": ["target/vfs-n1p/native-populated-final.log", "target/vfs-n1p/native-unknown-final.log"]
+    },
+    "native_fault_injection": "NOT_RUN",
+    "physical_dma_reclamation": {"status": "BLOCKED", "execution": "NOT_RUN"}
+  },
+  "regressions": {
+    "baseline": {"status": "PASS", "matched_by_name": 481, "reference_logs": ["target/vfs-n1g/host.log", "target/vfs-n1g/registration.log"]},
+    "n1h": {"status": "PASS", "matched_by_name": 59, "reference_logs": ["target/vfs-n1h/transport.log", "target/vfs-n1h/lease.log"]},
+    "n1d": {"status": "PASS", "matched_by_name": 7, "reference_log": "target/vfs-n1d/focused.log"},
+    "n1l": {"status": "PASS", "matched_by_name": 3, "reference_log": "target/vfs-n1l/focused.log"},
+    "n1n_split_and_unsettled_withdrawal": "PASS",
+    "host_logs": ["target/vfs-n1p/host.log", "target/vfs-n1p/registration.log"],
+    "production_kernel": {"status": "PASS", "log": "target/vfs-n1p/kernel.log"},
+    "release_service": {"status": "PASS", "log": "target/vfs-n1p/service.log"}
+  },
+  "ownership_guard": {"status": "FAIL", "references": 71, "unmatched": 4, "identical_to_n1o": true, "logs": ["target/vfs-n1p/guard.log", "target/vfs-n1p/guard-no-growth.log"]},
+  "production_ownership_cutover": "BLOCKED",
+  "crash_recovery": "NOT_RUN",
+  "production_routing_changed": false,
+  "scratch_activated": false,
+  "l1c_3": "BLOCKED",
+  "vfs_d1": "DEFERRED",
+  "demand_backed_main_stacks": "OPT_IN"
+}

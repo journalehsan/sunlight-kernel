@@ -180,6 +180,8 @@ pub struct ReclaimStats {
     pub swap_blocks: usize,
 }
 
+pub(crate) type CreatedMappingTables = [Option<(*mut PageTableEntry, PhysAddr)>; 3];
+
 impl AddressSpace {
     /// Create a new address space, copying kernel higher-half mappings.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
@@ -832,8 +834,19 @@ impl AddressSpace {
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<(), MappingError> {
+        self.prepare_recorded_transaction_tables(page, pmm, hhdm_offset, &mut [None; 3])
+    }
+
+    /// Record only tables allocated by this attempt, including a partial walk.
+    pub(crate) unsafe fn prepare_recorded_transaction_tables(
+        &self,
+        page: Page<Size4KiB>,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+        created: &mut CreatedMappingTables,
+    ) -> Result<(), MappingError> {
         let mut table = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
-        for index in [page.p4_index(), page.p3_index(), page.p2_index()] {
+        for (level, index) in [page.p4_index(), page.p3_index(), page.p2_index()].into_iter().enumerate() {
             let entry = &mut table[index];
             if entry.is_unused() {
                 let frame = pmm.alloc_frame_class(crate::memory::accounting::PhysicalMemoryClass::PageTable)
@@ -842,6 +855,7 @@ impl AddressSpace {
                 child.zero();
                 core::sync::atomic::fence(Ordering::Release);
                 entry.set_addr(frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE);
+                created[level] = Some((entry, frame));
                 #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
                 crate::serial_println!("[MT-TABLE] root={} vm={} va={} frame={} parent={} owner=attached-graph", self.identity.pml4_phys, self.identity.generation, page.start_address().as_u64(), frame.as_u64(), entry as *mut PageTableEntry as u64 - hhdm_offset.as_u64());
                 table = child;
@@ -2167,8 +2181,8 @@ impl AddressSpace {
         }
     }
 
-    fn rollback_created_tables(
-        created: &mut [Option<(*mut PageTableEntry, PhysAddr)>; 3],
+    pub(crate) fn rollback_created_tables(
+        created: &mut CreatedMappingTables,
         identity: AddressSpaceIdentity,
         page: Page<Size4KiB>,
         pmm: &mut PhysicalMemoryManager,

@@ -32,6 +32,9 @@ pub(crate) use vfs_registration::{
     FileCompletion, FileControl, FileOperation,
 };
 
+#[cfg(all(debug_assertions, feature = "vfs_d2a_test"))]
+pub(crate) use vfs_registration::mapping_epoch as vfs_mapping_epoch;
+
 pub(crate) use vfs_registration::{
     expect_file_transfer as expect_vfs_file_transfer,
     finish_file_transfer as finish_vfs_file_transfer,

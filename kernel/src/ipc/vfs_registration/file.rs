@@ -26,6 +26,8 @@ pub(super) struct Publication {
     failed: bool,
     woken: bool,
     started_tick: u64,
+    token: u64,
+    compensation: bool,
     buffer: alloc::vec::Vec<u8>,
 }
 
@@ -40,6 +42,8 @@ pub(crate) enum FileOperation<'a> {
         token: u64,
         length: usize,
     },
+    #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+    Pread { token: u64, offset: u64, length: usize },
     Write {
         token: u64,
         payload: &'a [u8],
@@ -64,10 +68,27 @@ pub(crate) enum FileOperation<'a> {
 }
 
 impl FileOperation<'_> {
+    fn token(&self) -> u64 {
+        match *self {
+            Self::Open { .. } => 0,
+            #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+            Self::Pread { token, .. } => token,
+            Self::Read { token, .. }
+            | Self::Write { token, .. }
+            | Self::Seek { token, .. }
+            | Self::Stat { token }
+            | Self::Truncate { token }
+            | Self::Close { token }
+            | Self::Dup { token } => token,
+        }
+    }
+
     fn op(&self) -> u64 {
         match self {
             Self::Open { .. } => api::OPEN,
             Self::Read { .. } => api::READ,
+            #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+            Self::Pread { .. } => api::PREAD,
             Self::Write { .. } => api::WRITE,
             Self::Seek { .. } => api::SEEK,
             Self::Stat { .. } => api::STAT,
@@ -94,6 +115,20 @@ pub(crate) enum FileCall {
 }
 
 impl Runtime {
+    fn check_descriptor(
+        &self,
+        identity: AdmissionIdentity,
+        descriptor: Option<(Caller, u64)>,
+    ) -> Result<(), Error> {
+        if self.registry.active() == Some(identity.registration)
+            && descriptor == Some((identity.caller, identity.registration.epoch))
+        {
+            Ok(())
+        } else {
+            Err(Error::NotReady)
+        }
+    }
+
     /// Hold the file-owner barrier until the kernel has published every
     /// surviving descriptor transfer for this caller. Set before retirement so
     /// the service cannot observe an empty transfer set in the publication gap.
@@ -121,7 +156,8 @@ impl Runtime {
 
     fn expire_files(&mut self, now_tick: u64) {
         for publication in self.file_publications.iter_mut().flatten() {
-            if !publication.replied
+            if !publication.compensation
+                && !publication.replied
                 && now_tick.wrapping_sub(publication.started_tick) >= TIMEOUT_TICKS
             {
                 publication.failed = true;
@@ -134,12 +170,9 @@ impl Runtime {
         // timeout) the slot is free; the barrier may then proceed and close
         // anything left untransferred.
         for slot in &mut self.file_publications {
-            if slot
-                .as_ref()
-                .is_some_and(|publication| {
-                    matches!(publication.op, api::TRANSFER | api::CLOSE) && publication.replied
-                })
-            {
+            if slot.as_ref().is_some_and(|publication| {
+                matches!(publication.op, api::TRANSFER | api::CLOSE) && publication.replied
+            }) {
                 *slot = None;
             }
         }
@@ -157,9 +190,24 @@ impl Runtime {
             })
     }
 
+    /// A late PREAD has no cursor side effect and its reply no longer names
+    /// a publication. Keep this narrower than whole-image retirement.
+    #[cfg(any(test, all(debug_assertions, feature = "vfs_d2a_test")))]
+    fn cancel_mapping_read(&mut self, caller: Caller, epoch: u64, token: u64) {
+        if let Some(slot) = self.caller_publication(caller) {
+            let publication = self.file_publications[slot].as_ref().unwrap();
+            if publication.op == api::PREAD
+                && publication.token == token
+                && publication.identity.registration.epoch == epoch
+            {
+                self.file_publications[slot] = None;
+            }
+        }
+    }
+
     /// Lexicographically latest retained metadata lease for this caller. The
     /// service still proves the receipt names a live binding before publishing.
-    fn caller_receipt(&self, identity: AdmissionIdentity) -> Option<Receipt> {
+    pub(super) fn caller_receipt(&self, identity: AdmissionIdentity) -> Option<Receipt> {
         self.remote
             .iter()
             .flatten()
@@ -223,6 +271,10 @@ impl Runtime {
             FileOperation::Read { token, length } => {
                 (api::READ, *token, 0, *length as u64, &[][..], None)
             }
+            #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
+            FileOperation::Pread { token, offset, length } => {
+                (api::PREAD, *token, *offset, *length as u64, &[][..], None)
+            }
             FileOperation::Write { token, payload } => (api::WRITE, *token, 0, 0, *payload, None),
             FileOperation::Seek {
                 token,
@@ -275,6 +327,8 @@ impl Runtime {
             failed: false,
             woken: false,
             started_tick: sched.global_tick,
+            token,
+            compensation: false,
             buffer,
         });
         // Completion and teardown cannot observe a published request with an
@@ -305,24 +359,7 @@ impl Runtime {
             .position(Option::is_none)
             .ok_or(Error::Capacity)?;
         let request_id = self.file_ids.allocate().ok_or(Error::Capacity)?;
-        let request = api::Request {
-            registration,
-            caller,
-            request_id,
-            op: api::CLOSE,
-            token,
-            arg0: 0,
-            arg1: 0,
-            length: 0,
-            namespace_id: 0,
-            namespace_generation: 0,
-            receipt_id: 0,
-            receipt_generation: 0,
-            uid: 0,
-            gid: 0,
-            payload: &[],
-        };
-        let bytes = request.encode().map_err(|_| Error::Protocol)?;
+        let bytes = Self::file_close_frame(registration, caller, token, request_id)?;
         let mut buffer = alloc::vec::Vec::new();
         buffer
             .try_reserve_exact(api::FRAME_BYTES)
@@ -340,12 +377,40 @@ impl Runtime {
             op: api::CLOSE,
             replied: false,
             failed: false,
-            // No caller is parked for this terminal result.
             woken: true,
             started_tick: now_tick,
+            token,
+            compensation: false,
             buffer,
         });
         Ok(())
+    }
+
+    fn file_close_frame(
+        registration: Registration,
+        caller: Caller,
+        token: u64,
+        request_id: u64,
+    ) -> Result<[u8; api::FRAME_BYTES], Error> {
+        api::Request {
+            registration,
+            caller,
+            request_id,
+            op: api::CLOSE,
+            token,
+            arg0: 0,
+            arg1: 0,
+            length: 0,
+            namespace_id: 0,
+            namespace_generation: 0,
+            receipt_id: 0,
+            receipt_generation: 0,
+            uid: 0,
+            gid: 0,
+            payload: &[],
+        }
+        .encode()
+        .map_err(|_| Error::Protocol)
     }
 
     pub(super) fn next_file(
@@ -400,6 +465,30 @@ impl Runtime {
                 })
             })
             .ok_or(Error::Identity)?;
+        #[cfg(all(not(test), debug_assertions, feature = "vfs_d1b_test"))]
+        {
+            let publication = self.file_publications[slot].as_ref().unwrap();
+            if publication.compensation {
+                use core::sync::atomic::{AtomicU64, Ordering};
+                static REJECTED_ID: AtomicU64 = AtomicU64::new(0);
+                if REJECTED_ID.swap(reply.request_id, Ordering::Relaxed) != reply.request_id {
+                    crate::serial_println!(
+                        "[VFS-D1B] compensation acknowledgement withheld id={} token={} epoch={} charge=1",
+                        reply.request_id, publication.token, registration.epoch,
+                    );
+                    return Err(Error::Protocol);
+                }
+                crate::serial_println!(
+                    "[VFS-D1B] compensation retry id={} token={} epoch={} errno={}",
+                    reply.request_id, publication.token, registration.epoch, reply.errno,
+                );
+            }
+        }
+        if self.file_publications[slot].as_ref().unwrap().compensation
+            && !matches!(reply.errno, 0 | 9)
+        {
+            return Err(Error::Protocol);
+        }
         {
             let publication = self.file_publications[slot].as_mut().unwrap();
             publication.buffer.clear();
@@ -506,6 +595,8 @@ impl Runtime {
             failed: false,
             woken: false,
             started_tick: now_tick,
+            token,
+            compensation: false,
             buffer,
         });
         Ok(())
@@ -538,21 +629,87 @@ impl Runtime {
         })
     }
 
+    fn finish_open(
+        &mut self,
+        slot: usize,
+        install: impl FnOnce(u64, u64) -> Result<u64, u64>,
+    ) -> Result<FileCompletion, Error> {
+        let publication = self.file_publications[slot].as_mut().unwrap();
+        let caller = publication.identity.caller;
+        if publication.failed {
+            return self.take_file(caller, api::OPEN).ok_or(Error::Protocol);
+        }
+        let reply = api::Reply::decode(&publication.buffer).map_err(|_| Error::Protocol)?;
+        if reply.errno != 0 {
+            return self.take_file(caller, api::OPEN).ok_or(Error::Protocol);
+        }
+        let token = reply.result0;
+        let registration = publication.identity.registration;
+        let (errno, result0) = match install(token, registration.epoch) {
+            Ok(fd) => {
+                self.file_publications[slot] = None;
+                (0, fd)
+            }
+            Err(errno) => {
+                #[cfg(all(not(test), debug_assertions, feature = "vfs_d1b_test"))]
+                crate::serial_println!(
+                    "[VFS-D1B] failed install pid={} incarnation={} image={} epoch={} id={} token={} errno={}",
+                    caller.pid, caller.incarnation, caller.address_space_generation,
+                    registration.epoch, publication.id, token, errno,
+                );
+                let bytes = Self::file_close_frame(registration, caller, token, publication.id)
+                    .expect("validated OPEN reply supplies a valid close identity");
+                publication.buffer.copy_from_slice(&bytes);
+                publication.op = api::CLOSE;
+                publication.token = token;
+                publication.compensation = true;
+                publication.replied = false;
+                publication.woken = true;
+                (errno, 0)
+            }
+        };
+        Ok(FileCompletion {
+            op: api::OPEN,
+            errno,
+            result0,
+            result1: 0,
+            registration_epoch: registration.epoch,
+            payload: alloc::vec::Vec::new(),
+        })
+    }
+
     pub(super) fn retire_file_publications(&mut self, expected: Caller) {
-        for slot in &mut self.file_publications {
-            if slot.as_ref().is_some_and(|p| p.identity.caller == expected) {
-                *slot = None;
+        for slot in 0..self.file_publications.len() {
+            let Some(publication) = self.file_publications[slot]
+                .as_ref()
+                .filter(|publication| publication.identity.caller == expected)
+            else {
+                continue;
+            };
+            if publication.compensation {
+                continue;
+            }
+            if publication.op == api::OPEN && publication.replied && !publication.failed {
+                let _ = self.finish_open(slot, |_, _| Err(125));
+            } else {
+                self.file_publications[slot] = None;
             }
         }
     }
 
     pub(super) fn retire_file_registration(&mut self, expected: Registration) {
         for slot in &mut self.file_publications {
-            if slot
-                .as_ref()
-                .is_some_and(|p| p.identity.registration == expected)
+            if let Some(publication) = slot
+                .as_mut()
+                .filter(|p| p.identity.registration == expected)
             {
-                *slot = None;
+                if matches!(publication.op, api::CLOSE | api::TRANSFER) {
+                    *slot = None;
+                } else {
+                    publication.failed = true;
+                    publication.replied = true;
+                    publication.buffer.clear();
+                }
             }
         }
     }
@@ -586,8 +743,10 @@ impl Runtime {
 pub(crate) fn file_call(
     pid: usize,
     operation: FileOperation<'_>,
+    descriptor: Option<(Caller, u64)>,
     sched: &mut Scheduler,
     caps: &CapabilityBroker,
+    install: impl FnOnce(&mut Scheduler, u64, u64) -> Result<u64, u64>,
 ) -> Result<FileCall, Error> {
     let routed = sched
         .processes
@@ -613,10 +772,26 @@ pub(crate) fn file_call(
     let caller = process_identity(&sched.processes[idx]);
     {
         let mut runtime = RUNTIME.lock();
+        live_registration(&mut runtime, sched, caps);
         runtime.expire_files(sched.global_tick);
+        if let Some((owner, _)) = descriptor {
+            if owner != caller {
+                return Err(Error::Identity);
+            }
+        }
         if let Some(slot) = runtime.caller_publication(caller) {
-            if runtime.file_publications[slot].as_ref().unwrap().op != op {
+            let publication = runtime.file_publications[slot].as_ref().unwrap();
+            if publication.op != op
+                || publication.token != operation.token()
+                || (op != api::OPEN
+                    && descriptor != Some((caller, publication.identity.registration.epoch)))
+            {
                 return Err(Error::Busy);
+            }
+            if op == api::OPEN && publication.replied {
+                return runtime
+                    .finish_open(slot, |token, epoch| install(sched, token, epoch))
+                    .map(FileCall::Complete);
             }
             if let Some(completion) = runtime.take_file(caller, op) {
                 return Ok(FileCall::Complete(completion));
@@ -627,6 +802,9 @@ pub(crate) fn file_call(
     }
     let identity = capture(pid, sched, caps).map_err(|_| Error::Identity)?;
     let mut runtime = RUNTIME.lock();
+    if op != api::OPEN {
+        runtime.check_descriptor(identity, descriptor)?;
+    }
     let receipt = match &operation {
         FileOperation::Open { .. } => {
             Some(runtime.caller_receipt(identity).ok_or(Error::NotReady)?)
@@ -635,6 +813,12 @@ pub(crate) fn file_call(
     };
     runtime.publish_file(identity, operation, receipt, sched)?;
     Ok(FileCall::Pending)
+}
+
+/// Drop the exact cancelled mapping read without touching ordinary Close.
+#[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+pub(crate) fn cancel_mapping_read(caller: Caller, epoch: u64, token: u64) {
+    RUNTIME.lock().cancel_mapping_read(caller, epoch, token);
 }
 
 /// Expire and wake pending file operations at timer or syscall-return points.

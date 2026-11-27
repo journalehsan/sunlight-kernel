@@ -35,6 +35,11 @@ const MOUNT_BOOT: u32 = 1;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[cfg(feature = "vfs-n1o-fat-test")]
+    {
+        debug_log("[VFS-N1O] ring3 panic");
+        debug_log(&alloc::format!("{_info}"));
+    }
     loop {}
 }
 
@@ -205,6 +210,11 @@ pub extern "C" fn _start() -> ! {
     let ep = endpoint_create();
     assert!(nameserver_register("vfs", ep), "VFS registration rejected");
     debug_log("[VFS]  Registered as 'vfs'");
+    #[cfg(feature = "vfs-n1o-fat-test")]
+    if core::hint::black_box(true) {
+        sunlight_vfs_server::directory::attachment::qualify_native_fat(debug_log);
+        sunlight_ipc::ProcessExit::exit(0);
+    }
     #[cfg(feature = "vfs-n1m-block-test")]
     if core::hint::black_box(true) {
         qualify_native_block();
@@ -353,10 +363,19 @@ fn qualify_native_block() -> ! {
 
 /// Bound the work per ordinary IPC turn or payload-free kernel receive hint.
 fn drain_retention(state: &mut State) {
+    #[cfg(feature = "vfs-d1b-test")]
+    let before = state.vfs.lock().open_handle_count();
     state.retention.poll_root_control(
         &mut sunlight_vfs_server::runtime::control::CopiedControl,
         &state.namespace,
     );
+    #[cfg(feature = "vfs-d1b-test")]
+    {
+        let after = state.vfs.lock().open_handle_count();
+        if before != after {
+            debug_log(&alloc::format!("[VFS-D1B] backend handles={before}->{after}"));
+        }
+    }
 }
 
 /// Copied stat work is kernel-origin only; legacy IPC cannot enter this path.
@@ -416,15 +435,7 @@ fn drain_files(state: &mut State) {
         let Ok(Some(frame)) = control.file_next(registration.epoch) else {
             break;
         };
-        let Some(reply) = state
-            .retention
-            .file_request(&mut control, registration, &frame)
-        else {
-            // A structurally invalid frame is left for the kernel timeout; it
-            // is never retransmitted or acknowledged as success.
-            break;
-        };
-        if !control.file_reply(registration.epoch, &reply) {
+        if !state.retention.dispatch_file(&mut control, registration, &frame) {
             break;
         }
     }

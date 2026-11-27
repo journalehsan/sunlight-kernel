@@ -1923,6 +1923,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
         #[cfg(all(debug_assertions, feature = "vfs_l1c_parent_lifecycle_test"))]
         "/bin/vfs-lifecycle-parent" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/vfs-stat-caller"))),
+        #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
+        "/bin/vfs-d1b-caller" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/vfs-stat-caller"))),
         #[cfg(feature = "vfs_stat_failure_test")]
         "/bin/vfs-stat-caller" => Ok(include_bytes!(
             "../../../target/x86_64-unknown-none/release/vfs-stat-caller"

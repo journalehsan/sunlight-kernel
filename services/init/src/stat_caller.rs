@@ -39,6 +39,24 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 32) },
         3
     );
+    #[cfg(feature = "vfs-d1b-test")]
+    match args[1] {
+        #[cfg(feature = "vfs-d2a-test")]
+        "private-mmap" => run_private_mmap(),
+        "descriptor-lifecycle" => run_native_descriptors(args[2] == "exec"),
+        "descriptor-exec" => {
+            assert_eq!(unsafe { sunlight_libc::sys::syscall2(0xf1c1, 23, 2) }, 1);
+            let mut bytes = [0; 10];
+            assert_eq!(sunlight_libc::read(sunlight_libc::Fd(8), &mut bytes), Err(sunlight_libc::Errno::BadFd));
+            assert_eq!(sunlight_libc::read(sunlight_libc::Fd(9), &mut bytes[..5]), Ok(5));
+            assert_eq!(&bytes[..5], b" from");
+            assert_eq!(sunlight_libc::read(sunlight_libc::Fd(10), &mut bytes[..5]), Ok(5));
+            assert_eq!(&bytes[..5], b" cat\n");
+            sunlight_ipc::debug_log("[VFS-D1B] exec inherited shared cursor and closed CLOEXEC");
+            sunlight_libc::exit(0);
+        }
+        _ => {}
+    }
     #[cfg(feature = "vfs-l1c-file-ipc-test")]
     if args[1] == "file-ipc" {
         let start = sunlight_ipc::monotonic_millis();
@@ -544,4 +562,163 @@ fn verify_native_denied() {
     assert_eq!(linux_output, [0xa5; 144]);
     sunlight_ipc::debug_log("[VFS-RPC] Linux stat withdrawn profile/no kernel fallback OK");
     sunlight_ipc::debug_log("[VFS-RPC] native StatPath withdrawn profile/no kernel fallback OK");
+}
+
+#[cfg(feature = "vfs-d1b-test")]
+fn run_native_descriptors(exec: bool) -> ! {
+    use sunlight_libc::{
+        close, dup, dup2, lseek, open, open_with_flags, read, write, Errno, Fd, O_CLOEXEC,
+        O_RDWR, SEEK_CUR, SEEK_SET,
+    };
+
+    const PATH: &[u8] = b"/tests/cat-hello";
+    let checkpoint = |mode, arg| unsafe { sunlight_libc::sys::syscall2(0xf1c1, mode, arg) };
+    assert_eq!(checkpoint(20, 0), 1);
+
+    let fd = open_with_flags(PATH, O_RDWR).expect("service OPEN and FD installation");
+    let mut bytes = [0; 5];
+    assert_eq!(read(fd, &mut bytes), Ok(5));
+    assert_eq!(&bytes, b"hello");
+    let duplicate = dup(fd).unwrap();
+    assert_eq!(lseek(duplicate, 0, SEEK_CUR), Ok(5));
+    let pread = |fd: Fd, bytes: &mut [u8], offset| unsafe {
+        sunlight_libc::sys::syscall4(
+            0xf1c5, fd.0 as u64, bytes.as_mut_ptr() as u64, bytes.len() as u64, offset,
+        )
+    };
+    assert_eq!(pread(fd, &mut bytes, 6), 5);
+    assert_eq!(&bytes, b"from ");
+    assert_eq!(pread(duplicate, &mut bytes, 10), 5);
+    assert_eq!(&bytes, b" cat\n");
+    assert_eq!(lseek(fd, 0, SEEK_CUR), Ok(5));
+    assert_eq!(lseek(fd, 0, SEEK_SET), Ok(0));
+    assert_eq!(write(duplicate, b"HELLO"), Ok(5));
+    assert_eq!(pread(fd, &mut bytes, 0), 5);
+    assert_eq!(&bytes, b"HELLO");
+    assert_eq!(lseek(duplicate, 0, SEEK_SET), Ok(0));
+    assert_eq!(write(fd, b"hello"), Ok(5));
+    close(fd).unwrap();
+    assert_eq!(read(duplicate, &mut bytes), Ok(5));
+    assert_eq!(&bytes, b" from");
+    close(duplicate).unwrap();
+    sunlight_ipc::debug_log("[VFS-D1B] native open/read/write/seek/pread/dup/final close");
+
+    let fd = open(PATH).unwrap();
+    for slot in 0..256 {
+        if slot != fd.0 {
+            assert_eq!(dup2(fd, Fd(slot)), Ok(Fd(slot)));
+        }
+    }
+    assert_eq!(checkpoint(23, 256), 1);
+    assert_eq!(open(PATH), Err(Errno::Failed));
+    assert_eq!(checkpoint(23, 256), 1);
+    assert_eq!(read(Fd(255), &mut bytes), Ok(5));
+    assert_eq!(&bytes, b"hello");
+    sunlight_ipc::debug_log("[VFS-D1B] full FD table preserved");
+
+    if exec {
+        for slot in 0..256 {
+            if !matches!(slot, 9 | 10) {
+                close(Fd(slot)).unwrap();
+            }
+        }
+        let cloexec = open_with_flags(PATH, O_CLOEXEC).unwrap();
+        assert_ne!(cloexec, Fd(9));
+        assert_ne!(cloexec, Fd(10));
+        assert_eq!(dup2(cloexec, Fd(8)), Ok(Fd(8)));
+        assert_eq!(unsafe { sunlight_libc::sys::syscall3(49, 8, 2, 1) }, 0);
+        close(cloexec).unwrap();
+        assert_eq!(checkpoint(23, 3), 1);
+        sunlight_libc::exec(
+            b"/bin/vfs-d1b-caller",
+            &[b"vfs-d1b-caller", b"descriptor-exec", b"0"],
+        ).unwrap();
+        panic!("exec returned to original image");
+    }
+    sunlight_libc::exit(0);
+}
+
+#[cfg(feature = "vfs-d2a-test")]
+fn run_private_mmap() -> ! {
+    use sunlight_libc::{close, lseek, open, open_with_flags, read, write, O_RDWR, O_WRONLY, SEEK_CUR, SEEK_SET};
+    use sunlight_libc::mman::munmap;
+    use sunlight_libc::sys::{syscall2, syscall6};
+
+    const PATH: &[u8] = b"/tests/cat-hello";
+    const PAGE: usize = 4096;
+    const NX: u64 = 1 << 63;
+    const PRESENT: u64 = 1;
+    const WRITE: u64 = 2;
+    const USER: u64 = 4;
+    const PRIVATE: u64 = 2;
+    const FIXED: u64 = 0x10;
+    const NOREPLACE: u64 = 0x100000;
+    const TARGET: u64 = 0x2080_0000_0000;
+    let checkpoint = |mode, arg| unsafe { syscall2(0xf1c1, mode, arg) };
+    let map = |addr, len, prot, flags, fd: sunlight_libc::Fd, offset| unsafe {
+        syscall6(50, addr, len as u64, prot, flags, fd.0 as u64, offset as u64)
+    };
+    assert_eq!(checkpoint(20, 0), 1);
+    let fd = open_with_flags(PATH, O_RDWR).unwrap();
+    assert_eq!(lseek(fd, PAGE as i64, SEEK_SET), Ok(PAGE as u64));
+    assert_eq!(write(fd, b"tail-data"), Ok(9));
+    assert_eq!(lseek(fd, 5, SEEK_SET), Ok(5));
+    let baseline = checkpoint(26, 0);
+    assert_eq!(map(0, PAGE, 7, PRIVATE, fd, 0), u64::MAX);
+    assert_eq!(map(0, PAGE, 1, PRIVATE, fd, 1), u64::MAX);
+    let write_only = open_with_flags(PATH, O_WRONLY).unwrap();
+    assert_eq!(map(0, PAGE, 1, PRIVATE, write_only, 0), u64::MAX);
+    close(write_only).unwrap();
+
+    for fault in 1..=6 {
+        assert_eq!(checkpoint(24, fault), 1);
+        let placement = if fault == 5 { FIXED } else { NOREPLACE };
+        assert_eq!(map(TARGET, PAGE + 9, 3, PRIVATE | placement, fd, 0), u64::MAX);
+        assert_eq!(checkpoint(25, TARGET), 0);
+        assert_eq!(checkpoint(25, TARGET + PAGE as u64), 0);
+        assert_eq!(checkpoint(26, fault), baseline);
+    }
+    for cycle in 0..4 {
+        let address = map(0, PAGE + 9, 3, PRIVATE, fd, 0);
+        assert_ne!(address, u64::MAX);
+        assert_eq!(checkpoint(25, address), PRESENT | USER | WRITE | NX);
+        assert_eq!(checkpoint(25, address + PAGE as u64), PRESENT | USER | WRITE | NX);
+        let bytes = unsafe { core::slice::from_raw_parts_mut(address as *mut u8, 2 * PAGE) };
+        assert_eq!(&bytes[..15], b"hello from cat\n");
+        assert!(bytes[15..PAGE].iter().all(|byte| *byte == 0));
+        assert_eq!(&bytes[PAGE..PAGE + 9], b"tail-data");
+        assert!(bytes[PAGE + 9..].iter().all(|byte| *byte == 0));
+        bytes[0] = b'X';
+        assert_eq!(bytes[0], b'X');
+        munmap(address as *mut u8, PAGE + 9).unwrap();
+        assert_eq!(checkpoint(25, address), 0);
+        assert_eq!(checkpoint(26, 10 + cycle), baseline);
+    }
+    assert_eq!(lseek(fd, 0, SEEK_CUR), Ok(5));
+    let mut bytes = [0; 5];
+    assert_eq!(read(fd, &mut bytes), Ok(5));
+    assert_eq!(&bytes, b" from");
+    assert_eq!(lseek(fd, 0, SEEK_SET), Ok(0));
+    assert_eq!(read(fd, &mut bytes), Ok(5));
+    assert_eq!(&bytes, b"hello");
+
+    let address = map(TARGET, PAGE, 1, PRIVATE | NOREPLACE, fd, PAGE);
+    assert_eq!(address, TARGET);
+    assert_eq!(checkpoint(25, address), PRESENT | USER | NX);
+    assert_eq!(map(TARGET, PAGE, 1, PRIVATE | NOREPLACE, fd, 0), u64::MAX);
+    assert_eq!(map(TARGET, PAGE, 5, PRIVATE | FIXED, fd, PAGE), TARGET);
+    assert_eq!(checkpoint(25, address), PRESENT | USER);
+    let guard = map(0, PAGE, 0, PRIVATE, fd, 2 * PAGE);
+    assert_ne!(guard, u64::MAX);
+    assert_eq!(checkpoint(25, guard), PRESENT | NX);
+    munmap(guard as *mut u8, PAGE).unwrap();
+    close(fd).unwrap();
+    assert_eq!(unsafe { core::slice::from_raw_parts(address as *const u8, 9) }, b"tail-data");
+    let check = open(PATH).unwrap();
+    assert_eq!(read(check, &mut bytes), Ok(5));
+    assert_eq!(&bytes, b"hello");
+    close(check).unwrap();
+    assert_eq!(checkpoint(26, 20), baseline + 1);
+    sunlight_ipc::debug_log("[VFS-D2A] Ring-3 private mmap checks passed; exiting with a live page");
+    sunlight_libc::exit(0);
 }

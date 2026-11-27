@@ -680,6 +680,8 @@ pub(crate) use file::{
     file_call as vfs_file_call, wake_file_callers as vfs_wake_file_callers, FileCall,
     FileCompletion, FileOperation,
 };
+#[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+pub(crate) use file::cancel_mapping_read;
 use inheritance::Inheritance;
 pub(crate) use inheritance::{capture_inheritance, provision_inheritance};
 pub(crate) use stat::{
@@ -691,6 +693,13 @@ pub(crate) use transport::{control, file_control, initial_cwd, FileControl};
 #[path = "vfs_registration/wakeup.rs"]
 mod wakeup;
 pub(super) use wakeup::{take_control_wakeup, wake_control_receivers};
+
+#[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+pub(crate) fn mapping_epoch(sched: &Scheduler, caps: &CapabilityBroker) -> Option<u64> {
+    let identity = capture(sched.current_pid(), sched, caps).ok()?;
+    RUNTIME.lock().caller_receipt(identity)?;
+    Some(identity.registration.epoch)
+}
 
 /// Capture from a retained process record under SCHEDULER, never a wire PID.
 pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
@@ -708,6 +717,8 @@ pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
 /// preparation. Remote ownership survives retirement. No synchronous IPC,
 /// remote drain or VM cleanup occurs here.
 pub(crate) fn retire_process(expected: Caller) {
+    #[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
+    crate::process::mmap::service::retire(expected);
     RUNTIME.lock().retire_process(expected);
 }
 
@@ -757,6 +768,7 @@ pub(crate) fn transfer_file_owner(
 pub(crate) fn close_file_owner(
     caller: Caller,
     token: u64,
+    epoch: u64,
     sched: &mut Scheduler,
     caps: &CapabilityBroker,
 ) -> bool {
@@ -764,6 +776,9 @@ pub(crate) fn close_file_owner(
     let Some(registration) = live_registration(&mut runtime, sched, caps) else {
         return false;
     };
+    if registration.epoch != epoch {
+        return false;
+    }
     runtime
         .publish_file_close(registration, caller, token, sched.global_tick)
         .is_ok()

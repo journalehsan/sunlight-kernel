@@ -368,6 +368,8 @@ impl Runtime {
         let binding = self.namespaces.install_receipt(identity, receipt, grants)
             .map_err(|_| Error::Preparation)?;
         *local = Some(LocalLease::Bound { receipt, binding });
+        #[cfg(all(not(test), debug_assertions, feature = "vfs_d1b_test"))]
+        fixture::record_native_descriptor_receipt(receipt);
         #[cfg(not(test))]
         if let Some(owner) = self.spawns[slot].as_mut().unwrap().owner.take() {
             owner.disarm();
@@ -771,6 +773,10 @@ pub(crate) fn publish(
             sched.pending_children.eligible(identity, true).expect("validated private owner");
             let mut process = sched.pending_children.transfer(identity, true)
                 .expect("exclusive scheduler publication owner");
+            #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
+            {
+                process.vfs_file_routed = true;
+            }
             process.vfs_root_metadata = true;
             process.vfs_stat_routed = launch.stat_routed;
             process.vfs_root_rebased = launch.root_rebased;
@@ -1272,7 +1278,138 @@ pub(crate) mod fixture {
     #[cfg(feature = "vfs_l1c_file_ipc_test")]
     pub(crate) use accounting::file_ipc_checkpoint;
 
-    pub(crate) fn run(mode: u64) -> Option<u64> {
+    #[cfg(feature = "vfs_d1b_test")]
+    static DESCRIPTOR_RECEIPT: Mutex<Option<Receipt>> = Mutex::new(None);
+
+    #[cfg(feature = "vfs_d1b_test")]
+    pub(super) fn record_native_descriptor_receipt(receipt: Receipt) {
+        *DESCRIPTOR_RECEIPT.lock() = Some(receipt);
+        log_descriptor_receipt("before enqueue", receipt);
+    }
+
+    #[cfg(feature = "vfs_d1b_test")]
+    fn log_descriptor_receipt(phase: &str, receipt: Receipt) {
+        let scope = receipt.scope();
+        crate::serial_println!(
+            "[VFS-D1B] {} pid={} incarnation={} image={} namespace={} generation={} epoch={}",
+            phase, scope.caller.pid, scope.caller.incarnation,
+            scope.caller.address_space_generation, scope.namespace_id,
+            scope.namespace_generation, receipt.registration().epoch,
+        );
+    }
+
+    #[cfg(feature = "vfs_d1b_test")]
+    fn observe_native_descriptor_caller() -> u64 {
+        let sched = SCHEDULER.lock();
+        let process = sched.current_process();
+        if !process.vfs_file_routed || PUBLICATION.load(Relaxed) != process.pid {
+            return u64::MAX;
+        }
+        assert_eq!(process.state, ProcessState::Running);
+        let identity = capture(process.pid, &sched, &CAP_BROKER.lock()).expect("live registration");
+        let runtime = RUNTIME.lock();
+        let source = runtime.capture_inheritance(identity).expect("published namespace binding");
+        let receipt = runtime.source_receipt(&source).expect("published namespace receipt");
+        assert_eq!(receipt.scope().caller, identity.caller);
+        assert_eq!(Some(receipt), *DESCRIPTOR_RECEIPT.lock());
+        log_descriptor_receipt("Ring-3 syscall", receipt);
+        1
+    }
+
+    #[cfg(feature = "vfs_d1b_test")]
+    fn descriptor_checkpoint(mode: u64, arg: u64) -> u64 {
+        use crate::process::fd_table::FdTable;
+
+        let sched = SCHEDULER.lock();
+        let current = sched.current_process();
+        if mode == 23 {
+            if !current.vfs_file_routed {
+                return u64::MAX;
+            }
+            let fds = &current.fd_table;
+            let slots = (0..256).filter(|&fd| fds.get(fd).is_some()).count();
+            assert_eq!(slots as u64, arg);
+            let service_refs = (0..256)
+                .filter(|&fd| fds.get(fd).is_some_and(|entry| entry.handle.is_service()))
+                .count();
+            let (service_rows, kernel_service_refs) = FdTable::service_description_counts();
+            assert_eq!(kernel_service_refs, service_refs);
+            let owned_frames = crate::PMM.lock().owned_frame_count(current.pid as u32);
+            crate::serial_println!(
+                "[VFS-D1B] live pid={} image={} slots={} service_rows={} service_refs={} owned_frames={}",
+                current.pid, process_identity(current).address_space_generation, slots,
+                service_rows, service_refs, owned_frames,
+            );
+            return 1;
+        }
+
+        if current.pid != 1 {
+            return u64::MAX;
+        }
+        let (descriptions, refs) = FdTable::description_counts();
+        let (service_rows, service_refs) = FdTable::service_description_counts();
+        if mode == 21 {
+            assert_eq!((service_rows, service_refs), (0, 0));
+            crate::serial_println!(
+                "[VFS-D1B] baseline descriptions={} refs={} service_rows={} service_refs={}",
+                descriptions, refs, service_rows, service_refs,
+            );
+            return 1;
+        }
+
+        let pid = arg as usize;
+        let receipt = DESCRIPTOR_RECEIPT.lock().expect("recorded descriptor receipt");
+        assert_eq!(receipt.scope().caller.pid, arg);
+        let index = sched.process_index_by_pid(pid).expect("tracked descriptor caller");
+        let process = &sched.processes[index];
+        assert_eq!(receipt.scope().caller.incarnation, process.foreground.incarnation);
+        let runtime = RUNTIME.lock();
+        if process.state != ProcessState::Reaped
+            || runtime.file_publications.iter().flatten().any(|p| p.identity.caller.pid == arg)
+            || runtime.remote.iter().flatten().any(|remote| {
+                remote.callers.iter().flatten().any(|row| row.caller.pid == arg)
+                    || remote.local.iter().flatten().any(|row| match row {
+                        LocalLease::Preparing { scope, .. } => scope.caller.pid == arg,
+                        LocalLease::Bound { receipt, .. } => receipt.scope().caller.pid == arg,
+                    })
+                    || remote.ownership.releases().any(|frame| {
+                        matches!(frame, Frame::Release(receipt) if receipt.scope().caller.pid == arg)
+                    })
+            })
+        {
+            return 0;
+        }
+        drop(runtime);
+        assert_eq!((service_rows, service_refs), (0, 0));
+        assert!((0..256).all(|fd| process.fd_table.get(fd).is_none()));
+        assert!(process.address_space.is_reclaimed() && process.kernel_stack.is_none());
+        let owned_frames = crate::PMM.lock().owned_frame_count(pid as u32);
+        assert_eq!(owned_frames, 0);
+        crate::serial_println!(
+            "[VFS-D1B] settled pid={} incarnation={} descriptions={} refs={} service_rows={} service_refs={} owned_frames={}",
+            pid, process.foreground.incarnation, descriptions, refs, service_rows, service_refs, owned_frames,
+        );
+        1
+    }
+
+    #[cfg(feature = "vfs_d2a_test")]
+    pub(crate) fn is_d2a_caller(pid: usize) -> bool {
+        PUBLICATION.load(Relaxed) == pid
+    }
+
+    pub(crate) fn run(mode: u64, _arg: u64) -> Option<u64> {
+        #[cfg(feature = "vfs_d2a_test")]
+        if matches!(mode, 24..=26) {
+            return Some(crate::process::mmap::service::checkpoint(mode, _arg));
+        }
+        #[cfg(feature = "vfs_d1b_test")]
+        if matches!(mode, 21..=23) {
+            return Some(descriptor_checkpoint(mode, _arg));
+        }
+        #[cfg(feature = "vfs_d1b_test")]
+        if mode == 20 {
+            return Some(observe_native_descriptor_caller());
+        }
         #[cfg(feature = "vfs_l1c_parent_lifecycle_test")]
         if matches!(mode, 12..=18) {
             return Some(parent_lifecycle::stage(mode));
@@ -1309,13 +1446,23 @@ pub(crate) mod fixture {
                         let bytes = (mode == 8).then_some(r3::IMAGE);
                         #[cfg(not(feature = "vfs_l1c_r3_test"))]
                         let bytes: Option<&[u8]> = None;
+                        #[cfg(feature = "vfs_d1b_test")]
+                        let bytes = Some(include_bytes!(concat!(env!("OUT_DIR"), "/vfs-stat-caller")).as_slice()).or(bytes);
                         bytes.unwrap_or(if cfg!(feature = "vfs_l1c_2_test") {
                             crate::SUNLIGHT_UTILS_ELF_BYTES
                         } else {
                             crate::SUNLIGHT_TRUE_ELF_BYTES
                         })
                     },
-                    argv: if cfg!(feature = "vfs_l1c_r3_test") && mode == 8 {
+                    argv: if cfg!(feature = "vfs_d1b_test") {
+                        if cfg!(feature = "vfs_d2a_test") && _arg == 3 {
+                            &[b"vfs-d1b-caller", b"private-mmap", b"0"]
+                        } else if _arg == 0 {
+                            &[b"vfs-d1b-caller", b"descriptor-lifecycle", b"exit"]
+                        } else {
+                            &[b"vfs-d1b-caller", b"descriptor-lifecycle", b"exec"]
+                        }
+                    } else if cfg!(feature = "vfs_l1c_r3_test") && mode == 8 {
                         &[b"vfs-r3-stat", b"/tmp"]
                     } else if cfg!(feature = "vfs_l1c_2_test") {
                         &[b"stat", b"/tmp"]

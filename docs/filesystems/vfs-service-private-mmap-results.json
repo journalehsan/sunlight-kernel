@@ -1,0 +1,992 @@
+{
+  "stage": "VFS-D2A",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "scope": "isolated debug-only authenticated native caller, eager private file-backed mmap",
+  "native": {
+    "status": "PASS",
+    "feature": "vfs_d2a_test",
+    "elf": {
+      "path": "target/vfs-d2a/park.elf",
+      "sha256": "e9144c5c266e9bb4c6e73447f692ce0f60ebfb1039aa2e5cf04ae576abd053c8"
+    },
+    "iso": {
+      "path": "target/vfs-d2a/park.iso",
+      "sha256": "fdcecbec1bf8d961d02ec931fc1ef3f1a8a25c9eaa9cfdc6f157708f2e1160f4"
+    },
+    "build_log": "target/vfs-d2a/native-build-park.log",
+    "runs": [
+      {
+        "status": "PASS",
+        "vcpus": 1,
+        "exit_code": 0,
+        "serial": "target/vfs-d2a/up-park.serial.log",
+        "qemu_args": "target/vfs-d2a/up-park.args",
+        "commits": [
+          {
+            "line": 2223,
+            "pid": 10,
+            "base": 68719476736,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2228,
+            "pid": 10,
+            "base": 68719484928,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2233,
+            "pid": 10,
+            "base": 68719493120,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2238,
+            "pid": 10,
+            "base": 68719501312,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2246,
+            "pid": 10,
+            "base": 35734127902720,
+            "span": 4096,
+            "bytes": 9,
+            "offset": 4096,
+            "prot": 1
+          },
+          {
+            "line": 2250,
+            "pid": 10,
+            "base": 35734127902720,
+            "span": 4096,
+            "bytes": 9,
+            "offset": 4096,
+            "prot": 5
+          },
+          {
+            "line": 2252,
+            "pid": 10,
+            "base": 68719509504,
+            "span": 4096,
+            "bytes": 0,
+            "offset": 8192,
+            "prot": 0
+          }
+        ],
+        "errors": [],
+        "identity": {
+          "line": 2162,
+          "pid": 10,
+          "incarnation": 689,
+          "image": 1365,
+          "namespace": 1,
+          "generation": 10,
+          "epoch": 1
+        },
+        "ring3_line": 2170,
+        "ring3_assertions_line": 2257,
+        "rollback": [
+          {
+            "line": 2187,
+            "pid": 10,
+            "fault": 1,
+            "staged_bytes": 4096,
+            "error": "FileIo",
+            "status": "PASS"
+          },
+          {
+            "line": 2193,
+            "pid": 10,
+            "fault": 2,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2199,
+            "pid": 10,
+            "fault": 3,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2205,
+            "pid": 10,
+            "fault": 4,
+            "staged_bytes": 4105,
+            "error": "FileIo",
+            "status": "PASS"
+          },
+          {
+            "line": 2211,
+            "pid": 10,
+            "fault": 5,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2217,
+            "pid": 10,
+            "fault": 6,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          }
+        ],
+        "checkpoints": [
+          {
+            "line": 2177,
+            "pid": 10,
+            "sample": 0,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2189,
+            "pid": 10,
+            "sample": 1,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2195,
+            "pid": 10,
+            "sample": 2,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2201,
+            "pid": 10,
+            "sample": 3,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2207,
+            "pid": 10,
+            "sample": 4,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2213,
+            "pid": 10,
+            "sample": 5,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2219,
+            "pid": 10,
+            "sample": 6,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2224,
+            "pid": 10,
+            "sample": 10,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2229,
+            "pid": 10,
+            "sample": 11,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2234,
+            "pid": 10,
+            "sample": 12,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2239,
+            "pid": 10,
+            "sample": 13,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2256,
+            "pid": 10,
+            "sample": 20,
+            "owned_frames": 538,
+            "regions": 5,
+            "service_rows": 0,
+            "service_refs": 0
+          }
+        ],
+        "source_final_close": {
+          "line": 2253,
+          "pid": 10,
+          "incarnation": 689,
+          "image": 1365,
+          "epoch": 1,
+          "id": 101,
+          "op": 6,
+          "token": 12,
+          "result": 0,
+          "errno": 0,
+          "handles": 0,
+          "ack": 1
+        },
+        "settled": {
+          "line": 2268,
+          "pid": 10,
+          "incarnation": 689,
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "owned_frames": 0
+        },
+        "backend_handles_at_settlement": 2,
+        "backend_baseline_line": 2264
+      },
+      {
+        "status": "PASS",
+        "vcpus": 2,
+        "exit_code": 0,
+        "serial": "target/vfs-d2a/smp2-park.serial.log",
+        "qemu_args": "target/vfs-d2a/smp2-park.args",
+        "commits": [
+          {
+            "line": 2223,
+            "pid": 9,
+            "base": 68719476736,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2228,
+            "pid": 9,
+            "base": 68719484928,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2233,
+            "pid": 9,
+            "base": 68719493120,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2237,
+            "pid": 9,
+            "base": 68719501312,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2246,
+            "pid": 9,
+            "base": 35734127902720,
+            "span": 4096,
+            "bytes": 9,
+            "offset": 4096,
+            "prot": 1
+          },
+          {
+            "line": 2250,
+            "pid": 9,
+            "base": 35734127902720,
+            "span": 4096,
+            "bytes": 9,
+            "offset": 4096,
+            "prot": 5
+          },
+          {
+            "line": 2252,
+            "pid": 9,
+            "base": 68719509504,
+            "span": 4096,
+            "bytes": 0,
+            "offset": 8192,
+            "prot": 0
+          }
+        ],
+        "errors": [],
+        "identity": {
+          "line": 2159,
+          "pid": 9,
+          "incarnation": 689,
+          "image": 1365,
+          "namespace": 1,
+          "generation": 10,
+          "epoch": 1
+        },
+        "ring3_line": 2170,
+        "ring3_assertions_line": 2257,
+        "rollback": [
+          {
+            "line": 2186,
+            "pid": 9,
+            "fault": 1,
+            "staged_bytes": 4096,
+            "error": "FileIo",
+            "status": "PASS"
+          },
+          {
+            "line": 2193,
+            "pid": 9,
+            "fault": 2,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2198,
+            "pid": 9,
+            "fault": 3,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2205,
+            "pid": 9,
+            "fault": 4,
+            "staged_bytes": 4105,
+            "error": "FileIo",
+            "status": "PASS"
+          },
+          {
+            "line": 2211,
+            "pid": 9,
+            "fault": 5,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2217,
+            "pid": 9,
+            "fault": 6,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          }
+        ],
+        "checkpoints": [
+          {
+            "line": 2177,
+            "pid": 9,
+            "sample": 0,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2189,
+            "pid": 9,
+            "sample": 1,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2195,
+            "pid": 9,
+            "sample": 2,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2201,
+            "pid": 9,
+            "sample": 3,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2207,
+            "pid": 9,
+            "sample": 4,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2213,
+            "pid": 9,
+            "sample": 5,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2219,
+            "pid": 9,
+            "sample": 6,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2224,
+            "pid": 9,
+            "sample": 10,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2229,
+            "pid": 9,
+            "sample": 11,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2234,
+            "pid": 9,
+            "sample": 12,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2239,
+            "pid": 9,
+            "sample": 13,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2256,
+            "pid": 9,
+            "sample": 20,
+            "owned_frames": 538,
+            "regions": 5,
+            "service_rows": 0,
+            "service_refs": 0
+          }
+        ],
+        "source_final_close": {
+          "line": 2253,
+          "pid": 9,
+          "incarnation": 689,
+          "image": 1365,
+          "epoch": 1,
+          "id": 101,
+          "op": 6,
+          "token": 12,
+          "result": 0,
+          "errno": 0,
+          "handles": 0,
+          "ack": 1
+        },
+        "settled": {
+          "line": 2267,
+          "pid": 9,
+          "incarnation": 689,
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "owned_frames": 0
+        },
+        "backend_handles_at_settlement": 2,
+        "backend_baseline_line": 2268
+      },
+      {
+        "status": "PASS",
+        "vcpus": 4,
+        "exit_code": 0,
+        "serial": "target/vfs-d2a/smp4-park.serial.log",
+        "qemu_args": "target/vfs-d2a/smp4-park.args",
+        "commits": [
+          {
+            "line": 2232,
+            "pid": 11,
+            "base": 68719476736,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2236,
+            "pid": 11,
+            "base": 68719484928,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2242,
+            "pid": 11,
+            "base": 68719493120,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2246,
+            "pid": 11,
+            "base": 68719501312,
+            "span": 8192,
+            "bytes": 4105,
+            "offset": 0,
+            "prot": 3
+          },
+          {
+            "line": 2255,
+            "pid": 11,
+            "base": 35734127902720,
+            "span": 4096,
+            "bytes": 9,
+            "offset": 4096,
+            "prot": 1
+          },
+          {
+            "line": 2259,
+            "pid": 11,
+            "base": 35734127902720,
+            "span": 4096,
+            "bytes": 9,
+            "offset": 4096,
+            "prot": 5
+          },
+          {
+            "line": 2261,
+            "pid": 11,
+            "base": 68719509504,
+            "span": 4096,
+            "bytes": 0,
+            "offset": 8192,
+            "prot": 0
+          }
+        ],
+        "errors": [],
+        "identity": {
+          "line": 2169,
+          "pid": 11,
+          "incarnation": 689,
+          "image": 1365,
+          "namespace": 1,
+          "generation": 10,
+          "epoch": 1
+        },
+        "ring3_line": 2177,
+        "ring3_assertions_line": 2266,
+        "rollback": [
+          {
+            "line": 2196,
+            "pid": 11,
+            "fault": 1,
+            "staged_bytes": 4096,
+            "error": "FileIo",
+            "status": "PASS"
+          },
+          {
+            "line": 2202,
+            "pid": 11,
+            "fault": 2,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2208,
+            "pid": 11,
+            "fault": 3,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2214,
+            "pid": 11,
+            "fault": 4,
+            "staged_bytes": 4105,
+            "error": "FileIo",
+            "status": "PASS"
+          },
+          {
+            "line": 2219,
+            "pid": 11,
+            "fault": 5,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          },
+          {
+            "line": 2225,
+            "pid": 11,
+            "fault": 6,
+            "staged_bytes": 4105,
+            "error": "NoMemory",
+            "status": "PASS"
+          }
+        ],
+        "checkpoints": [
+          {
+            "line": 2187,
+            "pid": 11,
+            "sample": 0,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2198,
+            "pid": 11,
+            "sample": 1,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2204,
+            "pid": 11,
+            "sample": 2,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2210,
+            "pid": 11,
+            "sample": 3,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2216,
+            "pid": 11,
+            "sample": 4,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2222,
+            "pid": 11,
+            "sample": 5,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2228,
+            "pid": 11,
+            "sample": 6,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2233,
+            "pid": 11,
+            "sample": 10,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2238,
+            "pid": 11,
+            "sample": 11,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2243,
+            "pid": 11,
+            "sample": 12,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2248,
+            "pid": 11,
+            "sample": 13,
+            "owned_frames": 537,
+            "regions": 4,
+            "service_rows": 1,
+            "service_refs": 1
+          },
+          {
+            "line": 2265,
+            "pid": 11,
+            "sample": 20,
+            "owned_frames": 538,
+            "regions": 5,
+            "service_rows": 0,
+            "service_refs": 0
+          }
+        ],
+        "source_final_close": {
+          "line": 2262,
+          "pid": 11,
+          "incarnation": 689,
+          "image": 1365,
+          "epoch": 1,
+          "id": 101,
+          "op": 6,
+          "token": 12,
+          "result": 0,
+          "errno": 0,
+          "handles": 0,
+          "ack": 1
+        },
+        "settled": {
+          "line": 2278,
+          "pid": 11,
+          "incarnation": 689,
+          "descriptions": 72,
+          "refs": 72,
+          "service_rows": 0,
+          "service_refs": 0,
+          "owned_frames": 0
+        },
+        "backend_handles_at_settlement": 2,
+        "backend_baseline_line": 2276
+      }
+    ],
+    "checks": {
+      "contents": "PASS",
+      "multi_page_partial_eof": "PASS",
+      "nonzero_offset": "PASS",
+      "permissions": "PASS",
+      "private_writes": "PASS",
+      "source_close": "PASS",
+      "cursor": "PASS",
+      "exact_fixed_and_noreplace": "PASS",
+      "ordinary_unmap": "PASS",
+      "exit_with_live_mapping": "PASS",
+      "frame_and_handle_accounting": "PASS",
+      "injected_epoch_rejection": "PASS",
+      "live_service_withdrawal_while_parked": "NOT_RUN",
+      "live_caller_exit_or_exec_while_parked": "NOT_RUN",
+      "swap_and_fault_restore": "NOT_RUN"
+    },
+    "prior_controls": [
+      {
+        "status": "PARTIAL",
+        "vcpus": 2,
+        "log": "target/vfs-d2a/smp2.serial.log",
+        "reason": "D1B fixture timed out before D2A"
+      },
+      {
+        "status": "FAIL",
+        "vcpus": 2,
+        "log": "target/vfs-d2a/smp2-verified.serial.log",
+        "reason": "Ready-before-park replay rejected as Busy"
+      },
+      {
+        "status": "FAIL",
+        "vcpus": 4,
+        "log": "target/vfs-d2a/smp4-verified.serial.log",
+        "reason": "Ready-before-park replay rejected as Busy"
+      }
+    ]
+  },
+  "rollback_cases": {
+    "1": "Injected read failure after staging a full page",
+    "2": "First private frame allocation failure",
+    "3": "First page-table allocation failure after allocating a private frame",
+    "4": "Injected stale service epoch at commit",
+    "5": "Partial fixed-address page-table allocation failure",
+    "6": "Second private frame allocation failure after installing the first leaf"
+  },
+  "host": {
+    "status": "PASS",
+    "mapping_reply_assembly": {
+      "status": "PASS",
+      "passed": 3,
+      "log": "target/vfs-d2a/mapping-host-final.log"
+    },
+    "positional": {
+      "status": "PASS",
+      "passed": 9,
+      "log": "target/vfs-d2a/positional.log"
+    },
+    "filesystems_ipc_vfs_and_virtio": {
+      "status": "PASS",
+      "passed": 425,
+      "log": "target/vfs-d2a/host-final.log"
+    },
+    "registration": {
+      "status": "PASS",
+      "passed": 112,
+      "log": "target/vfs-d2a/registration-final.log"
+    },
+    "fd_description": {
+      "status": "PASS",
+      "passed": 19,
+      "log": "target/vfs-d2a/fd-description.log"
+    },
+    "page_table_install_and_process_reap": {
+      "status": "NOT_RUN",
+      "qualification": "actual native runs"
+    }
+  },
+  "regressions_by_name": {
+    "baseline": {
+      "status": "PASS",
+      "matched_by_name": 481
+    },
+    "N1H": {
+      "status": "PASS",
+      "matched_by_name": 59
+    },
+    "N1D": {
+      "status": "PASS",
+      "matched_by_name": 7
+    },
+    "N1L": {
+      "status": "PASS",
+      "matched_by_name": 3
+    },
+    "N1P_FAT": {
+      "status": "PASS",
+      "matched_by_name": 14
+    },
+    "D1A": {
+      "status": "PASS",
+      "matched_by_name": 522
+    },
+    "D1B": {
+      "status": "PASS",
+      "matched_by_name": 536
+    }
+  },
+  "native_regressions": {
+    "D1B": {
+      "status": "PASS",
+      "cycles": 3,
+      "evidence": "target/vfs-d2a/d1b-reverified.json"
+    },
+    "N1P": {
+      "status": "PASS",
+      "fixtures": {
+        "populated": {
+          "status": "PASS",
+          "cycles": 4,
+          "log": "target/vfs-d2a/n1p-populated.log",
+          "serial": "target/vfs-n1o-qemu-9exdvcu2/serial.log"
+        },
+        "unknown": {
+          "status": "PASS",
+          "cycles": 4,
+          "log": "target/vfs-d2a/n1p-unknown.log",
+          "serial": "target/vfs-n1o-qemu-upqdg68n/serial.log"
+        }
+      },
+      "kernel_build_log": "target/vfs-d2a/n1p-kernel-build.log",
+      "service_build_log": "target/vfs-d2a/n1p-service-build.log"
+    }
+  },
+  "builds": {
+    "production_kernel": {
+      "status": "PASS",
+      "log": "target/vfs-d2a/kernel-verified.log"
+    },
+    "release_service": {
+      "status": "PASS",
+      "log": "target/vfs-d2a/service-verified.log"
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched": [
+      "statfs",
+      "ProcFS mountinfo",
+      "private mmap",
+      "runtime FAT mount"
+    ],
+    "historical_private_mmap_dependency_live": true,
+    "logs": [
+      "target/vfs-d2a/guard.log",
+      "target/vfs-d2a/guard-no-growth.log"
+    ]
+  },
+  "production_cutover": "BLOCKED",
+  "ordinary_production_boot": "BLOCKED",
+  "broad_L1C_3": "BLOCKED"
+}

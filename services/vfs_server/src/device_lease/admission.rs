@@ -313,8 +313,7 @@ impl DeviceLease {
         state.begin(lease, Destination::ClientFlush)
     }
 
-    #[cfg(not(target_os = "none"))]
-    pub(crate) fn with_attachment_pin<T>(
+    pub fn with_attachment_pin<T>(
         &self,
         session: &Session,
         lease: &Lease,
