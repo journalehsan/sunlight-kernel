@@ -32,6 +32,32 @@ fn escape(output: &mut Output, path: &str) -> fmt::Result {
 }
 
 impl<D: BlockDevice> Vfs<D> {
+    #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
+    pub fn attachment_mountinfo(
+        rows: &[super::AttachmentRow],
+        mount_id: impl Fn(u64) -> Option<u64>,
+        limit: usize,
+    ) -> Result<String, FsError> {
+        let mut output = Output { text: String::new(), limit };
+        for row in rows.iter().rev() {
+            let id = mount_id(row.id).ok_or(FsError::Unsupported)?;
+            let parent = mount_id(row.parent_id).ok_or(FsError::Unsupported)?;
+            let format_error = |_| FsError::NoMemory;
+            if row.fat && !(1..(1 << 20)).contains(&row.source) {
+                return Err(FsError::Unsupported);
+            }
+            let (major, minor) = if row.fat { (240, row.source) } else { (0, row.slot) };
+            write!(output, "{id} {parent} {major}:{minor} / ").map_err(format_error)?;
+            escape(&mut output, &row.mountpoint).map_err(format_error)?;
+            if row.fat {
+                writeln!(output, " rw - vfat helios-block:{minor} rw").map_err(format_error)?;
+            } else {
+                output.write_str(" rw - tmpfs tmpfs rw\n").map_err(format_error)?;
+            }
+        }
+        Ok(output.text)
+    }
+
     pub fn linux_mountinfo(
         &self,
         limit: usize,

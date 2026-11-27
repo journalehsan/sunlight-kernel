@@ -532,6 +532,10 @@ pub(crate) fn file_control(
     use sunlight_ipc::vfs_rpc::file_transport as file;
     let mut runtime = RUNTIME.lock();
     let registration = authenticate(&mut runtime, pid, epoch, sched, caps)?;
+    #[cfg(feature = "vfs_c1e2_test")]
+    if operation == file::NEXT {
+        runtime.revalidate_storage_files(sched);
+    }
     match operation {
         file::NEXT => match runtime.next_file(registration, bytes) {
             Ok(Some(_)) => Ok(FileControl::Filled),

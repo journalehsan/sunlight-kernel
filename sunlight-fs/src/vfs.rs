@@ -1,5 +1,5 @@
 use crate::{path, FsError, RamFs};
-use alloc::string::String;
+use alloc::{collections::BTreeMap, string::String};
 use sunlight_block::{BlockDevice, NullDevice};
 use sunlight_fat::{Fat32, FatError, MAX_NAME_83};
 
@@ -204,6 +204,7 @@ pub trait FileSystem {
 #[derive(Clone, Copy)]
 struct FatOpen {
     entry_location: (u64, u16),
+    object_id: Option<u64>,
     revoked: bool,
     first_cluster: u32,
     size: u32,
@@ -224,9 +225,18 @@ pub struct FatFs<D: BlockDevice> {
     poisoned: bool,
     handles: [Option<FatOpen>; FAT_MAX_HANDLES],
     generations: [u32; FAT_MAX_HANDLES],
+    stable_objects: bool,
+    identities: BTreeMap<(u64, u16), u64>,
+    next_identity: u64,
 }
 
 impl<D: BlockDevice> FatFs<D> {
+    pub fn new_attachment(fat: Fat32<D>) -> Self {
+        let mut backend = Self::new(fat);
+        backend.stable_objects = true;
+        backend
+    }
+
     pub fn new(fat: Fat32<D>) -> Self {
         Self {
             fat,
@@ -234,7 +244,100 @@ impl<D: BlockDevice> FatFs<D> {
             poisoned: false,
             handles: [None; FAT_MAX_HANDLES],
             generations: [0; FAT_MAX_HANDLES],
+            stable_objects: false,
+            identities: BTreeMap::new(),
+            next_identity: 1,
         }
+    }
+
+    fn intern(&mut self, location: (u64, u16)) -> Result<u64, FsError> {
+        if location == (0, 0) {
+            return Ok(0);
+        }
+        if let Some(&id) = self.identities.get(&location) {
+            return Ok(id);
+        }
+        let id = self.next_identity;
+        self.next_identity = id.checked_add(1).ok_or(FsError::Busy)?;
+        self.identities.insert(location, id);
+        Ok(id)
+    }
+
+    fn canonical_location(&mut self, path: &str, output: &mut [u8]) -> Result<(usize, (u64, u16)), FsError> {
+        self.ensure_healthy()?;
+        path::validate_absolute(path)?;
+        self.fat.locate_path(path.as_bytes(), output).map_err(Self::map_error)
+    }
+
+    fn stable_id(&mut self, path: &str) -> Result<u64, FsError> {
+        let (_, location) = self.canonical_location(path, &mut [0; 128])?;
+        self.intern(location)
+    }
+
+    fn pinned(&self, location: (u64, u16)) -> bool {
+        self.handles.iter().flatten().any(|open| open.entry_location == location)
+    }
+
+    fn rename_stable(&mut self, old: &str, new: &str) -> Result<(), FsError> {
+        if old == "/" || new == "/" || new.len() > 128 {
+            return Err(FsError::InvalidPath);
+        }
+        let mut old_path = [0; 128];
+        let (old_len, source) = self.canonical_location(old, &mut old_path)?;
+        let destination = match self.canonical_location(new, &mut [0; 128]) {
+            Ok((_, location)) if location == source => return Ok(()),
+            Ok((_, location)) if self.pinned(location) => return Err(FsError::Busy),
+            Ok((_, location)) => Some(location),
+            Err(FsError::NotFound) => None,
+            Err(error) => return Err(error),
+        };
+        let directory = self.stat(old)?.file_type == FileType::Directory;
+        let mut new_parent = [0; 128];
+        let (parent_len, _) = self.canonical_location(parent_path(new)?, &mut new_parent)?;
+        let canonical_old = core::str::from_utf8(&old_path[..old_len]).map_err(|_| FsError::InvalidPath)?;
+        if directory {
+            if destination.is_some() || parent_path(canonical_old)?.as_bytes() != &new_parent[..parent_len] {
+                return Err(FsError::Unsupported);
+            }
+            for open in self.handles.iter().flatten() {
+                let len = open.path_len as usize;
+                if open.path[..len].starts_with(&old_path[..old_len])
+                    && open.path.get(old_len) == Some(&b'/')
+                    && len - old_len + new.len() - parent_path(new)?.len() + parent_len > open.path.len()
+                {
+                    return Err(FsError::InvalidPath);
+                }
+            }
+        } else if destination.is_some() && self.stat(new)?.file_type != FileType::File {
+            return Err(FsError::IsDir);
+        }
+        let result = self.fat.rename_path(old.as_bytes(), new.as_bytes());
+        self.mutation(result)?;
+        let mut new_path = [0; 128];
+        let (new_len, location) = self.canonical_location(new, &mut new_path).inspect_err(|_| self.poisoned = true)?;
+        if let Some(destination) = destination {
+            self.identities.remove(&destination);
+        }
+        if let Some(id) = self.identities.remove(&source) {
+            self.identities.insert(location, id);
+        }
+        for open in self.handles.iter_mut().flatten() {
+            if open.entry_location == source {
+                open.entry_location = location;
+                open.path = new_path;
+                open.path_len = new_len as u8;
+            } else if directory {
+                let len = open.path_len as usize;
+                if open.path[..len].starts_with(&old_path[..old_len])
+                    && open.path.get(old_len) == Some(&b'/')
+                {
+                    open.path.copy_within(old_len..len, new_len);
+                    open.path[..new_len].copy_from_slice(&new_path[..new_len]);
+                    open.path_len = (len - old_len + new_len) as u8;
+                }
+            }
+        }
+        Ok(())
     }
 
     fn handle_slot(&self, handle: FileHandle) -> Result<FatOpen, FsError> {
@@ -279,6 +382,11 @@ impl<D: BlockDevice> FatFs<D> {
         let location = self.fat.entry_location(path).map_err(Self::map_error)?;
         if location != open.entry_location {
             return Err(FsError::BadHandle);
+        }
+        if let Some(id) = open.object_id {
+            if location != (0, 0) && self.identities.get(&location) != Some(&id) {
+                return Err(FsError::BadHandle);
+            }
         }
         let stat = self.fat.stat_path(path).ok_or(FsError::Io)?;
         open.first_cluster = stat.first_cluster;
@@ -329,6 +437,10 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         BackendCapabilities::FAT
     }
 
+    fn handle_object_id(&self, handle: FileHandle) -> Result<Option<u64>, FsError> {
+        Ok(self.handle_slot(handle)?.object_id)
+    }
+
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
         self.ensure_healthy()?;
         path::validate_absolute(path)?;
@@ -340,26 +452,29 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         if path_bytes.len() > 128 {
             return Err(FsError::InvalidPath);
         }
-        let entry_location = self
-            .fat
-            .entry_location(path_bytes)
-            .map_err(Self::map_error)?;
+        let mut stored = [0; 128];
+        let (len, entry_location, object_id) = if self.stable_objects {
+            let (len, location) = self.canonical_location(path, &mut stored)?;
+            (len, location, Some(self.intern(location)?))
+        } else {
+            stored[..path_bytes.len()].copy_from_slice(path_bytes);
+            (path_bytes.len(), self.fat.entry_location(path_bytes).map_err(Self::map_error)?, None)
+        };
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
                 let Some(generation) = next_handle_generation(self.generations[idx]) else {
                     continue;
                 };
                 self.generations[idx] = generation;
-                let mut stored = [0u8; 128];
-                stored[..path_bytes.len()].copy_from_slice(path_bytes);
                 *slot = Some(FatOpen {
                     entry_location,
+                    object_id,
                     revoked: false,
                     first_cluster: stat.first_cluster,
                     size: stat.size,
                     generation,
                     is_dir: stat.is_dir,
-                    path_len: path_bytes.len() as u8,
+                    path_len: len as u8,
                     path: stored,
                 });
                 return Ok(make_local_handle(idx, generation));
@@ -573,6 +688,19 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     fn unlink(&mut self, path: &str) -> Result<(), FsError> {
         self.ensure_healthy()?;
         path::validate_absolute(path)?;
+        if self.stable_objects {
+            let (_, location) = self.canonical_location(path, &mut [0; 128])?;
+            if self.pinned(location) {
+                return Err(FsError::Busy);
+            }
+            if self.stat(path)?.file_type == FileType::Directory {
+                return Err(FsError::IsDir);
+            }
+            let result = self.fat.unlink_path(path.as_bytes());
+            self.mutation(result)?;
+            self.identities.remove(&location);
+            return Ok(());
+        }
         let location = self
             .fat
             .entry_location(path.as_bytes())
@@ -588,6 +716,9 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         self.ensure_healthy()?;
         path::validate_absolute(old)?;
         path::validate_absolute(new)?;
+        if self.stable_objects {
+            return self.rename_stable(old, new);
+        }
         if new.len() > 128 {
             return Err(FsError::InvalidPath);
         }
@@ -1909,5 +2040,5 @@ mod anchored;
 #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
 mod attachment;
 #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
-pub use attachment::{AttachmentRow, DeviceWithdrawal};
+pub use attachment::{AttachmentCapacity, AttachmentRow, DeviceWithdrawal};
 pub use anchored::ObjectMetadata;

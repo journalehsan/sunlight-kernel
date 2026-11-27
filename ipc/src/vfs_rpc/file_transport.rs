@@ -24,6 +24,17 @@ pub const TRANSFER: u64 = 8;
 /// advanced. Kernel origin is required exactly as for every other operation,
 /// so this codec entry alone grants no routing authority.
 pub const PREAD: u64 = 9;
+pub const PREPARE_STORAGE: u64 = 12;
+pub const ABORT_STORAGE: u64 = 13;
+pub const PUBLISH_STORAGE: u64 = 14;
+pub const INVENTORY_STORAGE: u64 = 15;
+pub const UNMOUNT_STORAGE: u64 = 16;
+pub const MOUNTINFO: u64 = 17;
+pub const STATFS: u64 = 18;
+
+pub fn mount_observation(op: u64) -> bool {
+    matches!(op, MOUNTINFO | STATFS)
+}
 
 /// Kernel pull/reply operations on the copied retention syscall.
 pub const NEXT: u64 = 10;
@@ -34,7 +45,9 @@ pub const EMPTY: u64 = 1;
 /// historical contiguous range, so both decoders use this predicate instead of
 /// the range alone.
 fn is_file_op(op: u64) -> bool {
-    (OPEN..=TRANSFER).contains(&op) || op == PREAD
+    (OPEN..=TRANSFER).contains(&op)
+        || matches!(op, PREAD | PREPARE_STORAGE | ABORT_STORAGE | PUBLISH_STORAGE
+            | INVENTORY_STORAGE | UNMOUNT_STORAGE) || mount_observation(op)
 }
 
 pub const HEADER_WORDS: usize = 22;
@@ -167,6 +180,48 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
         return Err(ProtocolError::Bounds);
     }
     match request.op {
+        UNMOUNT_STORAGE | INVENTORY_STORAGE => {
+            if request.arg0 != 0 || request.arg1 != 0 || request.length != 0
+                || request.namespace_id != 0 || request.namespace_generation != 0
+                || request.receipt_id != 0 || request.receipt_generation != 0
+                || (request.op == UNMOUNT_STORAGE
+                    && request.token & crate::storage::SERVICE_MOUNT_BIT == 0)
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        ABORT_STORAGE | PUBLISH_STORAGE => {
+            if request.token == 0 || request.arg0 != 0 || request.arg1 != 0
+                || request.length != 0 || request.namespace_id != 0
+                || request.namespace_generation != 0 || request.receipt_id != 0
+                || request.receipt_generation != 0 || request.uid != 0 || request.gid != 0
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        PREPARE_STORAGE => {
+            let path = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
+            if request.token == 0 || request.arg0 != 0 || request.arg1 != 0
+                || path.len() != request.length || path.len() >= crate::storage::TARGET_MAX
+                || !path.starts_with('/') || path.as_bytes().contains(&0)
+                || request.namespace_id != 0 || request.namespace_generation != 0
+                || request.receipt_id != 0 || request.receipt_generation != 0
+                || request.uid != 0 || request.gid != 0
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        MOUNTINFO | STATFS => {
+            let path = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
+            if request.token != 0 || request.arg0 != 0 || request.arg1 != 0
+                || request.namespace_id == 0 || request.namespace_generation == 0
+                || request.receipt_id == 0 || request.receipt_generation == 0
+                || path.as_bytes().contains(&0)
+                || (request.op == MOUNTINFO) != path.is_empty()
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
         OPEN => {
             if request.token != 0
                 || request.arg0 & !(ACCESS_READ | ACCESS_WRITE) != 0
@@ -415,6 +470,29 @@ fn validate_reply(reply: &Reply<'_>) -> Result<(), ProtocolError> {
         return Ok(());
     }
     match reply.op {
+        MOUNTINFO if reply.result0 != 0 && reply.result1 == 0
+            && reply.length != 0 && core::str::from_utf8(reply.payload).is_ok() => {}
+        STATFS if reply.result0 != 0 && reply.length == 12
+            && crate::storage::local_mount_id(reply.registration.epoch, reply.result1).is_some() => {}
+        MOUNTINFO | STATFS => return Err(ProtocolError::Encoding),
+        PUBLISH_STORAGE => return Err(ProtocolError::Status),
+        INVENTORY_STORAGE => {
+            match (reply.result0, reply.length) {
+                (0, 0) if reply.result1 <= 8 => {}
+                (1, crate::storage::MOUNT_RECORD_SIZE) if reply.result1 == 0 => {}
+                _ => return Err(ProtocolError::Encoding),
+            }
+        }
+        ABORT_STORAGE | UNMOUNT_STORAGE => {
+            if reply.result0 != 0 || reply.result1 != 0 || reply.length != 0 {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        PREPARE_STORAGE => {
+            if reply.result0 == 0 || reply.result1 != reply.request_id || reply.length != 0 {
+                return Err(ProtocolError::Encoding);
+            }
+        }
         OPEN | DUP | TRANSFER => {
             if reply.result0 == 0 || reply.result1 != 0 || reply.length != 0 {
                 return Err(ProtocolError::Encoding);
@@ -569,6 +647,75 @@ mod tests {
             gid: 0,
             payload: b"/etc",
         }
+    }
+
+    #[test]
+    fn storage_prepare_requires_an_exact_reservation_and_lease_receipt() {
+        let request = Request {
+            op: PREPARE_STORAGE,
+            token: 17,
+            arg0: 0,
+            namespace_id: 0,
+            namespace_generation: 0,
+            receipt_id: 0,
+            receipt_generation: 0,
+            payload: b"/mnt",
+            ..open_request()
+        };
+        assert_eq!(Request::decode(&request.encode().unwrap()), Ok(request));
+        assert!(Request { token: 0, ..request }.encode().is_err());
+        assert!(Request { payload: b"mnt/", ..request }.encode().is_err());
+        let reply = Reply {
+            registration: request.registration,
+            caller: request.caller,
+            request_id: request.request_id,
+            op: request.op,
+            errno: 0,
+            result0: 21,
+            result1: request.request_id,
+            length: 0,
+            payload: &[],
+        };
+        assert_eq!(Reply::decode(&reply.encode().unwrap()), Ok(reply));
+        assert!(Reply { result1: request.request_id + 1, ..reply }.encode().is_err());
+        assert!(Reply { result0: 0, ..reply }.encode().is_err());
+        assert!(Reply { errno: 5, ..reply }.encode().is_err());
+    }
+
+    #[test]
+    fn storage_lifecycle_requests_carry_only_the_preparation_cookie() {
+        let request = Request {
+            op: ABORT_STORAGE,
+            token: 8,
+            arg0: 0,
+            length: 0,
+            namespace_id: 0,
+            namespace_generation: 0,
+            receipt_id: 0,
+            receipt_generation: 0,
+            payload: &[],
+            ..open_request()
+        };
+        assert_eq!(Request::decode(&request.encode().unwrap()), Ok(request));
+        assert!(Request { token: 0, ..request }.encode().is_err());
+        assert!(Request { namespace_id: 1, ..request }.encode().is_err());
+        let publish = Request { op: PUBLISH_STORAGE, ..request };
+        assert_eq!(Request::decode(&publish.encode().unwrap()), Ok(publish));
+        assert!(Request { token: 0, ..publish }.encode().is_err());
+        assert!(Request { arg1: 1, ..publish }.encode().is_err());
+        let refusal = Reply {
+            registration: publish.registration,
+            request_id: publish.request_id,
+            caller: publish.caller,
+            op: publish.op,
+            errno: 95,
+            result0: 0,
+            result1: 0,
+            length: 0,
+            payload: &[],
+        };
+        assert_eq!(Reply::decode(&refusal.encode().unwrap()), Ok(refusal));
+        assert!(Reply { errno: 0, ..refusal }.encode().is_err());
     }
 
     #[test]

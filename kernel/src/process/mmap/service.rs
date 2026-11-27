@@ -2,6 +2,8 @@
 use super::*;
 #[path = "read_progress.rs"]
 mod read_progress;
+#[cfg(feature = "vfs_d2b_test")]
+pub(crate) mod lifecycle;
 use crate::process::fd_table::{release_service, retain_service, service_description};
 use read_progress::{apply_reply, ReadProgress};
 use sunlight_ipc::vfs_rpc::{file_transport::IO_BYTES, lifecycle::Caller};
@@ -51,7 +53,13 @@ pub(crate) fn retire(caller: Caller) {
     drop(fault);
     let mut pending = PENDING.lock();
     if pending.as_ref().is_some_and(|tx| tx.caller == caller) {
-        pending.take();
+        let _retired = pending.take();
+        #[cfg(feature = "vfs_d2b_test")]
+        if let Some(tx) = _retired {
+            let bytes = tx.done;
+            drop(tx);
+            lifecycle::retired(caller, bytes);
+        }
     }
 }
 
@@ -370,6 +378,8 @@ pub(crate) fn step(args: [u64; 6]) -> Result<Option<u64>, MmapError> {
                 &caps,
             );
         }
+        #[cfg(feature = "vfs_d2b_test")]
+        lifecycle::terminal(&tx, &sched, result);
     }
     result
 }

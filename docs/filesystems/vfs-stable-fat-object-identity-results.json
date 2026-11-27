@@ -1,0 +1,72 @@
+{
+  "stage": "VFS-C1D",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "ordinary_storagectl": "BLOCKED",
+  "production_cutover": "BLOCKED",
+  "production_routing_enabled": false,
+  "host": {
+    "status": "PASS",
+    "tests": 296,
+    "log": "target/vfs-c1d/host.log",
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1d/registration.log"}
+  },
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1d/kernel.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1d/service.log"},
+    "fixture_vfs": {"status": "PASS", "log": "target/vfs-c1d/service-fixture.log"},
+    "isolated_candidate": {"status": "PASS", "log": "target/vfs-c1d/candidate.log"}
+  },
+  "native": {
+    "status": "PARTIAL",
+    "memory_mib": 2048,
+    "vcpus_1": {
+      "status": "PASS",
+      "scope": "Ring-3 backend handles with anchored FAT open through the authenticated live registry fixture",
+      "populated": {"status": "PASS", "serial": "target/vfs-n1o-qemu-86r_pn4t/serial.log", "log": "target/vfs-c1d/reverify-populated.log"},
+      "unknown": {"status": "PASS", "serial": "target/vfs-n1o-qemu-86g76lo_/serial.log", "log": "target/vfs-c1d/reverify-unknown.log"},
+      "initial_n1p_image_expectation": {"status": "FAIL", "reason": "C1D adds a deleted directory entry; C1D verifier checks exact bytes", "logs": ["target/vfs-c1d/native-populated.log", "target/vfs-c1d/native-unknown.log"]},
+      "closed_image_fsck_and_persistence": "PASS",
+      "cycles_per_variant": 4,
+      "whole_device_sectors": 131072,
+      "partition_start": 2048,
+      "partition_sectors": 129024,
+      "free_clusters_before": 127004,
+      "free_clusters_after": 127003,
+      "outstanding_commands_per_release": 0,
+      "mapping_users_per_release": 0,
+      "retained_dma_bytes": 20480,
+      "open_handles_after_identity_exercise": 0
+    },
+    "vcpus_2": {"status": "BLOCKED", "execution": "NOT_RUN", "reason": "Native block fixture requires one CPU"},
+    "vcpus_4": {"status": "BLOCKED", "execution": "NOT_RUN", "reason": "Native block fixture requires one CPU"},
+    "retained_directory_and_shared_description": "NOT_RUN",
+    "identity_index_allocation_accounting": "NOT_RUN",
+    "ordinary_fat_descriptor_and_mmap": "NOT_RUN"
+  },
+  "regressions": {
+    "n1p_c1c_reverification": {"status": "PASS", "scope": "Archived disposable images and serial evidence", "logs": ["target/vfs-c1d/c1c-populated.log", "target/vfs-c1d/c1c-unknown.log"]},
+    "earlier_accepted_and_rejected_native_evidence": "vfs-live-storage-registry-integration-results.json",
+    "archived_c1a_d1b_d2a_d2b_reverification": {
+      "status": "PASS",
+      "vcpus": [1, 2, 4],
+      "logs": [
+        "target/vfs-c1d/c1c-regression-up-c1a.json",
+        "target/vfs-c1d/c1c-replay-smp2-c1a.json",
+        "target/vfs-c1d/c1c-replay-smp4-c1a.json",
+        "target/vfs-c1d/c1c-regression-up-d1b.json",
+        "target/vfs-c1d/c1c-replay-smp2-d1b.json",
+        "target/vfs-c1d/c1c-replay-smp4-d1b.json",
+        "target/vfs-c1d/d2a-reverify.json",
+        "target/vfs-c1d/d2b-reverify.json"
+      ]
+    },
+    "fresh_d1b_d2a_d2b_c1a_matrix": "NOT_RUN"
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "outside_baseline": 4,
+    "logs": ["target/vfs-c1d/guard.log", "target/vfs-c1d/guard-check.log"]
+  }
+}

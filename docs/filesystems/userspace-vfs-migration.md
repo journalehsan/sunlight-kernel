@@ -101,16 +101,17 @@ The four historical findings remain open.
    ([results](vfs-native-descriptor-lifecycle-results.json)).
    [VFS-D2A](vfs-service-private-mmap.md) qualifies eager private mmap
    in the isolated native caller on one, two, and four vCPUs using the
-   retained description and bounded PREAD. Live retirement during a pending
-   native mmap and the historical kernel ownership finding remain open.
+   retained description and bounded PREAD.
+   [VFS-D2B](vfs-private-mmap-lifecycle-closure.md) qualifies completion,
+   caller exit, exact late-reply rejection, and endpoint withdrawal with a
+   native mmap parked on a one-, two-, and four-vCPU guest. The current
+   single-executor contract blocks a concurrent exec case. Ordinary
+   descriptor exec remains covered by D1B. The historical kernel mmap
+   ownership finding remains open.
    Authenticated pre-dispatch binding for both ordinary launch adapters
    and cross-caller descriptor handoff remain open.
-   Keep broad L1C-3 blocked and production VFS-D1 deferred at this boundary. In a
-   future coordinated candidate, remove the FAT/ProcFS/statfs dependencies
-   together and remove the mmap dependency through retained positional I/O.
-   Run the unchanged guard before ordinary boot. Reproduce the matched native
-   matrix only after the guard permits it, distinguishing pre-publication
-   errors from authenticated ENOENT.
+   Keep broad L1C-3 blocked and production VFS-D1 deferred at this boundary.
+   Follow the coordinated candidate order below before attempting ordinary boot.
 3. **Qualify /vfs-scratch, a new volatile data-only mount.** Build a complete service operation
    contract off the production launch path. Switch all exposed operations for
    the mount together, with one live mount generation and no kernel fallback.
@@ -3272,10 +3273,164 @@ D1B admission, stages positional reads outside PMM and kernel VFS locks,
 and commits eager private mappings after exact image, epoch, and address
 revalidation. Native qualification on one, two, and four vCPUs covers
 permissions, private writes, source close, shared cursor preservation,
-repeated unmap, rollback and process exit. Live retirement during a
-pending native mapping remains open. The historical Linux-compatible eager path still depends on the
+repeated unmap, rollback and process exit. D2B extends the live retirement
+evidence. The historical Linux-compatible eager path still depends on the
 kernel backend. Keep that ownership finding open and production routing
 blocked pending coordinated cutover.
+
+### Coordinated candidate after D2B
+
+VFS-C1 is **PARTIAL**. Capacity now resolves through the same retained
+caller view and attachment incarnation as the service snapshot in the isolated
+FAT path. The real StorageCtl lease and service mount publication, both
+ordinary launch adapters, and the syscall reply and install fences remain
+open. The unchanged no-growth guard reports 71 references and the same four
+findings. Ordinary acceptance is **BLOCKED** before QEMU. Keep the four
+findings open until the live callers and owners have moved.
+[C1 report](vfs-coordinated-cutover-candidate.md)
+[C1 results](vfs-coordinated-cutover-candidate-results.json)
+[D2B lifecycle gates](vfs-private-mmap-lifecycle-closure.md)
+
+VFS-C1A connects both ordinary launch adapters to the existing authenticated
+pending-child transaction under the isolated `vfs_c1a_candidate` feature.
+Candidate boot keeps the independent Init/VFS bootstrap. An ordinary child
+needs a current receipt before its first dispatch. Scoped qualification
+passed with the original full D1B/D2A/D2B assertions at one, two and four
+vCPUs with 2 GiB. The original three C1 four-vCPU failures and the rejected
+C1A repetitions remain recorded. The unchanged ownership guard still
+blocks ordinary acceptance.
+[C1A report](vfs-ordinary-namespace-publication.md)
+[C1A results](vfs-ordinary-namespace-publication-results.json)
+
+VFS-C1B makes the service runtime, retained policies and file descriptions
+share the attachment namespace's device type. A host regression binds the
+runtime to the authenticated attachment owner; a regular tmpfs description
+survives FAT withdrawal and caller-scoped capacity identifies the FAT
+incarnation. The ordinary StorageCtl transfer remains blocked: native block
+admission still uses a fixed fixture extent, and anchored lookup cannot
+retain files below the FAT root. Do not enable attachment publication until
+those prerequisites and the topology, statfs and mount inventory adapters
+can switch together. Production defaults and the ownership guard are unchanged.
+[C1B report](vfs-storagectl-service-fat-integration.md)
+[C1B results](vfs-storagectl-service-fat-integration-results.json)
+
+VFS-C1C registers the disposable VirtIO medium and its discovered FAT source
+in the live storage registry. The isolated candidate gives the initialized
+queue exclusively to the existing authenticated lease authority, leases the
+whole medium and confines native data I/O to the registered source. This
+first handoff does not cover boot-mounted or USB media. Ordinary StorageCtl
+publication remains blocked on the authenticated reservation/continuation,
+mount-scoped retained FAT objects and coordinated namespace routing.
+[C1C report](vfs-live-storage-registry-integration.md)
+[C1C results](vfs-live-storage-registry-integration-results.json)
+
+VFS-C1D supplies mount-scoped FAT identities for prepared device
+attachments. Anchored opens and same-parent directory rename retain the
+existing objects; pinned FAT unlink and replacement return Busy. The
+disposable live registry fixture now exercises retained FAT file handles
+at one vCPU and 2 GiB. Complete native retained-directory and shared
+description coverage and the SMP gate before accepting ordinary routing.
+The caller-bound StorageCtl transaction and coordinated namespace consumers
+remain required. [C1D report](vfs-stable-fat-object-identity.md) and
+[results](vfs-stable-fat-object-identity-results.json).
+
+VFS-C1E remains **PARTIAL**. The existing isolated candidate builds, but
+ordinary StorageCtl still has no caller-bound continuation to the service's
+registered device lease and attachment reservation. Keep publication disabled
+until the same service mount incarnation owns file operations, retained roots,
+mount inventory, mountinfo, statfs and private mmap. The unchanged guard
+still rejects all four historical sites. The archived single-vCPU FAT
+checks pass reverification; ordinary StorageCtl and guarded boot were
+**NOT_RUN**. See the [C1E report](vfs-storagectl-authenticated-handoff.md)
+and [results](vfs-storagectl-authenticated-handoff-results.json).
+
+VFS-C1E1 adds the opt-in StorageCtl preparation continuation. The isolated
+caller executes syscall 168 and the VFS service validates the N1D target under
+the request's exact whole-device lease. The fixture settles and discards the
+preparation; production mount publication and coordinated routing remain
+blocked. See the
+[C1E1 report](vfs-storagectl-authenticated-continuation.md) and
+[results](vfs-storagectl-authenticated-continuation-results.json).
+
+VFS-C1E2 retains the private FAT backend, N1D reservation and authenticated
+whole-device lease in the existing service owner. The opt-in StorageCtl
+preparation returns its exact transaction cookie; abort uses that cookie and
+the same caller image identity. Before enabling publication, qualify media
+replacement and uncertain transport outcomes, define authorized publication and
+revalidate the reservation, readiness and lease at the publication boundary.
+Coordinate ordinary namespace, mountinfo, statfs and mmap routing in a later
+stage. See the [C1E2 report](vfs-storagectl-retained-preparation.md) and
+[results](vfs-storagectl-retained-preparation-results.json).
+
+VFS-C1E3 adds an opt-in authenticated publication request for that same
+cookie. The retained service loop checks the target reservation and rejects
+publication with EOPNOTSUPP while ordinary file and topology consumers still
+use a different namespace. This leaves the preparation available for retry
+or abort. The next integration step is to bring the block-capable attachment
+owner into the ordinary VFS runtime and bind file descriptions, retained
+directories, inventory, mountinfo, statfs and mmap to the same mount before
+enabling commit. See the [C1E3 report](vfs-storagectl-coordinated-publication.md)
+and [results](vfs-storagectl-coordinated-publication-results.json).
+
+VFS-C1E4 completes shared preparation ownership in the opt-in runtime.
+The ordinary service now owns the block-capable namespace and retains the
+StorageCtl reservation, backend and lease in its copied file drain. Fresh
+single-vCPU evidence covers ordinary IPC lookup invisibility, authorization,
+abort, retirement and backing-image integrity. Publication remains closed:
+kernel StorageCtl inventory and withdrawal still consult the kernel mount
+table, and ProcFS, statfs and private mmap still need coordinated routing.
+See the [C1E4 report](vfs-storagectl-runtime-namespace-integration.md) and
+[results](vfs-storagectl-runtime-namespace-integration-results.json).
+
+VFS-C1E5 adds ordinary StorageCtl inventory and withdrawal routing to that
+owner in the opt-in candidate. Inventory obtains the service snapshot
+before consulting legacy mounts, and a service-qualified unmount ID never
+enters the legacy unmount path. Publication remains closed until ProcFS
+mountinfo, Linux statfs, private mmap and runtime FAT construction use
+coordinated authority. See the [C1E5 report](vfs-storagectl-authoritative-inventory-withdrawal.md)
+and [results](vfs-storagectl-authoritative-inventory-withdrawal-results.json).
+
+VFS-C1E6 adds an opt-in copied route for ordinary Linux mountinfo and
+statfs, using the retained namespace receipt and one service topology owner.
+The publication gate stays closed. Legacy dependencies remain in the
+ownership guard, and successful ordinary FAT capacity requires committed
+publication. C1E6A fixes the reproduced post-probe retirement panic by making
+bulk exit cleanup consume an already-retired descriptor alias without a
+second description/backend release; the original 2 GiB QEMU scenario now
+reaps the Linux fixture completely with balanced storage and DMA accounting.
+See the [C1E6 report](vfs-authoritative-procfs-statfs-routing.md)
+and [results](vfs-authoritative-procfs-statfs-routing-results.json).
+
+1. Preserve the candidate publication gate and extend qualification to
+   session and manager workflows, service replacement policy and exact
+   launch from a shared namespace owner. Complete explicit service
+   descriptor admission, exact FD install and shared-table ownership.
+   Preserve the rejection of process fork and the single executor during
+   parked mmap. Gate on allowed rights, full-table compensation, final
+   Close, exit, ordinary exec and generic resource settlement.
+2. Land authoritative runtime FAT attachment below the existing StorageCtl
+   ABI. Require an exclusive alias-fenced device lease, retained FAT
+   directory and file objects, a capacity pin, and one publication and
+   retirement order for crossings, topology and capacity. Gate on actual
+   mount, busy unmount, I/O drain, confirmed flush, withdrawal, old-lease
+   release before new admission, and N1P closed-image verification. For the
+   qualified bounded retained-buffer lifecycle, live successor-owner handoff
+   and physical DMA reclamation remain independently deferred.
+3. Connect ProcFS mountinfo and Linux statfs to the same attachment graph.
+   Gate on bounded caller-visible snapshots, publication versus FD
+   installation, pinned-mount capacity, output ABI and copyout, and
+   replacement, churn and retirement. Preserve fail-closed errors and
+   verify that the two adapters agree with StorageCtl on attachment identity.
+4. Integrate eager private mmap with ordinary service descriptions in the
+   native and Linux adapters. Preserve the exact image, epoch, descriptor
+   rights, address-space commit and rollback rules. Gate on the D2A and D2B
+   matrices, plus all newly admitted sharing and lifecycle cases.
+5. In one candidate remove the historical call sites and the obsolete
+   runtime namespace owners. Run the unchanged ownership guard before an
+   ordinary boot. Require the release builds, the native matrices, the
+   ordinary boot gate and matched Helios/syscall/IPC and durable storage
+   evidence. Start at one vCPU and 2 GiB, then expand CPU coverage after that
+   gate passes. Distinguish pre-publication errors from authenticated ENOENT.
 
 ### VFS-D3: ZRAM independence and private mappings
 

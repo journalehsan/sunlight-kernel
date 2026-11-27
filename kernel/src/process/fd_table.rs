@@ -888,6 +888,17 @@ impl FdTable {
         let mut handles = [None; 256];
         for (idx, entry) in self.entries.iter_mut().enumerate() {
             handles[idx] = entry.take().and_then(|descriptor| {
+                // Exit cleanup can observe a descriptor alias after its open
+                // description was retired by an earlier entry in this same
+                // table.  The alias no longer owns either the description or
+                // its backend, so consuming it is the complete cleanup action.
+                if !DESCRIPTIONS
+                    .lock()
+                    .get(descriptor.description as usize)
+                    .is_some_and(Option::is_some)
+                {
+                    return None;
+                }
                 let last = release_description(descriptor.description);
                 release_eventfd(descriptor.handle);
                 if descriptor.handle.is_service() {
@@ -1479,6 +1490,19 @@ mod tests {
         let result = table.dup2(old, second).unwrap();
         assert_eq!(result.service_close, None);
         assert_eq!(table.get(first).unwrap().handle.is_service(), true);
+    }
+
+    #[test]
+    fn exit_cleanup_consumes_stale_descriptor_alias_without_double_release() {
+        let mut table = FdTable::new();
+        let alias = table.entries[0].expect("stdin descriptor");
+        table.entries[24] = Some(FileDescriptor { fd: 24, ..alias });
+
+        let handles = table.take_all_handles();
+
+        assert_eq!(handles[0], Some(FileHandle(0)));
+        assert_eq!(handles[24], None);
+        assert!((0..256).all(|fd| table.get(fd).is_none()));
     }
 }
 

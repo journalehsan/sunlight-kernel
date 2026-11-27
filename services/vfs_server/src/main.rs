@@ -13,9 +13,11 @@ use sunlight_fs::{
     FsError, FstabEntry, PermCheck, RamEntry, RamFs, Vfs,
 };
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup_timeout,
+    debug_log, endpoint_create, ipc_call, nameserver_lookup_timeout,
     nameserver_register, shm_alloc, shm_free, shm_map, unpack_ipv4, IpcMsg, ResolvedMsg, VfsMsg,
 };
+#[cfg(not(feature = "vfs-c1e2-test"))]
+use sunlight_ipc::{ipc_recv, ipc_reply_and_wait};
 
 const STATUS_OK: u64 = 0;
 const ERR_PERM: u64 = 1;
@@ -164,14 +166,21 @@ impl BootFs {
 #[cfg(feature = "stat-failure-test")]
 mod stat_failure_probe;
 
+#[cfg(feature = "vfs-c1e2-test")]
+use sunlight_vfs_server::directory::attachment::{RetainedStorage, StorageDevice};
+#[cfg(not(feature = "vfs-c1e2-test"))]
+use sunlight_fs::NullDevice as StorageDevice;
+
 struct State {
     #[cfg(feature = "stat-failure-test")]
     stat_failure: stat_failure_probe::Probe,
     // Bound only through the service-only kernel snapshot syscall. Ordinary
     // nameserver registration returns no trusted registration snapshot.
-    retention: sunlight_vfs_server::runtime::Runtime<64, 64, 4>,
-    vfs: alloc::sync::Arc<spin::Mutex<Vfs>>,
-    namespace: sunlight_vfs_server::directory::DirectoryNamespace,
+    retention: sunlight_vfs_server::runtime::Runtime<64, 64, 4, StorageDevice>,
+    vfs: alloc::sync::Arc<spin::Mutex<Vfs<StorageDevice>>>,
+    namespace: sunlight_vfs_server::directory::DirectoryNamespace<StorageDevice>,
+    #[cfg(feature = "vfs-c1e2-test")]
+    storage: RetainedStorage,
     boot: Option<BootFs>,
     boot_mountpoint: Option<&'static str>,
     open_meta: [OpenMeta; OPEN_META_SLOTS],
@@ -204,13 +213,30 @@ impl OpenMeta {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    #[cfg(feature = "vfs-c1e2-test")]
+    if linux_fixture_call(sunlight_ipc::NATIVE_SYSCALL_TAG | 33, 0, 0, 0)
+        == sunlight_ipc::storage::FIXTURE_LINUX_PID as i64
+    {
+        linux_mount_fixture();
+    }
     init_tmpfs_pages();
+    #[cfg(feature = "vfs-c1e1-test")]
+    if sunlight_ipc::getpid() == sunlight_ipc::storage::FIXTURE_CALLER_PID
+        || (cfg!(feature = "vfs-c1e2-test")
+            && sunlight_ipc::getpid() == sunlight_ipc::storage::FIXTURE_RETIRING_PID)
+    {
+        sunlight_vfs_server::directory::attachment::storage_caller(debug_log);
+    }
     debug_log("[VFS]  VFS server started");
 
     let ep = endpoint_create();
     assert!(nameserver_register("vfs", ep), "VFS registration rejected");
     debug_log("[VFS]  Registered as 'vfs'");
-    #[cfg(feature = "vfs-n1o-fat-test")]
+    #[cfg(all(feature = "vfs-c1e1-test", not(feature = "vfs-c1e2-test")))]
+    if core::hint::black_box(true) {
+        sunlight_vfs_server::directory::attachment::qualify_storage(debug_log);
+    }
+    #[cfg(all(feature = "vfs-n1o-fat-test", not(feature = "vfs-c1e1-test")))]
     if core::hint::black_box(true) {
         sunlight_vfs_server::directory::attachment::qualify_native_fat(debug_log);
         sunlight_ipc::ProcessExit::exit(0);
@@ -241,8 +267,14 @@ pub extern "C" fn _start() -> ! {
     #[cfg(not(feature = "boot-resources"))]
     let seed = sunlight_fs::INITRAMFS;
     let boot_mountpoint = mount_from_fstab(&mut vfs, &mut boot, seed);
+    #[cfg(feature = "vfs-c1e2-test")]
+    for path in ["/mnt", "/mnt/volume", "/mnt/bad", "/mnt/other", "/mnt/exit"] {
+        if matches!(vfs.stat(path), Err(FsError::NotFound)) {
+            vfs.mkdir(path, 0, 0, 0o755).expect("storage fixture target");
+        }
+    }
 
-    let namespace = sunlight_vfs_server::directory::DirectoryNamespace::mounted(vfs)
+    let namespace = sunlight_vfs_server::directory::DirectoryNamespace::mount_owner(vfs)
         .expect("service mounted namespace ownership");
     let mut state = State {
         #[cfg(feature = "stat-failure-test")]
@@ -250,10 +282,14 @@ pub extern "C" fn _start() -> ! {
         retention: sunlight_vfs_server::runtime::Runtime::new(),
         vfs: namespace.shared(),
         namespace,
+        #[cfg(feature = "vfs-c1e2-test")]
+        storage: RetainedStorage::default(),
         boot,
         boot_mountpoint,
         open_meta: [OpenMeta::EMPTY; OPEN_META_SLOTS],
     };
+    #[cfg(feature = "vfs-d2b-test")]
+    state.retention.set_fixture_endpoint(ep);
     assert!(alloc::sync::Arc::ptr_eq(
         &state.vfs,
         &state.namespace.shared()
@@ -306,18 +342,97 @@ pub extern "C" fn _start() -> ! {
     }
 
     // IPC server loop
+    #[cfg(not(feature = "vfs-c1e2-test"))]
     let mut msg = ipc_recv(ep);
     loop {
         drain_retention(&mut state);
         drain_stats(&mut state);
         drain_files(&mut state);
+        #[cfg(feature = "vfs-c1e2-test")]
+        let Some(msg) = sunlight_ipc::ipc_try_recv(ep) else {
+            sunlight_ipc::process_yield();
+            continue;
+        };
+        #[cfg(feature = "vfs-d2b-test")]
+        if state.retention.fixture_withdrew() {
+            let handles = state.vfs.lock().open_handle_count();
+            assert_eq!(handles, 2);
+            debug_log("[VFS-D2B] withdrawn service backend handles=2");
+            // Require endpoint withdrawal alone to wake the mmap caller.
+            let start = sunlight_ipc::monotonic_millis();
+            while unsafe { sunlight_libc::sys::syscall2(0xf1c1, 30, 0) } == 0 {
+                assert!(sunlight_ipc::monotonic_millis() - start < 3000);
+                sunlight_ipc::process_yield();
+            }
+            sunlight_ipc::ProcessExit::exit(0);
+        }
         if sunlight_ipc::vfs_rpc::retention::transport::is_control_wakeup(&msg) {
-            msg = ipc_recv(ep);
+            #[cfg(not(feature = "vfs-c1e2-test"))]
+            { msg = ipc_recv(ep); }
             continue;
         }
         let reply = handle_request(&mut state, msg);
-        msg = ipc_reply_and_wait(ep, reply);
+        #[cfg(not(feature = "vfs-c1e2-test"))]
+        { msg = ipc_reply_and_wait(ep, reply); }
+        #[cfg(feature = "vfs-c1e2-test")]
+        sunlight_ipc::ipc_reply(reply);
     }
+}
+
+#[cfg(feature = "vfs-c1e2-test")]
+fn linux_fixture_call(number: u64, arg0: u64, arg1: u64, arg2: u64) -> i64 {
+    let mut result = number;
+    unsafe {
+        core::arch::asm!("syscall", inout("rax") result, in("rdi") arg0, in("rsi") arg1,
+            in("rdx") arg2, lateout("rcx") _, lateout("r11") _);
+    }
+    result as i64
+}
+
+#[cfg(feature = "vfs-c1e2-test")]
+fn linux_mount_fixture() -> ! {
+    let open = || linux_fixture_call(2, b"/proc/self/mountinfo\0".as_ptr() as u64, 0, 0);
+    let log = |message: &str| {
+        linux_fixture_call(sunlight_ipc::NATIVE_SYSCALL_TAG | 99,
+            message.as_ptr() as u64, message.len() as u64, 0);
+    };
+    let mut passed = false;
+    let mut unavailable = false;
+    for _ in 0..200_000 {
+        let fd = open();
+        if fd >= 0 {
+            let mut bytes = core::mem::MaybeUninit::<[u8; 4096]>::uninit();
+            let len = linux_fixture_call(0, fd as u64, bytes.as_mut_ptr() as u64, 4096);
+            let closed = linux_fixture_call(3, fd as u64, 0, 0);
+            let statfs = linux_fixture_call(137, b"/mnt/volume/KEEP.TXT\0".as_ptr() as u64, 0, 0);
+            let root = linux_fixture_call(137, b"/\0".as_ptr() as u64, 0, 0);
+            if (1..=4096).contains(&len) && closed == 0 && statfs == -2 && root == -95
+            {
+                let bytes = unsafe { core::slice::from_raw_parts(bytes.as_ptr().cast::<u8>(), len as usize) };
+                let contains = |pattern: &[u8]| bytes.windows(pattern.len()).any(|window| {
+                    window.iter().zip(pattern).all(|(left, right)| left == right)
+                });
+                if !contains(b" / / rw - tmpfs tmpfs rw\n") || contains(b"/mnt/volume ") {
+                    break;
+                }
+                if !passed {
+                    log("[VFS-C1E6] ordinary Linux open/read/close and statfs reached retained view");
+                }
+                passed = true;
+            }
+        } else if passed && fd == -5
+            && linux_fixture_call(137, b"/\0".as_ptr() as u64, 0, 0) == -5
+        {
+            unavailable = true;
+            break;
+        }
+        linux_fixture_call(24, 0, 0, 0);
+    }
+    if unavailable {
+        log("[VFS-C1E6] ordinary Linux mountinfo and statfs fail closed after service loss");
+    }
+    linux_fixture_call(60, u64::from(!unavailable), 0, 0);
+    loop { core::hint::spin_loop(); }
 }
 
 #[cfg(feature = "vfs-n1m-block-test")]
@@ -431,11 +546,32 @@ fn drain_files(state: &mut State) {
         return;
     };
     let mut control = CopiedControl;
+    #[cfg(feature = "vfs-c1e2-test")]
+    state.storage.reap_cancelled(debug_log);
     for _ in 0..64 {
         let Ok(Some(frame)) = control.file_next(registration.epoch) else {
             break;
         };
-        if !state.retention.dispatch_file(&mut control, registration, &frame) {
+        #[cfg(feature = "vfs-d1b-test")]
+        let before = state.vfs.lock().open_handle_count();
+        #[cfg(feature = "vfs-c1e2-test")]
+        if let Some(accepted) =
+            state.storage.dispatch(&state.namespace, registration, &frame, debug_log)
+        {
+            if !accepted {
+                break;
+            }
+            continue;
+        }
+        let accepted = state.retention.dispatch_file(&mut control, registration, &frame);
+        #[cfg(feature = "vfs-d1b-test")]
+        {
+            let after = state.vfs.lock().open_handle_count();
+            if before != after {
+                debug_log(&alloc::format!("[VFS-D1B] backend handles={before}->{after}"));
+            }
+        }
+        if !accepted {
             break;
         }
     }
@@ -445,7 +581,7 @@ fn drain_files(state: &mut State) {
 // FSTAB mount coordinator
 // ---------------------------------------------------------------------------
 
-fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>, entries_seed: &'static [RamEntry]) -> Option<&'static str> {
+fn mount_from_fstab(vfs: &mut Vfs<StorageDevice>, boot: &mut Option<BootFs>, entries_seed: &'static [RamEntry]) -> Option<&'static str> {
     let mut seed = Vfs::new();
     let _ = seed.mount_ramfs("/", RamFs::new(entries_seed));
 
@@ -481,7 +617,7 @@ fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>, entries_seed: &'st
 }
 
 fn mount_fstab_entry(
-    vfs: &mut Vfs,
+    vfs: &mut Vfs<StorageDevice>,
     boot: &mut Option<BootFs>,
     entry: &FstabEntry<'_>,
     seed: &'static [RamEntry],
@@ -489,6 +625,9 @@ fn mount_fstab_entry(
     match entry.fs_type {
         "ramfs" | "tmpfs" => {
             if entry.mountpoint == "/" {
+                #[cfg(feature = "vfs-c1e2-test")]
+                vfs.mount_tmpfs("/", sunlight_fs::Tmpfs::new(seed)).expect("storage fixture root");
+                #[cfg(not(feature = "vfs-c1e2-test"))]
                 let _ = vfs.mount_ramfs("/", RamFs::new(seed));
             }
             None
@@ -1314,7 +1453,7 @@ fn test_live_namespace_pins(state: &mut State) {
         .lock()
         .mkdir("/tmp/vfs-pins", 0, 0, 0o755)
         .unwrap();
-    let mut policy = sunlight_vfs_server::runtime::Runtime::<1, 4, 1>::new();
+    let mut policy = sunlight_vfs_server::runtime::Runtime::<1, 4, 1, StorageDevice>::new();
     policy.bind(registration).unwrap();
     policy
         .install(registration, scope, &state.namespace, "/", "/tmp/vfs-pins")

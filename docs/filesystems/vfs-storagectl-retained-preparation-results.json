@@ -1,0 +1,53 @@
+{
+  "stage": "VFS-C1E2",
+  "date": "2026-11-28",
+  "status": "PARTIAL",
+  "mount_published": false,
+  "coordinated_routing": "BLOCKED",
+  "production_cutover": "BLOCKED",
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1e2/production.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e2/release-service.log"},
+    "isolated_candidate": {"status": "PASS", "log": "target/vfs-c1e2/candidate-final.log"},
+    "fixture_service": {"status": "PASS", "log": "target/vfs-c1e2/fixture-service.log"}
+  },
+  "native": {
+    "status": "PASS",
+    "syscall": 168,
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "explicit_prepare_abort_cycles": 3,
+    "conflicting_lease": "PASS",
+    "namespace_invisibility": "PASS",
+    "reservation_and_fat_alias_identity": "PASS",
+    "fat_initialization_failure_compensation": "PASS",
+    "missing_reservation_target": "PASS",
+    "standalone_readiness_failure_injection": "NOT_RUN",
+    "parked_caller_retirement_and_late_reply": "PASS",
+    "service_exit_before_prepare_reply": "PASS",
+    "wrong_abort_cookie_and_repeated_abort": "PASS",
+    "wrong_caller_wrong_generation_and_duplicate_reply": "PASS",
+    "retained": {"reservations": 1, "backends": 1, "lease": "Active", "descriptors": 0},
+    "explicit_and_compensated_settlement": {"reservations": 0, "backends": 0, "lease": "Vacant", "descriptors": 0},
+    "all_six_settlements": {"outstanding_commands": 0, "mapping_users": 0, "retained_command_data": 0, "flush_pending": false, "retained_dma_bytes": 20480},
+    "closed_image_byte_identical": true,
+    "closed_partition_fsck": {"status": "PASS", "log": "target/vfs-c1e2/closed-fsck.log", "hash_log": "target/vfs-c1e2/closed-sha256.log"},
+    "log": "target/vfs-c1e2/native-retry.log",
+    "serial": "target/vfs-n1o-qemu-v5hvq_ry/serial.log",
+    "prior_failed_runs": ["target/vfs-c1e2/native.log", "target/vfs-c1e2/native-final.log", "target/vfs-c1e2/native-combined.log"],
+    "not_run": ["media replacement", "transport uncertainty injection", "SMP", "fresh standalone C1E1 native rerun"]
+  },
+  "host": {
+    "focused_filesystem_and_vfs": {"status": "PASS", "tests": 467, "log": "target/vfs-c1e2/filesystem-host.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e2/registration.log"},
+    "allocator": {"status": "PASS", "tests": 11, "log": "target/vfs-c1e2/allocator-host.log"},
+    "workspace_lib": {"status": "FAIL", "reason": "sunlight-ui-wayland duplicate panic_impl", "log": "target/vfs-c1e2/host-final.log"},
+    "combined_focused_with_libc": {"status": "PARTIAL", "reason": "two secret_store tests did not complete in the observation window", "log": "target/vfs-c1e2/focused.log"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched_sites": 4,
+    "logs": ["target/vfs-c1e2/guard-check.log", "target/vfs-c1e2/guard-no-growth.log"]
+  }
+}

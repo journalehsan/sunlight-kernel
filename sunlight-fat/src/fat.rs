@@ -33,6 +33,12 @@ pub struct Fat32<D: BlockDevice> {
     fsinfo_invalidated: bool,
 }
 
+impl<D: BlockDevice> Fat32<D> {
+    pub fn device(&self) -> &D {
+        &self.dev
+    }
+}
+
 /// Result of a path lookup: enough to read the object later.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FatStat {
@@ -209,7 +215,10 @@ impl<D: BlockDevice> Fat32<D> {
         let mut lfn_valid = false;
         let mut lfn_locations = [SlotLocation::EMPTY; MAX_LFN_SLOTS];
         let mut lfn_count = 0u8;
-        loop {
+        for _ in 0..self.cluster_count {
+            if !(2..self.cluster_count + 2).contains(&cluster) {
+                return None;
+            }
             let lba = self.cluster_lba(cluster);
             for s_off in 0..self.spc as u64 {
                 self.dev.read_block(lba + s_off, &mut sec).ok()?;
@@ -309,35 +318,31 @@ impl<D: BlockDevice> Fat32<D> {
                     }
                 }
             }
-            cluster = match self.next_cluster(cluster) {
-                Some(c) => c,
-                None => return Some(()),
-            };
+            let next = self.read_fat_entry(cluster).ok()?;
+            if next >= FAT_EOC {
+                return Some(());
+            }
+            cluster = next;
         }
+        None
     }
 
     /// Look up `name8` + `ext3` in the directory rooted at `cluster`.
     pub(super) fn find_in_dir(&mut self, cluster: u32, component: &[u8]) -> Option<DirEntry> {
+        self.find_entry(cluster, component).ok()
+    }
+
+    fn find_entry(&mut self, cluster: u32, component: &[u8]) -> Result<DirEntry, FatError> {
         let mut found: Option<DirEntry> = None;
         self.walk_dir(cluster, &mut |entry| {
             if entry.display_name[..entry.display_len as usize].eq_ignore_ascii_case(component) {
-                found = Some(DirEntry {
-                    name: entry.name,
-                    display_name: entry.display_name,
-                    display_len: entry.display_len,
-                    cluster: entry.cluster,
-                    size: entry.size,
-                    attr: entry.attr,
-                    short_location: entry.short_location,
-                    lfn_locations: entry.lfn_locations,
-                    lfn_count: entry.lfn_count,
-                });
+                found = Some(*entry);
                 false
             } else {
                 true
             }
-        })?;
-        found
+        }).ok_or(FatError::Io)?;
+        found.ok_or(FatError::NotFound)
     }
 
     /// Resolve a path (bytes, '/'-separated, any depth) to its entry.
@@ -363,6 +368,41 @@ impl<D: BlockDevice> Fat32<D> {
             };
         }
         Some(current)
+    }
+
+    /// Resolve a path to its on-disk spelling and short-entry locator.
+    /// The root has no short entry and uses the reserved locator (0, 0).
+    pub fn locate_path(
+        &mut self,
+        path: &[u8],
+        output: &mut [u8],
+    ) -> Result<(usize, (u64, u16)), FatError> {
+        let mut directory = self.rc;
+        let mut is_dir = true;
+        let mut location = (0, 0);
+        let mut len = 0;
+        for component in path.split(|&byte| byte == b'/').filter(|part| !part.is_empty()) {
+            if !is_dir {
+                return Err(FatError::NotDirectory);
+            }
+            let entry = self.find_entry(directory, component)?;
+            let name = &entry.display_name[..entry.display_len as usize];
+            let end = len + 1 + name.len();
+            if end > output.len() {
+                return Err(FatError::InvalidName);
+            }
+            output[len] = b'/';
+            output[len + 1..end].copy_from_slice(name);
+            len = end;
+            location = (entry.short_location.lba, entry.short_location.offset);
+            directory = entry.cluster;
+            is_dir = entry.attr & ATTR_DIRECTORY != 0;
+        }
+        if len == 0 {
+            *output.first_mut().ok_or(FatError::InvalidName)? = b'/';
+            len = 1;
+        }
+        Ok((len, location))
     }
 
     /// Read file content starting at `offset` into `out`, following the FAT

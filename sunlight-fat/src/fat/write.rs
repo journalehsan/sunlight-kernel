@@ -35,7 +35,7 @@ impl<D: BlockDevice> Fat32<D> {
         Err(FatError::Io)
     }
 
-    fn read_fat_entry(&mut self, cluster: u32) -> Result<u32, FatError> {
+    pub(super) fn read_fat_entry(&mut self, cluster: u32) -> Result<u32, FatError> {
         if cluster >= self.cluster_count.saturating_add(2) {
             return Err(FatError::Io);
         }
@@ -181,12 +181,15 @@ impl<D: BlockDevice> Fat32<D> {
 
     fn resolve_entry(&mut self, path: &[u8]) -> Result<DirEntry, FatError> {
         let (parent_path, leaf) = Self::split_parent(path)?;
-        let parent = self.stat_path(parent_path).ok_or(FatError::NotFound)?;
-        if !parent.is_dir {
-            return Err(FatError::NotDirectory);
+        let mut directory = self.rc;
+        for component in parent_path.split(|&byte| byte == b'/').filter(|part| !part.is_empty()) {
+            let parent = self.find_entry(directory, component)?;
+            if parent.attr & ATTR_DIRECTORY == 0 {
+                return Err(FatError::NotDirectory);
+            }
+            directory = parent.cluster;
         }
-        self.find_in_dir(parent.first_cluster, leaf)
-            .ok_or(FatError::NotFound)
+        self.find_entry(directory, leaf)
     }
 
     fn short_exists(&mut self, directory: u32, name: &[u8; 11]) -> Result<bool, FatError> {
@@ -556,7 +559,11 @@ impl<D: BlockDevice> Fat32<D> {
 
     pub fn rename_path(&mut self, old: &[u8], new: &[u8]) -> Result<(), FatError> {
         let source = self.resolve_entry(old)?;
-        let destination = self.resolve_entry(new).ok();
+        let destination = match self.resolve_entry(new) {
+            Ok(entry) => Some(entry),
+            Err(FatError::NotFound) => None,
+            Err(error) => return Err(error),
+        };
         let replaced_chain = destination.map(|entry| entry.cluster).unwrap_or(0);
         if let Some(destination) = destination {
             if (destination.attr & ATTR_DIRECTORY != 0) != (source.attr & ATTR_DIRECTORY != 0) {

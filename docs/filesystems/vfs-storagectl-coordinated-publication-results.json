@@ -1,0 +1,56 @@
+{
+  "stage": "VFS-C1E3",
+  "date": "2026-11-28",
+  "status": "PARTIAL",
+  "authorized_publication_request": "PASS",
+  "publication_commit_and_ownership_transfer": "BLOCKED",
+  "coordinated_routing": "BLOCKED",
+  "mount_published": false,
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1e3/production-final.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e3/release-vfs-user.log"},
+    "isolated_candidate": {"status": "PASS", "log": "target/vfs-c1e3/candidate-user.log"},
+    "embedded_fixture_service": {"status": "PASS", "log": "target/vfs-c1e3/service-user.log"}
+  },
+  "native": {
+    "scope": "fresh StorageCtl refusal and C1E2 regressions; no committed mount",
+    "status": "PASS",
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "log": "target/vfs-c1e3/native-user.log",
+    "serial": "target/vfs-n1o-qemu-9ayjfm63/serial.log",
+    "prior_attempt": {"status": "FAIL", "reason": "fixture was linked at a kernel virtual address", "log": "target/vfs-c1e3/native.log"},
+    "wrong_and_aborted_cookies": "PASS",
+    "retryable_publication_refusal_then_abort": "PASS",
+    "prepare_fat_failure_compensation": "PASS",
+    "parked_caller_and_service_retirement": "PASS",
+    "unauthorized_publish": "NOT_RUN",
+    "duplicate_after_success": "NOT_RUN",
+    "ordinary_visibility_and_file_access": "NOT_RUN",
+    "ordinary_retained_identity_and_mmap": "NOT_RUN",
+    "ordinary_inventory_mountinfo_statfs": "NOT_RUN",
+    "ordinary_withdrawal_and_reattachment": "NOT_RUN",
+    "settlement": {"paths": 6, "outstanding_commands": 0, "mapping_users": 0, "retained_command_data": 0, "flush_pending": false, "retained_dma_bytes": 20480},
+    "closed_image": {"status": "PASS", "byte_identical": true, "fsck_exit": 0, "fsinfo": "initial unknown free count preserved", "recovered_keep_payload": "untouched", "partition_sha256": "0200d3422ae451a94fcf4b598cedf307f3328680c0c16843136f7d638beeec1a"}
+  },
+  "host": {
+    "filesystem_and_vfs": {"status": "PASS", "tests": 397, "log": "target/vfs-c1e3/focused.log"},
+    "storage_protocol": {"status": "PASS", "tests": 4, "log": "target/vfs-c1e3/storage-host.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e3/registration.log"},
+    "global_alloc": {"status": "PASS", "tests": 11, "log": "target/vfs-c1e3/allocator.log"},
+    "workspace_lib": {"status": "FAIL", "reason": "sunlight-ui-wayland duplicate panic_impl", "log": "target/vfs-c1e3/workspace-lib.log"},
+    "secret_store": {"status": "PARTIAL", "reason": "prior C1E2 run stalled in two secret_store tests, independently of the workspace build failure", "log": "target/vfs-c1e2/focused.log"}
+  },
+  "prior_native_regressions": {"status": "NOT_RUN", "scope": "standalone C1E1, N1P, C1A, C1C, C1D, D1A, D1B, D2A and D2B qualification remains historical"},
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched_sites": 4,
+    "runtime_kernel_fat": "BLOCKED",
+    "procfs_kernel_topology": "BLOCKED",
+    "linux_statfs_kernel_backend": "BLOCKED",
+    "private_mmap_kernel_backend": "BLOCKED",
+    "guarded_ordinary_boot": "NOT_RUN",
+    "logs": ["target/vfs-c1e3/guard-check.log", "target/vfs-c1e3/guard-no-growth.log"]
+  }
+}

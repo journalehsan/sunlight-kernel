@@ -24,6 +24,62 @@ pub(crate) struct Child {
 }
 
 impl Child {
+    /// Adopt an adapter-built image before releasing its construction locks.
+    /// The image still contains only its initial streams.
+    #[cfg(feature = "vfs_c1a_candidate")]
+    pub(crate) fn adopt(
+        parent: Parent,
+        mut process: Process,
+        sched: &mut Scheduler,
+        pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+        hhdm: VirtAddr,
+    ) -> Result<Self, Error> {
+        let reservation = (|| {
+            let incarnation = process.foreground.incarnation;
+            if incarnation == 0 || process.pid > 0x00ff_ffff {
+                return Err(Error::Exhausted);
+            }
+            parent_index(sched, parent).ok_or(Error::ParentGone)?;
+            let storage = thread_admission::try_box_uninit().map_err(|_| Error::NoMemory)?;
+            let occupied = sched.process_index_by_pid(process.pid).is_some();
+            let ticket = sched.pending_children.reserve(process.pid, parent, occupied)?;
+            Ok((ticket, storage))
+        })();
+        let (ticket, mut storage) = match reservation {
+            Ok(reservation) => reservation,
+            Err(error) => {
+                unsafe { spawn::rollback_initial_image(&mut process, pmm, hhdm) };
+                return Err(error);
+            }
+        };
+        let identity = Identity {
+            ticket,
+            incarnation: process.foreground.incarnation,
+            image_generation: process.address_space.identity().generation,
+        };
+        storage.write(process);
+        let process = unsafe { storage.assume_init() };
+        assert!(sched.pending_children.finish(identity, process, |_| true).is_ok());
+        Ok(Self { identity, hhdm })
+    }
+
+
+    #[cfg(feature = "vfs_c1a_candidate")]
+    pub(crate) fn rollback_unstaged(
+        self,
+        sched: &mut Scheduler,
+        pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+    ) {
+        let identity = self.identity;
+        assert!(sched.pending_children.remote(identity).is_none());
+        let mut child = sched.pending_children.cancel(identity.ticket, Some(identity))
+            .expect("unstaged child owner").expect("constructed child");
+        unsafe { spawn::rollback_initial_image(&mut child, pmm, self.hhdm) };
+        drop(child);
+        sched.pending_children.reclaimed(identity.ticket);
+        self.disarm();
+    }
+
     pub(crate) fn private_identity(&self) -> Identity {
         self.identity
     }

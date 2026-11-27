@@ -693,6 +693,7 @@ heapless = "0.8"
 
 [features]
 vfs-d1b-test = []
+vfs-d2b-test = ["vfs-d1b-test"]
 attachment-transactions = ["sunlight-fs/attachment-transactions"]
 boot-resources = ["sunlight-fs/boot-resources"]
 # Fault injection only in the dedicated native stat failure gate.
@@ -702,6 +703,8 @@ production-grant-test = []
 vfs-n1j-exit-test = []
 vfs-n1m-block-test = []
 vfs-n1o-fat-test = ["attachment-transactions"]
+vfs-c1e1-test = ["vfs-n1o-fat-test"]
+vfs-c1e2-test = ["vfs-c1e1-test"]
 
 [dev-dependencies]
 sunlight-fat = { path = "../../sunlight-fat", features = ["testutil"] }

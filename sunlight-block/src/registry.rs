@@ -137,6 +137,18 @@ impl DeviceRegistry {
         self.entries.iter().flatten().find(|e| e.id == id).copied()
     }
 
+    pub fn resolve_extent(&self, id: u64) -> Option<(DeviceInfo, DeviceInfo)> {
+        let source = self.get(id)?;
+        let disk = if source.parent == 0 {
+            source
+        } else {
+            self.get(source.parent)?
+        };
+        (disk.parent == 0 && source.blocks != 0
+            && source.start.checked_add(source.blocks)? <= disk.blocks)
+            .then_some((disk, source))
+    }
+
     fn child_slot(&self, id: u64) -> Option<usize> {
         self.entries.iter().position(|entry| {
             entry.is_some_and(|entry| entry.id == id && entry.parent != 0)
@@ -210,6 +222,12 @@ mod tests {
         registry.register_partitions(disk, &table).unwrap();
         let first = registry.enumerate(1).unwrap().id;
         let sibling = registry.enumerate(2).unwrap().id;
+        for (id, start, blocks) in [(disk, 0, 100), (first, 10, 20), (sibling, 40, 20)] {
+            let (physical, source) = registry.resolve_extent(id).unwrap();
+            assert_eq!((physical.id, physical.blocks), (disk, 100));
+            assert_eq!((source.id, source.start, source.blocks), (id, start, blocks));
+        }
+        assert!(registry.resolve_extent(u64::MAX).is_none());
         assert_eq!(registry.read_totals(first), Some(ReadTotals::ZERO));
         assert_eq!(registry.read_totals(disk), None);
         // Intervals [10, 20) and [15, 25): one success and one failure.

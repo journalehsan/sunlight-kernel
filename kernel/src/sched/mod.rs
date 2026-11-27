@@ -490,6 +490,10 @@ impl Scheduler {
         if let Some(idx) = task {
             crate::ipc::vfs_registration::spawn::fixture::observe_dispatch(self, idx);
         }
+        #[cfg(all(debug_assertions, feature = "vfs_c1a_test"))]
+        if let Some(idx) = task {
+            crate::ipc::vfs_registration::spawn::ordinary::observe_dispatch(&self.processes[idx], cpu_id);
+        }
         #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
         let previous;
         match SCHEDULER_MODE {

@@ -179,6 +179,7 @@ impl DirectoryNamespace<AttachmentDevice> {
         let cleanup = Unpublished(Some(binding.clone()));
         let mut fat = Fat32::mount(AttachmentDevice(binding)).ok_or(FsError::Io)?;
         fat.validate_root_chain().map_err(|_| FsError::Io)?;
+        let _ = fat.sample_capacity(1024);
         let mut backend = FatFs::new(fat);
         if backend.stat("/")?.file_type != FileType::Directory {
             return Err(FsError::NotDir.into());

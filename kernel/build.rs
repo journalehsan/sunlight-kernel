@@ -507,7 +507,11 @@ fn main() {
     );
 
     if env::var_os("CARGO_FEATURE_VFS_L1C_1_TEST").is_some() {
-        let feature = if env::var_os("CARGO_FEATURE_VFS_D2A_TEST").is_some() {
+        let feature = if env::var_os("CARGO_FEATURE_VFS_C1A_TEST").is_some() {
+            "vfs-c1a-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_D2B_TEST").is_some() {
+            "vfs-d2b-test"
+        } else if env::var_os("CARGO_FEATURE_VFS_D2A_TEST").is_some() {
             "vfs-d2a-test"
         } else if env::var_os("CARGO_FEATURE_VFS_D1B_TEST").is_some() {
             "vfs-d1b-test"
@@ -543,7 +547,7 @@ fn main() {
         };
         println!("cargo:rerun-if-changed=../services/init");
         let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-        if matches!(feature.as_str(), "vfs-l1c-parent-lifecycle-test" | "vfs-l1c-file-ipc-test" | "vfs-d1b-test" | "vfs-d2a-test") {
+        if matches!(feature.as_str(), "vfs-l1c-parent-lifecycle-test" | "vfs-l1c-file-ipc-test" | "vfs-d1b-test" | "vfs-d2a-test" | "vfs-d2b-test" | "vfs-c1a-test") {
             build_package(
                 workspace_root,
                 &scratch_target_dir.join(&feature),
@@ -571,6 +575,11 @@ fn main() {
 
     if env::var_os("CARGO_FEATURE_VFS_D1B_TEST").is_some() {
         println!("cargo:rerun-if-changed=../services/vfs_server");
+        let feature = if env::var_os("CARGO_FEATURE_VFS_D2B_TEST").is_some() {
+            "vfs-d2b-test"
+        } else {
+            "vfs-d1b-test"
+        };
         let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
         build_package(
             workspace_root,
@@ -580,7 +589,7 @@ fn main() {
                 package: "sunlight-vfs-server",
                 output: "sunlight-vfs-server",
                 rustflags: service_rustflags,
-                args: &["--release", "--features", "vfs-d1b-test"],
+                args: &["--release", "--features", feature],
             },
         );
     }

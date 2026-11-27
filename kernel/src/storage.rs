@@ -10,6 +10,36 @@ pub const MAX_CAPACITY_FAT_SECTORS: u32 = 1024;
 
 pub static DEVICES: spin::Mutex<DeviceRegistry> = spin::Mutex::new(DeviceRegistry::new());
 
+#[cfg(feature = "vfs_c1c_test")]
+pub(crate) fn register_disposable(blk: &mut sunlight_virtio::VirtioBlk) -> u64 {
+    use sunlight_block::registry::{FLUSH, READ};
+
+    assert!(blk.supports_write() && blk.supports_flush());
+    let mut marker = [0; 512];
+    assert!(unsafe { blk.read_block(0, &mut marker) });
+    assert!(marker.starts_with(b"VFS-N1O-DISPOSABLE-ONLY!"));
+    let table = sunlight_block::partition::discover(&mut crate::VirtioBootDisk {
+        blk,
+        partition: None,
+    })
+    .expect("C1C disposable partition table");
+    let [partition] = table.partitions() else {
+        panic!("C1C requires one disposable FAT32 partition");
+    };
+    assert!(partition.fat_candidate);
+    let mut registry = DEVICES.lock();
+    let disk = registry
+        .register_disk(blk.block_count(), READ | WRITE | FLUSH)
+        .expect("C1C physical registry slot");
+    registry
+        .register_partitions(disk, &table)
+        .expect("C1C partition registry slot");
+    registry
+        .find_extent(disk, partition.start, partition.blocks)
+        .expect("C1C registered FAT32 extent")
+        .id
+}
+
 pub(crate) fn virtio_partition(parent: u64, start: u64, blocks: u64) -> Option<DeviceInfo> {
     DEVICES.lock().find_extent(parent, start, blocks).filter(|info| info.parent == parent)
 }

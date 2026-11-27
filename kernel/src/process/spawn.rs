@@ -137,6 +137,8 @@ pub enum SpawnError {
     UnsupportedPersonality,
     PidExhausted,
     SessionRejected,
+    #[cfg(feature = "vfs_c1a_candidate")]
+    NamespaceUnavailable,
 }
 
 /// Execute an ELF binary into the current process (re-exec semantics).
@@ -1617,147 +1619,10 @@ pub(crate) fn spawn_with_session_attachment(
     attachment: Option<crate::capability::sessions::LaunchAttachment>,
     parent_pid: Option<usize>,
 ) -> Result<usize, SpawnError> {
-    sched
-        .reserve_task_storage()
-        .map_err(|_| SpawnError::NoMemory)?;
-    let bytes = embedded_bytes_for_path(path)?;
-    // Shells map a tty tab via their shell_id; non-shell paths (e.g. user-level
-    // daemons such as timezone_service/niced/gcd spawned by sunlightd) have no
-    // shell_id and run detached from any TTY tab.
-    let shell_id = shell_id_from_path(path);
-
-    crate::serial_println!("[SPAWN] Loading {} ({} bytes)", path, bytes.len());
-
-    // Allocate a collision-free pid the same way the spawn syscall does:
-    // highest existing pid + 1. Using processes.len()+1 here is unsafe because
-    // boot services hardcode non-contiguous pids (e.g. niced=10, gcd=11), so
-    // len()+1 can alias an existing pid — duplicate pids then break every
-    // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
-    // process, leaving the real one blocked forever).
-    let pid = sched.next_process_pid()
-        .ok_or(SpawnError::PidExhausted)?;
-    // net_server is no longer spawned at a fixed pid (init launches it after
-    // timer_server), so the kernel frame-proxy syscalls (net_tx/net_rx) can no
-    // longer gate on pid==5. Give it a stable name here and gate on that.
-    // For all other binaries derive the name from the path basename so that
-    // monitoring tools (top) can display meaningful names instead of "daemon".
-    let proc_name = if shell_id.is_some() {
-        "sshl"
-    } else {
-        name_from_path(path)
-    };
-    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    let free_before = pmm.free_page_count();
-    let mut process = unsafe {
-        Process::try_new(pid, parent_pid.unwrap_or(1), proc_name, pmm, hhdm_offset)
-            .map_err(|_| SpawnError::NoMemory)?
-    };
-    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(
-        &mut process,
-        attachment.as_ref(),
-        1,
-        pmm,
-        hhdm_offset,
-        free_before,
-    ) {
-        return Err(SpawnError::SessionRejected);
-    }
-    process.uid = uid;
-    process.gid = gid;
-    process.system_allocation = attachment.is_none() && uid == 0;
-    // Attach this shell to a TTY tab keyed by its shell_id (parsed from the
-    // path above). Children spawned by the shell inherit this, so their fd0/fd1
-    // route to the tab's kernel stdin/stdout rings (foreground input routing).
-    // tty_server uses the same shell_id as the ring key. Daemons stay detached.
-    process.tty_tab = shell_id.map(|id| id as u8);
-    // Phase 6.5 Step 2: every spawned process gets an environment — either
-    // one inherited from the caller or the defaults for this uid (PATH,
-    // USER, HOME, SHELL). Username resolution from /etc/passwd happens in
-    // userspace via VFS; the kernel only knows the uid here.
-    process.env = env.unwrap_or_else(|| super::env::EnvMap::with_defaults(uid, ""));
-    process.service_lookup_restrictions = service_lookup_restrictions;
-
-    let envp_strings = process.env.to_envp();
-    let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
-    if let Err(error) = exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)
-    {
-        unsafe {
-            rollback_initial_image(&mut process, pmm, hhdm_offset);
-        }
-        return Err(error);
-    }
-    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(
-        &mut process,
-        attachment.as_ref(),
-        2,
-        pmm,
-        hhdm_offset,
-        free_before,
-    ) {
-        return Err(SpawnError::SessionRejected);
-    }
-    process.nice = initial_embedded_nice(path, uid);
-    process.trusted_display_service = is_trusted_display_path(path);
-    process.trusted_swap_admin_service = is_trusted_swap_admin_path(path);
-    process.trusted_zram_diagnostic = is_trusted_zram_diagnostic_path(path);
-    process.trusted_pty_service = is_trusted_pty_service_path(path);
-    process.trusted_lock_service = is_trusted_lock_service_path(path);
-    // The KV credential syscall observes every caller's UID, so the marker is
-    // granted only to a root-launched embedded sunlight-kv image.
-    process.trusted_kv_service = uid == 0 && is_trusted_kv_service_path(path);
-    process.trusted_session_service = is_trusted_session_service_path(path);
-    process.service_identity = if uid == 0 {
-        trusted_service_identity_for_path(path)
-    } else {
-        0
-    };
-    #[cfg(feature = "native_session_race_test")]
-    if process.trusted_session_service && sched.online_cores > 1 {
-        process.cpu_mask = 2;
-    }
-    process.trusted_wiseowl_braind = is_trusted_wiseowl_braind_path(path);
-    process.trusted_wiseowl_console = is_trusted_wiseowl_console_path(path);
-    process.trusted_control_panel = is_trusted_control_panel_path(path);
-    // The account broker may resolve caller roles and owns `account-broker:*`.
-    process.trusted_account_broker = uid == 0 && is_trusted_account_broker_path(path);
-    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(
-        &mut process,
-        attachment.as_ref(),
-        3,
-        pmm,
-        hhdm_offset,
-        free_before,
-    ) {
-        return Err(SpawnError::SessionRejected);
-    }
-    process.set_initial_args(
-        if matches!(
-            path,
-            "/bin/vortex-lock-presenter" | "/usr/bin/vortex-lock-presenter"
-        ) {
-            LOCK_PRESENTER_ENTRY_MAGIC
-        } else {
-            shell_id.unwrap_or(0)
-        },
-        uid as u64,
-        gid as u64,
-        0,
-    );
-
-    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
-    if rollback_launch_fault(
-        &mut process,
-        attachment.as_ref(),
-        4,
-        pmm,
-        hhdm_offset,
-        free_before,
-    ) {
-        return Err(SpawnError::SessionRejected);
-    }
+    let mut process = prepare_capability_child(
+        path, pmm, sched, hhdm_offset, uid, gid, env,
+        service_lookup_restrictions, attachment.as_ref(), parent_pid,
+    )?;
     if let Some(attachment) = attachment {
         // The caller retains the broker guard throughout construction. Thus
         // revoke/expiry cannot interleave between validation and publication.
@@ -1806,12 +1671,173 @@ pub(crate) fn spawn_with_session_attachment(
         }
     }
     let actual_pid = process.pid;
-    let idx = sched.add_process_after_reaping(process);
+    let idx = sched.add_process_after_reaping(*process);
     crate::ipc::provision_vfs_inheritance(idx, sched, source);
     sched.enqueue_ready(idx);
 
     crate::serial_println!("[SPAWN] {} spawned pid={}", path, actual_pid);
     Ok(actual_pid)
+}
+
+pub(crate) fn prepare_capability_child(
+    path: &str,
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    uid: u32,
+    gid: u32,
+    env: Option<super::env::EnvMap>,
+    service_lookup_restrictions: Option<u64>,
+    attachment: Option<&crate::capability::sessions::LaunchAttachment>,
+    parent_pid: Option<usize>,
+) -> Result<alloc::boxed::Box<Process>, SpawnError> {
+    sched
+        .reserve_task_storage()
+        .map_err(|_| SpawnError::NoMemory)?;
+    let bytes = embedded_bytes_for_path(path)?;
+    // Shells map a tty tab via their shell_id; non-shell paths (e.g. user-level
+    // daemons such as timezone_service/niced/gcd spawned by sunlightd) have no
+    // shell_id and run detached from any TTY tab.
+    let shell_id = shell_id_from_path(path);
+
+    crate::serial_println!("[SPAWN] Loading {} ({} bytes)", path, bytes.len());
+
+    // Allocate a collision-free pid the same way the spawn syscall does:
+    // highest existing pid + 1. Using processes.len()+1 here is unsafe because
+    // boot services hardcode non-contiguous pids (e.g. niced=10, gcd=11), so
+    // len()+1 can alias an existing pid — duplicate pids then break every
+    // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
+    // process, leaving the real one blocked forever).
+    let pid = sched.next_process_pid()
+        .ok_or(SpawnError::PidExhausted)?;
+    // net_server is no longer spawned at a fixed pid (init launches it after
+    // timer_server), so the kernel frame-proxy syscalls (net_tx/net_rx) can no
+    // longer gate on pid==5. Give it a stable name here and gate on that.
+    // For all other binaries derive the name from the path basename so that
+    // monitoring tools (top) can display meaningful names instead of "daemon".
+    let proc_name = if shell_id.is_some() {
+        "sshl"
+    } else {
+        name_from_path(path)
+    };
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    let free_before = pmm.free_page_count();
+    // Keep the prepared image off the caller's kernel stack while it
+    // chooses between direct publication and an authenticated retain.
+    let mut storage = super::thread_admission::try_box_uninit()
+        .map_err(|_| SpawnError::NoMemory)?;
+    storage.write(unsafe {
+        Process::try_new(pid, parent_pid.unwrap_or(1), proc_name, pmm, hhdm_offset)
+            .map_err(|_| SpawnError::NoMemory)?
+    });
+    let mut process = unsafe { storage.assume_init() };
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(
+        &mut process,
+        attachment,
+        1,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
+        return Err(SpawnError::SessionRejected);
+    }
+    process.uid = uid;
+    process.gid = gid;
+    process.system_allocation = attachment.is_none() && uid == 0;
+    // Attach this shell to a TTY tab keyed by its shell_id (parsed from the
+    // path above). Children spawned by the shell inherit this, so their fd0/fd1
+    // route to the tab's kernel stdin/stdout rings (foreground input routing).
+    // tty_server uses the same shell_id as the ring key. Daemons stay detached.
+    process.tty_tab = shell_id.map(|id| id as u8);
+    // Phase 6.5 Step 2: every spawned process gets an environment — either
+    // one inherited from the caller or the defaults for this uid (PATH,
+    // USER, HOME, SHELL). Username resolution from /etc/passwd happens in
+    // userspace via VFS; the kernel only knows the uid here.
+    process.env = env.unwrap_or_else(|| super::env::EnvMap::with_defaults(uid, ""));
+    process.service_lookup_restrictions = service_lookup_restrictions;
+
+    let envp_strings = process.env.to_envp();
+    let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
+    if let Err(error) = exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)
+    {
+        unsafe {
+            rollback_initial_image(&mut process, pmm, hhdm_offset);
+        }
+        return Err(error);
+    }
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(
+        &mut process,
+        attachment,
+        2,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
+        return Err(SpawnError::SessionRejected);
+    }
+    process.nice = initial_embedded_nice(path, uid);
+    process.trusted_display_service = is_trusted_display_path(path);
+    process.trusted_swap_admin_service = is_trusted_swap_admin_path(path);
+    process.trusted_zram_diagnostic = is_trusted_zram_diagnostic_path(path);
+    process.trusted_pty_service = is_trusted_pty_service_path(path);
+    process.trusted_lock_service = is_trusted_lock_service_path(path);
+    // The KV credential syscall observes every caller's UID, so the marker is
+    // granted only to a root-launched embedded sunlight-kv image.
+    process.trusted_kv_service = uid == 0 && is_trusted_kv_service_path(path);
+    process.trusted_session_service = is_trusted_session_service_path(path);
+    process.service_identity = if uid == 0 {
+        trusted_service_identity_for_path(path)
+    } else {
+        0
+    };
+    #[cfg(feature = "native_session_race_test")]
+    if process.trusted_session_service && sched.online_cores > 1 {
+        process.cpu_mask = 2;
+    }
+    process.trusted_wiseowl_braind = is_trusted_wiseowl_braind_path(path);
+    process.trusted_wiseowl_console = is_trusted_wiseowl_console_path(path);
+    process.trusted_control_panel = is_trusted_control_panel_path(path);
+    // The account broker may resolve caller roles and owns `account-broker:*`.
+    process.trusted_account_broker = uid == 0 && is_trusted_account_broker_path(path);
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(
+        &mut process,
+        attachment,
+        3,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
+        return Err(SpawnError::SessionRejected);
+    }
+    process.set_initial_args(
+        if matches!(
+            path,
+            "/bin/vortex-lock-presenter" | "/usr/bin/vortex-lock-presenter"
+        ) {
+            LOCK_PRESENTER_ENTRY_MAGIC
+        } else {
+            shell_id.unwrap_or(0)
+        },
+        uid as u64,
+        gid as u64,
+        0,
+    );
+
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(
+        &mut process,
+        attachment,
+        4,
+        pmm,
+        hhdm_offset,
+        free_before,
+    ) {
+        return Err(SpawnError::SessionRejected);
+    }
+    Ok(process)
 }
 
 /// Get embedded ELF bytes for a given path.
@@ -1923,6 +1949,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         | "/usr/bin/dhclient" => Ok(crate::SUNLIGHT_NET_UTILS_ELF_BYTES),
         #[cfg(all(debug_assertions, feature = "vfs_l1c_parent_lifecycle_test"))]
         "/bin/vfs-lifecycle-parent" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/vfs-stat-caller"))),
+        #[cfg(all(debug_assertions, feature = "vfs_c1a_test"))]
+        "/bin/vfs-c1a-probe" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/vfs-stat-caller"))),
         #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
         "/bin/vfs-d1b-caller" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/vfs-stat-caller"))),
         #[cfg(feature = "vfs_stat_failure_test")]

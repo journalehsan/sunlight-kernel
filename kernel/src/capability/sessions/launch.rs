@@ -109,13 +109,11 @@ impl CapabilityBroker {
         ))
     }
 
-    /// Commit and publication share SCHEDULER -> PMM -> CAP_BROKER guards.
-    /// Consume bootstrap eligibility only after all fallible construction.
-    pub(crate) fn commit_session_launch(
-        &mut self,
-        attachment: LaunchAttachment,
+    pub(crate) fn validate_session_launch(
+        &self,
+        attachment: &LaunchAttachment,
         now: u64,
-    ) -> Result<SessionRef, Error> {
+    ) -> Result<(), Error> {
         if attachment.bootstrap {
             self.authorize_initial_session_launch(attachment.owner, attachment.reference, now)?;
         } else {
@@ -124,12 +122,25 @@ impl CapabilityBroker {
         let session = self
             .sessions
             .rows
-            .iter_mut()
+            .iter()
             .find(|s| s.reference == attachment.reference)
             .ok_or(Error::SessionChanged)?;
         if session.launch_revision != attachment.revision {
             return Err(Error::Denied);
         }
+        Ok(())
+    }
+
+    /// Consume bootstrap eligibility only after all fallible construction.
+    pub(crate) fn commit_session_launch(
+        &mut self,
+        attachment: LaunchAttachment,
+        now: u64,
+    ) -> Result<SessionRef, Error> {
+        self.validate_session_launch(&attachment, now)?;
+        let session = self.sessions.rows.iter_mut()
+            .find(|s| s.reference == attachment.reference)
+            .expect("validated session");
         if attachment.bootstrap {
             session.bootstrap_available = false;
             session.state = State::Active;

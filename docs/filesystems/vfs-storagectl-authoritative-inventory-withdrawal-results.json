@@ -1,0 +1,72 @@
+{
+  "stage": "VFS-C1E5",
+  "date": "2026-11-28",
+  "status": "PARTIAL",
+  "inventory_and_withdrawal_routing": "PASS",
+  "publication_commit": "BLOCKED",
+  "mount_published": false,
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1e5/production.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e5/release-vfs.log"},
+    "isolated_candidate": {"status": "PASS", "log": "target/vfs-c1e5/candidate-retry.log"},
+    "embedded_fixture_service": {"status": "PASS", "log": "target/vfs-c1e5/service-retry.log"}
+  },
+  "native": {
+    "status": "PASS",
+    "scope": "Ordinary inventory, rejected unmount, and unpublished preparation lifecycle",
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "command": "python3 tools/test_vfs_n1h.py --c1e5 --kernel target/vfs-c1e5/kernel-retry.elf",
+    "log": "target/vfs-c1e5/native-retry.log",
+    "serial": "target/vfs-n1o-qemu-mc3v9cy4/serial.log",
+    "prepared_mount_hidden_in_both_inventory_operations": "PASS",
+    "authorized_inventory_reaches_runtime_owner": "PASS",
+    "unauthorized_admin_inventory_unmount_and_publish": "PASS",
+    "stale_service_epoch_unmount": "PASS",
+    "service_retirement_fails_inventory_closed": "PASS",
+    "ordinary_stat_preparation_invisibility_and_stable_fat_identity": "PASS",
+    "abort_reprepare_wrong_cookies_fat_failure_and_exact_retirement": "PASS",
+    "preparation_settlement": {
+      "status": "PASS",
+      "explicit_releases": 5,
+      "service_retirements": 1,
+      "outstanding_commands": 0,
+      "mapping_users": 0,
+      "retained_command_data": 0,
+      "flush_pending": false,
+      "retained_dma_bytes": 20480
+    },
+    "closed_image": {
+      "status": "PASS",
+      "byte_identical": true,
+      "fsck_exit": 0,
+      "fsinfo": "initial unknown free count preserved",
+      "recovered_keep_payload": "untouched",
+      "partition_sha256": "35476222748e99d1a8c743fc47d68bdb6881f9822a5c11769aa92c873645ef9a"
+    },
+    "published_inventory_and_ordinary_withdrawal": "BLOCKED",
+    "committed_retained_reference_lifetime_and_lease_accounting": "BLOCKED",
+    "committed_private_mmap_and_write_persistence": "NOT_RUN",
+    "standalone_c1e1_and_smp": "NOT_RUN",
+    "rejected_attempt": {
+      "status": "FAIL",
+      "reason": "Fixture expected -5 on post-retirement admission failure; native file continuation returned -9. The retry asserts an error and rejects both legacy row and end-of-list results.",
+      "log": "target/vfs-c1e5/native.log",
+      "serial": "target/vfs-n1o-qemu-jecapjh4/serial.log"
+    }
+  },
+  "host": {
+    "focused_filesystem_block_fat_ipc_and_vfs": {"status": "PASS", "tests": 468, "log": "target/vfs-c1e5/focused.log"},
+    "withdrawal_stale_successor_and_busy_retry": {"status": "PASS", "tests": 1, "log": "target/vfs-c1e5/withdrawal.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e5/registration.log"},
+    "workspace_lib": {"status": "FAIL", "reason": "sunlight-ui-wayland duplicate panic_impl", "log": "target/vfs-c1e5/workspace-lib.log"},
+    "secret_store": {"status": "FAIL", "reason": "Separate 45-second run timed out during default_options_are_private_and_bounded", "log": "target/vfs-c1e5/secret-store.log"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched_sites": 4,
+    "log": "target/vfs-c1e5/guard.log",
+    "guarded_ordinary_boot": "NOT_RUN"
+  }
+}

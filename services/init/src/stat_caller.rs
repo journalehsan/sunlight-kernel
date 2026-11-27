@@ -34,15 +34,25 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    #[cfg(feature = "vfs-c1a-test")]
+    if argc == 0 {
+        qualify_ordinary_child();
+    }
     let mut args = [""; 3];
     assert_eq!(
         unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 32) },
         3
     );
+    #[cfg(feature = "vfs-c1a-test")]
+    if args[1] == "c1a" {
+        qualify_ordinary_child();
+    }
     #[cfg(feature = "vfs-d1b-test")]
     match args[1] {
         #[cfg(feature = "vfs-d2a-test")]
         "private-mmap" => run_private_mmap(),
+        #[cfg(feature = "vfs-d2b-test")]
+        "mmap-lifecycle" => run_mmap_lifecycle(args[2]),
         "descriptor-lifecycle" => run_native_descriptors(args[2] == "exec"),
         "descriptor-exec" => {
             assert_eq!(unsafe { sunlight_libc::sys::syscall2(0xf1c1, 23, 2) }, 1);
@@ -638,6 +648,34 @@ fn run_native_descriptors(exec: bool) -> ! {
     sunlight_libc::exit(0);
 }
 
+#[cfg(feature = "vfs-c1a-test")]
+fn qualify_ordinary_child() -> ! {
+    use sunlight_libc::{close, open, read, mman::munmap, sys::{syscall2, syscall6}};
+    assert_eq!(unsafe { syscall2(0xf1c6, 3, 0) }, 1);
+    let fd = open(b"motd").unwrap();
+    let mut bytes = [0; 8];
+    assert_eq!(read(fd, &mut bytes), Ok(8));
+    let addr = unsafe { syscall6(50, 0, 4096, 1, 2, fd.0 as u64, 0) };
+    assert_ne!(addr, u64::MAX);
+    assert_eq!(unsafe { core::slice::from_raw_parts(addr as *const u8, 8) }, &bytes);
+    munmap(addr as *mut u8, 4096).unwrap();
+    close(fd).unwrap();
+    sunlight_libc::exit(37)
+}
+
+#[cfg(feature = "vfs-d2a-test")]
+fn drain_fixture_close() {
+    let start = sunlight_ipc::monotonic_millis();
+    loop {
+        match unsafe { sunlight_libc::sys::syscall2(0xf1c1, 31, 0) } {
+            1 => return,
+            0 => assert!(sunlight_ipc::monotonic_millis() - start < 3000),
+            _ => panic!("fixture close drain rejected"),
+        }
+        sunlight_libc::yield_now();
+    }
+}
+
 #[cfg(feature = "vfs-d2a-test")]
 fn run_private_mmap() -> ! {
     use sunlight_libc::{close, lseek, open, open_with_flags, read, write, O_RDWR, O_WRONLY, SEEK_CUR, SEEK_SET};
@@ -713,12 +751,77 @@ fn run_private_mmap() -> ! {
     assert_eq!(checkpoint(25, guard), PRESENT | NX);
     munmap(guard as *mut u8, PAGE).unwrap();
     close(fd).unwrap();
+    drain_fixture_close();
     assert_eq!(unsafe { core::slice::from_raw_parts(address as *const u8, 9) }, b"tail-data");
     let check = open(PATH).unwrap();
     assert_eq!(read(check, &mut bytes), Ok(5));
     assert_eq!(&bytes, b"hello");
     close(check).unwrap();
+    drain_fixture_close();
     assert_eq!(checkpoint(26, 20), baseline + 1);
     sunlight_ipc::debug_log("[VFS-D2A] Ring-3 private mmap checks passed; exiting with a live page");
+    sunlight_libc::exit(0);
+}
+
+#[cfg(feature = "vfs-d2b-test")]
+fn run_mmap_lifecycle(case: &str) -> ! {
+    use sunlight_libc::{close, open};
+    use sunlight_libc::mman::munmap;
+    use sunlight_libc::sys::{syscall2, syscall6};
+
+    const BASE: u64 = 0x2080_0000_0000;
+    const PAGE: usize = 4096;
+    const PRIVATE_FIXED_NOREPLACE: u64 = 2 | 0x100000;
+    let checkpoint = |mode, arg| unsafe { syscall2(0xf1c1, mode, arg) };
+    let action = match case {
+        "normal" => 1,
+        "exit" => 2,
+        "withdraw" => 3,
+        _ => panic!("unknown mmap lifecycle case"),
+    };
+    assert_eq!(checkpoint(20, 0), 1);
+    let fd = open(b"/tests/cat-hello").unwrap();
+    let map_file = |len| unsafe {
+        syscall6(50, BASE, len, 1, PRIVATE_FIXED_NOREPLACE, fd.0 as u64, 0)
+    };
+    let baseline = checkpoint(26, 30);
+    assert_eq!(checkpoint(27, action), 1);
+    let address = map_file(2 * PAGE as u64);
+    match action {
+        1 => {
+            assert_eq!(address, BASE);
+            assert_eq!(unsafe { *(address as *const u8) }, b'h');
+            assert_eq!(unsafe { *((address + PAGE as u64) as *const u8) }, b't');
+            munmap(address as *mut u8, 2 * PAGE).unwrap();
+            let subsequent = map_file(PAGE as u64);
+            assert_eq!(subsequent, BASE);
+            assert_eq!(unsafe { *(subsequent as *const u8) }, b'h');
+            munmap(subsequent as *mut u8, PAGE).unwrap();
+        }
+        3 => {
+            assert_eq!(address, u64::MAX);
+            assert_eq!(checkpoint(25, BASE), 0);
+            assert_eq!(checkpoint(25, BASE + PAGE as u64), 0);
+            let subsequent = unsafe {
+                syscall6(50, BASE, 2 * PAGE as u64, 3, PRIVATE_FIXED_NOREPLACE | 0x20, u64::MAX, 0)
+            };
+            assert_eq!(subsequent, BASE);
+            let byte = subsequent as *mut u8;
+            assert_eq!(unsafe { *byte }, 0);
+            unsafe { *byte = b'R' };
+            assert_eq!(unsafe { *byte }, b'R');
+            munmap(byte, 2 * PAGE).unwrap();
+        }
+        _ => panic!("mmap returned to killed caller"),
+    }
+    assert_eq!(checkpoint(26, 31), baseline);
+    close(fd).unwrap();
+    if action == 1 { drain_fixture_close(); }
+    assert_eq!(checkpoint(26, 32), baseline);
+    sunlight_ipc::debug_log(if action == 1 {
+        "[VFS-D2B] Ring-3 normal completion and subsequent file map passed"
+    } else {
+        "[VFS-D2B] Ring-3 withdrawal and subsequent anonymous map passed"
+    });
     sunlight_libc::exit(0);
 }

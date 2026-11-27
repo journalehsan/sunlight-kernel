@@ -1,0 +1,565 @@
+{
+  "stage": "VFS-C1A",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "coordinated_cutover_status": "BLOCKED",
+  "scope": "Isolated opt-in candidate. Both ordinary adapters reuse the existing authenticated pending-child transaction.",
+  "candidate_feature": "vfs_c1a_candidate",
+  "native_fixture_feature": "vfs_c1a_test",
+  "production_routing_enabled": false,
+  "storagectl_ownership_transfer": "NOT_RUN",
+  "scratch_activated": false,
+  "ordinary_publication": {
+    "status": "PASS",
+    "adapters": [
+      "native sys_spawn",
+      "capability SPAWN_TOKEN"
+    ],
+    "stable_checkpoint": {
+      "leases": 1,
+      "generic_descriptions": 72,
+      "generic_references": 72,
+      "pending_pids": 0,
+      "owned_child_frames": 0,
+      "service_rows": 0,
+      "service_references": 0
+    },
+    "namespace_probe": {
+      "cwd": "/etc",
+      "relative_file": "motd",
+      "service_file_bytes": 22,
+      "initial_binding": "exact caller, request, namespace and service epoch before first dispatch",
+      "child_exit": 37
+    },
+    "native_runs": [
+      {
+        "status": "PASS",
+        "vcpus": 1,
+        "memory_mib": 2048,
+        "guest_runner_exit": 0,
+        "serial": "target/vfs-c1a/matrix-up.serial.log",
+        "qemu_args": "target/vfs-c1a/matrix-up.args",
+        "ordinary_publication": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/c1a-matrix-up.json"
+        },
+        "d1b": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/d1b-matrix-up.json",
+          "descriptor_cycles": 3,
+          "exec_cycles": 2
+        },
+        "d2a_d2b": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/d2b-matrix-up.json"
+        }
+      },
+      {
+        "status": "PASS",
+        "vcpus": 2,
+        "memory_mib": 2048,
+        "guest_runner_exit": 0,
+        "serial": "target/vfs-c1a/matrix-smp2-run3.serial.log",
+        "qemu_args": "target/vfs-c1a/matrix-smp2-run3.args",
+        "ordinary_publication": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/c1a-matrix-smp2-run3.json"
+        },
+        "d1b": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/d1b-matrix-smp2-run3.json",
+          "descriptor_cycles": 3,
+          "exec_cycles": 2
+        },
+        "d2a_d2b": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/d2b-matrix-smp2-run3.json"
+        }
+      },
+      {
+        "status": "PASS",
+        "vcpus": 4,
+        "memory_mib": 2048,
+        "guest_runner_exit": 0,
+        "serial": "target/vfs-c1a/matrix-smp4-run2.serial.log",
+        "qemu_args": "target/vfs-c1a/matrix-smp4-run2.args",
+        "ordinary_publication": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/c1a-matrix-smp4-run2.json"
+        },
+        "d1b": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/d1b-matrix-smp4-run2.json",
+          "descriptor_cycles": 3,
+          "exec_cycles": 2
+        },
+        "d2a_d2b": {
+          "status": "PASS",
+          "evidence": "target/vfs-c1a/d2b-matrix-smp4-run2.json"
+        }
+      }
+    ],
+    "kernel": {
+      "path": "target/vfs-c1a/final-matrix.elf",
+      "sha256": "7165d7d0096d8fcbfa1f658047cbf5eff4e593506ff5bf4dab1bf030a2f79750"
+    },
+    "iso": {
+      "path": "target/vfs-c1a/final-matrix.iso",
+      "sha256": "fe9b3c27a49efe98418fb7d1e95f8400771cd13b763e2d6254252320d72388be"
+    },
+    "build_log": "target/vfs-c1a/final-matrix-build.log",
+    "verifier": "tools/check_vfs_c1a.py",
+    "full_descriptor_and_mmap_verifier": {
+      "scripts": [
+        "target/vfs-c1a/verify-d1b.py",
+        "target/vfs-c1a/verify-mapping.py",
+        "target/vfs-c1a/verify-d2b.py"
+      ],
+      "difference_from_c1": "Evidence path substitutions only."
+    },
+    "native_authenticated_registration_refusal_and_timeout": "NOT_RUN",
+    "host_transaction_failure_paths": {
+      "status": "PASS",
+      "evidence": "target/vfs-c1a/registration.log",
+      "cases": [
+        "exact identity and epoch rejection",
+        "terminal failure and remote cleanup",
+        "stale service image",
+        "bounded admission and unsent cancellation"
+      ]
+    },
+    "native_session_manager_and_cross_thread_launch": "NOT_RUN",
+    "ordinary_boot_acceptance": {
+      "status": "BLOCKED",
+      "execution": "NOT_RUN"
+    }
+  },
+  "c1_four_vcpu_rejected_evidence": [
+    {
+      "tag": "smp4",
+      "status": "FAIL",
+      "guest_runner_exit": 0,
+      "serial": "target/vfs-c1/smp4.serial.log",
+      "verifier_log": "target/vfs-c1/d2b-smp4.verify.log",
+      "classification": "Incomplete backend transition evidence",
+      "evidence": {
+        "d2a_acknowledged_close_line": 2262,
+        "d2b_unacknowledged_close_line": 2388
+      },
+      "disposition": "File dispatch can close between retention-batch samples. The observed close alone does not satisfy the backend transition assertion."
+    },
+    {
+      "tag": "smp4-retry",
+      "status": "FAIL",
+      "guest_runner_exit": 0,
+      "serial": "target/vfs-c1/smp4-retry.serial.log",
+      "verifier_log": "target/vfs-c1/d2b-smp4-retry.verify.log",
+      "classification": "Normal Close acknowledgement missing after exact caller retires",
+      "evidence": {
+        "unacknowledged_close_line": 2387,
+        "owner_retirement_zero_to_zero_line": 2392
+      }
+    },
+    {
+      "tag": "smp4-repeat",
+      "status": "FAIL",
+      "guest_runner_exit": 0,
+      "serial": "target/vfs-c1/smp4-repeat.serial.log",
+      "verifier_log": "target/vfs-c1/d2b-smp4-repeat.verify.log",
+      "classification": "Normal Close acknowledgement missing after exact caller retires",
+      "evidence": {
+        "unacknowledged_close_line": 2389,
+        "owner_retirement_zero_to_zero_line": 2390
+      }
+    }
+  ],
+  "qualification_changes": {
+    "acceptance_criteria_changed": false,
+    "backend_transition": "Sample backend counts around each file dispatch in the debug service.",
+    "normal_close": "Keep the normal D2A and D2B caller alive while its Close publication drains. The unchanged verifier still requires ack=1.",
+    "intermediate_runs": [
+      {
+        "tag": "up",
+        "status": "PARTIAL",
+        "serial": "target/vfs-c1a/up.serial.log",
+        "finding": "Preliminary D2A-only image showed both ordinary paths, with no D2B or explicit scheduler dispatch attestation."
+      },
+      {
+        "tag": "final-up",
+        "status": "FAIL",
+        "serial": "target/vfs-c1a/final-up.serial.log",
+        "finding": "Combined image panicked in the allocator during a debug observer launch. The next build boxed capability preparation to reduce kernel stack use."
+      },
+      {
+        "tag": "qualified-smp2",
+        "status": "FAIL",
+        "serial": "target/vfs-c1a/qualified-smp2.serial.log",
+        "finding": "Preceding chdir lease had not retired when the fixture sampled the baseline. The fixture now waits for retirement before sampling."
+      },
+      {
+        "tag": "matrix-smp2",
+        "status": "FAIL",
+        "guest_runner_exit": 0,
+        "ordinary_publication": "PASS",
+        "d1b": "PASS",
+        "serial": "target/vfs-c1a/matrix-smp2.serial.log",
+        "verifier_log": "target/vfs-c1a/matrix-smp2.verify.log",
+        "finding": "D2B caller terminal marker preceded service-side withdrawal/settlement marker."
+      },
+      {
+        "tag": "matrix-smp2-repeat",
+        "status": "FAIL",
+        "guest_runner_exit": 1,
+        "serial": "target/vfs-c1a/matrix-smp2-repeat.serial.log",
+        "finding": "D2A caller asserted lseek(fd, 5, SEEK_SET) returned Err(Failed). Cause remains unconfirmed."
+      },
+      {
+        "tag": "matrix-smp4",
+        "status": "FAIL",
+        "guest_runner_exit": 0,
+        "ordinary_publication": "PASS",
+        "d1b": "PASS",
+        "serial": "target/vfs-c1a/matrix-smp4.serial.log",
+        "verifier_log": "target/vfs-c1a/matrix-smp4.verify.log",
+        "finding": "D2B caller terminal marker preceded service-side withdrawal/settlement marker."
+      }
+    ]
+  },
+  "regressions": {
+    "host_library_groups": {
+      "status": "PASS",
+      "log": "target/vfs-c1a/host.log",
+      "passed": {
+        "sunlight-fs": 118,
+        "sunlight-fat": 14,
+        "sunlight-ipc": 169,
+        "sunlight-vfs-server": 91,
+        "sunlight-virtio": 33
+      }
+    },
+    "registration": {
+      "status": "PASS",
+      "passed": 112,
+      "log": "target/vfs-c1a/registration.log"
+    },
+    "kernel_library": {
+      "status": "PASS",
+      "passed": 223,
+      "log": "target/vfs-c1a/kernel-host.log"
+    },
+    "scheduler_policy_and_lifecycle": {
+      "status": "PASS",
+      "log": "target/vfs-c1a/scheduler.log"
+    },
+    "fd_descriptions": {
+      "status": "PASS",
+      "passed": 19,
+      "log": "target/vfs-c1a/fd-description.log"
+    },
+    "named_host_groups": {
+      "status": "PASS",
+      "matched": {
+        "N1G": 481,
+        "N1H": 59,
+        "N1D": 7,
+        "N1L": 3,
+        "N1P FAT": 14,
+        "D1A": 536,
+        "D2B libraries": 537
+      },
+      "log": "target/vfs-c1a/host-name-comparison.log"
+    },
+    "caller_scoped_snapshots_and_capacity": {
+      "status": "PASS",
+      "host_log": "target/vfs-c1a/host.log",
+      "native_evidence": "N1P capacity attestation lines"
+    },
+    "n1p": {
+      "status": "PASS",
+      "populated": {
+        "status": "PASS",
+        "vcpus": 1,
+        "memory_mib": 2048,
+        "cycles": 4,
+        "log": "target/vfs-c1a/n1p-populated.log",
+        "serial": "target/vfs-n1o-qemu-lbryx4j0/serial.log",
+        "closed_image": {
+          "path": "target/vfs-n1o-qemu-lbryx4j0/final.fat",
+          "sha256": "3137671a8af18777465da7b0996e187f36b5049e37549dffe3a7f6c7b0575c01"
+        },
+        "capacity_attestation_lines": [
+          357,
+          363,
+          369,
+          375
+        ],
+        "free_clusters": [
+          127004,
+          127003
+        ]
+      },
+      "unknown": {
+        "status": "PASS",
+        "vcpus": 1,
+        "memory_mib": 2048,
+        "cycles": 4,
+        "log": "target/vfs-c1a/n1p-unknown.log",
+        "serial": "target/vfs-n1o-qemu-69dyt9c2/serial.log",
+        "closed_image": {
+          "path": "target/vfs-n1o-qemu-69dyt9c2/final.fat",
+          "sha256": "55a457bcd97c068b51026ed200bec18c5dd0f9aee6a5e2ca9c2561fd232172d9"
+        },
+        "capacity_attestation_lines": [
+          354,
+          360,
+          366,
+          375
+        ],
+        "free_clusters": [
+          127004,
+          127003
+        ]
+      },
+      "build_logs": [
+        "target/vfs-c1a/n1p-kernel.log",
+        "target/vfs-c1a/n1p-service.log"
+      ]
+    },
+    "l1c_parent_and_exec": [
+      {
+        "status": "PASS",
+        "vcpus": 1,
+        "memory_mib": 2048,
+        "serial": "target/vfs-c1a/l1c-1.serial.log",
+        "guest_runner_exit": 0,
+        "qemu_args": "target/vfs-c1a/l1c-1.args",
+        "markers": [
+          {
+            "line": 1792,
+            "text": "[VFS-L1P] PASS cpus=1 cycles=100 heap_faults=12 ledger_faults=2 pmm_faults=523 frames=342497 heap=180872 descriptions=72 refs=72 swap_candidates=0 published=3 ready=0"
+          },
+          {
+            "line": 1914,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1959,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1986,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 7, incarnation: 687, image_generation: 1359 } child=Identity { ticket: Ticket { pid: 8, serial: 652 }, incarnation: 688, image_generation: 1361 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2031,
+            "text": "[VFS-ACCT] PASS child=8 retain=7 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2061,
+            "text": "[VFS-EXEC] rejected exec preserved exact launch and receipt"
+          },
+          {
+            "line": 2062,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 9, incarnation: 689, image_generation: 1363 } child=Identity { ticket: Ticket { pid: 10, serial: 653 }, incarnation: 690, image_generation: 1365 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2107,
+            "text": "[VFS-ACCT] PASS child=10 retain=9 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2141,
+            "text": "[VFS-EXEC] detached retained child=12 parent=11 incarnation=691 old_vm=1367 new_vm=1370 source_pinned=1 inline_bytes=64"
+          },
+          {
+            "line": 2146,
+            "text": "[VFS-EXEC] replacement image executed"
+          },
+          {
+            "line": 2161,
+            "text": "[VFS-ACCT] PASS child=12 retain=11 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2162,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      },
+      {
+        "status": "PASS",
+        "vcpus": 2,
+        "memory_mib": 2048,
+        "serial": "target/vfs-c1a/l1c-2.serial.log",
+        "guest_runner_exit": 0,
+        "qemu_args": "target/vfs-c1a/l1c-2.args",
+        "markers": [
+          {
+            "line": 1799,
+            "text": "[VFS-L1P] PASS cpus=2 cycles=100 heap_faults=12 ledger_faults=2 pmm_faults=523 frames=342238 heap=181896 descriptions=72 refs=72 swap_candidates=0 published=3 ready=0"
+          },
+          {
+            "line": 1918,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1963,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1990,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 7, incarnation: 687, image_generation: 1359 } child=Identity { ticket: Ticket { pid: 8, serial: 652 }, incarnation: 688, image_generation: 1361 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2035,
+            "text": "[VFS-ACCT] PASS child=8 retain=7 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2065,
+            "text": "[VFS-EXEC] rejected exec preserved exact launch and receipt"
+          },
+          {
+            "line": 2066,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 9, incarnation: 689, image_generation: 1363 } child=Identity { ticket: Ticket { pid: 10, serial: 653 }, incarnation: 690, image_generation: 1365 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2111,
+            "text": "[VFS-ACCT] PASS child=10 retain=9 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2145,
+            "text": "[VFS-EXEC] detached retained child=12 parent=11 incarnation=691 old_vm=1367 new_vm=1370 source_pinned=1 inline_bytes=64"
+          },
+          {
+            "line": 2153,
+            "text": "[VFS-EXEC] replacement image executed"
+          },
+          {
+            "line": 2166,
+            "text": "[VFS-ACCT] PASS child=12 retain=11 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2167,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      },
+      {
+        "status": "PASS",
+        "vcpus": 4,
+        "memory_mib": 2048,
+        "serial": "target/vfs-c1a/l1c-4.serial.log",
+        "guest_runner_exit": 0,
+        "qemu_args": "target/vfs-c1a/l1c-4.args",
+        "markers": [
+          {
+            "line": 1813,
+            "text": "[VFS-L1P] PASS cpus=4 cycles=100 heap_faults=12 ledger_faults=2 pmm_faults=523 frames=341726 heap=183944 descriptions=72 refs=72 swap_candidates=0 published=3 ready=0"
+          },
+          {
+            "line": 1932,
+            "text": "[VFS-ACCT] PASS child=6 retain=3 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 1977,
+            "text": "[VFS-ACCT] PASS child=7 retain=5 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2004,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 7, incarnation: 687, image_generation: 1359 } child=Identity { ticket: Ticket { pid: 8, serial: 652 }, incarnation: 688, image_generation: 1361 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2049,
+            "text": "[VFS-ACCT] PASS child=8 retain=7 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2079,
+            "text": "[VFS-EXEC] rejected exec preserved exact launch and receipt"
+          },
+          {
+            "line": 2080,
+            "text": "[VFS-LAUNCH] published parent=Parent { pid: 9, incarnation: 689, image_generation: 1363 } child=Identity { ticket: Ticket { pid: 10, serial: 653 }, incarnation: 690, image_generation: 1365 } execution=0 inline_bytes=64"
+          },
+          {
+            "line": 2125,
+            "text": "[VFS-ACCT] PASS child=10 retain=9 epoch=1 published=1 reaped_slot=1 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2159,
+            "text": "[VFS-EXEC] detached retained child=12 parent=11 incarnation=691 old_vm=1367 new_vm=1370 source_pinned=1 inline_bytes=64"
+          },
+          {
+            "line": 2165,
+            "text": "[VFS-EXEC] replacement image executed"
+          },
+          {
+            "line": 2180,
+            "text": "[VFS-ACCT] PASS child=12 retain=11 epoch=1 published=0 reaped_slot=0 fd_table_bytes=10240 live_frames=0 private_pid=0 adapter=0 continuation=0 vfs_claim=0 ipc_refs=0 stat_bytes=0 stat_requests=0"
+          },
+          {
+            "line": 2181,
+            "text": "[VFS-PARENT] complete"
+          }
+        ]
+      }
+    ],
+    "preserved_l1c_history": [
+      "vfs-l1c-production-parent-lifecycle-results.json",
+      "vfs-l1c-production-launch-attribution-results.json",
+      "vfs-l1c-production-exec-lifecycle-results.json"
+    ],
+    "other_native_regressions": {
+      "production_swap1": "NOT_RUN",
+      "interactive_btop_and_qalculate": "NOT_RUN"
+    }
+  },
+  "builds": {
+    "release-kernel": {
+      "status": "PASS",
+      "log": "target/vfs-c1a/release-kernel.log"
+    },
+    "release-kernel-boot-resources": {
+      "status": "PASS",
+      "log": "target/vfs-c1a/release-kernel-boot-resources.log"
+    },
+    "release-service": {
+      "status": "PASS",
+      "log": "target/vfs-c1a/release-service.log"
+    },
+    "release-service-boot-resources": {
+      "status": "PASS",
+      "log": "target/vfs-c1a/release-service-boot-resources.log"
+    },
+    "release-candidate": {
+      "status": "PASS",
+      "log": "target/vfs-c1a/release-candidate.log"
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "unchanged": true,
+    "inventory_exit": 0,
+    "no_growth_exit": 1,
+    "strict_exit": 1,
+    "references": 71,
+    "unmatched_findings": [
+      "Private mmap",
+      "ProcFS mountinfo",
+      "Linux statfs",
+      "Runtime FAT mount"
+    ],
+    "logs": [
+      "target/vfs-c1a/guard.log",
+      "target/vfs-c1a/guard-no-growth.log",
+      "target/vfs-c1a/guard-check.log",
+      "target/vfs-c1a/guard-tests.log"
+    ]
+  },
+  "remaining_prerequisites": {
+    "storagectl": "BLOCKED",
+    "real_registry_extent_and_exclusive_lease": "BLOCKED",
+    "ordinary_block_capable_namespace_and_retained_fat_objects": "BLOCKED",
+    "publication_and_withdrawal_crossing_topology_and_capacity": "BLOCKED",
+    "ordinary_native_and_linux_descriptor_and_private_mmap_admission": "BLOCKED",
+    "trusted_successor_activation": "BLOCKED",
+    "fault_driven_service_populated_reclaim": "NOT_RUN"
+  }
+}

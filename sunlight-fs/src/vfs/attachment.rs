@@ -22,7 +22,17 @@ pub struct AttachmentRow {
     pub parent_id: u64,
     pub source: u64,
     pub protected: bool,
+    pub fat: bool,
     pub mountpoint: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AttachmentCapacity {
+    /// Full mount ID, including its incarnation, as in AttachmentRow::id.
+    pub id: u64,
+    pub unit: u32,
+    pub blocks: u32,
+    pub free: u32,
 }
 
 /// Unique work item for one closing mount incarnation.
@@ -34,6 +44,10 @@ pub struct DeviceWithdrawal<D: BlockDevice> {
 }
 
 impl<D: BlockDevice> DeviceWithdrawal<D> {
+    pub fn device(&self) -> &D {
+        self.backend.fat.device()
+    }
+
     pub fn synchronize(&mut self) -> Result<(), FsError> {
         self.synchronized = false;
         self.backend.sync_dir("/")?;
@@ -52,6 +66,36 @@ fn copy_path(path: &str) -> Result<String, FsError> {
 }
 
 impl<D: BlockDevice> Vfs<D> {
+    /// Resolve and sample capacity under the same exclusive namespace borrow.
+    /// Capacity needs a live mount incarnation, so the lookup only needs
+    /// existence and search permissions for objects inside that mount.
+    pub fn attachment_capacity_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+    ) -> Result<AttachmentCapacity, FsError> {
+        let resolved = self.walk_beneath(root, cwd, path, caller, Self::stat)?;
+        let stat = self.stat(resolved.as_str())?;
+        if path.ends_with('/') && stat.file_type != FileType::Directory {
+            return Err(FsError::NotDir);
+        }
+        let (slot, _) = self.resolve_mount(resolved.as_str())?;
+        let mount = self.mounts[slot].as_ref().ok_or(FsError::NotFound)?;
+        if mount.device_attachment.is_none() {
+            return Err(FsError::Unsupported);
+        }
+        let id = u64::from(mount.tag) + 1;
+        let (unit, blocks, free) = self.fat_capacity(id)?;
+        Ok(AttachmentCapacity {
+            id,
+            unit,
+            blocks,
+            free,
+        })
+    }
+
     pub fn topology_revision(&self) -> u64 {
         self.topology_revision
     }
@@ -120,6 +164,16 @@ impl<D: BlockDevice> Vfs<D> {
     /// Caller holds the namespace reservation and the device admission pin.
     /// Target validation must already have completed; this step performs no I/O.
     pub fn publish_prepared_device(&mut self, target: &str, fs: FatFs<D>) -> Result<u64, FsError> {
+        self.publish_prepared_device_with_metadata(target, fs, 0, false)
+    }
+
+    pub fn publish_prepared_device_with_metadata(
+        &mut self,
+        target: &str,
+        mut fs: FatFs<D>,
+        source: u64,
+        protected: bool,
+    ) -> Result<u64, FsError> {
         let slot = self
             .mounts
             .iter()
@@ -127,7 +181,8 @@ impl<D: BlockDevice> Vfs<D> {
             .position(|(slot, mount)| mount.is_none() && self.next_tags[slot] <= u16::from(u8::MAX))
             .ok_or(FsError::TooManyOpenFiles)?;
         let id = u64::from(self.next_tags[slot]) + 1;
-        self.mount_with_metadata(target, FsNode::Fat(fs), 0, false)?;
+        fs.stable_objects = true;
+        self.mount_with_metadata(target, FsNode::Fat(fs), source, protected)?;
         self.mounts[slot].as_mut().unwrap().device_attachment = Some(DeviceState::Active);
         Ok(id)
     }
@@ -145,6 +200,9 @@ impl<D: BlockDevice> Vfs<D> {
 
     pub fn prepare_device_withdrawal(&mut self, id: u64) -> Result<DeviceWithdrawal<D>, FsError> {
         let index = self.device_attachment_index(id)?;
+        if self.mounts[index].as_ref().unwrap().protected {
+            return Err(FsError::PermissionDenied);
+        }
         if matches!(
             self.mounts[index].as_ref().unwrap().device_attachment,
             Some(DeviceState::Active)
@@ -242,6 +300,7 @@ impl<D: BlockDevice> Vfs<D> {
             let incarnation = u64::from(mount.tag) / MAX_MOUNTS as u64 + 1;
             let source = mount.source;
             let protected = mount.protected;
+            let fat = matches!(mount.fs, FsNode::Fat(_));
             let supported = matches!(mount.fs, FsNode::Ram(_)) || mount.device_attachment.is_some();
             let stat = match self.stat_beneath(root, root, &mountpoint, caller) {
                 Ok(stat) => stat,
@@ -275,6 +334,7 @@ impl<D: BlockDevice> Vfs<D> {
                 parent_id,
                 source,
                 protected,
+                fat,
                 mountpoint,
             });
         }

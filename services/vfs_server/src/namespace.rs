@@ -1,6 +1,6 @@
 //! Operations on the service's mounted namespace, shared by dispatch adapters.
 //! Caller credentials must be authenticated by the adapter, never payload fields.
-use sunlight_fs::{check_permission, Credential, FileStat, FileType, FsError, PermCheck, Vfs};
+use sunlight_fs::{check_permission, BlockDevice, Credential, FileStat, FileType, FsError, PermCheck, Vfs};
 
 /// Maximum captured path supported by the initial mounted-namespace adapter.
 /// Reject before traversal rather than silently truncating a caller's path.
@@ -10,7 +10,7 @@ pub const MAX_ROOT_PATH: usize = 255;
 /// require retained directory objects and are not supported by this adapter.
 /// Check each traversed parent before interpreting `.` or `..`: lexical cleanup
 /// alone would let a caller skip a denied or nonexistent directory.
-pub fn stat_root(vfs: &mut Vfs, path: &str, caller: Credential) -> Result<FileStat, FsError> {
+pub fn stat_root<D: BlockDevice>(vfs: &mut Vfs<D>, path: &str, caller: Credential) -> Result<FileStat, FsError> {
     if !path.starts_with('/') || path.len() > MAX_ROOT_PATH || path.as_bytes().contains(&0) {
         return Err(FsError::InvalidPath);
     }
@@ -39,7 +39,7 @@ pub fn stat_root(vfs: &mut Vfs, path: &str, caller: Credential) -> Result<FileSt
     Ok(stat)
 }
 
-fn search(vfs: &mut Vfs, path: &str, caller: Credential) -> Result<(), FsError> {
+fn search<D: BlockDevice>(vfs: &mut Vfs<D>, path: &str, caller: Credential) -> Result<(), FsError> {
     let stat = vfs.stat(path)?;
     if stat.file_type != FileType::Directory {
         return Err(FsError::NotDir);
@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn lookup_observes_the_live_service_namespace_and_search_permissions() {
-        let mut vfs = Vfs::new();
+        let mut vfs = Vfs::<sunlight_fs::NullDevice>::new();
         vfs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();
         vfs.mkdir("/private", 42, 42, 0o700).unwrap();
         let handle = vfs
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn lookup_rejects_invalid_paths_and_file_parents() {
-        let mut vfs = Vfs::new();
+        let mut vfs = Vfs::<sunlight_fs::NullDevice>::new();
         vfs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();
         let root = Credential { uid: 0, gid: 0 };
         for path in ["", "relative", "/bad\0path"] {
@@ -99,7 +99,7 @@ mod traversal_tests {
 
     #[test]
     fn traversal_checks_components_before_parent_navigation() {
-        let mut vfs = Vfs::new();
+        let mut vfs = Vfs::<sunlight_fs::NullDevice>::new();
         vfs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();
         vfs.mkdir("/denied", 42, 42, 0o700).unwrap();
         vfs.mkdir("/visible", 43, 43, 0o755).unwrap();
@@ -133,7 +133,7 @@ mod traversal_tests {
 
     #[test]
     fn traversal_crosses_live_mounts_and_preserves_utf8_parents() {
-        let mut vfs = Vfs::new();
+        let mut vfs = Vfs::<sunlight_fs::NullDevice>::new();
         vfs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();
         vfs.mkdir("/mounted", 0, 0, 0o755).unwrap();
         vfs.mount_tmpfs("/mounted", Tmpfs::new(&[])).unwrap();

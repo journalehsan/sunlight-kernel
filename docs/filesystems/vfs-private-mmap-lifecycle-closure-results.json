@@ -1,0 +1,1963 @@
+{
+  "stage": "VFS-D2B",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "scope": "Opt-in native eager private file-backed mmap with one executor per address space",
+  "implementation": "Fixture coordination and receipts only. The exercised lifecycle paths required no production repair.",
+  "native": {
+    "status": "PASS",
+    "feature": "vfs_d2b_test",
+    "elf": {
+      "path": "target/vfs-d2b/lifecycle-final.elf",
+      "sha256": "214df6369fe0e89a5aadfdb1c79609a696b9b9bc7cd5fe02c2b813cfb0fe3323"
+    },
+    "iso": {
+      "path": "target/vfs-d2b/lifecycle-final.iso",
+      "sha256": "2c31cd577f11fbf8c49f0a9cea34fa50c945d9fb29d9f24e8598a27656100a7d"
+    },
+    "build_log": "target/vfs-d2b/native-build-final.log",
+    "parked_exec": {
+      "status": "BLOCKED",
+      "reason": "Single-executor mapping preflight and current-image exec prevent ordinary concurrent exec in this fixture."
+    },
+    "runs": [
+      {
+        "status": "PASS",
+        "vcpus": 1,
+        "exit_code": 0,
+        "serial": "target/vfs-d2b/up-final.serial.log",
+        "qemu_args": "target/vfs-d2b/up-final.args",
+        "completion_line": 2448,
+        "lifecycle": [
+          {
+            "status": "PASS",
+            "case": "caller_exit_and_late_reply",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2306,
+              "pid": 11,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2308,
+              "pid": 11,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "id": 107,
+              "token": 15,
+              "action": 2,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2310,
+              "pid": 11,
+              "incarnation": 691,
+              "image": 1369,
+              "id": 107,
+              "staged": 4096,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "caller-retired"
+            },
+            "reap": {
+              "line": 2315,
+              "pid": 11,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2321,
+              "pid": 11,
+              "incarnation": 691,
+              "descriptions": 72,
+              "refs": 72,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "computed_pread_reply": {
+              "line": 2318,
+              "pid": 11,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "id": 107,
+              "op": 9,
+              "token": 15,
+              "result": 9,
+              "errno": 0,
+              "handles": 1,
+              "ack": 0
+            },
+            "remote_release": {
+              "line": 2319,
+              "pid": 11,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "handles": 1,
+              "before": 1,
+              "after": 0,
+              "source": "FileOwnerRetired"
+            },
+            "exit": {
+              "line": 2312,
+              "pid": 11,
+              "incarnation": 691,
+              "vm": 1369,
+              "code": 137
+            },
+            "backend_baseline": {
+              "line": 2320,
+              "handles": 2
+            }
+          },
+          {
+            "status": "PASS",
+            "case": "normal_completion_and_subsequent_file_mapping",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2359,
+              "pid": 13,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2361,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "id": 110,
+              "token": 16,
+              "action": 1,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2365,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "id": 110,
+              "staged": 4105,
+              "frames": 540,
+              "regions": 5,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "committed"
+            },
+            "reap": {
+              "line": 2376,
+              "pid": 13,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2381,
+              "pid": 13,
+              "incarnation": 693,
+              "descriptions": 72,
+              "refs": 72,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "computed_pread_reply": {
+              "line": 2362,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "id": 110,
+              "op": 9,
+              "token": 16,
+              "result": 9,
+              "errno": 0,
+              "handles": 1,
+              "ack": 1
+            },
+            "remote_release": {
+              "line": 2379,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "handles": 1,
+              "before": 1,
+              "after": 0,
+              "source": "FileOwnerRetired"
+            },
+            "backend_baseline": {
+              "line": 2380,
+              "handles": 2
+            },
+            "after_subsequent_unmap": {
+              "line": 2368,
+              "pid": 13,
+              "sample": 31,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "after_local_fd_close": {
+              "line": 2369,
+              "pid": 13,
+              "sample": 32,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 0,
+              "service_refs": 0
+            },
+            "ring3_assertions_line": 2370
+          },
+          {
+            "status": "PASS",
+            "case": "endpoint_withdrawal_and_subsequent_anonymous_mapping",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2419,
+              "pid": 14,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2421,
+              "pid": 14,
+              "incarnation": 695,
+              "image": 1377,
+              "epoch": 1,
+              "id": 116,
+              "token": 17,
+              "action": 3,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2425,
+              "pid": 14,
+              "incarnation": 695,
+              "image": 1377,
+              "id": 116,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "service-withdrawn"
+            },
+            "reap": {
+              "line": 2444,
+              "pid": 14,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2447,
+              "pid": 14,
+              "incarnation": 695,
+              "descriptions": 69,
+              "refs": 69,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "remote_release": {
+              "line": 2422,
+              "epoch": 1,
+              "id": 116,
+              "token": 17,
+              "handles": 1,
+              "reply_ack": 0,
+              "before": 1,
+              "after": 0,
+              "source": "service epoch disposal"
+            },
+            "service_exit": {
+              "line": 2439,
+              "pid": 3,
+              "code": 0
+            },
+            "service_reap": {
+              "line": 2441,
+              "pid": 3,
+              "user_frames": 22262,
+              "page_tables": 53,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "two_target_leaves_absent": true,
+            "backend_baseline": {
+              "line": 2424,
+              "handles": 2
+            },
+            "after_subsequent_unmap": {
+              "line": 2428,
+              "pid": 14,
+              "sample": 31,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "after_local_fd_close": {
+              "line": 2429,
+              "pid": 14,
+              "sample": 32,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 0,
+              "service_refs": 0
+            },
+            "ring3_assertions_line": 2430
+          }
+        ],
+        "d2a": {
+          "status": "PASS",
+          "vcpus": 1,
+          "exit_code": 0,
+          "serial": "target/vfs-d2b/up-final.serial.log",
+          "qemu_args": "target/vfs-d2b/up-final.args",
+          "commits": [
+            {
+              "line": 2223,
+              "pid": 10,
+              "base": 68719476736,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2228,
+              "pid": 10,
+              "base": 68719484928,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2233,
+              "pid": 10,
+              "base": 68719493120,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2238,
+              "pid": 10,
+              "base": 68719501312,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2246,
+              "pid": 10,
+              "base": 35734127902720,
+              "span": 4096,
+              "bytes": 9,
+              "offset": 4096,
+              "prot": 1
+            },
+            {
+              "line": 2250,
+              "pid": 10,
+              "base": 35734127902720,
+              "span": 4096,
+              "bytes": 9,
+              "offset": 4096,
+              "prot": 5
+            },
+            {
+              "line": 2252,
+              "pid": 10,
+              "base": 68719509504,
+              "span": 4096,
+              "bytes": 0,
+              "offset": 8192,
+              "prot": 0
+            }
+          ],
+          "errors": [],
+          "identity": {
+            "line": 2162,
+            "pid": 10,
+            "incarnation": 689,
+            "image": 1365,
+            "namespace": 1,
+            "generation": 10,
+            "epoch": 1
+          },
+          "ring3_line": 2170,
+          "ring3_assertions_line": 2257,
+          "rollback": [
+            {
+              "line": 2187,
+              "pid": 10,
+              "fault": 1,
+              "staged_bytes": 4096,
+              "error": "FileIo",
+              "status": "PASS"
+            },
+            {
+              "line": 2193,
+              "pid": 10,
+              "fault": 2,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2199,
+              "pid": 10,
+              "fault": 3,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2205,
+              "pid": 10,
+              "fault": 4,
+              "staged_bytes": 4105,
+              "error": "FileIo",
+              "status": "PASS"
+            },
+            {
+              "line": 2211,
+              "pid": 10,
+              "fault": 5,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2217,
+              "pid": 10,
+              "fault": 6,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            }
+          ],
+          "checkpoints": [
+            {
+              "line": 2177,
+              "pid": 10,
+              "sample": 0,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2189,
+              "pid": 10,
+              "sample": 1,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2195,
+              "pid": 10,
+              "sample": 2,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2201,
+              "pid": 10,
+              "sample": 3,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2207,
+              "pid": 10,
+              "sample": 4,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2213,
+              "pid": 10,
+              "sample": 5,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2219,
+              "pid": 10,
+              "sample": 6,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2224,
+              "pid": 10,
+              "sample": 10,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2229,
+              "pid": 10,
+              "sample": 11,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2234,
+              "pid": 10,
+              "sample": 12,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2239,
+              "pid": 10,
+              "sample": 13,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2256,
+              "pid": 10,
+              "sample": 20,
+              "owned_frames": 539,
+              "regions": 5,
+              "service_rows": 0,
+              "service_refs": 0
+            }
+          ],
+          "source_final_close": {
+            "line": 2253,
+            "pid": 10,
+            "incarnation": 689,
+            "image": 1365,
+            "epoch": 1,
+            "id": 101,
+            "op": 6,
+            "token": 12,
+            "result": 0,
+            "errno": 0,
+            "handles": 0,
+            "ack": 1
+          },
+          "settled": {
+            "line": 2268,
+            "pid": 10,
+            "incarnation": 689,
+            "descriptions": 72,
+            "refs": 72,
+            "service_rows": 0,
+            "service_refs": 0,
+            "owned_frames": 0
+          },
+          "backend_handles_at_settlement": 2,
+          "backend_baseline_line": 2264
+        },
+        "d1b": {
+          "status": "PASS",
+          "cycles": 3,
+          "exec_cycles": 2,
+          "evidence": "target/vfs-d2b/d1b-up-final.json"
+        }
+      },
+      {
+        "status": "PASS",
+        "vcpus": 2,
+        "exit_code": 0,
+        "serial": "target/vfs-d2b/smp2-final.serial.log",
+        "qemu_args": "target/vfs-d2b/smp2-final.args",
+        "completion_line": 2449,
+        "lifecycle": [
+          {
+            "status": "PASS",
+            "case": "caller_exit_and_late_reply",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2308,
+              "pid": 12,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2310,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "id": 107,
+              "token": 15,
+              "action": 2,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2312,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "id": 107,
+              "staged": 4096,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "caller-retired"
+            },
+            "reap": {
+              "line": 2317,
+              "pid": 12,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2323,
+              "pid": 12,
+              "incarnation": 691,
+              "descriptions": 72,
+              "refs": 72,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "computed_pread_reply": {
+              "line": 2320,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "id": 107,
+              "op": 9,
+              "token": 15,
+              "result": 9,
+              "errno": 0,
+              "handles": 1,
+              "ack": 0
+            },
+            "remote_release": {
+              "line": 2321,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "handles": 1,
+              "before": 1,
+              "after": 0,
+              "source": "FileOwnerRetired"
+            },
+            "exit": {
+              "line": 2314,
+              "pid": 12,
+              "incarnation": 691,
+              "vm": 1369,
+              "code": 137
+            },
+            "backend_baseline": {
+              "line": 2322,
+              "handles": 2
+            }
+          },
+          {
+            "status": "PASS",
+            "case": "normal_completion_and_subsequent_file_mapping",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2361,
+              "pid": 14,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2363,
+              "pid": 14,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "id": 110,
+              "token": 16,
+              "action": 1,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2367,
+              "pid": 14,
+              "incarnation": 693,
+              "image": 1373,
+              "id": 110,
+              "staged": 4105,
+              "frames": 540,
+              "regions": 5,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "committed"
+            },
+            "reap": {
+              "line": 2378,
+              "pid": 14,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2382,
+              "pid": 14,
+              "incarnation": 693,
+              "descriptions": 72,
+              "refs": 72,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "computed_pread_reply": {
+              "line": 2364,
+              "pid": 14,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "id": 110,
+              "op": 9,
+              "token": 16,
+              "result": 9,
+              "errno": 0,
+              "handles": 1,
+              "ack": 1
+            },
+            "remote_release": {
+              "line": 2381,
+              "pid": 14,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "handles": 1,
+              "before": 1,
+              "after": 0,
+              "source": "FileOwnerRetired"
+            },
+            "backend_baseline": {
+              "line": 2384,
+              "handles": 2
+            },
+            "after_subsequent_unmap": {
+              "line": 2370,
+              "pid": 14,
+              "sample": 31,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "after_local_fd_close": {
+              "line": 2371,
+              "pid": 14,
+              "sample": 32,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 0,
+              "service_refs": 0
+            },
+            "ring3_assertions_line": 2372
+          },
+          {
+            "status": "PASS",
+            "case": "endpoint_withdrawal_and_subsequent_anonymous_mapping",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2420,
+              "pid": 16,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2423,
+              "pid": 16,
+              "incarnation": 695,
+              "image": 1377,
+              "epoch": 1,
+              "id": 116,
+              "token": 17,
+              "action": 3,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2426,
+              "pid": 16,
+              "incarnation": 695,
+              "image": 1377,
+              "id": 116,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "service-withdrawn"
+            },
+            "reap": {
+              "line": 2445,
+              "pid": 16,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2448,
+              "pid": 16,
+              "incarnation": 695,
+              "descriptions": 69,
+              "refs": 69,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "remote_release": {
+              "line": 2424,
+              "epoch": 1,
+              "id": 116,
+              "token": 17,
+              "handles": 1,
+              "reply_ack": 0,
+              "before": 1,
+              "after": 0,
+              "source": "service epoch disposal"
+            },
+            "service_exit": {
+              "line": 2431,
+              "pid": 3,
+              "code": 0
+            },
+            "service_reap": {
+              "line": 2442,
+              "pid": 3,
+              "user_frames": 22262,
+              "page_tables": 53,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "two_target_leaves_absent": true,
+            "backend_baseline": {
+              "line": 2425,
+              "handles": 2
+            },
+            "after_subsequent_unmap": {
+              "line": 2434,
+              "pid": 16,
+              "sample": 31,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "after_local_fd_close": {
+              "line": 2435,
+              "pid": 16,
+              "sample": 32,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 0,
+              "service_refs": 0
+            },
+            "ring3_assertions_line": 2436
+          }
+        ],
+        "d2a": {
+          "status": "PASS",
+          "vcpus": 2,
+          "exit_code": 0,
+          "serial": "target/vfs-d2b/smp2-final.serial.log",
+          "qemu_args": "target/vfs-d2b/smp2-final.args",
+          "commits": [
+            {
+              "line": 2224,
+              "pid": 10,
+              "base": 68719476736,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2229,
+              "pid": 10,
+              "base": 68719484928,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2234,
+              "pid": 10,
+              "base": 68719493120,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2239,
+              "pid": 10,
+              "base": 68719501312,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2247,
+              "pid": 10,
+              "base": 35734127902720,
+              "span": 4096,
+              "bytes": 9,
+              "offset": 4096,
+              "prot": 1
+            },
+            {
+              "line": 2251,
+              "pid": 10,
+              "base": 35734127902720,
+              "span": 4096,
+              "bytes": 9,
+              "offset": 4096,
+              "prot": 5
+            },
+            {
+              "line": 2253,
+              "pid": 10,
+              "base": 68719509504,
+              "span": 4096,
+              "bytes": 0,
+              "offset": 8192,
+              "prot": 0
+            }
+          ],
+          "errors": [],
+          "identity": {
+            "line": 2160,
+            "pid": 10,
+            "incarnation": 689,
+            "image": 1365,
+            "namespace": 1,
+            "generation": 10,
+            "epoch": 1
+          },
+          "ring3_line": 2171,
+          "ring3_assertions_line": 2258,
+          "rollback": [
+            {
+              "line": 2187,
+              "pid": 10,
+              "fault": 1,
+              "staged_bytes": 4096,
+              "error": "FileIo",
+              "status": "PASS"
+            },
+            {
+              "line": 2193,
+              "pid": 10,
+              "fault": 2,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2200,
+              "pid": 10,
+              "fault": 3,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2206,
+              "pid": 10,
+              "fault": 4,
+              "staged_bytes": 4105,
+              "error": "FileIo",
+              "status": "PASS"
+            },
+            {
+              "line": 2212,
+              "pid": 10,
+              "fault": 5,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2217,
+              "pid": 10,
+              "fault": 6,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            }
+          ],
+          "checkpoints": [
+            {
+              "line": 2178,
+              "pid": 10,
+              "sample": 0,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2190,
+              "pid": 10,
+              "sample": 1,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2196,
+              "pid": 10,
+              "sample": 2,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2202,
+              "pid": 10,
+              "sample": 3,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2208,
+              "pid": 10,
+              "sample": 4,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2214,
+              "pid": 10,
+              "sample": 5,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2220,
+              "pid": 10,
+              "sample": 6,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2225,
+              "pid": 10,
+              "sample": 10,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2230,
+              "pid": 10,
+              "sample": 11,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2235,
+              "pid": 10,
+              "sample": 12,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2240,
+              "pid": 10,
+              "sample": 13,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2257,
+              "pid": 10,
+              "sample": 20,
+              "owned_frames": 539,
+              "regions": 5,
+              "service_rows": 0,
+              "service_refs": 0
+            }
+          ],
+          "source_final_close": {
+            "line": 2254,
+            "pid": 10,
+            "incarnation": 689,
+            "image": 1365,
+            "epoch": 1,
+            "id": 101,
+            "op": 6,
+            "token": 12,
+            "result": 0,
+            "errno": 0,
+            "handles": 0,
+            "ack": 1
+          },
+          "settled": {
+            "line": 2270,
+            "pid": 10,
+            "incarnation": 689,
+            "descriptions": 72,
+            "refs": 72,
+            "service_rows": 0,
+            "service_refs": 0,
+            "owned_frames": 0
+          },
+          "backend_handles_at_settlement": 2,
+          "backend_baseline_line": 2265
+        },
+        "d1b": {
+          "status": "PASS",
+          "cycles": 3,
+          "exec_cycles": 2,
+          "evidence": "target/vfs-d2b/d1b-smp2-final.json"
+        }
+      },
+      {
+        "status": "PASS",
+        "vcpus": 4,
+        "exit_code": 0,
+        "serial": "target/vfs-d2b/smp4-final.serial.log",
+        "qemu_args": "target/vfs-d2b/smp4-final.args",
+        "completion_line": 2458,
+        "lifecycle": [
+          {
+            "status": "PASS",
+            "case": "caller_exit_and_late_reply",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2316,
+              "pid": 12,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2318,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "id": 107,
+              "token": 15,
+              "action": 2,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2320,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "id": 107,
+              "staged": 4096,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "caller-retired"
+            },
+            "reap": {
+              "line": 2325,
+              "pid": 12,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2330,
+              "pid": 12,
+              "incarnation": 691,
+              "descriptions": 72,
+              "refs": 72,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "computed_pread_reply": {
+              "line": 2328,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "id": 107,
+              "op": 9,
+              "token": 15,
+              "result": 9,
+              "errno": 0,
+              "handles": 1,
+              "ack": 0
+            },
+            "remote_release": {
+              "line": 2329,
+              "pid": 12,
+              "incarnation": 691,
+              "image": 1369,
+              "epoch": 1,
+              "handles": 1,
+              "before": 1,
+              "after": 0,
+              "source": "FileOwnerRetired"
+            },
+            "exit": {
+              "line": 2322,
+              "pid": 12,
+              "incarnation": 691,
+              "vm": 1369,
+              "code": 137
+            },
+            "backend_baseline": {
+              "line": 2332,
+              "handles": 2
+            }
+          },
+          {
+            "status": "PASS",
+            "case": "normal_completion_and_subsequent_file_mapping",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2365,
+              "pid": 13,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2368,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "id": 110,
+              "token": 16,
+              "action": 1,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2371,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "id": 110,
+              "staged": 4105,
+              "frames": 540,
+              "regions": 5,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "committed"
+            },
+            "reap": {
+              "line": 2386,
+              "pid": 13,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2390,
+              "pid": 13,
+              "incarnation": 693,
+              "descriptions": 72,
+              "refs": 72,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "computed_pread_reply": {
+              "line": 2369,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "id": 110,
+              "op": 9,
+              "token": 16,
+              "result": 9,
+              "errno": 0,
+              "handles": 1,
+              "ack": 1
+            },
+            "remote_release": {
+              "line": 2389,
+              "pid": 13,
+              "incarnation": 693,
+              "image": 1373,
+              "epoch": 1,
+              "handles": 1,
+              "before": 1,
+              "after": 0,
+              "source": "FileOwnerRetired"
+            },
+            "backend_baseline": {
+              "line": 2392,
+              "handles": 2
+            },
+            "after_subsequent_unmap": {
+              "line": 2378,
+              "pid": 13,
+              "sample": 31,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "after_local_fd_close": {
+              "line": 2379,
+              "pid": 13,
+              "sample": 32,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 0,
+              "service_refs": 0
+            },
+            "ring3_assertions_line": 2380
+          },
+          {
+            "status": "PASS",
+            "case": "endpoint_withdrawal_and_subsequent_anonymous_mapping",
+            "staged_buffer_disposition": "dropped",
+            "before": {
+              "line": 2426,
+              "pid": 15,
+              "sample": 30,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "parked": {
+              "line": 2428,
+              "pid": 15,
+              "incarnation": 695,
+              "image": 1377,
+              "epoch": 1,
+              "id": 116,
+              "token": 17,
+              "action": 3,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 2
+            },
+            "terminal": {
+              "line": 2435,
+              "pid": 15,
+              "incarnation": 695,
+              "image": 1377,
+              "id": 116,
+              "staged": 4096,
+              "frames": 538,
+              "regions": 4,
+              "cursor": 0,
+              "service_rows": 1,
+              "service_refs": 1,
+              "disposition": "service-withdrawn"
+            },
+            "reap": {
+              "line": 2454,
+              "pid": 15,
+              "user_frames": 538,
+              "page_tables": 8,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "settled": {
+              "line": 2457,
+              "pid": 15,
+              "incarnation": 695,
+              "descriptions": 69,
+              "refs": 69,
+              "service_rows": 0,
+              "service_refs": 0,
+              "owned_frames": 0
+            },
+            "remote_release": {
+              "line": 2429,
+              "epoch": 1,
+              "id": 116,
+              "token": 17,
+              "handles": 1,
+              "reply_ack": 0,
+              "before": 1,
+              "after": 0,
+              "source": "service epoch disposal"
+            },
+            "service_exit": {
+              "line": 2441,
+              "pid": 3,
+              "code": 0
+            },
+            "service_reap": {
+              "line": 2451,
+              "pid": 3,
+              "user_frames": 22262,
+              "page_tables": 53,
+              "swap_blocks": 0,
+              "ipc_cleared": 0
+            },
+            "two_target_leaves_absent": true,
+            "backend_baseline": {
+              "line": 2431,
+              "handles": 2
+            },
+            "after_subsequent_unmap": {
+              "line": 2443,
+              "pid": 15,
+              "sample": 31,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            "after_local_fd_close": {
+              "line": 2444,
+              "pid": 15,
+              "sample": 32,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 0,
+              "service_refs": 0
+            },
+            "ring3_assertions_line": 2445
+          }
+        ],
+        "d2a": {
+          "status": "PASS",
+          "vcpus": 4,
+          "exit_code": 0,
+          "serial": "target/vfs-d2b/smp4-final.serial.log",
+          "qemu_args": "target/vfs-d2b/smp4-final.args",
+          "commits": [
+            {
+              "line": 2233,
+              "pid": 10,
+              "base": 68719476736,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2237,
+              "pid": 10,
+              "base": 68719484928,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2242,
+              "pid": 10,
+              "base": 68719493120,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2248,
+              "pid": 10,
+              "base": 68719501312,
+              "span": 8192,
+              "bytes": 4105,
+              "offset": 0,
+              "prot": 3
+            },
+            {
+              "line": 2256,
+              "pid": 10,
+              "base": 35734127902720,
+              "span": 4096,
+              "bytes": 9,
+              "offset": 4096,
+              "prot": 1
+            },
+            {
+              "line": 2259,
+              "pid": 10,
+              "base": 35734127902720,
+              "span": 4096,
+              "bytes": 9,
+              "offset": 4096,
+              "prot": 5
+            },
+            {
+              "line": 2262,
+              "pid": 10,
+              "base": 68719509504,
+              "span": 4096,
+              "bytes": 0,
+              "offset": 8192,
+              "prot": 0
+            }
+          ],
+          "errors": [],
+          "identity": {
+            "line": 2169,
+            "pid": 10,
+            "incarnation": 689,
+            "image": 1365,
+            "namespace": 1,
+            "generation": 10,
+            "epoch": 1
+          },
+          "ring3_line": 2177,
+          "ring3_assertions_line": 2267,
+          "rollback": [
+            {
+              "line": 2197,
+              "pid": 10,
+              "fault": 1,
+              "staged_bytes": 4096,
+              "error": "FileIo",
+              "status": "PASS"
+            },
+            {
+              "line": 2202,
+              "pid": 10,
+              "fault": 2,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2209,
+              "pid": 10,
+              "fault": 3,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2214,
+              "pid": 10,
+              "fault": 4,
+              "staged_bytes": 4105,
+              "error": "FileIo",
+              "status": "PASS"
+            },
+            {
+              "line": 2220,
+              "pid": 10,
+              "fault": 5,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            },
+            {
+              "line": 2227,
+              "pid": 10,
+              "fault": 6,
+              "staged_bytes": 4105,
+              "error": "NoMemory",
+              "status": "PASS"
+            }
+          ],
+          "checkpoints": [
+            {
+              "line": 2187,
+              "pid": 10,
+              "sample": 0,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2199,
+              "pid": 10,
+              "sample": 1,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2205,
+              "pid": 10,
+              "sample": 2,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2211,
+              "pid": 10,
+              "sample": 3,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2217,
+              "pid": 10,
+              "sample": 4,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2223,
+              "pid": 10,
+              "sample": 5,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2229,
+              "pid": 10,
+              "sample": 6,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2234,
+              "pid": 10,
+              "sample": 10,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2239,
+              "pid": 10,
+              "sample": 11,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2244,
+              "pid": 10,
+              "sample": 12,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2249,
+              "pid": 10,
+              "sample": 13,
+              "owned_frames": 538,
+              "regions": 4,
+              "service_rows": 1,
+              "service_refs": 1
+            },
+            {
+              "line": 2266,
+              "pid": 10,
+              "sample": 20,
+              "owned_frames": 539,
+              "regions": 5,
+              "service_rows": 0,
+              "service_refs": 0
+            }
+          ],
+          "source_final_close": {
+            "line": 2263,
+            "pid": 10,
+            "incarnation": 689,
+            "image": 1365,
+            "epoch": 1,
+            "id": 101,
+            "op": 6,
+            "token": 12,
+            "result": 0,
+            "errno": 0,
+            "handles": 0,
+            "ack": 1
+          },
+          "settled": {
+            "line": 2277,
+            "pid": 10,
+            "incarnation": 689,
+            "descriptions": 72,
+            "refs": 72,
+            "service_rows": 0,
+            "service_refs": 0,
+            "owned_frames": 0
+          },
+          "backend_handles_at_settlement": 2,
+          "backend_baseline_line": 2279
+        },
+        "d1b": {
+          "status": "PASS",
+          "cycles": 3,
+          "exec_cycles": 2,
+          "evidence": "target/vfs-d2b/d1b-smp4-final.json"
+        }
+      }
+    ]
+  },
+  "regression": {
+    "D2A": {
+      "status": "PASS",
+      "reference": "vfs-service-private-mmap-results.json",
+      "coverage": [
+        "mapped data and offsets",
+        "EOF padding and protections",
+        "private modification and cursor",
+        "source Close",
+        "all six rollback cases",
+        "repeated unmap and exit with a live page",
+        "frame and service handle accounting"
+      ]
+    },
+    "D1A": {
+      "status": "PASS",
+      "matched_by_name": 522,
+      "logs": [
+        "target/vfs-d2b/registration-host.log",
+        "target/vfs-d2b/host-libraries.log",
+        "target/vfs-d2b/virtio-host.log"
+      ]
+    },
+    "D1B": {
+      "status": "PASS",
+      "cycles_per_guest": 3,
+      "vcpus": [
+        1,
+        2,
+        4
+      ]
+    },
+    "N1P": {
+      "status": "PASS",
+      "populated": {
+        "status": "PASS",
+        "log": "target/vfs-d2b/n1p-populated.log",
+        "cycles": 4,
+        "vcpus": 1,
+        "serial": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-n1o-qemu-88lhpbs0/serial.log",
+        "closed_image": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-n1o-qemu-88lhpbs0/final.fat",
+        "prior_verification": "target/vfs-d2b/n1p-populated-recheck.log"
+      },
+      "unknown": {
+        "status": "PASS",
+        "log": "target/vfs-d2b/n1p-unknown.log",
+        "cycles": 4,
+        "vcpus": 1,
+        "serial": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-n1o-qemu-gctkfyoy/serial.log",
+        "closed_image": "/home/ehsantor/Projects/sunlightos-kernel/target/vfs-n1o-qemu-gctkfyoy/final.fat",
+        "prior_verification": "target/vfs-d2b/n1p-unknown-recheck.log"
+      },
+      "builds": [
+        "target/vfs-d2b/n1p-kernel-build.log",
+        "target/vfs-d2b/n1p-service-build.log"
+      ]
+    },
+    "host": {
+      "status": "PASS",
+      "registration": {
+        "status": "PASS",
+        "log": "target/vfs-d2b/registration-host.log",
+        "passed": 112
+      },
+      "libraries": {
+        "status": "PASS",
+        "log": "target/vfs-d2b/host-libraries.log",
+        "passed": 392
+      },
+      "virtio": {
+        "status": "PASS",
+        "log": "target/vfs-d2b/virtio-host.log",
+        "passed": 33
+      },
+      "private_mmap_read_progress": {
+        "status": "PASS",
+        "log": "target/vfs-d2b/read-progress-host.log",
+        "passed": 3
+      },
+      "fd_descriptions": {
+        "status": "PASS",
+        "log": "target/vfs-d2b/fd-description-host.log",
+        "passed": 19
+      }
+    }
+  },
+  "builds": {
+    "production_kernel": {
+      "status": "PASS",
+      "log": "target/vfs-d2b/production-kernel.log"
+    },
+    "production_kernel_release": {
+      "status": "PASS",
+      "log": "target/vfs-d2b/production-kernel-release.log"
+    },
+    "release_vfs_service": {
+      "status": "PASS",
+      "log": "target/vfs-d2b/release-service.log"
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched_live_findings": [
+      "private mmap",
+      "ProcFS mountinfo",
+      "Linux statfs",
+      "runtime FAT mount"
+    ],
+    "historical_kernel_mmap_dependency_live": true,
+    "final_check": {
+      "status": "FAIL",
+      "log": "target/vfs-d2b/guard.log",
+      "exit_code": 1
+    },
+    "no_growth": {
+      "status": "FAIL",
+      "log": "target/vfs-d2b/guard-no-growth.log",
+      "exit_code": 1
+    }
+  },
+  "ordinary_production_boot": {
+    "status": "NOT_RUN",
+    "gate_status": "BLOCKED",
+    "reason": "Unchanged ownership guard failed."
+  },
+  "D3_native_modified_page_reclaim_and_fault_restore": {
+    "status": "NOT_RUN"
+  },
+  "coordinated_cutover": {
+    "status": "BLOCKED",
+    "candidate_implementation": "NOT_RUN",
+    "order_and_acceptance_gates": "userspace-vfs-migration.md#coordinated-candidate-after-d2b"
+  }
+}

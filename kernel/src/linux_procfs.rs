@@ -163,6 +163,13 @@ fn same_linux_group(s: &Scheduler, idx: usize) -> bool {
 
 fn has_kernel_mount_view(s: &Scheduler) -> bool {
     let caller = s.current_process();
+    #[cfg(feature = "vfs_c1e2_test")]
+    if caller.is_linux_compat()
+        && s.current_pid() == s.current_shared_process().pid
+        && caller.vfs_file_routed
+    {
+        return true;
+    }
     caller.is_linux_compat()
         && !caller.vfs_file_routed
         && !s.current_shared_process().vfs_file_routed

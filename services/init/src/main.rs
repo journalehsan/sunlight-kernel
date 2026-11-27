@@ -226,6 +226,8 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
                     sunlight_libc::yield_now();
                 }
             }
+            #[cfg(feature = "vfs-c1a-test")]
+            qualify_ordinary_publication(spawn_cap);
             #[cfg(feature = "vfs-d1b-test")]
             run_native_descriptor_probe();
             #[cfg(feature = "vfs-l1c-file-ipc-test")]
@@ -1032,13 +1034,86 @@ fn verify_file_caller(cap: CapabilityToken) {
     assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
 }
 
+#[cfg(feature = "vfs-c1a-test")]
+fn qualify_ordinary_publication(spawn_cap: CapabilityToken) {
+    const PATH: &str = "/bin/vfs-c1a-probe";
+    let checkpoint = |mode| unsafe { sunlight_libc::sys::syscall2(0xf1c6, mode, 0) };
+    let launch = |native| {
+        if native {
+            return sunlight_libc::spawn_with_stdio(
+                PATH.as_bytes(), &[PATH.as_bytes(), b"c1a", b"native"],
+                Some(sunlight_libc::Fd(0)), Some(sunlight_libc::Fd(1)), Some(sunlight_libc::Fd(2)),
+            ).ok();
+        }
+        let mut bytes = [0; 32];
+        bytes[..PATH.len()].copy_from_slice(PATH.as_bytes());
+        let mut request = IpcMsg::with_label(SpawnMsg::SPAWN);
+        for (index, chunk) in bytes.chunks_exact(8).enumerate() {
+            request.words[index] = u64::from_le_bytes(chunk.try_into().unwrap());
+        }
+        request.word_count = 4;
+        let reply = ipc_call(spawn_cap, request);
+        if reply.label == SpawnMsg::REPLY {
+            assert!(reply.words[0] != 0 && reply.words[1] != 0);
+            Some(reply.words[0])
+        } else {
+            assert_eq!(reply.label, SpawnMsg::ERROR);
+            None
+        }
+    };
+    let await_checkpoint = |mode| {
+        let start = sunlight_ipc::monotonic_millis();
+        loop {
+            match checkpoint(mode) {
+                1 => return,
+                0 => assert!(sunlight_ipc::monotonic_millis() - start < 5000),
+                _ => panic!("ordinary publication checkpoint rejected"),
+            }
+            sunlight_libc::yield_now();
+        }
+    };
+    sunlight_libc::chdir(b"/etc").unwrap();
+    await_checkpoint(0);
+    for native in [true, false] {
+        assert_eq!(checkpoint(1), 1);
+        assert_eq!(launch(native), None);
+        await_checkpoint(2);
+        for _ in 0..4 {
+            let pid = launch(native).expect("ordinary published child");
+            assert_eq!(sunlight_libc::waitpid(pid), Ok(37));
+            if native {
+                assert!(sunlight_libc::waitpid(pid).is_err());
+            }
+            await_checkpoint(2);
+        }
+    }
+    sunlight_libc::chdir(b"/").unwrap();
+    debug_log("[VFS-C1A] ordinary complete native=4 capability=4 refused_publication=2");
+}
+
 #[cfg(feature = "vfs-d1b-test")]
 fn run_native_descriptor_probe() {
-    for cycle in 0..(3 + u64::from(cfg!(feature = "vfs-d2a-test"))) {
+    let cycles = if cfg!(feature = "vfs-d2b-test") {
+        7
+    } else {
+        3 + u64::from(cfg!(feature = "vfs-d2a-test"))
+    };
+    for cycle in 0..cycles {
         assert_eq!(unsafe { sunlight_libc::sys::syscall2(0xf1c1, 21, 0) }, 1);
         let pid = unsafe { sunlight_libc::sys::syscall2(0xf1c1, 0, cycle) };
         assert!(pid != 0 && pid != u64::MAX);
-        assert_eq!(sunlight_libc::waitpid(pid), Ok(0));
+        let exit_code = if cfg!(feature = "vfs-d2b-test") && cycle == 4 {
+            let start = sunlight_ipc::monotonic_millis();
+            while unsafe { sunlight_libc::sys::syscall2(0xf1c1, 29, pid) } == 0 {
+                assert!(sunlight_ipc::monotonic_millis() - start < 3000);
+                sunlight_libc::yield_now();
+            }
+            sunlight_libc::kill(pid, 9).expect("kill parked child");
+            137
+        } else {
+            0
+        };
+        assert_eq!(sunlight_libc::waitpid(pid), Ok(exit_code));
         assert!(sunlight_libc::waitpid(pid).is_err());
         let start = sunlight_ipc::monotonic_millis();
         while unsafe { sunlight_libc::sys::syscall2(0xf1c1, 22, pid) } == 0 {

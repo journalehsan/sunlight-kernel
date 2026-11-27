@@ -70,8 +70,11 @@ pub(super) struct Call {
     result: Option<Terminal>,
     capture: Option<Inheritance>,
     detached: bool,
+    ordinary_admission: bool,
     #[cfg(not(test))]
     owner: Option<crate::process::pending::Child>,
+    #[cfg(all(not(test), feature = "vfs_c1a_candidate"))]
+    ordinary: Option<alloc::boxed::Box<ordinary::Launch>>,
 }
 
 fn caller(child: Identity) -> Caller {
@@ -139,7 +142,7 @@ impl Runtime {
         sched: &mut Scheduler,
         caps: &CapabilityBroker,
     ) -> Result<RemoteClaim, Error> {
-        self.stage_spawn_inner(idx, child, sched, caps, false)
+        self.stage_spawn_inner(idx, child, sched, caps, false, false)
     }
 
     pub(super) fn stage_spawn_inner(
@@ -149,6 +152,7 @@ impl Runtime {
         sched: &mut Scheduler,
         caps: &CapabilityBroker,
         capture: bool,
+        ordinary_admission: bool,
     ) -> Result<RemoteClaim, Error> {
         let waiter = sched.processes.get(idx).ok_or(Error::Identity)?;
         if waiter.is_exiting()
@@ -171,7 +175,7 @@ impl Runtime {
         }
         if !matches!(waiter.state, ProcessState::Ready | ProcessState::Running)
             || waiter.pending_call.is_some()
-            || waiter.ipc_reply_target.is_some()
+            || (!ordinary_admission && waiter.ipc_reply_target.is_some())
             || sched.pending_children.remote(child).is_some()
             || self
                 .spawns
@@ -252,8 +256,11 @@ impl Runtime {
             result: None,
             capture: pin,
             detached: false,
+            ordinary_admission,
             #[cfg(not(test))]
             owner: None,
+            #[cfg(all(not(test), feature = "vfs_c1a_candidate"))]
+            ordinary: None,
         });
         Ok(claim)
     }
@@ -288,7 +295,10 @@ impl Runtime {
                     .is_some_and(|call| !call.detached && call.claim == claim && call.parent.caller == exact)
             })
             .ok_or(Error::Identity)?;
-        if waiter.pending_call.is_some() || waiter.ipc_reply_target.is_some() {
+        let call = self.spawns[slot].as_ref().unwrap();
+        if waiter.pending_call.is_some()
+            || (!call.ordinary_admission && waiter.ipc_reply_target.is_some())
+        {
             return Err(Error::Busy);
         }
         self.expire_spawns(sched.global_tick);
@@ -369,7 +379,9 @@ impl Runtime {
             .map_err(|_| Error::Preparation)?;
         *local = Some(LocalLease::Bound { receipt, binding });
         #[cfg(all(not(test), debug_assertions, feature = "vfs_d1b_test"))]
-        fixture::record_native_descriptor_receipt(receipt);
+        if !self.spawns[slot].as_ref().unwrap().ordinary_admission {
+            fixture::record_native_descriptor_receipt(receipt);
+        }
         #[cfg(not(test))]
         if let Some(owner) = self.spawns[slot].as_mut().unwrap().owner.take() {
             owner.disarm();
@@ -537,6 +549,14 @@ impl Runtime {
                 call.parked = false;
             }
         }
+        // Ordinary syscalls cancel when their exact continuation disappears.
+        for slot in 0..self.spawns.len() {
+            if let Some(call) = self.spawns[slot].as_ref().filter(|call| {
+                call.parent.caller == caller && call.ordinary_admission
+            }) {
+                self.finish_spawn(call.claim, Terminal::Cancelled);
+            }
+        }
     }
 
     pub(super) fn expire_spawns(&mut self, now: u64) {
@@ -598,7 +618,7 @@ impl Runtime {
                     continue;
                 }
                 let waiter = &sched.processes[idx];
-                if waiter.pending_call.is_none() && waiter.ipc_reply_target.is_none() {
+                if waiter.pending_call.is_none() && (call.ordinary_admission || waiter.ipc_reply_target.is_none()) {
                     super::super::wake_terminal(sched, idx);
                     self.spawns[slot].as_mut().unwrap().parked = false;
                 }
@@ -674,7 +694,7 @@ pub(crate) fn stage_owned(
 ) -> Result<RemoteClaim, Error> {
     let child = owner.as_ref().ok_or(Error::Identity)?.private_identity();
     let mut runtime = RUNTIME.lock();
-    let claim = runtime.stage_spawn_inner(idx, child, sched, caps, true)?;
+    let claim = runtime.stage_spawn_inner(idx, child, sched, caps, true, false)?;
     runtime.spawns.iter_mut().flatten().find(|call| call.claim == claim)
         .expect("staged transaction").owner = owner.take();
     Ok(claim)
@@ -750,6 +770,31 @@ pub(crate) fn wait_for_publication(
     RUNTIME.lock().wait_spawn_inner(idx, claim, sched, true)
 }
 
+#[cfg(all(not(test), feature = "vfs_c1a_candidate"))]
+pub(crate) mod ordinary;
+
+#[cfg(not(test))]
+fn take_bound_child(
+    sched: &mut Scheduler,
+    identity: Identity,
+    launch: LaunchAttribution,
+) -> alloc::boxed::Box<Process> {
+    sched.pending_children.eligible(identity, true).expect("validated private owner");
+    let mut process = sched.pending_children.transfer(identity, true)
+        .expect("exclusive scheduler publication owner");
+    process.vfs_root_metadata = true;
+    process.vfs_stat_routed = launch.stat_routed;
+    process.vfs_root_rebased = launch.root_rebased;
+    debug_assert_eq!(process.ppid, launch.parent.pid);
+    process.foreground.parent_generation = launch.parent.incarnation;
+    process.foreground.session_broker = launch.session_broker;
+    process.foreground.session = launch.session;
+    process.foreground.generation = launch.session_generation;
+    process.foreground.member = launch.execution;
+    sched.pending_children.published(identity.ticket);
+    process
+}
+
 #[cfg(not(test))]
 #[allow(dead_code)]
 pub(crate) fn publish(
@@ -770,24 +815,10 @@ pub(crate) fn publish(
         |sched, identity, launch| {
             #[cfg(all(debug_assertions, feature = "vfs_l1c_1_test"))]
             fixture::publication_event(identity, "binding");
-            sched.pending_children.eligible(identity, true).expect("validated private owner");
-            let mut process = sched.pending_children.transfer(identity, true)
-                .expect("exclusive scheduler publication owner");
-            #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
-            {
-                process.vfs_file_routed = true;
-            }
-            process.vfs_root_metadata = true;
-            process.vfs_stat_routed = launch.stat_routed;
-            process.vfs_root_rebased = launch.root_rebased;
-            debug_assert_eq!(process.ppid, launch.parent.pid);
-            process.foreground.parent_generation = launch.parent.incarnation;
-            process.foreground.session_broker = launch.session_broker;
-            process.foreground.session = launch.session;
-            process.foreground.generation = launch.session_generation;
-            process.foreground.member = launch.execution;
+            let mut process = take_bound_child(sched, identity, launch);
             process.child_wait = crate::process::ChildWait::Pending;
-            sched.pending_children.published(identity.ticket);
+            #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
+            { process.vfs_file_routed = true; }
             let slot = sched.insert_attributed_process(*process);
             #[cfg(all(debug_assertions, feature = "vfs_l1c_1_test"))]
             fixture::publication_event(identity, "committed");
@@ -1398,6 +1429,24 @@ pub(crate) mod fixture {
     }
 
     pub(crate) fn run(mode: u64, _arg: u64) -> Option<u64> {
+        #[cfg(feature = "vfs_d2b_test")]
+        if matches!(mode, 27..=30) {
+            return Some(crate::process::mmap::service::lifecycle::checkpoint(mode, _arg));
+        }
+        #[cfg(feature = "vfs_d2a_test")]
+        if mode == 31 {
+            let sched = SCHEDULER.lock();
+            let process = sched.current_process();
+            if !is_d2a_caller(process.pid) || !process.vfs_file_routed {
+                return Some(u64::MAX);
+            }
+            let caller = process_identity(process);
+            let runtime = RUNTIME.lock();
+            return Some(u64::from(!runtime.file_publications.iter().flatten().any(|p| {
+                p.identity.caller == caller
+                    && p.op == sunlight_ipc::vfs_rpc::file_transport::CLOSE
+            })));
+        }
         #[cfg(feature = "vfs_d2a_test")]
         if matches!(mode, 24..=26) {
             return Some(crate::process::mmap::service::checkpoint(mode, _arg));
@@ -1455,7 +1504,13 @@ pub(crate) mod fixture {
                         })
                     },
                     argv: if cfg!(feature = "vfs_d1b_test") {
-                        if cfg!(feature = "vfs_d2a_test") && _arg == 3 {
+                        if cfg!(feature = "vfs_d2b_test") && _arg == 4 {
+                            &[b"vfs-d1b-caller", b"mmap-lifecycle", b"exit"]
+                        } else if cfg!(feature = "vfs_d2b_test") && _arg == 5 {
+                            &[b"vfs-d1b-caller", b"mmap-lifecycle", b"normal"]
+                        } else if cfg!(feature = "vfs_d2b_test") && _arg == 6 {
+                            &[b"vfs-d1b-caller", b"mmap-lifecycle", b"withdraw"]
+                        } else if cfg!(feature = "vfs_d2a_test") && _arg == 3 {
                             &[b"vfs-d1b-caller", b"private-mmap", b"0"]
                         } else if _arg == 0 {
                             &[b"vfs-d1b-caller", b"descriptor-lifecycle", b"exit"]

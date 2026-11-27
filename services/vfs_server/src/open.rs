@@ -2,7 +2,7 @@
 //! not an ordinary IPC handle interface. Tokens alone never confer authority.
 use alloc::sync::Arc;
 use spin::Mutex;
-use sunlight_fs::{FileHandle, FileStat, FsError, Vfs};
+use sunlight_fs::{BlockDevice, FileHandle, FileStat, FsError, NullDevice, Vfs};
 use sunlight_ipc::vfs_rpc::lifecycle::{Caller, RequestIds};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,16 +28,16 @@ pub enum Seek {
 }
 
 /// Private backend ownership; only final description destruction closes it.
-pub(crate) struct File {
-    filesystem: Arc<Mutex<Vfs>>,
+pub(crate) struct File<Device: BlockDevice> {
+    filesystem: Arc<Mutex<Vfs<Device>>>,
     handle: FileHandle,
 }
-impl File {
-    pub(crate) fn new(filesystem: Arc<Mutex<Vfs>>, handle: FileHandle) -> Self {
+impl<Device: BlockDevice> File<Device> {
+    pub(crate) fn new(filesystem: Arc<Mutex<Vfs<Device>>>, handle: FileHandle) -> Self {
         Self { filesystem, handle }
     }
 }
-impl Drop for File {
+impl<Device: BlockDevice> Drop for File<Device> {
     fn drop(&mut self) {
         self.filesystem
             .lock()
@@ -45,24 +45,24 @@ impl Drop for File {
             .expect("private open handle remains owned");
     }
 }
-struct Description {
-    file: File,
+struct Description<Device: BlockDevice> {
+    file: File<Device>,
     access: Access,
     offset: usize,
 }
-struct Entry {
+struct Entry<Device: BlockDevice> {
     owner: Caller,
     token: u64,
-    description: Arc<Mutex<Description>>,
+    description: Arc<Mutex<Description<Device>>>,
 }
 
 /// Each registration has a bounded descriptor inventory and a nonreusing token
 /// allocator. Duplicates own separate rows and share one offset and backend pin.
-pub(crate) struct Table<const N: usize> {
-    entries: [Option<Entry>; N],
+pub(crate) struct Table<const N: usize, Device: BlockDevice = NullDevice> {
+    entries: [Option<Entry<Device>>; N],
     ids: RequestIds,
 }
-impl<const N: usize> Table<N> {
+impl<const N: usize, Device: BlockDevice> Table<N, Device> {
     pub(crate) const fn new() -> Self {
         Self {
             entries: [const { None }; N],
@@ -84,7 +84,7 @@ impl<const N: usize> Table<N> {
     pub(crate) fn insert(
         &mut self,
         owner: Caller,
-        file: File,
+        file: File<Device>,
         access: Access,
     ) -> Result<u64, FsError> {
         self.capacity()?;
@@ -99,7 +99,7 @@ impl<const N: usize> Table<N> {
     fn publish(
         &mut self,
         owner: Caller,
-        description: Arc<Mutex<Description>>,
+        description: Arc<Mutex<Description<Device>>>,
     ) -> Result<u64, FsError> {
         let slot = self
             .entries
@@ -124,7 +124,7 @@ impl<const N: usize> Table<N> {
             })
             .ok_or(FsError::BadHandle)
     }
-    fn description(&self, owner: Caller, token: u64) -> Result<&Mutex<Description>, FsError> {
+    fn description(&self, owner: Caller, token: u64) -> Result<&Mutex<Description<Device>>, FsError> {
         Ok(&self.entries[self.index(owner, token)?]
             .as_ref()
             .unwrap()

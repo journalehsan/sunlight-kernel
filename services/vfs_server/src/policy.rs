@@ -4,7 +4,7 @@
 //! with caller/service lifecycle. Never recreate this owner within an epoch.
 use crate::directory::{DirectoryNamespace, DirectoryPair};
 use alloc::sync::Arc;
-use sunlight_fs::{FileStat, FsError};
+use sunlight_fs::{BlockDevice, FileStat, FsError, NullDevice};
 use sunlight_ipc::vfs_rpc::{
     lifecycle::Caller,
     registration::Registration,
@@ -24,24 +24,32 @@ pub enum Error {
     Retention(retention::Error<FsError>),
 }
 
-#[derive(Clone)]
-pub(crate) struct Binding {
+pub(crate) struct Binding<Device: BlockDevice> {
     scope: Scope,
-    pair: Arc<DirectoryPair>,
+    pair: Arc<DirectoryPair<Device>>,
+}
+
+impl<Device: BlockDevice> Clone for Binding<Device> {
+    fn clone(&self) -> Self {
+        Self {
+            scope: self.scope,
+            pair: self.pair.clone(),
+        }
+    }
 }
 
 /// Policy capacity and remote lease capacity are separate. Each policy owns one
 /// pair of real handles; leases share ownership of those exact pinned objects,
 /// never re-resolve saved paths. Withdrawal drops policy ownership only.
-pub struct Policy<const P: usize, const L: usize> {
+pub struct Policy<const P: usize, const L: usize, Device: BlockDevice = NullDevice> {
     registration: Registration,
-    bindings: [Option<Binding>; P],
+    bindings: [Option<Binding<Device>>; P],
     last_generation: u64,
-    leases: Table<Arc<DirectoryPair>, L>,
+    leases: Table<Arc<DirectoryPair<Device>>, L>,
     retired: bool,
 }
 
-impl<const P: usize, const L: usize> Policy<P, L> {
+impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
     pub fn new(registration: Registration) -> Result<Self, Error> {
         let leases = Table::new(registration).map_err(|_| Error::Identity)?;
         Ok(Self {
@@ -60,7 +68,7 @@ impl<const P: usize, const L: usize> Policy<P, L> {
     pub fn install(
         &mut self,
         scope: Scope,
-        namespace: &DirectoryNamespace,
+        namespace: &DirectoryNamespace<Device>,
         root: &str,
         directory: &str,
     ) -> Result<(), Error> {
@@ -201,7 +209,7 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         &mut self,
         parent: Scope,
         child: Scope,
-        pair: Arc<DirectoryPair>,
+        pair: Arc<DirectoryPair<Device>>,
         revalidate: impl FnOnce() -> bool,
     ) -> Result<(), Error> {
         if self.retired {
@@ -235,7 +243,7 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         Ok(())
     }
 
-    pub(crate) fn save_directory(&self, scope: Scope) -> Result<Binding, Error> {
+    pub(crate) fn save_directory(&self, scope: Scope) -> Result<Binding<Device>, Error> {
         self.bindings
             .iter()
             .flatten()
@@ -243,7 +251,7 @@ impl<const P: usize, const L: usize> Policy<P, L> {
             .cloned()
             .ok_or(Error::Scope)
     }
-    pub(crate) fn restore_directory(&mut self, scope: Scope, saved: Binding) {
+    pub(crate) fn restore_directory(&mut self, scope: Scope, saved: Binding<Device>) {
         if let Some(slot) = self
             .bindings
             .iter_mut()
@@ -440,7 +448,7 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         caller: sunlight_fs::Credential,
         read: bool,
         write: bool,
-    ) -> Result<crate::open::File, Error> {
+    ) -> Result<crate::open::File<Device>, Error> {
         if self.retired || authenticated != self.registration {
             return Err(Error::Identity);
         }
@@ -458,6 +466,24 @@ impl<const P: usize, const L: usize> Policy<P, L> {
         }
         pair.open_file(path, caller, read, write)
             .map_err(Error::Filesystem)
+    }
+
+    #[cfg(feature = "vfs-c1e2-test")]
+    pub(crate) fn mount_observation(
+        &self,
+        authenticated: Registration,
+        receipt: Receipt,
+        caller: sunlight_fs::Credential,
+        path: Option<&str>,
+    ) -> Result<(u64, u64, alloc::vec::Vec<u8>), crate::directory::attachment::Error> {
+        use crate::directory::attachment::Error;
+        if self.retired || authenticated != self.registration
+            || !self.bindings.iter().flatten().any(|binding| binding.scope == receipt.scope())
+        {
+            return Err(Error::Stale);
+        }
+        self.leases.get(authenticated, receipt).map_err(|_| Error::Stale)?
+            .mount_observation(caller, authenticated.epoch, path)
     }
 
     /// Diagnostics of retained objects, with no pathname lookup or new authority.

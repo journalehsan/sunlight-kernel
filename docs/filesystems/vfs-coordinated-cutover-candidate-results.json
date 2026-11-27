@@ -1,0 +1,318 @@
+{
+  "stage": "VFS-C1",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "coordinated_cutover_status": "BLOCKED",
+  "ownership_findings": {
+    "private_mmap": {
+      "status": "BLOCKED",
+      "live": true,
+      "site": "kernel/src/process/mmap.rs:277",
+      "replacement": "D1B service descriptions and D2A/D2B retained positional population",
+      "next_gate": "Both ordinary launch adapters and shared-table admission, then common native/Linux continuation with existing ABI and lifecycle checks."
+    },
+    "procfs_mountinfo": {
+      "status": "BLOCKED",
+      "live": true,
+      "site": "kernel/src/linux_procfs.rs:173",
+      "replacement": "N1D bounded caller-scoped attachment snapshots",
+      "next_gate": "Copy typed, source-bound rows from the service and fence FD install against authenticated view, epoch and topology changes."
+    },
+    "linux_statfs": {
+      "status": "PARTIAL",
+      "live": true,
+      "site": "kernel/src/arch/x86_64/syscall.rs:6318",
+      "replacement": "C1 anchored capacity read under the service owner lock, returning the exact attachment ID",
+      "next_gate": "Authenticate and fence copied capacity replies and preserve the Linux 120-byte ABI, lookup and copyout behavior."
+    },
+    "runtime_fat_mount": {
+      "status": "BLOCKED",
+      "live": true,
+      "site": "kernel/src/storage.rs:123",
+      "replacement": "N1D\u2013N1P isolated authenticated Ring-3 FAT32 attachment",
+      "next_gate": "Use existing StorageCtl policy and real registry extents, exclusive alias fencing, retained FAT objects and a single ordinary block-capable VFS owner for mount, lookup, mutation, capacity and withdrawal."
+    }
+  },
+  "integration": {
+    "production_routing_enabled": false,
+    "service_attachment_capacity": "PASS",
+    "authenticated_namespace_before_first_dispatch": "BLOCKED",
+    "ordinary_service_description_installation": "BLOCKED",
+    "ordinary_native_and_linux_private_mapping": "BLOCKED",
+    "ordinary_snapshot_install_fence": "BLOCKED",
+    "ordinary_statfs_transport_and_copyout": "BLOCKED",
+    "ordinary_ring3_fat_and_block_admission": "BLOCKED",
+    "ordinary_lease_withdrawal_and_settlement": "BLOCKED"
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "guard_and_inventory_unchanged": true,
+    "references": 71,
+    "unmatched_live_findings": 4,
+    "findings_removed": 0,
+    "no_growth_log_matches_d2b": true,
+    "inventory_only": {
+      "log": "target/vfs-c1/guard.log",
+      "command": "python3 tools/audit_vfs_cutover.py",
+      "exit_code": 0
+    },
+    "enforced": {
+      "log": "target/vfs-c1/guard-no-growth.log",
+      "command": "python3 tools/audit_vfs_cutover.py --no-growth",
+      "exit_code": 1
+    },
+    "strict": {
+      "log": "target/vfs-c1/guard-check.log",
+      "status": "FAIL",
+      "command": "python3 tools/audit_vfs_cutover.py --check",
+      "exit_code": 1
+    },
+    "unit_tests": {
+      "log": "target/vfs-c1/guard-tests.log",
+      "status": "PASS",
+      "passed": 2
+    }
+  },
+  "fresh_regressions": {
+    "host_libraries": {
+      "log": "target/vfs-c1/host.log",
+      "status": "PASS",
+      "passed": {
+        "sunlight-fs": 118,
+        "sunlight-fat": 14,
+        "sunlight-ipc": 169,
+        "sunlight-vfs-server": 91,
+        "sunlight-virtio": 33
+      }
+    },
+    "registration": {
+      "log": "target/vfs-c1/registration.log",
+      "status": "PASS",
+      "passed": 112
+    },
+    "kernel_library": {
+      "log": "target/vfs-c1/kernel-host.log",
+      "status": "PASS",
+      "passed": 223,
+      "includes_private_mmap_read_progress": 3
+    },
+    "fd_descriptions": {
+      "log": "target/vfs-c1/fd-description.log",
+      "status": "PASS",
+      "passed": 19
+    },
+    "n1n_host_split_and_unsettled_withdrawal": {
+      "log": "target/vfs-c1/host.log",
+      "status": "PASS",
+      "matched": 2
+    },
+    "named_host_groups": {
+      "log": "target/vfs-c1/host-name-comparison.log",
+      "status": "PASS",
+      "matched": {
+        "N1D": 7,
+        "N1G_baseline": 481,
+        "N1H": 59,
+        "N1L": 3,
+        "N1P_FAT": 14,
+        "D1A": 522,
+        "D2B_libraries_registration_virtio": 537
+      }
+    },
+    "builds": {
+      "production_kernel_release": {
+        "log": "target/vfs-c1/release-kernel.log",
+        "status": "PASS"
+      },
+      "production_kernel_release_compressed_boot_resources": {
+        "log": "target/vfs-c1/release-kernel-boot-resources-configured.log",
+        "status": "PASS"
+      },
+      "vfs_service_release_compressed_boot_resources": {
+        "log": "target/vfs-c1/release-service-boot-resources.log",
+        "status": "PASS"
+      },
+      "vfs_service_release": {
+        "log": "target/vfs-c1/release-service.log",
+        "status": "PASS"
+      }
+    },
+    "native_isolated": {
+      "N1P": {
+        "status": "PASS",
+        "runs": {
+          "populated": {
+            "log": "target/vfs-c1/n1p-populated.log",
+            "status": "PASS",
+            "vcpus": 1,
+            "memory_mib": 2048,
+            "cycles": 4,
+            "capacity_attestation_lines": [
+              354,
+              360,
+              366,
+              375
+            ],
+            "serial": "target/vfs-n1o-qemu-9msq1s_r/serial.log",
+            "closed_image": {
+              "path": "target/vfs-n1o-qemu-9msq1s_r/final.fat",
+              "sha256": "3615798d17ba6e181a25d1e9a838b52b72b1c6deda95a5ad92199cba1c1e6841"
+            }
+          },
+          "unknown": {
+            "log": "target/vfs-c1/n1p-unknown.log",
+            "status": "PASS",
+            "vcpus": 1,
+            "memory_mib": 2048,
+            "cycles": 4,
+            "capacity_attestation_lines": [
+              354,
+              360,
+              366,
+              372
+            ],
+            "serial": "target/vfs-n1o-qemu-nbf93j3v/serial.log",
+            "closed_image": {
+              "path": "target/vfs-n1o-qemu-nbf93j3v/final.fat",
+              "sha256": "177e2d7ce3959739067e9654f199502412f76d1fc814140809171954e26f440a"
+            }
+          }
+        },
+        "kernel_elf": {
+          "path": "target/vfs-c1/n1p-kernel.elf",
+          "sha256": "4a6740ae3f5972595051da501bb34bd81c132413f894b7880486daf5260fab1c"
+        },
+        "service_elf": {
+          "path": "target/vfs-c1/n1p-service/x86_64-unknown-none/release/sunlight-vfs-server",
+          "sha256": "522d365cf89d09d48e594a6923304c9cdeb5cf0fec434010f31c1da879d45003"
+        },
+        "runner": "target/vfs-c1/n1p-runner.py",
+        "settlement": "Zero outstanding commands and mapping users with bounded 20 KiB retained DMA allocation.",
+        "closed_image_checks": "Read-only fsck, exact payloads, full byte comparison, preserved prefix and free clusters 127004 -> 127003."
+      },
+      "D1B_D2A_D2B": {
+        "status": "PARTIAL",
+        "runs": [
+          {
+            "status": "PASS",
+            "vcpus": 1,
+            "memory_mib": 2048,
+            "serial": "target/vfs-c1/up.serial.log",
+            "qemu_args": "target/vfs-c1/up.args",
+            "exit_code": 0,
+            "d1b": {
+              "status": "PASS",
+              "cycles": 3,
+              "exec_cycles": 2,
+              "evidence": "target/vfs-c1/d1b-up.json"
+            },
+            "d2a_status": "PASS",
+            "d2b_evidence": "target/vfs-c1/d2b-up.json"
+          },
+          {
+            "status": "PASS",
+            "vcpus": 2,
+            "memory_mib": 2048,
+            "serial": "target/vfs-c1/smp2.serial.log",
+            "qemu_args": "target/vfs-c1/smp2.args",
+            "exit_code": 0,
+            "d1b": {
+              "status": "PASS",
+              "cycles": 3,
+              "exec_cycles": 2,
+              "evidence": "target/vfs-c1/d1b-smp2.json"
+            },
+            "d2a_status": "PASS",
+            "d2b_evidence": "target/vfs-c1/d2b-smp2.json"
+          },
+          {
+            "status": "FAIL",
+            "vcpus": 4,
+            "memory_mib": 2048,
+            "guest_exit_code": 0,
+            "serial": "target/vfs-c1/smp4.serial.log",
+            "qemu_args": "target/vfs-c1/smp4.args",
+            "d1b_evidence": "target/vfs-c1/d1b-smp4.json",
+            "verification_log": "target/vfs-c1/d2b-smp4.verify.log",
+            "d1b_status": "PASS",
+            "failure": "D2A backend-baseline transition absent from serial window."
+          },
+          {
+            "status": "FAIL",
+            "vcpus": 4,
+            "memory_mib": 2048,
+            "guest_exit_code": 0,
+            "serial": "target/vfs-c1/smp4-retry.serial.log",
+            "qemu_args": "target/vfs-c1/smp4-retry.args",
+            "d1b_evidence": "target/vfs-c1/d1b-smp4-retry.json",
+            "verification_log": "target/vfs-c1/d2b-smp4-retry.verify.log",
+            "d1b_status": "PASS",
+            "failure": "Normal D2B Close reached zero backend handles, but the reply was not acknowledged before caller retirement."
+          },
+          {
+            "status": "FAIL",
+            "vcpus": 4,
+            "memory_mib": 2048,
+            "guest_exit_code": 0,
+            "serial": "target/vfs-c1/smp4-repeat.serial.log",
+            "qemu_args": "target/vfs-c1/smp4-repeat.args",
+            "d1b_evidence": "target/vfs-c1/d1b-smp4-repeat.json",
+            "verification_log": "target/vfs-c1/d2b-smp4-repeat.verify.log",
+            "d1b_status": "PASS",
+            "failure": "Normal D2B Close reached zero backend handles, but the reply was not acknowledged before caller retirement."
+          }
+        ],
+        "elf": {
+          "path": "target/vfs-c1/d2b.elf",
+          "sha256": "1f3e4a2a43b41960eab1dfb551e23c5709f2d44bf36b0b2afded487a5dab6cc2"
+        },
+        "iso": {
+          "path": "target/vfs-c1/d2b.iso",
+          "sha256": "72f5f9d3a5f88931c401832faf933560b82619ae02294f646966661080feb83f"
+        },
+        "prior_evidence": "vfs-private-mmap-lifecycle-closure-results.json",
+        "parked_exec": {
+          "status": "BLOCKED",
+          "reason": "The existing single-executor contract allows ordinary exec only when the caller is able to execute."
+        }
+      }
+    }
+  },
+  "preserved_prior_storage_evidence": {
+    "scope": "Original milestone evidence. Earlier standalone native probes were not rerun in C1.",
+    "N1D": "vfs-service-attachment-transaction-results.json",
+    "N1E": "vfs-exclusive-device-lease-results.json",
+    "N1F": "vfs-authenticated-device-admission-results.json",
+    "N1G": "vfs-transport-dma-settlement-results.json",
+    "N1H": "vfs-virtio-settlement-qualification-results.json",
+    "N1I": "vfs-live-virtio-lease-integration-results.json",
+    "N1J": "vfs-live-endpoint-lease-binding-results.json",
+    "N1K": "vfs-lease-attachment-integration-results.json",
+    "N1L": "vfs-device-backed-attachment-results.json",
+    "N1M": "vfs-native-authenticated-block-io-results.json",
+    "N1N": "vfs-native-fat32-attachment-results.json",
+    "N1O": "vfs-native-fat32-adapter-completion-results.json",
+    "N1P": "vfs-fat32-fsinfo-consistency-results.json"
+  },
+  "ordinary_native_acceptance": {
+    "gate_status": "BLOCKED",
+    "reason": "Unchanged ownership guard failed with all four historical live dependencies.",
+    "initial": {
+      "status": "NOT_RUN",
+      "vcpus": 1,
+      "memory_mib": 2048
+    },
+    "additional_cpu_configurations": "NOT_RUN",
+    "service_readiness_and_namespace": "NOT_RUN",
+    "descriptor_operations": "NOT_RUN",
+    "private_mappings": "NOT_RUN",
+    "mountinfo_and_statfs": "NOT_RUN",
+    "persistent_filesystem_operations": "NOT_RUN",
+    "matched_helios_syscall_ipc": "NOT_RUN"
+  },
+  "independently_deferred": {
+    "physical_dma_reclamation": "NOT_RUN",
+    "live_successor_owner_handoff": "NOT_RUN",
+    "D3_service_populated_page_reclaim_and_fault_restore": "NOT_RUN"
+  }
+}

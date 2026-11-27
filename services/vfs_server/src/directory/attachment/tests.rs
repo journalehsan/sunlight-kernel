@@ -16,6 +16,29 @@ const CALLER: Caller = Caller {
 };
 const TARGET: &str = "/mnt/volume";
 
+#[cfg(feature = "vfs-c1e2-test")]
+#[test]
+fn mount_observation_uses_retained_root_and_hides_preparations() {
+    let namespace = fixture();
+    let full = namespace.pin("/", "/").unwrap();
+    let rebased = namespace.pin("/restricted", "/restricted").unwrap();
+    let pending = namespace.stage_attachment(TARGET, backend()).unwrap();
+    let (revision, _, hidden) = full.mount_observation(USER, 7, None).unwrap();
+    assert!(!core::str::from_utf8(&hidden).unwrap().contains(TARGET));
+    let mount = namespace.publish_attachment(pending).unwrap();
+    let (new_revision, _, visible) = full.mount_observation(USER, 7, None).unwrap();
+    assert!(new_revision > revision);
+    let id = sunlight_ipc::storage::service_mount_id(7, mount).unwrap();
+    assert!(core::str::from_utf8(&visible).unwrap()
+        .lines().any(|row| row.starts_with(&std::format!("{id} ")) && row.contains(TARGET)));
+    let (_, _, scoped) = rebased.mount_observation(USER, 7, None).unwrap();
+    assert!(!core::str::from_utf8(&scoped).unwrap().contains(TARGET));
+    assert!(matches!(
+        rebased.mount_observation(USER, 7, Some("/mnt/volume/data")),
+        Err(Error::Filesystem(FsError::NotFound))
+    ));
+}
+
 fn fixture() -> DirectoryNamespace {
     let mut fs = Vfs::new();
     fs.mount_tmpfs("/", Tmpfs::new(&[])).unwrap();

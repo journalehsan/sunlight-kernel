@@ -11,7 +11,7 @@ fn captured_spawn_authenticates_ack_after_exact_parent_retirement() {
     for exec in [false, true] {
         let (mut runtime, mut sched, caps, parent, child) = fixture();
         let claim = runtime
-            .stage_spawn_inner(1, child, &mut sched, &caps, true)
+            .stage_spawn_inner(1, child, &mut sched, &caps, true, false)
             .unwrap();
         let request = pull(&mut runtime, &sched, &caps, claim);
         assert!(runtime.authorize_derivation(claim.registration, &request, &sched).is_ok());
@@ -45,7 +45,7 @@ fn captured_spawn_authenticates_ack_after_exact_parent_retirement() {
 #[test]
 fn captured_spawn_drops_source_pin_after_service_image_proof() {
     let (mut runtime, mut sched, caps, parent, child) = fixture();
-    let claim = runtime.stage_spawn_inner(1, child, &mut sched, &caps, true).unwrap();
+    let claim = runtime.stage_spawn_inner(1, child, &mut sched, &caps, true, false).unwrap();
     let _request = pull(&mut runtime, &sched, &caps, claim);
     runtime.retire_process(parent.caller);
     runtime.retire_registration(claim.registration);

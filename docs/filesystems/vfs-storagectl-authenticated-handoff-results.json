@@ -1,0 +1,48 @@
+{
+  "stage": "VFS-C1E",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "ordinary_storagectl": {"status": "BLOCKED", "execution": "NOT_RUN", "service_authority_published": false},
+  "coordinated_routing": "BLOCKED",
+  "production_cutover": "BLOCKED",
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1e/production.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e/service-retry.log"},
+    "existing_isolated_candidate": {"status": "PASS", "log": "target/vfs-c1e/candidate-retry.log", "fixture_elf": "target/vfs-c1d/service-fixture.elf"}
+  },
+  "host": {"status": "PASS", "library_tests": 296, "log": "target/vfs-c1e/host-lib.log", "registration_tests": 112, "registration_log": "target/vfs-c1e/registration.log"},
+  "native": {
+    "ordinary_identity_and_descriptions": "NOT_RUN",
+    "ordinary_private_mmap": "NOT_RUN",
+    "ordinary_mountinfo_and_statfs": "NOT_RUN",
+    "ordinary_withdrawal_reattachment_and_cleanup": "NOT_RUN",
+    "fresh_image_integrity_and_payload": "NOT_RUN",
+    "smp": {"status": "BLOCKED", "execution": "NOT_RUN", "reason": "The block fixture requires one vCPU"},
+    "archived_c1d_reverification": {
+      "status": "PASS",
+      "memory_mib": 2048,
+      "vcpus": 1,
+      "cycles_per_variant": 4,
+      "closed_image_fsck_and_exact_payload": "PASS",
+      "retained_dma_bytes": 20480,
+      "outstanding_commands_per_release": 0,
+      "mapping_users_per_release": 0,
+      "logs": ["target/vfs-c1e/archive-populated.log", "target/vfs-c1e/archive-unknown.log"]
+    }
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "reference_count": 71,
+    "check_exit": 1,
+    "no_growth_exit": 1,
+    "logs": ["target/vfs-c1e/guard-check.log", "target/vfs-c1e/guard-no-growth.log"],
+    "findings": {
+      "runtime_kernel_fat": "BLOCKED",
+      "procfs_kernel_topology": "BLOCKED",
+      "linux_statfs_kernel_capacity": "PARTIAL",
+      "private_mmap_kernel_backend": "PARTIAL"
+    }
+  },
+  "guarded_ordinary_boot": "NOT_RUN",
+  "historical_regressions_and_rejections": "vfs-stable-fat-object-identity-results.json"
+}

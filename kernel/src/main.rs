@@ -982,6 +982,42 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    #[cfg(feature = "vfs_c1e1_test")]
+    for fixture_pid in ::sunlight_ipc::storage::FIXTURE_CALLER_PID
+        ..=if cfg!(feature = "vfs_c1e2_test") {
+            ::sunlight_ipc::storage::FIXTURE_LINUX_PID
+        } else {
+            ::sunlight_ipc::storage::FIXTURE_CALLER_PID
+        }
+    {
+        let mut pmm = PMM.lock();
+        let mut caller = unsafe {
+            Process::new(
+                fixture_pid as usize, 0, "storagectl-fixture",
+                &mut pmm, hhdm_offset,
+            )
+        };
+        caller.system_allocation = true;
+        caller.service_lookup_restrictions =
+            Some(ipc::ServiceCapability::StorageAdmin.bit() | ipc::ServiceCapability::Vfs.bit());
+        if fixture_pid == ::sunlight_ipc::storage::FIXTURE_LINUX_PID {
+            caller.personality = process::ProcessPersonality::Linux(process::LinuxProcessState::new());
+            caller.linux_tgid = Some(fixture_pid as usize);
+            caller.service_lookup_restrictions = Some(ipc::ServiceCapability::Vfs.bit());
+            caller.vfs_root_metadata = true;
+            caller.vfs_boot_root = true;
+            caller.vfs_stat_routed = true;
+            caller.vfs_file_routed = true;
+        }
+        let entry = process::elf_loader::load_elf(
+            VFS_SERVER_ELF_BYTES, &mut caller, &mut pmm, hhdm_offset,
+        ).expect("StorageCtl fixture ELF");
+        process::spawn::map_boot_user_stack(&mut caller, &mut pmm, hhdm_offset)
+            .expect("StorageCtl fixture stack");
+        caller.init_context(entry, layout::USER_STACK_TOP);
+        drop(pmm);
+        sched::with_scheduler(|scheduler| scheduler.add_process(caller));
+    }
     splash.set_progress(800); // 80%
     splash.redraw();
 
@@ -2355,7 +2391,13 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
 
     #[cfg(feature = "vfs-n1h-test")]
     {
-        #[cfg(feature = "vfs-n1j-test")]
+        #[cfg(feature = "vfs_c1c_test")]
+        {
+            let mut blk = blk;
+            let source = storage::register_disposable(&mut blk);
+            vfs_n1j_test::install(blk, queue_phys, req_phys, source);
+        }
+        #[cfg(all(feature = "vfs-n1j-test", not(feature = "vfs_c1c_test")))]
         vfs_n1j_test::install(blk, queue_phys, req_phys);
         #[cfg(all(feature = "vfs-n1i-test", not(feature = "vfs-n1j-test")))]
         vfs_n1i_test::run(blk);

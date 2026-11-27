@@ -667,6 +667,10 @@ mod chdir;
 pub(crate) mod spawn;
 #[path = "vfs_registration/file.rs"]
 mod file;
+#[cfg(feature = "vfs_c1e1_test")]
+pub(crate) use file::acquire_storage;
+#[cfg(feature = "vfs_c1e2_test")]
+pub(crate) use file::retire_storage_fixture_caller;
 #[path = "vfs_registration/stat.rs"]
 mod stat;
 pub(crate) use chdir::{
@@ -682,6 +686,10 @@ pub(crate) use file::{
 };
 #[cfg(all(not(test), debug_assertions, feature = "vfs_d2a_test"))]
 pub(crate) use file::cancel_mapping_read;
+#[cfg(all(not(test), debug_assertions, feature = "vfs_d2b_test"))]
+pub(crate) fn fixture_mapping_read(caller: Caller, service: Caller, id: u64) -> Option<(u64, u64)> {
+    RUNTIME.lock().fixture_mapping_read(caller, service, id)
+}
 use inheritance::Inheritance;
 pub(crate) use inheritance::{capture_inheritance, provision_inheritance};
 pub(crate) use stat::{

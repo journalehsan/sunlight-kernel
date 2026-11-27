@@ -1,0 +1,53 @@
+{
+  "stage": "VFS-C1E4",
+  "date": "2026-11-28",
+  "status": "PARTIAL",
+  "runtime_namespace_integration": "PASS",
+  "publication_commit": "BLOCKED",
+  "mount_published": false,
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1e4/production.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e4/release-vfs.log"},
+    "isolated_candidate": {"status": "PASS", "log": "target/vfs-c1e4/candidate.log"},
+    "embedded_fixture_service": {"status": "PASS", "log": "target/vfs-c1e4/service.log"}
+  },
+  "native": {
+    "status": "PASS",
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "command": "python3 tools/test_vfs_n1h.py --c1e4 --kernel target/vfs-c1e4/kernel.elf",
+    "log": "target/vfs-c1e4/native-final.log",
+    "serial": "target/vfs-n1o-qemu-dog92f6p/serial.log",
+    "shared_runtime_reservation": "PASS",
+    "ordinary_stat_invisibility": "PASS",
+    "wrong_and_aborted_cookie": "PASS",
+    "unauthorized_exact_cookie": "PASS",
+    "stable_fat_alias_identity": "PASS",
+    "abort_and_reprepare": "PASS",
+    "fat_failure_compensation": "PASS",
+    "caller_and_service_retirement": "PASS",
+    "settlement": {"paths": 6, "outstanding_commands": 0, "mapping_users": 0, "retained_command_data": 0, "flush_pending": false, "retained_dma_bytes": 20480},
+    "closed_image": {"status": "PASS", "byte_identical": true, "fsck_exit": 0, "fsinfo": "initial unknown free count preserved", "recovered_keep_payload": "untouched", "partition_sha256": "35b5a93804bc03d5e3697123e95f1dd62e41a85c7c310146da51df8207cad28e"},
+    "committed_fat_rpc_access_and_mmap": "NOT_RUN",
+    "ordinary_withdrawal_and_write_persistence": "NOT_RUN",
+    "standalone_c1e1_and_smp": "NOT_RUN"
+  },
+  "host": {
+    "filesystem_block_fat_and_vfs": {"status": "PASS", "tests": 296, "log": "target/vfs-c1e4/focused.log"},
+    "storage_protocol": {"status": "PASS", "tests": 4, "log": "target/vfs-c1e4/storage.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e4/registration.log"},
+    "workspace_lib": {"status": "FAIL", "reason": "sunlight-ui-wayland duplicate panic_impl", "log": "target/vfs-c1e4/workspace-lib.log"},
+    "secret_store": {"status": "PARTIAL", "reason": "separate run timed out during default_options_are_private_and_bounded", "log": "target/vfs-c1e4/secret-store.log"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched_sites": 4,
+    "log": "target/vfs-c1e4/guard.log",
+    "kernel_fat_inventory_and_unmount": "BLOCKED",
+    "kernel_procfs_topology": "BLOCKED",
+    "kernel_linux_statfs": "BLOCKED",
+    "kernel_private_mmap": "BLOCKED",
+    "guarded_ordinary_boot": "NOT_RUN"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "stage": "VFS-C1E1",
+  "date": "2026-11-28",
+  "scope": "Opt-in authenticated preparation and settlement",
+  "mount_published": false,
+  "prepared_backend_retained": false,
+  "coordinated_routing": "BLOCKED",
+  "production_cutover": "BLOCKED",
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1e1/production.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e1/release-service.log"},
+    "isolated_candidate": {"status": "PASS", "log": "target/vfs-c1e1/candidate-final.log"},
+    "fixture_service": {"status": "PASS", "log": "target/vfs-c1e1/fixture-service.log"}
+  },
+  "native": {
+    "status": "PASS",
+    "syscall": 168,
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "successful_preparations": 2,
+    "rejected": ["missing target", "unregistered source", "stale epoch", "wrong caller incarnation", "wrong reservation", "wrong lease generation", "duplicate reply"],
+    "outstanding_commands_per_release": 0,
+    "mapping_users_per_release": 0,
+    "retained_command_data_per_release": 0,
+    "pending_flush_per_release": false,
+    "lease_at_completion": "Vacant",
+    "retained_fixture_dma_bytes": 20480,
+    "closed_disk_identical": true,
+    "fsck": "PASS",
+    "log": "target/vfs-c1e1/native-retry.log",
+    "serial": "target/vfs-n1o-qemu-j2luadg2/serial.log",
+    "earlier_bootstrap_failure": "target/vfs-c1e1/native.log",
+    "not_run": ["caller retirement while parked", "service retirement with an active lease", "media replacement", "transport uncertainty", "failure after lease acquisition", "SMP"]
+  },
+  "host": {
+    "focused_regressions": {"status": "PASS", "tests": 465, "log": "target/vfs-c1e1/focused.log"},
+    "reservation_codec": {"status": "PASS", "tests": 1, "log": "target/vfs-c1e1/codec.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e1/registration.log"},
+    "workspace_lib": {"status": "FAIL", "reason": "sunlight-libc host test compilation could not resolve GLOBAL_ALLOC", "log": "target/vfs-c1e1/host-lib.log"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched_sites": 4,
+    "logs": ["target/vfs-c1e1/guard-check.log", "target/vfs-c1e1/guard-no-growth.log"]
+  }
+}

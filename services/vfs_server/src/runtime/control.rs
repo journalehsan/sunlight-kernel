@@ -1,5 +1,6 @@
 //! Bounded service loop shared by the native copied channel and host adapters.
 use super::Runtime;
+use sunlight_fs::BlockDevice;
 use sunlight_ipc::vfs_rpc::{
     registration::Registration,
     retention::{transport, wire::FRAME_BYTES},
@@ -128,7 +129,7 @@ impl Control for CopiedControl {
     }
 }
 
-impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
+impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtime<P, L, R, Device> {
     /// Poll at ordinary service turns and kernel control wakeups.
     /// Every retained epoch gets 16 attempts, preventing a retrying old release
     /// from starving a replacement. Missing status proves no retirement/drain.
@@ -141,7 +142,7 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
     pub fn poll_root_control(
         &mut self,
         control: &mut impl Control,
-        namespace: &crate::directory::DirectoryNamespace,
+        namespace: &crate::directory::DirectoryNamespace<Device>,
     ) {
         self.poll_control_inner(control, Some(namespace));
     }
@@ -149,7 +150,7 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
     fn poll_control_inner(
         &mut self,
         control: &mut impl Control,
-        namespace: Option<&crate::directory::DirectoryNamespace>,
+        namespace: Option<&crate::directory::DirectoryNamespace<Device>>,
     ) {
         if let Some(registration) = control.snapshot() {
             let _ = self.observe_active(registration);
@@ -315,7 +316,7 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
         &mut self,
         control: &mut impl Control,
         authenticated: Registration,
-        namespace: &crate::directory::DirectoryNamespace,
+        namespace: &crate::directory::DirectoryNamespace<Device>,
         bytes: &[u8; FRAME_BYTES],
     ) -> Result<super::wire::Frame, crate::policy::Error> {
         use super::wire::Frame;

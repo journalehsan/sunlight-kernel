@@ -1,7 +1,7 @@
 use super::*;
 use crate::linux_procfs::{self, Node, OpenFile};
 
-pub(super) fn open(path: &str, flags: u64) -> u64 {
+pub(super) fn open(_frame: &mut SyscallFrame, path: &str, flags: u64) -> u64 {
     let Ok(parsed) = sunlight_compat_linux::open_flags::parse(flags) else {
         return linux_errno(22);
     };
@@ -18,6 +18,13 @@ pub(super) fn open(path: &str, flags: u64) -> u64 {
     if (parsed.directory || path.ends_with('/')) && !node.directory() {
         return linux_errno(20);
     }
+    let status = parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 };
+    #[cfg(feature = "vfs_c1e2_test")]
+    if matches!(node, Node::MountInfo(_)) && mount_observation_routed() {
+        return service_mount_observation(_frame, None, |sched, completion| {
+            install(sched, node, Some(completion.payload), status)
+        });
+    }
     let mountinfo = if matches!(node, Node::MountInfo(_)) {
         match linux_procfs::mountinfo_snapshot() {
             Ok(bytes) => Some(bytes),
@@ -26,22 +33,19 @@ pub(super) fn open(path: &str, flags: u64) -> u64 {
     } else {
         None
     };
-    crate::sched::with_scheduler(|s| {
-        if !node.live(s) {
-            return linux_errno(2);
-        }
-        let file = match OpenFile::new(s, node, mountinfo) {
-            Ok(file) => file,
-            Err(error) => return linux_errno(error),
-        };
-        s.current_shared_process_mut()
-            .fd_table
-            .open_proc(
-                file,
-                parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 },
-            )
-            .map_or_else(|_| linux_errno(24), |fd| fd as u64)
-    })
+    crate::sched::with_scheduler(|sched| install(sched, node, mountinfo, status))
+}
+
+fn install(sched: &mut crate::sched::Scheduler, node: Node, bytes: Option<Vec<u8>>, status: u32) -> u64 {
+    if !node.live(sched) {
+        return linux_errno(2);
+    }
+    let file = match OpenFile::new(sched, node, bytes) {
+        Ok(file) => file,
+        Err(error) => return linux_errno(error),
+    };
+    sched.current_shared_process_mut().fd_table.open_proc(file, status)
+        .map_or_else(|_| linux_errno(24), |fd| fd as u64)
 }
 
 pub(super) fn stat(path: &str, ptr: u64, nofollow: bool) -> u64 {
@@ -279,6 +283,7 @@ pub(super) fn owns(path: &str) -> bool {
 pub(super) fn native_result(result: u64) -> u64 {
     match result as i64 {
         -2 => ERR_NOENT,
+        -5 => ERR_EIO,
         -9 => ERR_EBADF,
         _ => result,
     }

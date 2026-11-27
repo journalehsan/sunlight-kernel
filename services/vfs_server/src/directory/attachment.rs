@@ -2,7 +2,7 @@
 use super::*;
 use alloc::{string::String, sync::Weak, vec::Vec};
 use sunlight_fs::{
-    vfs::{AttachmentRow, ObjectMetadata},
+    vfs::{AttachmentCapacity, AttachmentRow, ObjectMetadata},
     Credential,
 };
 
@@ -159,11 +159,50 @@ impl<D: BlockDevice> CallerView<D> {
         Ok(fs.stat_beneath(self.pair.root, self.pair.directory, path, self.caller)?)
     }
 
+    pub fn capacity(&self, path: &str) -> Result<AttachmentCapacity, Error> {
+        let mut fs = self.owner().lock();
+        check_revision(&fs, self.revision)?;
+        Ok(fs.attachment_capacity_beneath(self.pair.root, self.pair.directory, path, self.caller)?)
+    }
+
     pub fn snapshot(&self) -> Result<Snapshot<'_, D>, Error> {
         let mut fs = self.owner().lock();
         check_revision(&fs, self.revision)?;
         let rows = fs.attachment_rows(self.pair.root, self.caller)?;
         Ok(Snapshot { view: self, rows })
+    }
+}
+
+#[cfg(feature = "vfs-c1e2-test")]
+impl<D: BlockDevice> DirectoryPair<D> {
+    pub(crate) fn mount_observation(
+        &self,
+        caller: Credential,
+        epoch: u64,
+        path: Option<&str>,
+    ) -> Result<(u64, u64, Vec<u8>), Error> {
+        let Backend::Mounted(owner) = &self.filesystem else {
+            return Err(FsError::Unsupported.into());
+        };
+        let mut fs = owner.lock();
+        let revision = fs.topology_revision();
+        let id = |local| sunlight_ipc::storage::service_mount_id(epoch, local);
+        if let Some(path) = path {
+            let capacity = fs.attachment_capacity_beneath(self.root, self.directory, path, caller)?;
+            let mount = id(capacity.id).ok_or(FsError::Unsupported)?;
+            let mut payload = Vec::new();
+            payload.try_reserve_exact(12).map_err(|_| FsError::NoMemory)?;
+            for word in [capacity.unit, capacity.blocks, capacity.free] {
+                payload.extend_from_slice(&word.to_le_bytes());
+            }
+            Ok((revision, mount, payload))
+        } else {
+            let rows = fs.attachment_rows(self.root, caller)?;
+            let text = Vfs::<D>::attachment_mountinfo(
+                &rows, id, sunlight_ipc::vfs_rpc::file_transport::IO_BYTES,
+            )?;
+            Ok((revision, 0, text.into_bytes()))
+        }
     }
 }
 
@@ -203,3 +242,9 @@ pub use device::*;
 mod native;
 #[cfg(all(target_os = "none", feature = "vfs-n1o-fat-test"))]
 pub use native::qualify_native_fat;
+#[cfg(all(target_os = "none", feature = "vfs-c1e1-test"))]
+pub use native::storage_caller;
+#[cfg(all(target_os = "none", feature = "vfs-c1e1-test", not(feature = "vfs-c1e2-test")))]
+pub use native::qualify_storage;
+#[cfg(all(target_os = "none", feature = "vfs-c1e2-test"))]
+pub use native::{Device as StorageDevice, RetainedStorage};

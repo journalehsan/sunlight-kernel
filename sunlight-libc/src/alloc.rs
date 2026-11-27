@@ -825,6 +825,8 @@ static GLOBAL_ALLOC: SunlightAlloc = SunlightAlloc;
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "global-alloc")]
+    static TEST_ALLOC: super::SunlightAlloc = super::SunlightAlloc;
+    #[cfg(feature = "global-alloc")]
     extern crate alloc as rust_alloc;
     extern crate std;
 
@@ -1084,10 +1086,10 @@ mod tests {
         unsafe {
             for &align in &[1, 2, 8, 16, 64, 4096, 65536] {
                 let layout = Layout::from_size_align(128, align).unwrap();
-                let value = GLOBAL_ALLOC.alloc(layout);
+                let value = TEST_ALLOC.alloc(layout);
                 assert!(!value.is_null());
                 assert_eq!((value as usize) & (align - 1), 0);
-                GLOBAL_ALLOC.dealloc(value, layout);
+                TEST_ALLOC.dealloc(value, layout);
             }
         }
 
@@ -1116,15 +1118,15 @@ mod tests {
         unsafe {
             let actual = Layout::from_size_align(8, 16).unwrap();
             let incorrect_old_layout = Layout::from_size_align(1024, 16).unwrap();
-            let value = GLOBAL_ALLOC.alloc(actual);
+            let value = TEST_ALLOC.alloc(actual);
             assert!(!value.is_null());
             for index in 0..actual.size() {
                 *value.add(index) = index as u8;
             }
-            let replacement = GLOBAL_ALLOC.realloc(value, incorrect_old_layout, 32);
+            let replacement = TEST_ALLOC.realloc(value, incorrect_old_layout, 32);
             assert!(!replacement.is_null());
             assert!((0..actual.size()).all(|index| *replacement.add(index) == index as u8));
-            GLOBAL_ALLOC.dealloc(replacement, Layout::from_size_align(32, 16).unwrap());
+            TEST_ALLOC.dealloc(replacement, Layout::from_size_align(32, 16).unwrap());
             assert_heap_invariants();
         }
     }

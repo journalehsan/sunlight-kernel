@@ -29,11 +29,25 @@ pub(super) struct Publication {
     token: u64,
     compensation: bool,
     buffer: alloc::vec::Vec<u8>,
+    #[cfg(feature = "vfs_c1e2_test")]
+    observation: Option<(Receipt, alloc::vec::Vec<u8>)>,
 }
 
 /// One caller-owned file request. Borrowed paths and payloads stay valid only
 /// for the duration of the syscall that admits them.
 pub(crate) enum FileOperation<'a> {
+    #[cfg(feature = "vfs_c1e2_test")]
+    ObserveMount { path: Option<&'a str> },
+    #[cfg(feature = "vfs_c1e1_test")]
+    PrepareStorage { source: u64, path: &'a str },
+    #[cfg(feature = "vfs_c1e2_test")]
+    AbortStorage { token: u64 },
+    #[cfg(feature = "vfs_c1e2_test")]
+    PublishStorage { token: u64 },
+    #[cfg(feature = "vfs_c1e2_test")]
+    InventoryStorage { index: u64 },
+    #[cfg(feature = "vfs_c1e2_test")]
+    UnmountStorage { token: u64 },
     Open {
         path: &'a str,
         access: u64,
@@ -70,6 +84,15 @@ pub(crate) enum FileOperation<'a> {
 impl FileOperation<'_> {
     fn token(&self) -> u64 {
         match *self {
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::ObserveMount { .. } => 0,
+            #[cfg(feature = "vfs_c1e1_test")]
+            Self::PrepareStorage { source, .. } => source,
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::AbortStorage { token } | Self::PublishStorage { token }
+            | Self::UnmountStorage { token } => token,
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::InventoryStorage { index } => index,
             Self::Open { .. } => 0,
             #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
             Self::Pread { token, .. } => token,
@@ -85,6 +108,20 @@ impl FileOperation<'_> {
 
     fn op(&self) -> u64 {
         match self {
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::ObserveMount { path: None } => api::MOUNTINFO,
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::ObserveMount { path: Some(_) } => api::STATFS,
+            #[cfg(feature = "vfs_c1e1_test")]
+            Self::PrepareStorage { .. } => api::PREPARE_STORAGE,
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::AbortStorage { .. } => api::ABORT_STORAGE,
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::PublishStorage { .. } => api::PUBLISH_STORAGE,
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::InventoryStorage { .. } => api::INVENTORY_STORAGE,
+            #[cfg(feature = "vfs_c1e2_test")]
+            Self::UnmountStorage { .. } => api::UNMOUNT_STORAGE,
             Self::Open { .. } => api::OPEN,
             Self::Read { .. } => api::READ,
             #[cfg(any(test, all(debug_assertions, feature = "vfs_d1b_test")))]
@@ -115,6 +152,27 @@ pub(crate) enum FileCall {
 }
 
 impl Runtime {
+    #[cfg(all(not(test), debug_assertions, feature = "vfs_d2b_test"))]
+    pub(crate) fn fixture_mapping_read(
+        &self,
+        caller: Caller,
+        service: Caller,
+        id: u64,
+    ) -> Option<(u64, u64)> {
+        let registration = self.registry.active()?;
+        if !owner_matches(registration.owner, service) {
+            return None;
+        }
+        self.file_publications.iter().flatten().find_map(|p| {
+            (p.id == id
+                && p.identity.caller == caller
+                && p.identity.registration == registration
+                && p.op == api::PREAD
+                && !p.replied)
+                .then_some((registration.epoch, p.token))
+        })
+    }
+
     fn check_descriptor(
         &self,
         identity: AdmissionIdentity,
@@ -160,6 +218,8 @@ impl Runtime {
                 && !publication.replied
                 && now_tick.wrapping_sub(publication.started_tick) >= TIMEOUT_TICKS
             {
+                #[cfg(feature = "vfs_c1e1_test")]
+                publication.cancel_storage();
                 publication.failed = true;
                 publication.replied = true;
                 publication.buffer.clear();
@@ -252,6 +312,31 @@ impl Runtime {
             .ok_or(Error::Capacity)?;
         let request_id = self.file_ids.allocate().ok_or(Error::Capacity)?;
         let (op, token, arg0, arg1, payload, receipt_words) = match &operation {
+            #[cfg(feature = "vfs_c1e2_test")]
+            FileOperation::ObserveMount { path } => {
+                let receipt = receipt.ok_or(Error::NotReady)?;
+                (operation.op(), 0, 0, 0, path.unwrap_or("").as_bytes(),
+                    Some((receipt.scope().namespace_id, receipt.scope().namespace_generation,
+                        receipt.request_id(), receipt.generation())))
+            }
+            #[cfg(feature = "vfs_c1e1_test")]
+            FileOperation::PrepareStorage { source, path } => {
+                (api::PREPARE_STORAGE, *source, 0, 0, path.as_bytes(), None)
+            }
+            #[cfg(feature = "vfs_c1e2_test")]
+            FileOperation::AbortStorage { token } => (api::ABORT_STORAGE, *token, 0, 0, &[][..], None),
+            #[cfg(feature = "vfs_c1e2_test")]
+            FileOperation::PublishStorage { token } => {
+                (api::PUBLISH_STORAGE, *token, 0, 0, &[][..], None)
+            }
+            #[cfg(feature = "vfs_c1e2_test")]
+            FileOperation::InventoryStorage { index } => {
+                (api::INVENTORY_STORAGE, *index, 0, 0, &[][..], None)
+            }
+            #[cfg(feature = "vfs_c1e2_test")]
+            FileOperation::UnmountStorage { token } => {
+                (api::UNMOUNT_STORAGE, *token, 0, 0, &[][..], None)
+            }
             FileOperation::Open { path, access } => {
                 let receipt = receipt.ok_or(Error::NotReady)?;
                 (
@@ -293,7 +378,11 @@ impl Runtime {
         // authenticated caller against an already-open token, and the codec
         // rejects credential words on those operations.
         let (uid, gid) = match &operation {
+            #[cfg(feature = "vfs_c1e2_test")]
+            FileOperation::ObserveMount { .. } => (identity.uid, identity.gid),
             FileOperation::Open { .. } => (identity.uid, identity.gid),
+            #[cfg(feature = "vfs_c1e2_test")]
+            FileOperation::InventoryStorage { .. } => (identity.uid, identity.gid),
             _ => (0, 0),
         };
         let request = api::Request {
@@ -319,6 +408,15 @@ impl Runtime {
             .try_reserve_exact(api::FRAME_BYTES)
             .map_err(|_| Error::Capacity)?;
         buffer.extend_from_slice(&bytes);
+        #[cfg(feature = "vfs_c1e2_test")]
+        let observation = if api::mount_observation(op) {
+            let mut path = alloc::vec::Vec::new();
+            path.try_reserve_exact(payload.len()).map_err(|_| Error::Capacity)?;
+            path.extend_from_slice(payload);
+            Some((receipt.ok_or(Error::NotReady)?, path))
+        } else {
+            None
+        };
         self.file_publications[slot] = Some(Publication {
             id: request_id,
             identity,
@@ -330,6 +428,8 @@ impl Runtime {
             token,
             compensation: false,
             buffer,
+            #[cfg(feature = "vfs_c1e2_test")]
+            observation,
         });
         // Completion and teardown cannot observe a published request with an
         // unparked caller: publication and the parking transition are atomic
@@ -375,6 +475,8 @@ impl Runtime {
                 registration,
             },
             op: api::CLOSE,
+            #[cfg(feature = "vfs_c1e2_test")]
+            observation: None,
             replied: false,
             failed: false,
             woken: true,
@@ -439,7 +541,32 @@ impl Runtime {
             return Err(Error::Protocol);
         }
         output.copy_from_slice(&publication.buffer);
-        Ok(Some(publication.id))
+        let id = publication.id;
+        #[cfg(feature = "vfs_c1e2_test")]
+        if publication.op == api::UNMOUNT_STORAGE {
+            for pending in self.file_publications.iter_mut().flatten() {
+                if pending.identity.registration == registration
+                    && pending.replied && api::mount_observation(pending.op)
+                {
+                    pending.failed = true;
+                }
+            }
+        }
+        Ok(Some(id))
+    }
+
+    #[cfg(feature = "vfs_c1e2_test")]
+    pub(super) fn revalidate_storage_files(&mut self, sched: &mut Scheduler) {
+        for publication in self.file_publications.iter_mut().flatten() {
+            if !publication.replied
+                && matches!(publication.op, api::INVENTORY_STORAGE | api::UNMOUNT_STORAGE)
+                && !storage_view_live(sched, publication.identity, publication.op)
+            {
+                publication.replied = true;
+                publication.failed = true;
+            }
+        }
+        self.wake_file_callers(sched);
     }
 
     pub(super) fn reply_file(
@@ -465,6 +592,40 @@ impl Runtime {
                 })
             })
             .ok_or(Error::Identity)?;
+        #[cfg(feature = "vfs_c1e2_test")]
+        if matches!(reply.op, api::INVENTORY_STORAGE | api::UNMOUNT_STORAGE)
+            && !storage_view_live(
+                sched, self.file_publications[slot].as_ref().unwrap().identity, reply.op,
+            )
+        {
+            self.revalidate_storage_files(sched);
+            return Err(Error::Identity);
+        }
+        #[cfg(feature = "vfs_c1e1_test")]
+        if reply.op == api::PREPARE_STORAGE {
+            let publication = self.file_publications[slot].as_ref().unwrap();
+            if !storage_caller_live(sched, reply.caller)
+                || self.registry.active() != Some(registration)
+                || !crate::vfs_n1j_test::storage_reply(
+                    registration, reply.caller, reply.request_id, publication.token,
+                    reply.result0, reply.errno, false,
+                )
+            {
+                return Err(Error::Identity);
+            }
+        }
+        #[cfg(feature = "vfs_c1e2_test")]
+        if reply.op == api::PUBLISH_STORAGE {
+            let publication = self.file_publications[slot].as_ref().unwrap();
+            if !storage_caller_live(sched, reply.caller)
+                || self.registry.active() != Some(registration)
+                || (reply.errno == 95 && !crate::vfs_n1j_test::validate_storage_publication(
+                    registration, reply.caller, publication.token,
+                ))
+            {
+                return Err(Error::Identity);
+            }
+        }
         #[cfg(all(not(test), debug_assertions, feature = "vfs_d1b_test"))]
         {
             let publication = self.file_publications[slot].as_ref().unwrap();
@@ -591,6 +752,8 @@ impl Runtime {
                 registration,
             },
             op: api::TRANSFER,
+            #[cfg(feature = "vfs_c1e2_test")]
+            observation: None,
             replied: false,
             failed: false,
             woken: false,
@@ -689,6 +852,8 @@ impl Runtime {
             if publication.compensation {
                 continue;
             }
+            #[cfg(feature = "vfs_c1e1_test")]
+            publication.cancel_storage();
             if publication.op == api::OPEN && publication.replied && !publication.failed {
                 let _ = self.finish_open(slot, |_, _| Err(125));
             } else {
@@ -752,7 +917,11 @@ pub(crate) fn file_call(
         .processes
         .iter()
         .any(|p| p.pid == pid && !p.is_exiting() && p.vfs_file_routed);
-    if !routed {
+    let storage = (cfg!(feature = "vfs_c1e1_test") && operation.op() == api::PREPARE_STORAGE)
+        || (cfg!(feature = "vfs_c1e2_test")
+            && matches!(operation.op(), api::ABORT_STORAGE | api::PUBLISH_STORAGE
+                | api::UNMOUNT_STORAGE | api::INVENTORY_STORAGE));
+    if !routed && !storage {
         return Err(Error::Identity);
     }
     if sched
@@ -770,6 +939,10 @@ pub(crate) fn file_call(
         .position(|p| p.pid == pid && !p.is_exiting())
         .ok_or(Error::Identity)?;
     let caller = process_identity(&sched.processes[idx]);
+    #[cfg(feature = "vfs_c1e1_test")]
+    if storage && op != api::INVENTORY_STORAGE && !storage_caller_live(sched, caller) {
+        return Err(Error::Identity);
+    }
     {
         let mut runtime = RUNTIME.lock();
         live_registration(&mut runtime, sched, caps);
@@ -783,15 +956,44 @@ pub(crate) fn file_call(
             let publication = runtime.file_publications[slot].as_ref().unwrap();
             if publication.op != op
                 || publication.token != operation.token()
-                || (op != api::OPEN
+                || (op != api::OPEN && !storage && !api::mount_observation(op)
                     && descriptor != Some((caller, publication.identity.registration.epoch)))
             {
                 return Err(Error::Busy);
+            }
+            #[cfg(feature = "vfs_c1e2_test")]
+            if let FileOperation::ObserveMount { path } = &operation {
+                let valid = publication.observation.as_ref().is_some_and(|(receipt, original)| {
+                    original == path.unwrap_or("").as_bytes()
+                        && runtime.registry.active() == Some(publication.identity.registration)
+                        && runtime.caller_receipt(publication.identity) == Some(*receipt)
+                        && sched.processes[idx].uid == publication.identity.uid
+                        && sched.processes[idx].gid == publication.identity.gid
+                        && sched.shared_process_index(idx) == idx
+                });
+                if !valid {
+                    runtime.file_publications[slot] = None;
+                    return Err(Error::Identity);
+                }
             }
             if op == api::OPEN && publication.replied {
                 return runtime
                     .finish_open(slot, |token, epoch| install(sched, token, epoch))
                     .map(FileCall::Complete);
+            }
+            #[cfg(feature = "vfs_c1e1_test")]
+            if op == api::PREPARE_STORAGE && publication.replied && !publication.failed {
+                let valid = runtime.registry.active() == Some(publication.identity.registration)
+                    && api::Reply::decode(&publication.buffer).is_ok_and(|reply| {
+                        crate::vfs_n1j_test::storage_reply(
+                            reply.registration, caller, reply.request_id, publication.token,
+                            reply.result0, reply.errno, true,
+                        )
+                    });
+                if !valid {
+                    publication.cancel_storage();
+                    runtime.file_publications[slot].as_mut().unwrap().failed = true;
+                }
             }
             if let Some(completion) = runtime.take_file(caller, op) {
                 return Ok(FileCall::Complete(completion));
@@ -801,11 +1003,24 @@ pub(crate) fn file_call(
         }
     }
     let identity = capture(pid, sched, caps).map_err(|_| Error::Identity)?;
+    if api::mount_observation(op) && sched.shared_process_index(idx) != idx {
+        return Err(Error::Identity);
+    }
+    #[cfg(feature = "vfs_c1e2_test")]
+    if matches!(op, api::INVENTORY_STORAGE | api::UNMOUNT_STORAGE)
+        && !storage_view_live(sched, identity, op)
+    {
+        return Err(Error::Identity);
+    }
     let mut runtime = RUNTIME.lock();
-    if op != api::OPEN {
+    if op != api::OPEN && !storage && !api::mount_observation(op) {
         runtime.check_descriptor(identity, descriptor)?;
     }
     let receipt = match &operation {
+        #[cfg(feature = "vfs_c1e2_test")]
+        FileOperation::ObserveMount { .. } => {
+            Some(runtime.caller_receipt(identity).ok_or(Error::NotReady)?)
+        }
         FileOperation::Open { .. } => {
             Some(runtime.caller_receipt(identity).ok_or(Error::NotReady)?)
         }
@@ -813,6 +1028,97 @@ pub(crate) fn file_call(
     };
     runtime.publish_file(identity, operation, receipt, sched)?;
     Ok(FileCall::Pending)
+}
+
+#[cfg(feature = "vfs_c1e1_test")]
+impl Publication {
+    fn cancel_storage(&self) {
+        if self.op == api::PREPARE_STORAGE {
+            crate::vfs_n1j_test::cancel_storage(self.identity.registration, self.identity.caller, self.id);
+        }
+    }
+}
+
+#[cfg(feature = "vfs_c1e1_test")]
+fn storage_caller_live(sched: &Scheduler, caller: Caller) -> bool {
+    sched.processes.iter().any(|process| {
+        !process.is_exiting() && process_identity(process) == caller
+            && sunlight_ipc::storage::authorized(process.uid, process.service_lookup_restrictions)
+    })
+}
+
+#[cfg(feature = "vfs_c1e2_test")]
+fn storage_view_live(sched: &Scheduler, identity: AdmissionIdentity, op: u64) -> bool {
+    sched.processes.iter().enumerate().any(|(index, process)| {
+        !process.is_exiting() && !process.vfs_root_rebased
+            && process_identity(process) == identity.caller
+            && !sched.processes[sched.shared_process_index(index)].vfs_root_rebased
+            && process.uid == identity.uid && process.gid == identity.gid
+            && (op != api::UNMOUNT_STORAGE
+                || sunlight_ipc::storage::authorized(process.uid, process.service_lookup_restrictions))
+    })
+}
+
+#[cfg(feature = "vfs_c1e1_test")]
+pub(crate) fn acquire_storage(
+    service: Caller,
+    epoch: u64,
+    request: u64,
+    sched: &Scheduler,
+    caps: &CapabilityBroker,
+) -> Option<u64> {
+    let mut runtime = RUNTIME.lock();
+    let registration = live_registration(&mut runtime, sched, caps)?;
+    if registration.epoch != epoch || registration.owner.pid != service.pid
+        || registration.owner.incarnation != service.incarnation
+        || registration.owner.address_space_generation != service.address_space_generation
+    {
+        return None;
+    }
+    let publication = runtime.file_publications.iter().flatten().find(|p| {
+        p.id == request && p.op == api::PREPARE_STORAGE && !p.replied
+            && p.identity.registration == registration
+            && storage_caller_live(sched, p.identity.caller)
+    })?;
+    crate::vfs_n1j_test::acquire_storage(
+        registration, publication.identity.caller, request, publication.token,
+    ).ok()
+}
+
+#[cfg(feature = "vfs_c1e2_test")]
+pub(crate) fn retire_storage_fixture_caller(
+    request: u64,
+    epoch: u64,
+    sched: &mut Scheduler,
+) -> bool {
+    let service = process_identity(sched.current_process());
+    let caller = {
+        let caps = crate::capability::CAP_BROKER.lock();
+        let mut runtime = RUNTIME.lock();
+        let Some(registration) = live_registration(&mut runtime, sched, &caps) else {
+            return false;
+        };
+        if registration.epoch != epoch || registration.owner.pid != service.pid
+            || registration.owner.incarnation != service.incarnation
+            || registration.owner.address_space_generation != service.address_space_generation
+        {
+            return false;
+        }
+        runtime.file_publications.iter().flatten().find(|entry| {
+            entry.id == request && entry.op == api::PREPARE_STORAGE && !entry.replied
+                && !entry.failed && entry.identity.registration == registration
+                && entry.identity.caller.pid == sunlight_ipc::storage::FIXTURE_RETIRING_PID
+        }).map(|entry| entry.identity.caller)
+    };
+    let Some(caller) = caller else { return false };
+    let pid = caller.pid as usize;
+    if !sched.process_index_by_pid(pid).is_some_and(|index| {
+        process_identity(&sched.processes[index]) == caller
+            && sched.processes[index].state != ProcessState::Running
+    }) {
+        return false;
+    }
+    sched.terminate_process_by_pid(pid, 125, "StorageCtl parked fixture")
 }
 
 /// Drop the exact cancelled mapping read without touching ordinary Close.

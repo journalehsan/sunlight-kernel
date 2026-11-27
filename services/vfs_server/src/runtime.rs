@@ -6,36 +6,50 @@ use crate::{
     policy::{Error, Policy},
 };
 use alloc::boxed::Box;
-use sunlight_fs::{FileStat, FsError};
+use sunlight_fs::{BlockDevice, FileStat, FsError, NullDevice};
 use sunlight_ipc::vfs_rpc::{
     lifecycle::Caller,
     registration::Registration,
     retention::{wire, Receipt, Scope},
 };
 
-struct Entry<const P: usize, const L: usize> {
+struct Entry<const P: usize, const L: usize, Device: BlockDevice> {
     registration: Registration,
-    policy: Policy<P, L>,
-    files: crate::open::Table<L>,
+    policy: Policy<P, L, Device>,
+    files: crate::open::Table<L, Device>,
 }
 
 /// Keep this owner for the entire service process lifetime. Retired policies
 /// consume capacity even when empty: there is no authenticated drain barrier yet.
 /// This preserves replay protection and duplicate-release replies indefinitely.
 /// Heap allocation is lazy and fallible; an unprovisioned service owns no policy.
-pub struct Runtime<const P: usize, const L: usize, const R: usize> {
-    entries: [Option<Box<Entry<P, L>>>; R],
+pub struct Runtime<const P: usize, const L: usize, const R: usize, Device: BlockDevice = NullDevice> {
+    entries: [Option<Box<Entry<P, L, Device>>>; R],
     active: Option<Registration>,
     last_epoch: u64,
+    #[cfg(feature = "vfs-d2b-test")]
+    fixture_endpoint: Option<sunlight_ipc::EndpointId>,
 }
 
-impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
+impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtime<P, L, R, Device> {
     pub const fn new() -> Self {
         Self {
             entries: [const { None }; R],
             active: None,
             last_epoch: 0,
+            #[cfg(feature = "vfs-d2b-test")]
+            fixture_endpoint: None,
         }
+    }
+
+    #[cfg(feature = "vfs-d2b-test")]
+    pub fn set_fixture_endpoint(&mut self, endpoint: sunlight_ipc::EndpointId) {
+        self.fixture_endpoint = Some(endpoint);
+    }
+
+    #[cfg(feature = "vfs-d2b-test")]
+    pub fn fixture_withdrew(&self) -> bool {
+        self.fixture_endpoint.is_none()
     }
 
     /// Trusted provisioning only. Idempotence preserves policy and allocators.
@@ -99,7 +113,7 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
         &mut self,
         registration: Registration,
         scope: Scope,
-        namespace: &DirectoryNamespace,
+        namespace: &DirectoryNamespace<Device>,
         root: &str,
         directory: &str,
     ) -> Result<(), Error> {
@@ -272,7 +286,10 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
             .map_err(Error::Filesystem)
     }
 
-    fn file_entry_mut(&mut self, authenticated: Registration) -> Result<&mut Entry<P, L>, Error> {
+    fn file_entry_mut(
+        &mut self,
+        authenticated: Registration,
+    ) -> Result<&mut Entry<P, L, Device>, Error> {
         if self.active != Some(authenticated) {
             return Err(Error::Identity);
         }
@@ -412,6 +429,40 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
         let Some(reply_bytes) = self.file_request(control, registration, bytes) else {
             return false;
         };
+        #[cfg(feature = "vfs-d2b-test")]
+        if self.fixture_endpoint.is_some() {
+            let request = api::Request::decode(bytes).unwrap();
+            if request.op == api::PREAD && request.arg0 == 4096 {
+                let start = sunlight_ipc::monotonic_millis();
+                loop {
+                    let action = unsafe {
+                        sunlight_libc::sys::syscall2(0xf1c1, 28, request.request_id)
+                    };
+                    match action {
+                        0 => {
+                            assert!(sunlight_ipc::monotonic_millis() - start < 3000);
+                            sunlight_ipc::process_yield();
+                        }
+                        1 => break,
+                        2 => {
+                            let entry = self.file_entry_mut(registration).unwrap();
+                            assert_eq!(entry.files.len(), 1);
+                            assert!(sunlight_ipc::endpoint_destroy(self.fixture_endpoint.take().unwrap()));
+                            assert!(!control.file_reply(registration.epoch, &reply_bytes));
+                            self.retire_registration(registration).unwrap();
+                            assert_eq!(self.entries.iter().flatten().find(|entry|
+                                entry.registration == registration).unwrap().files.len(), 0);
+                            sunlight_ipc::debug_log(&alloc::format!(
+                                "[VFS-D2B] endpoint-withdrawn epoch={} id={} token={} handles=1->0 reply_ack=0",
+                                registration.epoch, request.request_id, request.token
+                            ));
+                            return false;
+                        }
+                        _ => panic!("mmap lifecycle rendezvous rejected"),
+                    }
+                }
+            }
+        }
         let accepted = control.file_reply(registration.epoch, &reply_bytes);
         #[cfg(feature = "vfs-d1b-test")]
         {
@@ -469,6 +520,36 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
         };
         let failed = |error: &Error| reply(errno_for(error), 0, 0, &[]);
         match request.op {
+            #[cfg(feature = "vfs-c1e2-test")]
+            api::MOUNTINFO | api::STATFS => {
+                use crate::directory::attachment::Error as ObservationError;
+                let Some(receipt) = Receipt::from_parts(
+                    authenticated,
+                    Scope {
+                        caller: request.caller,
+                        namespace_id: request.namespace_id,
+                        namespace_generation: request.namespace_generation,
+                    },
+                    request.receipt_id,
+                    request.receipt_generation,
+                ) else {
+                    return reply(22, 0, 0, &[]);
+                };
+                let path = if request.op == api::STATFS {
+                    Some(core::str::from_utf8(request.payload).ok()?)
+                } else {
+                    None
+                };
+                let entry = self.file_entry_mut(authenticated).ok()?;
+                match entry.policy.mount_observation(
+                    authenticated, receipt, Credential { uid: request.uid, gid: request.gid }, path,
+                ) {
+                    Ok((revision, mount, payload)) => reply(0, revision, mount, &payload),
+                    Err(ObservationError::Stale) => reply(116, 0, 0, &[]),
+                    Err(ObservationError::Filesystem(error)) => failed(&Error::Filesystem(error)),
+                    Err(_) => reply(5, 0, 0, &[]),
+                }
+            }
             api::OPEN => {
                 let Some(receipt) = Receipt::from_parts(
                     authenticated,
@@ -656,7 +737,7 @@ impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
             .map_err(Error::Protocol)
     }
 
-    fn policy_mut(&mut self, registration: Registration) -> Result<&mut Policy<P, L>, Error> {
+    fn policy_mut(&mut self, registration: Registration) -> Result<&mut Policy<P, L, Device>, Error> {
         self.entries
             .iter_mut()
             .flatten()
@@ -700,10 +781,10 @@ pub(crate) fn errno_for(error: &Error) -> u64 {
 }
 
 /// Policy supplied by a trusted lifecycle owner, never decoded from a retain frame.
-pub struct ProvisionedScope<'a> {
+pub struct ProvisionedScope<'a, Device: BlockDevice = NullDevice> {
     pub registration: Registration,
     pub scope: Scope,
-    pub namespace: &'a DirectoryNamespace,
+    pub namespace: &'a DirectoryNamespace<Device>,
     pub root: &'a str,
     pub directory: &'a str,
 }
@@ -711,15 +792,15 @@ pub struct ProvisionedScope<'a> {
 /// The provider must serialize lifecycle changes across both callbacks and return
 /// false if caller, registration, namespace identity, or path policy changed.
 /// A production implementation requires an independently authenticated source.
-pub trait ScopeAuthority {
-    fn resolve(&mut self) -> Result<ProvisionedScope<'_>, Error>;
+pub trait ScopeAuthority<Device: BlockDevice = NullDevice> {
+    fn resolve(&mut self) -> Result<ProvisionedScope<'_, Device>, Error>;
     fn revalidate(&mut self, registration: Registration, scope: Scope) -> bool;
 }
 
-impl<const P: usize, const L: usize, const R: usize> Runtime<P, L, R> {
+impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtime<P, L, R, Device> {
     /// Install pins before retain handling, then fail closed on lifecycle races.
     /// Exclusive runtime access prevents requests from observing provisional pins.
-    pub fn provision(&mut self, authority: &mut impl ScopeAuthority) -> Result<Scope, Error> {
+    pub fn provision(&mut self, authority: &mut impl ScopeAuthority<Device>) -> Result<Scope, Error> {
         let policy = authority.resolve()?;
         let registration = policy.registration;
         let scope = policy.scope;

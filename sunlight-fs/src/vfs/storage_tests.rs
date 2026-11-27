@@ -65,6 +65,60 @@ fn mount(vfs: &mut Vfs<Cache>, disk: &Disk) {
 }
 
 #[test]
+fn attached_fat_keeps_renamed_roots_and_descendants() {
+    let (mut vfs, disk) = fixture();
+    let backend = || FatFs::new(Fat32::mount(Cache::new(disk.clone())).unwrap());
+    let id = vfs.publish_prepared_device("/mnt", backend()).unwrap();
+    let caller = crate::Credential { uid: 0, gid: 0 };
+    let outer = vfs.open("/").unwrap();
+    vfs.mkdir("/mnt/TREE", 0, 0, 0o755).unwrap();
+    let file = vfs.create_file_exclusive("/mnt/TREE/DATA", 0, 0, 0o644).unwrap();
+    let (root, cwd) = vfs.pin_root_beneath(outer, outer, "/mnt/tree", caller).unwrap();
+    let before = vfs.stat_beneath(root, cwd, "/DATA", caller).unwrap();
+    assert_eq!(vfs.handle_object_id(file).unwrap(), Some(before.object_id - 1));
+    vfs.rename("/mnt/tree", "/mnt/Renamed Branch").unwrap();
+    vfs.mkdir("/mnt/TREE", 0, 0, 0o755).unwrap();
+    assert_eq!(vfs.stat_beneath(root, cwd, "/../../data", caller).unwrap(), before);
+    assert_eq!(vfs.rename("/mnt/Renamed Branch", "/mnt/TREE/OTHER"), Err(FsError::Unsupported));
+    vfs.write(file, 0, b"retained").unwrap();
+    let mut output = [0; 8];
+    assert_eq!(vfs.read(file, 0, &mut output), Ok(8));
+    assert_eq!(&output, b"retained");
+    for handle in [file, root, cwd] {
+        vfs.close(handle).unwrap();
+    }
+    let mut work = vfs.prepare_device_withdrawal(id).unwrap();
+    work.synchronize().unwrap();
+    vfs.finish_device_withdrawal(&work).unwrap();
+    drop(work);
+    let remount = vfs.publish_prepared_device("/mnt", backend()).unwrap();
+    assert_ne!(remount, id);
+    assert_eq!(vfs.read(file, 0, &mut output), Err(FsError::BadHandle));
+    let after = vfs.stat_beneath(outer, outer, "/mnt/Renamed Branch/DATA", caller).unwrap();
+    assert_ne!(before.mount_generation, after.mount_generation);
+    vfs.close(outer).unwrap();
+    assert_eq!(vfs.open_handle_count(), 0);
+}
+
+#[test]
+fn attached_fat_uncertain_rename_cannot_authorize_io() {
+    let (_, disk) = fixture();
+    let mut fs = FatFs::new(Fat32::mount(disk.clone()).unwrap());
+    fs.stable_objects = true;
+    let handle = fs.open("/HELLO.TXT").unwrap();
+    let identity = fs.handle_object_id(handle).unwrap();
+    disk.fail_sync.set(true);
+    assert_eq!(fs.rename("/HELLO.TXT", "/MOVED.TXT"), Err(FsError::Io));
+    assert_eq!(fs.identities.values().copied().map(Some).collect::<Vec<_>>(), [identity]);
+    assert_eq!(fs.stable_id("/MOVED.TXT"), Err(FsError::Io));
+    assert_eq!(fs.read(handle, 0, &mut [0; 8]), Err(FsError::BadHandle));
+    fs.close(handle).unwrap();
+    assert!(fs.handles.iter().all(Option::is_none));
+    assert!(fs.fat.stat_path(b"/MOVED.TXT").is_some());
+    assert!(fs.fat.stat_path(b"/HELLO.TXT").is_some());
+}
+
+#[test]
 fn mountinfo_samples_one_fat_incarnation_and_requires_its_source() {
     let (mut vfs, disk) = fixture();
     let root = "1 1 0:0 / / rw - tmpfs tmpfs rw\n";

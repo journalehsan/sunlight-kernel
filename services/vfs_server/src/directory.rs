@@ -52,7 +52,7 @@ impl DirectoryNamespace {
 }
 
 impl<D: BlockDevice> DirectoryNamespace<D> {
-    fn mount_owner(filesystem: Vfs<D>) -> Result<Self, FsError> {
+    pub fn mount_owner(filesystem: Vfs<D>) -> Result<Self, FsError> {
         Ok(Self {
             filesystem: Backend::Mounted(
                 Arc::try_new(Mutex::new(filesystem)).map_err(|_| FsError::NoMemory)?,
@@ -185,14 +185,14 @@ impl<D: BlockDevice> DirectoryPair<D> {
     }
 }
 
-impl DirectoryPair {
+impl<Device: BlockDevice> DirectoryPair<Device> {
     pub(crate) fn open_file(
         &self,
         path: &str,
         caller: sunlight_fs::Credential,
         read: bool,
         write: bool,
-    ) -> Result<crate::open::File, FsError> {
+    ) -> Result<crate::open::File<Device>, FsError> {
         match &self.filesystem {
             Backend::Mounted(fs) => {
                 let handle = fs.lock().open_file_beneath(

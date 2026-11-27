@@ -1,0 +1,82 @@
+{
+  "stage": "VFS-C1C",
+  "date": "2026-11-27",
+  "status": "PARTIAL",
+  "production_cutover": "BLOCKED",
+  "production_routing_enabled": false,
+  "disposable_live_registry_binding": "PASS",
+  "already_mounted_transport_transfer": "NOT_RUN",
+  "media_replacement": "NOT_RUN",
+  "usb_handoff": "NOT_RUN",
+  "ordinary_storagectl_attachment": "BLOCKED",
+  "ordinary_fat_descriptor_mmap": "NOT_RUN",
+  "ordinary_coordinated_inventory_procfs_statfs": "NOT_RUN",
+  "stable_fat_object_identity": "BLOCKED",
+  "host": {
+    "registry": {"status": "PASS", "tests": 4, "log": "target/vfs-c1c/registry.log"},
+    "block_fs_vfs_service_libraries": {"status": "PASS", "tests": 280, "log": "target/vfs-c1c/host.log"},
+    "d1a_descriptor_cases": {"status": "PASS", "log": "target/vfs-c1c/host.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1c/registration.log"}
+  },
+  "builds": {
+    "production_kernel_release": {"status": "PASS", "log": "target/vfs-c1c/kernel.log"},
+    "vfs_service_release": {"status": "PASS", "log": "target/vfs-c1c/service-final.log"},
+    "vfs_service_fixture_release": {"status": "PASS", "log": "target/vfs-c1c/service-fixture.log"},
+    "isolated_candidate": {"status": "PASS", "feature": "vfs_c1c_test", "log": "target/vfs-c1c/candidate-final.log"}
+  },
+  "native_registry_backed_n1p": {
+    "status": "PASS",
+    "scope": "New C1C kernel with archived qualified N1P service ELF; authenticates service block requests; no ordinary StorageCtl attachment",
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "physical_id": 1,
+    "source_id": 2,
+    "block_bytes": 512,
+    "exclusive_device_blocks": 131072,
+    "source_start_lba": 2048,
+    "source_blocks": 129024,
+    "source_offset_bytes": 1048576,
+    "source_length_bytes": 66060288,
+    "cycles_per_disk": 4,
+    "closed_image_integrity": "PASS",
+    "free_clusters_before": 127004,
+    "free_clusters_after": 127003,
+    "retained_dma_bytes": 20480,
+    "outstanding_commands": 0,
+    "mapping_users": 0,
+    "populated": {"status": "PASS", "log": "target/vfs-c1c/native-populated.log", "serial": "target/vfs-n1o-qemu-ol3pdd5l/serial.log"},
+    "unknown": {"status": "PASS", "log": "target/vfs-c1c/native-unknown.log", "serial": "target/vfs-n1o-qemu-l4x4dxcc/serial.log"},
+    "additional_vcpu_configurations": "NOT_RUN"
+  },
+  "d2a_archived_matrix_reverification": {
+    "status": "PASS",
+    "vcpus": [1, 2, 4],
+    "log": "target/vfs-c1c/d2a-qualified-reverify.json"
+  },
+  "archived_c1a_image_fresh_replays": {
+    "status": "PASS",
+    "scope": "Unchanged C1A, D1B and D2B verifiers on archived image, not C1C or ordinary StorageCtl",
+    "memory_mib": 2048,
+    "runs": [
+      {"vcpus": 1, "status": "PASS", "serial": "target/vfs-c1a/c1c-regression-up.serial.log"},
+      {"vcpus": 2, "status": "PASS", "serial": "target/vfs-c1a/c1c-replay-smp2.serial.log"},
+      {"vcpus": 4, "status": "PASS", "serial": "target/vfs-c1a/c1c-replay-smp4.serial.log"}
+    ]
+  },
+  "preserved_historical_failures": {
+    "d2a_seek": {"status": "FAIL", "cause_confirmed": false, "serial": "target/vfs-c1a/matrix-smp2-repeat.serial.log"},
+    "d2a_earlier_pread_busy": {"status": "FAIL", "vcpus": [2, 4], "log": "target/vfs-c1c/d2a-reverify.json"},
+    "c1a_two_vcpu_retain": {"status": "FAIL", "cause_confirmed": false, "serial": "target/vfs-c1a/c1b-replay-smp2.serial.log"},
+    "c1a_four_vcpu_withdrawal_order": {"status": "FAIL", "cause_confirmed": false, "serial": "target/vfs-c1a/c1b-replay-smp4.serial.log"}
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "unmatched_baseline_references": 4,
+    "logs": ["target/vfs-c1c/guard.log", "target/vfs-c1c/guard-check.log"],
+    "runtime_fat": "BLOCKED",
+    "procfs": "BLOCKED",
+    "linux_statfs": "PARTIAL",
+    "private_mmap": "PARTIAL"
+  }
+}

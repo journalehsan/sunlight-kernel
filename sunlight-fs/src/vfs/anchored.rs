@@ -227,6 +227,24 @@ impl<D: BlockDevice> Vfs<D> {
         path: &str,
         caller: Credential,
     ) -> Result<(LookupPath, ObjectMetadata), FsError> {
+        let current = self.walk_beneath(root, cwd, path, caller, |fs, parent| {
+            fs.lookup_metadata(parent).map(|metadata| metadata.stat)
+        })?;
+        let result = self.lookup_metadata(current.as_str())?;
+        if path.ends_with('/') && result.stat.file_type != FileType::Directory {
+            return Err(FsError::NotDir);
+        }
+        Ok((current, result))
+    }
+
+    pub(super) fn walk_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+        mut stat_parent: impl FnMut(&mut Self, &str) -> Result<FileStat, FsError>,
+    ) -> Result<LookupPath, FsError> {
         if path.is_empty() || path.len() > LOOKUP_PATH_MAX || path.as_bytes().contains(&0) {
             return Err(FsError::InvalidPath);
         }
@@ -240,11 +258,11 @@ impl<D: BlockDevice> Vfs<D> {
             return Err(FsError::PermissionDenied);
         }
         for component in path.split('/').filter(|part| !part.is_empty()) {
-            let parent = self.lookup_metadata(current.as_str())?;
-            if parent.stat.file_type != FileType::Directory {
+            let parent = stat_parent(self, current.as_str())?;
+            if parent.file_type != FileType::Directory {
                 return Err(FsError::NotDir);
             }
-            if !check_permission(&parent.stat, &caller, PermCheck::Execute) {
+            if !check_permission(&parent, &caller, PermCheck::Execute) {
                 return Err(FsError::PermissionDenied);
             }
             match component {
@@ -259,23 +277,17 @@ impl<D: BlockDevice> Vfs<D> {
                         current.append("/")?;
                     }
                     current.append(name)?;
+                    self.canonicalize_fat(&mut current)?;
                 }
             }
         }
-        let result = self.lookup_metadata(current.as_str())?;
-        if path.ends_with('/') && result.stat.file_type != FileType::Directory {
-            return Err(FsError::NotDir);
-        }
-        Ok((current, result))
+        Ok(current)
     }
 
     pub(super) fn lookup_anchor(&mut self, handle: FileHandle) -> Result<LookupPath, FsError> {
         let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         let mount = self.mounts[mount_idx].as_mut().ok_or(FsError::BadHandle)?;
-        // FatOpen stores a historical spelling. Never treat it as an anchor.
-        let FsNode::Ram(fs) = &mut mount.fs else {
-            return Err(FsError::Unsupported);
-        };
+        let fs = &mut mount.fs;
         if fs.fstat_handle(local_handle)?.file_type != FileType::Directory {
             return Err(FsError::NotDir);
         }
@@ -285,7 +297,7 @@ impl<D: BlockDevice> Vfs<D> {
         let mut bytes = [0; LOOKUP_PATH_MAX];
         let len = fs.handle_path(local_handle, &mut bytes)?;
         let local = core::str::from_utf8(&bytes[..len]).map_err(|_| FsError::InvalidPath)?;
-        if fs.object_id(local)? != Some(id) {
+        if Self::path_id(fs, local)? != id {
             return Err(FsError::BadHandle);
         }
         let mut absolute = LookupPath::new();
@@ -304,27 +316,43 @@ impl<D: BlockDevice> Vfs<D> {
         // A new overmount must not silently replace a retained root or cwd.
         let (visible_mount, visible_local) = self.resolve_mount(absolute.as_str())?;
         if visible_mount != mount_idx
-            || self.mounts[visible_mount]
-                .as_ref()
-                .ok_or(FsError::BadHandle)?
-                .fs
-                .object_id(visible_local)?
-                != Some(id)
+            || Self::path_id(
+                &mut self.mounts[visible_mount].as_mut().ok_or(FsError::BadHandle)?.fs,
+                visible_local,
+            )? != id
         {
             return Err(FsError::BadHandle);
         }
         Ok(absolute)
     }
 
+    fn path_id(fs: &mut FsNode<D>, local: &str) -> Result<u64, FsError> {
+        match fs {
+            FsNode::Ram(fs) => fs.object_id(local)?.ok_or(FsError::Unsupported),
+            FsNode::Fat(fs) if fs.stable_objects => fs.stable_id(local),
+            _ => Err(FsError::Unsupported),
+        }
+    }
+
+    fn canonicalize_fat(&mut self, current: &mut LookupPath) -> Result<(), FsError> {
+        let (index, local) = self.resolve_mount(current.as_str())?;
+        let mount = self.mounts[index].as_mut().ok_or(FsError::NotFound)?;
+        if let FsNode::Fat(fs) = &mut mount.fs {
+            if fs.stable_objects && local != "/" {
+                let mut bytes = [0; 128];
+                let (len, _) = fs.canonical_location(local, &mut bytes)?;
+                current.len -= local.len();
+                current.append(core::str::from_utf8(&bytes[..len]).map_err(|_| FsError::InvalidPath)?)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn lookup_metadata(&mut self, path: &str) -> Result<ObjectMetadata, FsError> {
         let (index, local) = self.resolve_mount(path)?;
         let mount = self.mounts[index].as_mut().ok_or(FsError::NotFound)?;
-        let (id, stat) = match &mut mount.fs {
-            FsNode::Ram(fs) => (fs.object_id(local)?.ok_or(FsError::Unsupported)?, fs.stat(local)?),
-            #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
-            FsNode::Fat(fs) if mount.device_attachment.is_some() && local == "/" => (0, fs.stat(local)?),
-            _ => return Err(FsError::Unsupported),
-        };
+        let id = Self::path_id(&mut mount.fs, local)?;
+        let stat = mount.fs.stat(local)?;
         Ok(ObjectMetadata {
             stat,
             mount_id: index as u64 + 1,

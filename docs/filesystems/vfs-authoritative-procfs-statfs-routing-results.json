@@ -1,0 +1,46 @@
+{
+  "stage": "VFS-C1E6",
+  "status": "PARTIAL",
+  "publication": "BLOCKED",
+  "mount_published": false,
+  "host": {
+    "focused": {"status": "PASS", "tests": 469, "log": "target/vfs-c1e6/focused-retry.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e6/registration.log"},
+    "workspace_lib": {"status": "FAIL", "reason": "sunlight-ui-wayland duplicate panic_impl", "log": "target/vfs-c1e6/workspace.log"},
+    "secret_store": {"status": "FAIL", "reason": "Timed run reached the test but did not complete", "log": "target/vfs-c1e6/secret-store.log"}
+  },
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c1e6/production.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e6/release-vfs.log"},
+    "candidate": {"status": "PASS", "log": "target/vfs-c1e6/candidate-errno.log"},
+    "embedded_service": {"status": "PASS", "log": "target/vfs-c1e6/service-retry.log"}
+  },
+  "native": {
+    "status": "PASS",
+    "vcpus": 1,
+    "memory_mib": 2048,
+    "serial": "target/vfs-n1o-qemu-644nz9cp/serial.log",
+    "log": "target/vfs-c1e6/native-errno.log",
+    "ordinary_mountinfo_open_read_close": "PASS",
+    "ordinary_statfs_missing_path_and_unsupported_capacity": "PASS",
+    "ordinary_fat_positive_capacity": "BLOCKED",
+    "ordinary_namespace_scope_comparison": "NOT_RUN",
+    "ordinary_stale_reply": "NOT_RUN",
+    "service_unavailability": "PASS",
+    "linux_caller_cleanup": {"status": "PASS", "process_reaped": 1, "user_frames": 22299, "page_tables": 50, "swap_blocks": 0, "ipc_cleared": 0},
+    "c1e2_through_c1e5": {"status": "PASS", "reason": "All original harness assertions completed after caller retirement"},
+    "preparation_settlement": {"status": "PASS", "explicit_releases": 5, "exact_service_retirements": 1, "pending": 0, "mapping_users": 0, "retained_dma_bytes": 20480},
+    "backing_image_integrity": {"status": "PASS", "scope": "FAT partition byte identical, read-only fsck passed, KEEP.TXT unchanged", "log": "target/vfs-c1e6/image.log"},
+    "c1e1_standalone_n1p_c1a_c1c_c1d_d1a_d1b_d2a_d2b_native_reruns": "NOT_RUN"
+  },
+  "ownership_guard": {
+    "status": "FAIL",
+    "remaining_references": 71,
+    "unmatched_sites": 4,
+    "procfs_kernel_topology": "FAIL",
+    "linux_statfs_kernel_backend": "FAIL",
+    "private_mmap_kernel_backend": "FAIL",
+    "runtime_fat_construction": "FAIL",
+    "log": "target/vfs-c1e6/guard-growth.log"
+  }
+}
