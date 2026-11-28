@@ -3,6 +3,7 @@
 
 extern crate alloc;
 
+pub mod boot_root;
 pub mod directory;
 pub mod namespace;
 pub mod open;

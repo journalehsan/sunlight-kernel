@@ -1,0 +1,73 @@
+{
+  "milestone": "VFS-C2H",
+  "status": "PARTIAL",
+  "production_routing_changed": false,
+  "candidate_feature": "vfs_c2e_candidate",
+  "legacy_mmap_lookup_removed": false,
+  "removed_descriptor_producers": [],
+  "descriptor_regression": {
+    "c2g_parallel": {
+      "status": "FAIL",
+      "passed": 19,
+      "failed": 1,
+      "test": "exit_cleanup_consumes_stale_descriptor_alias_without_double_release",
+      "log": "target/vfs-c2g/descriptor.log"
+    },
+    "unmodified_rerun": {
+      "status": "PASS",
+      "tests": 20,
+      "log": "target/vfs-c2h/descriptor-before.log"
+    },
+    "controlled_reproduction": {
+      "status": "FAIL",
+      "test": "exit_cleanup_leaves_replacement_description_owned_by_its_table",
+      "condition": "Incarnation validation temporarily disabled to reproduce the occupied-slot check with a deterministically recycled identity",
+      "observed": "Some(FileHandle(0)) instead of None",
+      "log": "target/vfs-c2h/descriptor-reproduction.log"
+    },
+    "classification": "Real defensive cleanup defect exposed by a synthetic stale alias and shared slot reuse",
+    "correction": "Validate description identity and decrement under the same pool lock"
+  },
+  "remaining_producers": [
+    {"producer": "Native OPEN and Helios Linux open/openat via open_resolved_path", "mmap_reachable": true, "owner": "legacy root tmpfs and early or runtime FAT"},
+    {"producer": "HostKeyAdmin write-only staging via sys_secret_create", "mmap_reachable": false, "owner": "legacy protected tmpfs lifecycle", "correction": "close unpublished handle before unlink on descriptor install failure"},
+    {"producer": "HostKeyAdmin published-file reopen via open_resolved_path", "mmap_reachable": true, "owner": "legacy protected tmpfs lifecycle"},
+    {"producer": "Opt-in native_c_guest::launch capture streams", "mmap_reachable": true, "condition": "Linux personality with readable stdin capture"},
+    {"producer": "Native spawn inheritance outside the file-routed cohort", "mmap_reachable": true, "condition": "Inherits an existing readable legacy description"}
+  ],
+  "qualification": {
+    "descriptor_parallel": {"status": "PASS", "tests": 21, "log": "target/vfs-c2h/descriptor.log"},
+    "descriptor_parallel_stress": {"status": "PASS", "runs": 200, "tests_per_run": 21, "log": "target/vfs-c2h/descriptor-fixed-parallel-200.log"},
+    "filesystem_host": {"status": "PASS", "tests": 126, "log": "target/vfs-c2h/filesystem.log"},
+    "service_fat_host": {"status": "PASS", "tests": 95, "log": "target/vfs-c2h/service-fat.log"},
+    "registration_host": {"status": "PASS", "tests": 116, "log": "target/vfs-c2h/registration.log"},
+    "vfs_rpc_host": {"status": "PASS", "tests": 76, "log": "target/vfs-c2h/ipc.log"},
+    "linux_open_flags_host": {"status": "PASS", "tests": 5, "log": "target/vfs-c2h/linux-open-flags.log"},
+    "production_release": {"status": "PASS", "log": "target/vfs-c2h/production.log"},
+    "candidate_debug": {"status": "PASS", "log": "target/vfs-c2h/candidate.log"},
+    "candidate_release": {"status": "PASS", "log": "target/vfs-c2h/candidate-release.log"},
+    "c2c_fixture": {"status": "PASS", "command": "sha256sum -c target/vfs-c2e/c2c-fixture.sha256", "log": "target/vfs-c2h/fixture.log"},
+    "ordinary_boot": {"status": "BLOCKED", "command": "bash tools/test.sh", "log": "target/vfs-c2h/boot.log"},
+    "native_open_and_mmap_guest": "NOT_RUN",
+    "linux_open_openat_and_mmap_guest": "NOT_RUN",
+    "secret_staging_publication_failure_guest": "NOT_RUN",
+    "guest_regressions": {
+      "status": "NOT_RUN",
+      "coverage": ["C1E6A", "C1E6B", "C1E10", "C1E11", "C1E12", "C2B", "C2E", "C2F", "C2F1", "C2F2", "C2G", "C1A"]
+    },
+    "historical_c1e12": "docs/filesystems/vfs-committed-fat-private-mmap-results.json"
+  },
+  "guard": {
+    "inventory": {"status": "PASS", "before": 71, "after": 71, "added": 0, "removed": 0, "relocated": 0},
+    "no_growth": {"status": "FAIL", "before_unmatched": 4, "after_unmatched": 4},
+    "final_removal": {"status": "FAIL", "before": 71, "after": 71},
+    "removed_findings": [],
+    "historical_findings": {
+      "storage::mount": {"commit": "dd00fa775", "disposition": "remains", "blocker": "Legacy StorageCtl FAT mount constructor"},
+      "linux_procfs::mountinfo_snapshot": {"commit": "dd00fa775", "disposition": "remains", "blocker": "Legacy caller topology from KERNEL_VFS"},
+      "sys_linux_statfs": {"commit": "dd00fa775", "disposition": "remains", "blocker": "Legacy FAT capacity from KERNEL_VFS"},
+      "process::mmap::sys_mmap": {"commit": "5b8579f1d", "disposition": "remains", "blocker": "Linux private mappings of readable legacy root and FAT file descriptions"}
+    },
+    "logs": "target/vfs-c2h/guard-{before,after}-{inventory,no-growth,final}.log"
+  }
+}

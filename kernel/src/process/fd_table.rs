@@ -306,11 +306,8 @@ pub struct FileDescriptor {
     pub handle: FileHandle,
     pub rights: CapRights,
     pub flags: u32, // O_RDONLY, O_WRONLY, O_RDWR, O_CLOEXEC
-    /// Current read/write position (VFS-backed fds only).
-    pub offset: usize,
-    /// Index of the shared open file description. Duplication retains this
-    /// index; close-on-exec stays in `flags` on the individual descriptor.
-    description: u32,
+    /// Shared open description identity. Close-on-exec stays in the fd flags.
+    description: DescriptionId,
     /// True on a consumed snapshot only when backend cleanup is required.
     pub release_backend: bool,
 }
@@ -338,25 +335,33 @@ impl FileDescriptor {
         f: impl FnOnce(&crate::linux_procfs::OpenFile) -> R,
     ) -> Option<R> {
         let pool = DESCRIPTIONS.lock();
-        Some(f(pool[self.description as usize].as_ref()?.proc_file.as_ref()?))
+        Some(f(pool[self.description.slot as usize].as_ref()?.proc_file.as_ref()?))
     }
 
     pub fn current_offset(&self) -> usize {
-        DESCRIPTIONS.lock()[self.description as usize]
+        DESCRIPTIONS.lock()[self.description.slot as usize]
             .as_ref()
             .expect("live description")
             .offset
     }
     pub fn set_offset(&mut self, offset: usize) {
-        DESCRIPTIONS.lock()[self.description as usize]
+        DESCRIPTIONS.lock()[self.description.slot as usize]
             .as_mut()
             .expect("live description")
             .offset = offset;
-        self.offset = offset;
     }
 }
 
+// Keep the identity four-byte aligned so the table fits its existing stack
+// budget. The generation cannot wrap and alias a previously retired row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DescriptionId {
+    slot: u32,
+    generation: [u32; 2],
+}
+
 struct OpenDescription {
+    generation: [u32; 2],
     offset: usize,
     status: u32,
     refs: usize,
@@ -364,6 +369,8 @@ struct OpenDescription {
     memfd: Option<Memfd>,
 }
 
+static NEXT_DESCRIPTION: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
 static DESCRIPTIONS: Mutex<Vec<Option<OpenDescription>>> = Mutex::new(Vec::new());
 static MEMFD_USAGE: Mutex<(usize, usize)> = Mutex::new((0, 0));
 static MEMFD_RECLAIM: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
@@ -380,7 +387,7 @@ struct Memfd {
 impl FileDescriptor {
     pub(crate) fn memfd_view(&self) -> u32 {
         assert_eq!(self.handle, FileHandle::MEMFD);
-        self.description
+        self.description.slot
     }
 
     pub(crate) fn size_memfd(
@@ -403,7 +410,7 @@ impl FileDescriptor {
             return Err(abi::EFBIG);
         }
         let mut descriptions = DESCRIPTIONS.lock();
-        let backing = descriptions[self.description as usize]
+        let backing = descriptions[self.description.slot as usize]
             .as_mut().unwrap().memfd.as_mut().unwrap();
         if backing.length == length {
             return Ok(());
@@ -432,7 +439,7 @@ impl FileDescriptor {
         backing.length = length;
         usage.1 += pages;
         #[cfg(all(debug_assertions, feature = "fd_shared_mmap_test"))]
-        crate::serial_println!("[MEMFD] sized object={} pages={} live_pages={}", self.description, pages, usage.1);
+        crate::serial_println!("[MEMFD] sized object={} pages={} live_pages={}", self.description.slot, pages, usage.1);
         Ok(())
     }
 }
@@ -447,11 +454,13 @@ pub(crate) fn with_memfd_frames<R>(
 }
 
 pub(crate) fn retain_memfd_view(id: u32) {
-    retain_description(id);
+    let mut pool = DESCRIPTIONS.lock();
+    pool[id as usize].as_mut().expect("pinned memfd").refs += 1;
 }
 
 pub(crate) fn release_memfd_view(id: u32) {
-    release_description(id);
+    let mut pool = DESCRIPTIONS.lock();
+    release_description_row(&mut pool[id as usize]);
 }
 
 pub(crate) fn memfd_reclaim_pending() -> bool {
@@ -481,13 +490,18 @@ pub(crate) fn drain_memfd_frames(pmm: &mut PhysicalMemoryManager) {
     }
 }
 
-fn new_description(flags: u32) -> u32 {
+fn new_description(flags: u32) -> DescriptionId {
     try_new_description(flags).expect("open description allocation failed")
 }
 
-fn try_new_description(flags: u32) -> Result<u32, ()> {
+fn try_new_description(flags: u32) -> Result<DescriptionId, ()> {
     let mut pool = DESCRIPTIONS.lock();
+    let generation = NEXT_DESCRIPTION
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_add(1))
+        .map_err(|_| ())?;
+    let generation = [generation as u32, (generation >> 32) as u32];
     let item = OpenDescription {
+        generation,
         offset: 0,
         status: flags & !0x0008_0000,
         refs: 1,
@@ -496,35 +510,49 @@ fn try_new_description(flags: u32) -> Result<u32, ()> {
     };
     if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
         *slot = Some(item);
-        return Ok(idx as u32);
+        return Ok(DescriptionId { slot: idx as u32, generation });
     }
     let idx = u32::try_from(pool.len()).map_err(|_| ())?;
     pool.try_reserve(1).map_err(|_| ())?;
     pool.push(Some(item));
-    Ok(idx)
+    Ok(DescriptionId { slot: idx, generation })
 }
 
-fn retain_description(idx: u32) {
-    DESCRIPTIONS.lock()[idx as usize]
-        .as_mut()
-        .expect("live description")
-        .refs += 1;
-}
-
-fn release_description(idx: u32) -> bool {
+fn retain_description(id: DescriptionId) {
     let mut pool = DESCRIPTIONS.lock();
-    let item = pool[idx as usize].as_mut().expect("live description");
-    item.refs -= 1;
-    if item.refs == 0 {
-        if item.memfd.is_some() {
-            MEMFD_RECLAIM.store(true, Ordering::Release);
-        } else {
-            pool[idx as usize] = None;
-        }
-        true
-    } else {
-        false
+    let item = pool[id.slot as usize].as_mut().expect("live description");
+    assert_eq!(item.generation, id.generation);
+    assert_ne!(item.refs, 0);
+    item.refs += 1;
+}
+
+fn release_description(id: DescriptionId) -> bool {
+    try_release_description(id).expect("live description")
+}
+
+fn try_release_description(id: DescriptionId) -> Option<bool> {
+    let mut pool = DESCRIPTIONS.lock();
+    let slot = pool.get_mut(id.slot as usize)?;
+    let row = slot.as_ref()?;
+    if row.generation != id.generation || row.refs == 0 {
+        return None;
     }
+    Some(release_description_row(slot))
+}
+
+fn release_description_row(slot: &mut Option<OpenDescription>) -> bool {
+    let item = slot.as_mut().expect("live description");
+    assert_ne!(item.refs, 0);
+    item.refs -= 1;
+    if item.refs != 0 {
+        return false;
+    }
+    if item.memfd.is_some() {
+        MEMFD_RECLAIM.store(true, Ordering::Release);
+    } else {
+        *slot = None;
+    }
+    true
 }
 
 /// Kernel-side identity of one service-owned description. Duplicates and fork
@@ -613,7 +641,7 @@ impl FdTable {
         );
         let fd = self.open(FileHandle::MEMFD, rights, flags).map_err(|_| abi::EMFILE)?;
         let description = self.get(fd).unwrap().description;
-        DESCRIPTIONS.lock()[description as usize].as_mut().unwrap().memfd =
+        DESCRIPTIONS.lock()[description.slot as usize].as_mut().unwrap().memfd =
             Some(Memfd { length: 0, frames: Vec::new() });
         MEMFD_USAGE.lock().0 += 1;
         Ok(fd)
@@ -632,7 +660,7 @@ impl FdTable {
     pub fn install_shared_page(&mut self, queued: &QueuedSharedPage) -> Result<i32, FdError> {
         let entry = &queued.0;
         self.open_from(0, entry.handle, entry.rights, entry.flags | 0x80000,
-            entry.offset, Some(entry.description))
+            Some(entry.description))
     }
 
     pub fn new() -> Self {
@@ -644,7 +672,6 @@ impl FdTable {
             handle: FileHandle(0),
             rights: CapRights::new(CapRights::READ | CapRights::FSTAT),
             flags: 0, // O_RDONLY
-            offset: 0,
             description: new_description(0),
             release_backend: true,
         });
@@ -653,7 +680,6 @@ impl FdTable {
             handle: FileHandle(1),
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
             flags: 1, // O_WRONLY
-            offset: 0,
             description: new_description(1),
             release_backend: true,
         });
@@ -662,7 +688,6 @@ impl FdTable {
             handle: FileHandle(2),
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
             flags: 1, // O_WRONLY
-            offset: 0,
             description: new_description(1),
             release_backend: true,
         });
@@ -703,7 +728,6 @@ impl FdTable {
                 handle: FileHandle(fd as u32),
                 rights: CapRights::new(access | CapRights::FSTAT),
                 flags,
-                offset: 0,
                 description,
                 release_backend: true,
             });
@@ -719,7 +743,6 @@ impl FdTable {
         assert_eq!(old.handle.0, fd as u32);
         source.fd = fd;
         source.flags &= !0x0008_0000;
-        source.offset = source.current_offset();
         self.entries[fd as usize] = Some(source);
     }
 
@@ -742,7 +765,7 @@ impl FdTable {
         rights: CapRights,
         flags: u32,
     ) -> Result<i32, FdError> {
-        self.open_from(0, handle, rights, flags, 0, None)
+        self.open_from(0, handle, rights, flags, None)
     }
 
     pub(crate) fn open_proc(
@@ -752,7 +775,7 @@ impl FdTable {
     ) -> Result<i32, FdError> {
         let fd = self.open(FileHandle::PROC, CapRights::new(CapRights::READ | CapRights::FSTAT), flags)?;
         let idx = self.get(fd).expect("installed proc descriptor").description;
-        DESCRIPTIONS.lock()[idx as usize].as_mut().expect("live description").proc_file = Some(file);
+        DESCRIPTIONS.lock()[idx.slot as usize].as_mut().expect("live description").proc_file = Some(file);
         Ok(fd)
     }
 
@@ -762,8 +785,7 @@ impl FdTable {
         handle: FileHandle,
         rights: CapRights,
         flags: u32,
-        offset: usize,
-        shared_description: Option<u32>,
+        shared_description: Option<DescriptionId>,
     ) -> Result<i32, FdError> {
         if min_fd < 0 {
             return Err(FdError::InvalidFd);
@@ -796,7 +818,6 @@ impl FdTable {
             handle,
             rights,
             flags,
-            offset,
             description,
             release_backend: true,
         });
@@ -892,19 +913,14 @@ impl FdTable {
                 // description was retired by an earlier entry in this same
                 // table.  The alias no longer owns either the description or
                 // its backend, so consuming it is the complete cleanup action.
-                if !DESCRIPTIONS
-                    .lock()
-                    .get(descriptor.description as usize)
-                    .is_some_and(Option::is_some)
-                {
+                let Some(last) = try_release_description(descriptor.description) else {
                     #[cfg(feature = "vfs_c1e2_test")]
                     crate::serial_println!(
                         "[VFS-C1E6B] stale descriptor alias consumed fd={}",
                         idx
                     );
                     return None;
-                }
-                let last = release_description(descriptor.description);
+                };
                 release_eventfd(descriptor.handle);
                 if descriptor.handle.is_service() {
                     let _ = release_service(descriptor.handle);
@@ -930,7 +946,7 @@ impl FdTable {
         let ordinary = table.open(FileHandle::vfs(101), CapRights::all(), 0).unwrap();
         let ordinary_description = table.get(ordinary).unwrap().description;
         assert!(table.take(ordinary).unwrap().release_backend);
-        assert!(DESCRIPTIONS.lock()[ordinary_description as usize].is_none());
+        assert!(DESCRIPTIONS.lock()[ordinary_description.slot as usize].is_none());
 
         let handle = FileHandle::vfs(102);
         let fd = table.open(handle, CapRights::all(), 0).unwrap();
@@ -946,7 +962,7 @@ impl FdTable {
         assert_eq!(handles[24], Some(handle));
         assert_eq!(handles.iter().flatten().filter(|&&h| h == handle).count(), 1);
         assert!(table.entries.iter().all(Option::is_none));
-        assert!(DESCRIPTIONS.lock()[description as usize].is_none());
+        assert!(DESCRIPTIONS.lock()[description.slot as usize].is_none());
         assert!(table.take_all_handles().iter().all(Option::is_none));
         let final_counts = {
             let pool = DESCRIPTIONS.lock();
@@ -1030,14 +1046,14 @@ impl FdTable {
         let idx = self.get(fd)?.description;
         DESCRIPTIONS
             .lock()
-            .get(idx as usize)?
+            .get(idx.slot as usize)?
             .as_ref()
             .map(|item| item.status)
     }
 
     pub fn set_status_flags(&self, fd: i32, flags: u32) -> Result<(), FdError> {
         let idx = self.get(fd).ok_or(FdError::InvalidFd)?.description;
-        DESCRIPTIONS.lock()[idx as usize]
+        DESCRIPTIONS.lock()[idx.slot as usize]
             .as_mut()
             .expect("live description")
             .status = flags & !0x0008_0000;
@@ -1085,7 +1101,6 @@ impl FdTable {
             handle,
             rights,
             flags,
-            offset: 0,
             description: new_description(flags),
             release_backend: true,
         });
@@ -1134,7 +1149,6 @@ impl FdTable {
         retain_description(source.description);
         release_description(entry.description);
         entry.description = source.description;
-        entry.offset = source.current_offset();
         Ok(())
     }
 
@@ -1168,7 +1182,6 @@ impl FdTable {
             orig.handle,
             orig.rights,
             flags,
-            orig.offset,
             Some(orig.description),
         )
     }
@@ -1244,7 +1257,6 @@ impl FdTable {
             handle: orig.handle,
             rights: orig.rights,
             flags,
-            offset: orig.offset,
             description: orig.description,
             release_backend: true,
         });
@@ -1551,6 +1563,27 @@ mod tests {
         assert_eq!(handles[24], None);
         assert!((0..256).all(|fd| table.get(fd).is_none()));
     }
+
+    #[test]
+    fn exit_cleanup_leaves_replacement_description_owned_by_its_table() {
+        let mut exiting = FdTable::new();
+        let mut stale = *exiting.get(0).unwrap();
+        exiting.take(0).unwrap();
+
+        let mut other = FdTable::new();
+        let replacement = other.open(FileHandle::vfs(101), READ, 0).unwrap();
+        other.get_mut(replacement).unwrap().set_offset(37);
+        // Model another table recycling the retired slot. Select the live
+        // slot explicitly so unrelated parallel tests cannot affect the setup.
+        stale.description.slot = other.get(replacement).unwrap().description.slot;
+        stale.fd = 24;
+        exiting.entries[24] = Some(stale);
+
+        assert_eq!(exiting.take_all_handles()[24], None);
+        assert_eq!(other.get(replacement).unwrap().current_offset(), 37);
+        assert!(other.take(replacement).unwrap().release_backend);
+        other.take_all_handles();
+    }
 }
 
 #[cfg(all(
@@ -1572,7 +1605,7 @@ mod thread_snapshot_tests {
     #[test]
     fn failed_and_uncommitted_snapshots_never_adopt_references() {
         let mut parent = FdTable::new();
-        let description = parent.get(0).unwrap().description as usize;
+        let description = parent.get(0).unwrap().description.slot as usize;
         let refs = || DESCRIPTIONS.lock()[description].as_ref().unwrap().refs;
         let before = refs();
         super::super::thread_admission::host_fault::arm(1);

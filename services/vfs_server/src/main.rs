@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use sunlight_fat::{FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 use sunlight_fs::{
     check_permission, parse_fstab, parse_group, parse_passwd, Credential, FileHandle, FileType,
-    FsError, FstabEntry, PermCheck, RamEntry, RamFs, Vfs,
+    FsError, FstabEntry, PermCheck, RamEntry, Vfs,
 };
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, nameserver_lookup_timeout,
@@ -313,9 +313,8 @@ pub extern "C" fn _start() -> ! {
     ));
     assert!(state.retention.active().is_none());
 
-    // Pre-seed /etc/resolv.conf so it is visible via ls/stat/readdir from early boot.
-    // Content is a compatibility view; it will be refreshed from `resolved` on OPEN.
-    let _ = ensure_resolv_conf(&mut state);
+    // The boot inventory supplies resolv.conf until a compatibility request
+    // refreshes it. The resolver starts after init receives its root binding.
 
     // Phase 3.0 self-tests (RamFs)
     run_phase30_tests(&mut state, ep);
@@ -324,7 +323,7 @@ pub extern "C" fn _start() -> ! {
     run_phase35_tests(&mut state);
 
     // Phase 3.7 self-tests (Unix permissions)
-    run_phase37_tests(&mut state);
+    run_phase37_tests(&mut state, seed);
 
     // Bite 4: Shared memory grant self-test (exercises shm_alloc + large VFS read via DATA_SHARED + map/free)
     run_shm_tests(&mut state);
@@ -420,8 +419,10 @@ fn native_mutation_fixture() {
         sunlight_ipc::process_yield();
     }
     let fd = open(file).unwrap();
-    mkdir(b"/tmp/c1e9-native", 0o700).unwrap();
-    stat(b"/tmp/c1e9-native").unwrap();
+    let directory = b"/tmp/c1e9-native";
+    assert!(matches!(stat(directory), Err(sunlight_libc::sys::Errno::NoEntry)));
+    mkdir(directory, 0o700).unwrap();
+    assert_eq!(stat(directory).unwrap().file_type, sunlight_libc::FT_DIR);
     chdir(b"/tmp/c1e9-native").unwrap();
     mkdir(b"child", 0o700).unwrap();
     assert!(rename_no_replace(file, b"child").is_err());
@@ -876,11 +877,8 @@ fn drain_files(state: &mut State) {
 // ---------------------------------------------------------------------------
 
 fn mount_from_fstab(vfs: &mut Vfs<StorageDevice>, boot: &mut Option<BootFs>, entries_seed: &'static [RamEntry]) -> Option<&'static str> {
-    let mut seed = Vfs::new();
-    let _ = seed.mount_ramfs("/", RamFs::new(entries_seed));
-
     let mut fstab_buf = [0u8; FSTAB_MAX_BYTES];
-    let fstab_len = read_seed_file(&mut seed, "/etc/fstab", &mut fstab_buf);
+    let fstab_len = sunlight_vfs_server::boot_root::read_seed_file(entries_seed, "/etc/fstab", &mut fstab_buf);
     if fstab_len > sunlight_fs::fstab::MAX_FSTAB_BYTES {
         debug_log("[FSTAB] oversized configuration rejected");
         return None;
@@ -919,10 +917,13 @@ fn mount_fstab_entry(
     match entry.fs_type {
         "ramfs" | "tmpfs" => {
             if entry.mountpoint == "/" {
-                #[cfg(feature = "vfs-c1e2-test")]
-                vfs.mount_tmpfs("/", sunlight_fs::Tmpfs::new(seed)).expect("storage fixture root");
-                #[cfg(not(feature = "vfs-c1e2-test"))]
-                let _ = vfs.mount_ramfs("/", RamFs::new(seed));
+                use sunlight_vfs_server::boot_root::BootRoot;
+                let root = if cfg!(feature = "vfs-c1e2-test") {
+                    BootRoot::Writable
+                } else {
+                    BootRoot::Compatibility
+                };
+                root.mount(vfs, seed).expect("service boot root mount");
             }
             None
         }
@@ -935,16 +936,6 @@ fn mount_fstab_entry(
         }
         _ => None,
     }
-}
-
-fn read_seed_file(vfs: &mut Vfs, path: &str, out: &mut [u8]) -> usize {
-    let handle = match vfs.open(path) {
-        Ok(handle) => handle,
-        Err(_) => return 0,
-    };
-    let read = vfs.read(handle, 0, out).unwrap_or(0);
-    let _ = vfs.close(handle);
-    read
 }
 
 // ---------------------------------------------------------------------------
@@ -1976,24 +1967,6 @@ fn run_phase30_tests(state: &mut State, ep: sunlight_ipc::EndpointId) {
         return;
     }
 
-    // Exercise the native syscalls as well as IPC: clients use ENOENT from
-    // stat to decide whether to create their first-run RAMFS directories.
-    let probe = b"/tmp/.native-stat-mkdir-test";
-    if !matches!(
-        sunlight_libc::stat(probe),
-        Err(sunlight_libc::sys::Errno::NoEntry)
-    ) {
-        debug_log("[VFS]  Native missing stat errno FAILED");
-        return;
-    }
-    if sunlight_libc::mkdir(probe, 0o700).is_err()
-        || !sunlight_libc::stat(probe).is_ok_and(|s| s.file_type == sunlight_libc::FT_DIR)
-    {
-        debug_log("[VFS]  Native stat/mkdir RAMFS FAILED");
-        return;
-    }
-    debug_log("[VFS]  Native stat/mkdir RAMFS OK");
-
     let stat = handle_request(state, path_msg(VfsMsg::STAT, "/etc/sunlight/session.toml"));
     if stat.label == VfsMsg::REPLY
         && stat.words[1] > 0
@@ -2077,12 +2050,15 @@ fn run_phase35_tests(state: &mut State) {
 // Phase 3.7 self-tests (Unix permissions gate)
 // ---------------------------------------------------------------------------
 
-fn run_phase37_tests(state: &mut State) {
+fn run_phase37_tests(state: &mut State, seed: &[RamEntry]) {
     debug_log("[VFS]  Permission model: Unix uid/gid/mode");
 
-    // Read and parse /etc/passwd to count users
+    use sunlight_vfs_server::boot_root::read_seed_file;
+
+    // Use the boot seed for this permission probe. Compatibility account
+    // reads can enter the kernel account view and require a native descriptor.
     let mut passwd_buf = [0u8; 256];
-    let passwd_len = read_file_bytes(state, "/etc/passwd", &mut passwd_buf);
+    let passwd_len = read_seed_file(seed, "/etc/passwd", &mut passwd_buf);
     let (passwd_entries, passwd_count) = parse_passwd(&passwd_buf[..passwd_len]);
     if passwd_count == 2 {
         debug_log("[VFS]  /etc/passwd: 2 users loaded");
@@ -2092,7 +2068,7 @@ fn run_phase37_tests(state: &mut State) {
 
     // Read and parse /etc/group to count groups
     let mut group_buf = [0u8; 256];
-    let group_len = read_file_bytes(state, "/etc/group", &mut group_buf);
+    let group_len = read_seed_file(seed, "/etc/group", &mut group_buf);
     let (_, group_count) = parse_group(&group_buf[..group_len]);
     if group_count == 7 {
         debug_log("[VFS]  /etc/group: 7 groups loaded");
@@ -2203,40 +2179,6 @@ fn run_shm_tests(state: &mut State) {
     let _ = handle_request(state, IpcMsg::with_label(VfsMsg::CLOSE).word(0, h.0 as u64));
 
     debug_log("[SHM]  Shared memory grant: PASSED");
-}
-
-/// Read a file via internal handle_request calls into a caller-provided buffer.
-/// Returns the number of bytes written.
-fn read_file_bytes(state: &mut State, path: &str, out: &mut [u8]) -> usize {
-    let open_reply = handle_request(state, path_msg(VfsMsg::OPEN, path));
-    if open_reply.label != VfsMsg::REPLY || open_reply.words[0] != STATUS_OK {
-        return 0;
-    }
-    let handle = FileHandle(open_reply.words[1] as u32);
-    let mut total = 0usize;
-
-    loop {
-        if total >= out.len() {
-            break;
-        }
-        let r = handle_request(state, read_msg(handle, total, READ_REPLY_BYTES));
-        if r.label != VfsMsg::REPLY {
-            break;
-        }
-        let n = r.words[1] as usize;
-        if n == 0 {
-            break;
-        }
-        let to_copy = n.min(out.len() - total);
-        unpack_data(&r, &mut out[total..total + to_copy]);
-        total += to_copy;
-    }
-
-    let _ = handle_request(
-        state,
-        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle.0 as u64),
-    );
-    total
 }
 
 // ---------------------------------------------------------------------------

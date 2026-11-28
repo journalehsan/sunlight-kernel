@@ -362,3 +362,78 @@ fn copied_downloads_mutations_require_a_live_directory_description() {
     )).errno, 9);
     assert_eq!(namespace.shared().lock().open_handle_count(), baseline);
 }
+
+#[test]
+fn boot_root_seed_precedes_registration_and_writable_service_publication() {
+    use crate::boot_root::{read_seed_file, BootRoot};
+    use sunlight_fs::{Vfs, INITRAMFS};
+
+    let mut vfs = Vfs::new();
+    BootRoot::Writable.mount(&mut vfs, INITRAMFS).unwrap();
+    let mut bytes = [0; 256];
+    let count = read_seed_file(INITRAMFS, "/etc/resolv.conf", &mut bytes);
+    assert!(core::str::from_utf8(&bytes[..count])
+        .unwrap()
+        .contains("nameserver 208.67.222.222"));
+    let count = read_seed_file(INITRAMFS, "/etc/passwd", &mut bytes);
+    assert_eq!(sunlight_fs::parse_passwd(&bytes[..count]).1, 2);
+    let count = read_seed_file(INITRAMFS, "/etc/group", &mut bytes);
+    assert_eq!(sunlight_fs::parse_group(&bytes[..count]).1, 7);
+    let count = read_seed_file(INITRAMFS, "/etc/fstab", &mut bytes);
+    assert!(count > 0);
+    assert_eq!(vfs.open_handle_count(), 0);
+
+    let namespace = DirectoryNamespace::mounted(vfs).unwrap();
+    let shared = namespace.shared();
+    let r = registration();
+    let s = scope();
+    let mut runtime = Runtime::<2, 2, 2>::new();
+    assert_eq!(
+        runtime.install(r, s, &namespace, "/", "/tmp"),
+        Err(Error::Identity)
+    );
+    runtime.bind(r).unwrap();
+    runtime.install(r, s, &namespace, "/", "/tmp").unwrap();
+    let receipt = acquire(&mut runtime, r, s, 1);
+    let mut channel = Channel {
+        current: None,
+        replies: 0,
+    };
+    let reply = drive(
+        &mut runtime,
+        &mut channel,
+        request(
+            api::OPEN,
+            0,
+            api::ACCESS_WRITE | api::OPEN_CREATE,
+            0o600,
+            b"c2i-test",
+        ),
+    );
+    assert_eq!(reply.errno, 0);
+    runtime.write_file(r, s.caller, reply.result0, b"root").unwrap();
+
+    let stat = shared.lock().stat("/tmp/c2i-test").unwrap();
+    assert_eq!((stat.uid, stat.gid, stat.size), (42, 43, 4));
+    let read_only = runtime
+        .open_file(r, receipt, "c2i-test", OWNER, Access::Read, || true)
+        .unwrap();
+    let mut contents = [0; 3];
+    assert_eq!(
+        runtime.read_at_file(r, s.caller, read_only, 1, &mut contents).unwrap(),
+        3
+    );
+    assert_eq!(&contents, b"oot");
+
+    runtime.retire_registration(r).unwrap();
+    assert!(runtime.read_file(r, s.caller, read_only, &mut contents).is_err());
+    // Withdrawal closes file descriptions. The delivered namespace lease
+    // owns its two directory pins until the corresponding release arrives.
+    assert_eq!(shared.lock().open_handle_count(), 2);
+    runtime
+        .request(r, &wire::Frame::Release(receipt).encode().unwrap())
+        .unwrap();
+    assert_eq!(shared.lock().open_handle_count(), 0);
+    shared.lock().unlink("/tmp/c2i-test").unwrap();
+    assert!(INITRAMFS.iter().all(|entry| entry.path != "/tmp/c2i-test"));
+}

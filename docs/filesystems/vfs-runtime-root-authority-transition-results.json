@@ -1,0 +1,74 @@
+{
+  "milestone": "VFS-C2I",
+  "status": "PARTIAL",
+  "ordinary_activation": "BLOCKED",
+  "production_routing_changed": false,
+  "implementation": {
+    "service_root_constructor": "services/vfs_server/src/boot_root.rs",
+    "writable_service_root_selection": "existing isolated vfs-c1e2-test path",
+    "bootstrap_kernel_tmpfs_writes_removed": ["VFS native mkdir of /tmp/.native-stat-mkdir-test"],
+    "bootstrap_native_open_call_paths_removed": ["startup permission fixture compatibility reads of /etc/passwd and /etc/group"],
+    "bootstrap_resolver_lookup_removed": true,
+    "temporary_boot_fstab_mount_removed": true,
+    "migrated_ordinary_consumers": [],
+    "retired_ordinary_descriptor_producers": [],
+    "next_dependency": "Select exclusive owners for early and runtime FAT mounts at cold boot and publish those crossings in the retained service namespace before ordinary dispatch."
+  },
+  "activation_dependencies": [
+    "Early /state, /mnt and /boot FAT and unreserved StorageCtl attachments",
+    "Shared-cwd worker admission with the actual caller's identity and credentials",
+    "Generic descriptor, pathname, executable and stdio inheritance routing",
+    "Protected SSH staging, publication, cleanup and reopen under a single owner",
+    "Trusted KV and synthesized account policy",
+    "Ordinary ELF artifacts above the service snapshot cap"
+  ],
+  "executable_snapshot": {
+    "limit_bytes": 1048576,
+    "oversized_local_embedded_elf_bytes": {
+      "sunlight-tls": 1217328,
+      "dict": 14058032,
+      "yazi": 26942728,
+      "yazi-baseline": 24379624,
+      "sunlight-chronos": 1053304,
+      "silicon-echoes": 1221240,
+      "sunlight-files": 2342016,
+      "voice-recorder": 1073784,
+      "melody-mina": 1241720,
+      "rappid-rabbit": 5502192,
+      "sunlight-dialogd": 1889096,
+      "sunlight-vortex-shell": 5813072,
+      "control-panel": 2397008,
+      "sunlight-docserv": 5043424,
+      "sunlight-docview": [1454232, 1127312]
+    },
+    "measurement_log": "target/vfs-c2i/oversized-embedded.log"
+  },
+  "guard": {
+    "inventory": {"status": "PASS", "before": 71, "after": 71, "added": 0, "removed": 0, "relocated": 0},
+    "no_growth": {"status": "FAIL", "before_unmatched": 4, "after_unmatched": 4},
+    "final_removal": {"status": "FAIL", "before": 71, "after": 71},
+    "historical_owners_still_reachable": {
+      "storage::mount": "Unreserved runtime FAT creation",
+      "linux_procfs::mountinfo_snapshot": "Legacy graph for unrouted Linux callers",
+      "sys_linux_statfs": "Legacy capacity for unrouted Linux callers",
+      "process::mmap::sys_mmap": "Readable legacy root and FAT descriptions"
+    },
+    "logs": "target/vfs-c2i/guard-{before,after}-{inventory,no-growth,check}.log"
+  },
+  "qualification": {
+    "descriptor_parallel": {"status": "PASS", "tests": 21, "threads": 8, "log": "target/vfs-c2i/descriptor.log"},
+    "registration_host": {"status": "PASS", "tests": 116, "log": "target/vfs-c2i/registration.log"},
+    "filesystem_ipc_linux_host": {"status": "PASS", "tests": {"compat_linux": 30, "filesystem": 126, "ipc": 175}, "log": "target/vfs-c2i/filesystem-ipc-linux.log"},
+    "guarded_ordinary_boot": {"status": "BLOCKED", "log": "target/vfs-c2i/boot.log"},
+    "ordinary_transition_guest": {
+      "status": "NOT_RUN",
+      "areas": ["admission", "native pathname syscalls", "Linux pathname syscalls", "directory descriptors and relative paths", "private mmap", "authorized executable acquisition", "protected secret lifecycle", "service loss", "exit and exec accounting"]
+    },
+    "c2c_gpt_fixture": {"status": "PASS", "command": "sha256sum -c target/vfs-c2e/c2c-fixture.sha256", "log": "target/vfs-c2i/fixture.log"}
+  },
+  "historical_results": {
+    "c2h_and_c2g_descriptor_failure": "docs/filesystems/vfs-legacy-descriptor-mmap-retirement-results.json",
+    "c2g_snapshot": "docs/filesystems/vfs-service-backed-executable-sources-results.json",
+    "c1e12_native_and_historical_failures": "docs/filesystems/vfs-committed-fat-private-mmap-results.json"
+  }
+}

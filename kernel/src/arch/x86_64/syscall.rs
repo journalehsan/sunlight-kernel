@@ -6497,6 +6497,8 @@ fn sys_secret_create(frame: &mut SyscallFrame) -> u64 {
         Err(_) => {
             drop(sched);
             if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                // No descriptor took ownership of the staging handle.
+                let _ = vfs.close(handle);
                 let _ = vfs.unlink(path);
             }
             u64::MAX

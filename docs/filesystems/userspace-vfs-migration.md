@@ -3568,6 +3568,36 @@ interpreter and library opens. See the
 [C2G report](vfs-service-backed-executable-sources.md) and
 [results](vfs-service-backed-executable-sources-results.json).
 
+VFS-C2H is **PARTIAL**. Descriptor exit cleanup now detects recycled
+open-description slots before dropping a reference. Failed SSH staging
+descriptor publication closes its unpublished handle before unlinking.
+No legacy producer was removed. Ordinary boot is still **BLOCKED** at 71
+references and four historical findings. Legacy root tmpfs and persistent
+FAT still supply readable descriptions through native OPEN and Linux
+open/openat. Before removing the historical mmap branch, publish the
+service root and remaining mount authorities with all ordinary producers
+and consumers, including protected staging and reopen and opt-in native C
+captures. Settle inherited descriptions, directory/cwd pins and pending
+operations at that boundary. Keep direct bootstrap resources on their
+existing provenance path. See the
+[C2H report](vfs-legacy-descriptor-mmap-retirement.md) and
+[results](vfs-legacy-descriptor-mmap-retirement-results.json).
+
+VFS-C2I is **PARTIAL**. The VFS startup path reads the immutable resolver
+and permission inputs without a native root write, native account-file
+descriptions or a lookup of a service that init starts after readiness.
+The isolated writable root uses the existing mount and retention owner.
+Production routing is unchanged. Before activating ordinary service root
+ownership, select and publish exclusive owners for the early persistent
+FAT mounts and remaining StorageCtl attachments. Use the resulting
+retained mount graph for shared-cwd workers, ordinary pathname and
+executable operations, protected file creation and inherited descriptions.
+Preserve the existing executable snapshot bound and account for oversize
+ordinary artifacts before switching executable sources. Guarded ordinary
+boot remains **BLOCKED** at 71 references and four historical findings.
+See the [C2I report](vfs-runtime-root-authority-transition.md) and
+[results](vfs-runtime-root-authority-transition-results.json).
+
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact
    launch from a shared namespace owner. Complete explicit service
