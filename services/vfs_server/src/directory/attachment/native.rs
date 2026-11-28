@@ -145,7 +145,8 @@ pub fn storage_caller(log: fn(&str)) -> ! {
         }
     }
     assert_eq!(prepare(source, b"/mnt/missing\0"), (-5i64) as u64);
-    assert_eq!(prepare(source + 1, b"/mnt/volume\0"), (-5i64) as u64);
+    let unknown_source_errno = if cfg!(feature = "vfs-c1e2-test") { -2i64 } else { -5i64 };
+    assert_eq!(prepare(u64::MAX, b"/mnt/volume\0"), unknown_source_errno as u64);
     if cfg!(feature = "vfs-c1e2-test") {
         assert_eq!(prepare(source, b"/mnt/bad\0"), (-5i64) as u64);
         let mut previous = 0;
@@ -224,9 +225,18 @@ fn committed_fixture(source: u64, log: fn(&str)) {
     use sunlight_libc::{chdir, close, dup, lseek, open, read, stat};
     let mut previous_mount = None;
     for _cycle in 0..2 {
-        let cookie = storage_call(api::MOUNT_FAT32, source, b"/mnt/volume\0".as_ptr() as u64);
-        assert!(cookie != 0 && cookie <= i64::MAX as u64);
-        assert_eq!(storage_call(api::PUBLISH_PREPARATION, cookie, 0), 0);
+        let mut cookie = 0;
+        api::mount_fat32(source, b"/mnt/volume\0".as_ptr() as u64, |op, value, pointer| {
+            let result = storage_call(op, value, pointer) as i64;
+            if result < 0 {
+                return Err(result);
+            }
+            if op == api::MOUNT_FAT32 {
+                cookie = result as u64;
+            }
+            Ok(result as u64)
+        }).unwrap();
+        assert_ne!(cookie, 0);
         assert_eq!(storage_call(api::PUBLISH_PREPARATION, cookie, 0), (-2i64) as u64);
         assert_eq!(storage_call(api::ABORT_PREPARATION, cookie, 0), (-2i64) as u64);
         let mut record = [0; api::MOUNT_RECORD_SIZE];

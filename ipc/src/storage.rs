@@ -22,6 +22,25 @@ pub const MOUNT_RECORD_SIZE: usize = 160;
 pub const TARGET_MAX: usize = 128;
 pub const SERVICE_MOUNT_BIT: u64 = 1 << 63;
 
+/// Complete a mount on either the legacy or transactional StorageCtl ABI.
+pub fn mount_fat32(
+    source: u64,
+    target: u64,
+    mut control: impl FnMut(u64, u64, u64) -> Result<u64, i64>,
+) -> Result<(), i64> {
+    let token = control(MOUNT_FAT32, source, target)?;
+    if token == 0 {
+        return Ok(());
+    }
+    let result = match control(PUBLISH_PREPARATION, token, 0) {
+        Ok(0) => return Ok(()),
+        Ok(_) => -5,
+        Err(errno) => errno,
+    };
+    let _ = control(ABORT_PREPARATION, token, 0);
+    Err(result)
+}
+
 pub fn service_mount_id(epoch: u64, mount: u64) -> Option<u64> {
     (epoch != 0 && epoch < (1 << 31) && mount != 0 && mount <= u32::MAX as u64)
         .then_some(SERVICE_MOUNT_BIT | (epoch << 32) | mount)
@@ -60,6 +79,38 @@ pub fn authorized(uid: u32, capabilities: Option<u64>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mount_completes_publication_or_aborts_exact_preparation() {
+        for (prepare, publish, expected, operations) in [
+            (Ok(0), Ok(0), Ok(()), &[MOUNT_FAT32][..]),
+            (Err(-16), Ok(0), Err(-16), &[MOUNT_FAT32][..]),
+            (Ok(23), Ok(0), Ok(()), &[MOUNT_FAT32, PUBLISH_PREPARATION][..]),
+            (Ok(23), Err(-5), Err(-5), &[MOUNT_FAT32, PUBLISH_PREPARATION, ABORT_PREPARATION][..]),
+        ] {
+            let mut remaining = operations.iter();
+            let result = mount_fat32(17, 19, |op, value, pointer| {
+                assert_eq!(remaining.next(), Some(&op));
+                match op {
+                    MOUNT_FAT32 => {
+                        assert_eq!((value, pointer), (17, 19));
+                        prepare
+                    }
+                    PUBLISH_PREPARATION => {
+                        assert_eq!((value, pointer), (23, 0));
+                        publish
+                    }
+                    ABORT_PREPARATION => {
+                        assert_eq!((value, pointer), (23, 0));
+                        Err(-2)
+                    }
+                    _ => unreachable!(),
+                }
+            });
+            assert_eq!(result, expected);
+            assert_eq!(remaining.next(), None);
+        }
+    }
+
     #[test]
     fn service_ids_bind_epoch_and_mount_incarnation() {
         let old = service_mount_id(7, 2).unwrap();

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the isolated probe using a freshly created disk and a separate boot ISO."""
 import argparse
+import hashlib
 import pathlib
 import re
 import shutil
@@ -31,11 +32,13 @@ def main():
     parser.add_argument("--c1e10", action="store_true", help="verify committed StorageCtl FAT attachments")
     parser.add_argument("--c1e11", action="store_true", help="verify persistent ordinary FAT writes")
     parser.add_argument("--c1e12", action="store_true", help="verify ordinary private mappings on committed FAT")
+    parser.add_argument("--c2b", action="store_true", help="require early reservation of a separate PCI disk")
     parser.add_argument("--fsinfo", choices=("populated", "unknown"), default="unknown",
                         help="initial FSInfo hints for the native FAT32 probe")
     parser.add_argument("--check-n1o-artifacts", type=pathlib.Path,
                         help="verify a previously closed native FAT32 probe directory")
     args = parser.parse_args()
+    args.c1e12 = args.c1e12 or args.c2b
     args.c1e11 = args.c1e11 or args.c1e12
     args.c1e10 = args.c1e10 or args.c1e11
     args.c1e9 = args.c1e9 or args.c1e10
@@ -118,12 +121,23 @@ def main():
             [str(target / "limine/bin/limine"), "bios-install", str(iso)],
             stdout=log, stderr=subprocess.STDOUT, check=True,
         )
+    device = "virtio-blk-pci,drive=n1h,disable-modern=on"
+    boot_args = []
+    if args.c2b:
+        boot_disk = work / "boot.raw"
+        subprocess.run(["mkfs.fat", "-F", "32", "-C", str(boot_disk), "65536"], check=True)
+        with boot_disk.open("rb") as image:
+            boot_digest = hashlib.file_digest(image, "sha256").digest()
+        boot_args = ["-drive", f"file={boot_disk},format=raw,if=none,id=bootfat,readonly=on",
+                     "-device", "virtio-blk-pci,drive=bootfat,disable-modern=on,addr=0x0a"]
+        device += ",addr=0x0b"
     with (work / "qemu.log").open("wb") as log, subprocess.Popen(
         ["qemu-system-x86_64", "-m", "2048M" if args.c1c else "1024M", "-smp", "1", "-cpu", "max",
          "-display", "none", "-monitor", "none", "-no-reboot", "-nic", "none",
          "-boot", "d", "-cdrom", str(iso), "-serial", f"file:{serial}",
+         *boot_args,
          "-drive", f"file={disk},format=raw,if=none,id=n1h,cache=writeback",
-         "-device", "virtio-blk-pci,drive=n1h,disable-modern=on"],
+         "-device", device],
         stdout=log, stderr=subprocess.STDOUT,
     ) as guest:
         try:
@@ -156,6 +170,19 @@ def main():
                     guest.wait()
     if args.c1e1 or args.c1e2:
         output = serial.read_bytes()
+        if args.c2b:
+            markers = (
+                b"[VFS-C2B] reserved pci=00:0b.0 boot=00:0a.0 parent=1 source=2 aliases=1",
+                b"[FAT]  FAT32 detected",
+                b"[VFS] FAT volume mounted at /boot",
+                b"[VFS-C2B] legacy mount fenced rows=2 boot_parent=3",
+                b"[VFS-N1J] authenticated Registration",
+            )
+            positions = [output.index(marker) for marker in markers]
+            assert positions == sorted(set(positions))
+            assert output.count(b"[FAT]  FAT32 detected") == 1
+            with boot_disk.open("rb") as image:
+                assert hashlib.file_digest(image, "sha256").digest() == boot_digest
         if args.c1e9:
             for marker in (
                 b"[VFS-C1E9] native namespace mutations passed",

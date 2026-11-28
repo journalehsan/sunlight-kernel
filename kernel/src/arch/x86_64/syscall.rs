@@ -5900,7 +5900,18 @@ fn sys_storage_ctl(frame: &mut SyscallFrame) -> u64 {
         None
     };
     #[cfg(feature = "vfs_c1e1_test")]
-    if let Some(path) = target.as_deref() {
+    if let Some(path) = target.as_deref().filter(|_| {
+        #[cfg(feature = "vfs_c1e2_test")]
+        {
+            let device = crate::storage::DEVICES.lock().get(frame.rsi);
+            device.is_some_and(|info| {
+                let parent = if info.parent == 0 { info.id } else { info.parent };
+                crate::vfs_n1j_test::reserves_storage_parent(parent)
+            })
+        }
+        #[cfg(not(feature = "vfs_c1e2_test"))]
+        true
+    }) {
         let source = frame.rsi;
         return service_file(
             frame,

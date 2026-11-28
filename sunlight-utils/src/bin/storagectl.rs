@@ -1,4 +1,4 @@
-//! Privileged interface to the authoritative kernel mount table.
+//! Privileged interface to the authoritative StorageCtl mount table.
 #![no_std]
 #![no_main]
 
@@ -43,7 +43,7 @@ fn mount(id: u64, path: &[u8]) -> Result<(), i64> {
         return Err(-22);
     }
     target[..path.len()].copy_from_slice(path);
-    control(api::MOUNT_FAT32, id, target.as_ptr() as u64).map(|_| ())
+    api::mount_fat32(id, target.as_ptr() as u64, control)
 }
 
 fn diagnostic(args: fmt::Arguments<'_>) {

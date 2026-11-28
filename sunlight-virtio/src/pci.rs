@@ -268,6 +268,15 @@ pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
 ///
 /// SAFETY: Caller must be running at ring 0 (PCI port I/O requires privilege).
 pub unsafe fn find_virtio_blk() -> Option<(u8, u8, u8, u16)> {
+    find_virtio_blk_where(|_| true)
+}
+
+/// Select a supported block function from the same PCI scan as the boot disk.
+///
+/// SAFETY: Caller must be running at ring 0.
+pub unsafe fn find_virtio_blk_where(
+    mut select: impl FnMut((u8, u8, u8, u16)) -> bool,
+) -> Option<(u8, u8, u8, u16)> {
     for bus in 0u8..8 {
         for slot in 0u8..32 {
             let ids = pci_read32(bus, slot, 0, 0x00);
@@ -283,7 +292,10 @@ pub unsafe fn find_virtio_blk() -> Option<(u8, u8, u8, u16)> {
                 // Bit 0 = 1 means I/O BAR (legacy virtio uses I/O space)
                 if bar0 & 1 == 1 {
                     let io_base = (bar0 & !0x3) as u16;
-                    return Some((bus, slot, 0, io_base));
+                    let info = (bus, slot, 0, io_base);
+                    if select(info) {
+                        return Some(info);
+                    }
                 }
             }
         }

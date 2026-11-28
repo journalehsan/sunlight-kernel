@@ -1,0 +1,59 @@
+{
+  "stage": "VFS-C2B",
+  "status": "PARTIAL",
+  "early_reservation_and_authenticated_handoff": "PASS",
+  "host": {
+    "storage_ctl": {"status": "PASS", "tests": 4, "log": "target/vfs-c2b/storage-tests.log"},
+    "block": {"status": "PASS", "tests": 70, "log": "target/vfs-c2b/block-tests.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c2b/registration.log"}
+  },
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c2b/production.log"},
+    "release_vfs_and_storagectl": {"status": "PASS", "log": "target/vfs-c2b/release.log"},
+    "candidate_service": {"status": "PASS", "log": "target/vfs-c2b/service.log"},
+    "candidate_kernel": {"status": "PASS", "log": "target/vfs-c2b/candidate-verified.log"}
+  },
+  "native": {
+    "vcpu": 1,
+    "memory_mib": 2048,
+    "pci": {"boot": "00:0a.0", "reserved": "00:0b.0"},
+    "registry": {"boot": 3, "parent": 1, "source": 2, "start": 2048, "sectors": 129024},
+    "populated": {"status": "PASS", "log": "target/vfs-c2b/native-populated-verified.log", "serial": "target/vfs-n1o-qemu-0z12gyaj/serial.log"},
+    "unknown": {"status": "PASS", "log": "target/vfs-c2b/native-unknown-verified.log", "serial": "target/vfs-n1o-qemu-825hwg4p/serial.log"},
+    "initial_attempt": {"status": "FAIL", "serial": "target/vfs-n1o-qemu-eq9jkelm/serial.log", "reason": "The unknown-source fixture used source + 1, which is now the real boot disk registry ID."},
+    "boot_mount_and_closed_image_hash": "PASS",
+    "legacy_mount_refuses_parent_and_child_before_registration": "PASS",
+    "publication_receipts_persistent_mutation_mmap_metadata_withdrawal": "PASS",
+    "service_loss_linux_mutation_and_metadata": "PASS",
+    "closed_image_fsck_payload_and_fsinfo": "PASS",
+    "standalone_storagectl_default_fstab": "PASS",
+    "standalone_storagectl_fstab_reserved_partition": {"status": "BLOCKED", "execution": "NOT_RUN", "prerequisite": "Seed a matching GPT PARTUUID runtime entry and empty service target."},
+    "live_committed_fat_descriptor_exec": "NOT_RUN",
+    "accounting_per_guest": {
+      "lease_settlements": 7,
+      "pending_commands": 0,
+      "mapping_users": 0,
+      "retained_dma_bytes": 20480,
+      "final_service_rows": 0,
+      "final_service_references": 0,
+      "caller_frames_after_unmap": 22320,
+      "caller_regions_after_unmap": 4,
+      "caller_page_tables_after_unmap": 50,
+      "reaped_caller_swap_blocks": 0,
+      "reaped_caller_ipc_entries": 0
+    }
+  },
+  "guard": {
+    "status": "FAIL",
+    "logs": ["target/vfs-c2b/guard.log", "target/vfs-c2b/guard-full.log"],
+    "references": 71,
+    "unmatched": 4,
+    "findings": {
+      "storage::mount": "BLOCKED",
+      "linux_procfs::mountinfo_snapshot": "BLOCKED",
+      "sys_linux_statfs": "PARTIAL",
+      "process::mmap::sys_mmap": "PARTIAL"
+    }
+  },
+  "guarded_ordinary_boot": {"status": "NOT_RUN", "gate": "BLOCKED"}
+}

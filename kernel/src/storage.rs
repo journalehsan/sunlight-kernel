@@ -10,7 +10,29 @@ pub const MAX_CAPACITY_FAT_SECTORS: u32 = 1024;
 
 pub static DEVICES: spin::Mutex<DeviceRegistry> = spin::Mutex::new(DeviceRegistry::new());
 
-#[cfg(feature = "vfs_c1c_test")]
+pub(crate) fn register_virtio_disk(blk: &sunlight_virtio::VirtioBlk) -> Option<u64> {
+    use sunlight_block::registry::{FLUSH, READ};
+
+    let operations = READ
+        | if blk.supports_write() { WRITE } else { 0 }
+        | if blk.supports_flush() { FLUSH } else { 0 };
+    DEVICES.lock().register_disk(blk.block_count(), operations)
+}
+
+pub(crate) fn discover_virtio_partitions(
+    blk: &mut sunlight_virtio::VirtioBlk,
+    parent: u64,
+) -> Result<sunlight_block::partition::PartitionTable, sunlight_block::partition::TableError> {
+    let table = sunlight_block::partition::discover(&mut crate::VirtioBootDisk {
+        blk,
+        partition: None,
+    })?;
+    DEVICES.lock().register_partitions(parent, &table)
+        .expect("VirtIO partition registry capacity");
+    Ok(table)
+}
+
+#[cfg(all(feature = "vfs_c1c_test", not(feature = "vfs_c2b_test")))]
 pub(crate) fn register_disposable(blk: &mut sunlight_virtio::VirtioBlk) -> u64 {
     use sunlight_block::registry::{FLUSH, READ};
 
@@ -42,6 +64,26 @@ pub(crate) fn register_disposable(blk: &mut sunlight_virtio::VirtioBlk) -> u64 {
 
 pub(crate) fn virtio_partition(parent: u64, start: u64, blocks: u64) -> Option<DeviceInfo> {
     DEVICES.lock().find_extent(parent, start, blocks).filter(|info| info.parent == parent)
+}
+
+#[cfg(feature = "vfs_c2b_test")]
+pub(crate) fn verify_early_reservation(mut try_mount: impl FnMut(u64) -> Result<(), FsError>) {
+    use core::sync::atomic::Ordering;
+    use sunlight_block::registry::MAX_DEVICES;
+
+    let boot = crate::VIRTIO_DEVICE_ID.load(Ordering::Acquire);
+    assert_ne!(boot, 0);
+    assert!(!crate::vfs_n1j_test::reserves_storage_parent(boot));
+    let mut fenced = 0;
+    for row in (0..MAX_DEVICES).filter_map(|index| DEVICES.lock().enumerate(index)) {
+        let parent = if row.parent == 0 { row.id } else { row.parent };
+        if crate::vfs_n1j_test::reserves_storage_parent(parent) {
+            assert!(matches!(try_mount(row.id), Err(FsError::Busy)));
+            fenced += 1;
+        }
+    }
+    assert!(fenced >= 2);
+    crate::serial_println!("[VFS-C2B] legacy mount fenced rows={} boot_parent={}", fenced, boot);
 }
 
 pub(crate) unsafe fn read_virtio(
@@ -131,9 +173,6 @@ impl Drop for ReadBusy {
 
 pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Result<(), FsError> {
     let info = DEVICES.lock().get(device).ok_or(FsError::NotFound)?;
-    if info.operations & (FAT32 | WRITE) != FAT32 | WRITE {
-        return Err(FsError::Unsupported);
-    }
     let parent = if info.parent == 0 {
         info.id
     } else {
@@ -142,6 +181,9 @@ pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Res
     #[cfg(feature = "vfs_c1e2_test")]
     if crate::vfs_n1j_test::reserves_storage_parent(parent) {
         return Err(FsError::Busy);
+    }
+    if info.operations & (FAT32 | WRITE) != FAT32 | WRITE {
+        return Err(FsError::Unsupported);
     }
     vfs.validate_runtime_target(target, device)?;
     let usb = parent == crate::usb_storage::DEVICE_ID.load(core::sync::atomic::Ordering::Acquire);

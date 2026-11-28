@@ -2322,30 +2322,10 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
 /// and mapped into vfs_server). The page is zeroed (magic=0) when no device
 /// was found; vfs_server checks the magic and skips the boot mount gracefully.
 ///
-/// Logs [BLK] and [FAT] gate lines to the serial port.
-#[cfg_attr(feature = "vfs-n1h-test", allow(unreachable_code))]
-fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
-    serial_println!("[BLK]  Scanning PCI...");
-
-    // Always allocate the share page; virtio queue and request buffer are only
-    // used when a device is present.
-    let share_phys = PMM.lock().alloc_frame().expect("fat share alloc");
-    let share_virt = hhdm_offset.as_u64() + share_phys.as_u64();
-
-    // Zero the share page so vfs_server gets a safe sentinel when no device exists.
-    // SAFETY: share_virt is a valid HHDM-mapped kernel frame of 4096 bytes.
-    unsafe { (share_virt as *mut u8).write_bytes(0, 4096) };
-
-    // SAFETY: PCI port I/O requires ring-0, which we have during kernel boot.
-    let blk_info = unsafe { sunlight_virtio::find_virtio_blk() };
-    let (bus, slot, function, io_base) = match blk_info {
-        Some(info) => info,
-        None => {
-            serial_println!("[BLK]  No virtio-blk found — /boot will be unavailable");
-            return share_phys;
-        }
-    };
-
+fn init_discovered_virtio(
+    (bus, slot, function, io_base): (u8, u8, u8, u16),
+    hhdm_offset: VirtAddr,
+) -> Option<(sunlight_virtio::VirtioBlk, PhysAddr, PhysAddr)> {
     // Allocate virtio queue and request buffer only when device is present.
     let (queue_phys, req_phys) = {
         let mut pmm = PMM.lock();
@@ -2395,20 +2375,76 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
                 ::sunlight_ipc::HardwareFailureStage::QueueSetup,
                 1,
             );
-            return share_phys;
+            return None;
         }
     };
 
-    #[cfg(feature = "vfs-n1h-test")]
+    Some((blk, queue_phys, req_phys))
+}
+
+#[cfg(feature = "vfs_c2b_test")]
+fn reserve_non_boot_virtio(boot: (u8, u8, u8, u16), hhdm: VirtAddr) {
+    let address = option_env!("SUNLIGHT_VFS_C2B_PCI").expect("C2B requires a PCI BDF");
+    let selected = unsafe {
+        sunlight_virtio::find_virtio_blk_where(|(bus, slot, function, _)| {
+            address == alloc::format!("{bus:02x}:{slot:02x}.{function}")
+        })
+    }.expect("C2B selected PCI function is not a supported VirtIO block device");
+    assert_ne!(selected, boot, "C2B cannot reserve the boot device");
+    assert!(selected.3 != 0 && unsafe {
+        sunlight_virtio::find_virtio_blk_where(|info| info != selected && info.3 == selected.3)
+    }.is_none(), "C2B ambiguous I/O BAR");
+
+    let (mut blk, queue, bounce) =
+        init_discovered_virtio(selected, hhdm).expect("C2B selected device initialization");
+    assert!(blk.supports_write() && blk.supports_flush());
+    let mut marker = [0; 512];
+    assert!(unsafe { blk.read_block(0, &mut marker) });
+    assert!(marker.starts_with(b"VFS-N1O-DISPOSABLE-ONLY!"), "C2B disposable marker missing");
+
+    let parent = storage::register_virtio_disk(&blk).expect("C2B physical registry slot");
+    let table = storage::discover_virtio_partitions(&mut blk, parent)
+        .expect("C2B selected partition table");
+    let mut candidates = table.partitions().iter().filter(|part| part.fat_candidate);
+    let part = candidates.next().expect("C2B requires a FAT partition");
+    assert!(candidates.next().is_none(), "C2B ambiguous FAT partitions");
+    let source = storage::virtio_partition(parent, part.start, part.blocks)
+        .expect("C2B registered partition").id;
+    vfs_n1j_test::install(blk, queue, bounce, source);
+    serial_println!(
+        "[VFS-C2B] reserved pci={} boot={:02x}:{:02x}.{} parent={} source={} aliases={}",
+        address, boot.0, boot.1, boot.2, parent, source, table.partitions().len()
+    );
+}
+
+/// Logs [BLK] and [FAT] gate lines to the serial port.
+#[cfg_attr(all(feature = "vfs-n1h-test", not(feature = "vfs_c2b_test")), allow(unreachable_code))]
+fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
+    serial_println!("[BLK]  Scanning PCI...");
+    let share_phys = PMM.lock().alloc_frame().expect("fat share alloc");
+    let share_virt = hhdm_offset.as_u64() + share_phys.as_u64();
+    unsafe { (share_virt as *mut u8).write_bytes(0, 4096) };
+    let Some(info @ (bus, slot, function, _)) = (unsafe { sunlight_virtio::find_virtio_blk() }) else {
+        serial_println!("[BLK]  No virtio-blk found — /boot will be unavailable");
+        assert!(!cfg!(feature = "vfs_c2b_test"), "C2B requires a separate boot device");
+        return share_phys;
+    };
+    #[cfg(feature = "vfs_c2b_test")]
+    reserve_non_boot_virtio(info, hhdm_offset);
+    let Some((blk, _queue_phys, _req_phys)) = init_discovered_virtio(info, hhdm_offset) else {
+        return share_phys;
+    };
+
+    #[cfg(all(feature = "vfs-n1h-test", not(feature = "vfs_c2b_test")))]
     {
         #[cfg(feature = "vfs_c1c_test")]
         {
             let mut blk = blk;
             let source = storage::register_disposable(&mut blk);
-            vfs_n1j_test::install(blk, queue_phys, req_phys, source);
+            vfs_n1j_test::install(blk, _queue_phys, _req_phys, source);
         }
         #[cfg(all(feature = "vfs-n1j-test", not(feature = "vfs_c1c_test")))]
-        vfs_n1j_test::install(blk, queue_phys, req_phys);
+        vfs_n1j_test::install(blk, _queue_phys, _req_phys);
         #[cfg(all(feature = "vfs-n1i-test", not(feature = "vfs-n1j-test")))]
         vfs_n1i_test::run(blk);
         #[cfg(not(feature = "vfs-n1i-test"))]
@@ -2417,13 +2453,13 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     }
 
     #[cfg(feature = "sfs5b4-test")]
-    let blk = sfs5b4_test::run(blk, queue_phys.as_u64(), req_phys.as_u64());
+    let blk = sfs5b4_test::run(blk, _queue_phys.as_u64(), _req_phys.as_u64());
 
     #[cfg(all(feature = "sfs5a-test", not(feature = "sfs5b4-test")))]
     let blk = {
         let mut device = blk;
         #[cfg(feature = "sfs5b3-test")]
-        sfs5b3_test::run(&mut device, queue_phys.as_u64(), req_phys.as_u64());
+        sfs5b3_test::run(&mut device, _queue_phys.as_u64(), _req_phys.as_u64());
         #[cfg(feature = "sfs5b2-test")]
         sfs5b2_test::run(&mut device);
         #[cfg(feature = "sfs5b1-test")]
@@ -2434,10 +2470,7 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     };
 
     // Retain even an unformatted disk or rejected table for runtime enumeration.
-    let operations = sunlight_block::registry::READ
-        | if blk.supports_write() { sunlight_block::registry::WRITE } else { 0 }
-        | if blk.supports_flush() { sunlight_block::registry::FLUSH } else { 0 };
-    let device_id = match storage::DEVICES.lock().register_disk(blk.block_count(), operations) {
+    let device_id = match storage::register_virtio_disk(&blk) {
         Some(id) => id,
         None => {
             serial_println!("[BLK] zero-capacity disk or exhausted registry; no mount");
@@ -2471,18 +2504,13 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
         return share_phys;
     }
     serial_println!("[BLK]  Read LBA 0 OK");
-    let table = match sunlight_block::partition::discover(&mut VirtioBootDisk {
-        blk: &mut blk,
-        partition: None,
-    }) {
+    let table = match storage::discover_virtio_partitions(blk, device_id) {
         Ok(table) => table,
         Err(error) => {
             serial_println!("[PART] rejected disk: {:?}", error);
             return share_phys;
         }
     };
-    storage::DEVICES.lock().register_partitions(device_id, &table)
-        .expect("boot partition registry capacity");
     if option_env!("SUNLIGHT_BTOP16_TRACE") == Some("1") {
         for index in 0..sunlight_block::registry::MAX_DEVICES {
             let info = storage::DEVICES.lock().enumerate(index);
@@ -2701,6 +2729,8 @@ fn init_kernel_vfs(seed: &'static [sunlight_fs::RamEntry]) {
         }
     }
 
+    #[cfg(feature = "vfs_c2b_test")]
+    storage::verify_early_reservation(|id| storage::mount(&mut vfs, id, "/mnt/volume"));
     *KERNEL_VFS.lock() = Some(vfs);
     serial_println!("[VFS] kernel mount OK");
     if option_env!("SUNLIGHT_STORAGE_TEST") == Some("1") {

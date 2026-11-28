@@ -3470,6 +3470,24 @@ broader sharing and deployment qualification remain separate gates. See
 the [C1E12 report](vfs-committed-fat-private-mmap.md) and
 [results](vfs-committed-fat-private-mmap-results.json).
 
+VFS-C2A is **PARTIAL**. The ordinary StorageCtl mount and fstab client now
+completes the existing prepare/publish transaction, and the isolated runtime
+routes the reserved device family before dispatch. Production fstab device
+admission and ordinary caller publication remain open. The unchanged guard
+still identifies all four live kernel dependencies. See the
+[C2A report](vfs-legacy-authority-migration.md) and
+[results](vfs-legacy-authority-migration-results.json).
+
+VFS-C2B **passes** early reservation and authenticated handoff in the isolated
+two-disk candidate. The selected PCI function enters the ordinary storage
+registry before boot FAT probing, and its whole-parent fence covers every
+registered alias even without a live service. The separate boot disk keeps
+its protected mount. The staged workflow remains **PARTIAL**: qualify an
+ordinary fstab launch with a matching GPT runtime entry and scoped service
+target, and prove namespace publication for the selected ordinary callers.
+See the [C2B report](vfs-early-storage-ownership-reservation.md) and
+[results](vfs-early-storage-ownership-reservation-results.json).
+
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact
    launch from a shared namespace owner. Complete explicit service

@@ -1,0 +1,66 @@
+{
+  "stage": "VFS-C2A",
+  "status": "PARTIAL",
+  "scope": "Isolated reserved VirtIO FAT32 partition at /mnt/volume, scoped StorageAdmin fixture, and published native/Linux caller namespaces",
+  "production_migration": {
+    "status": "BLOCKED",
+    "prerequisite": "Reserve a real non-boot VirtIO parent before kernel probing/attachment, bind its admitted transport to the authenticated service, and publish the ordinary fstab manager and selected reader/writer namespaces before dispatch."
+  },
+  "host": {
+    "storage_transaction": {"status": "PASS", "tests": 4, "log": "target/vfs-c2a/check-0.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c2a/check-1.log"}
+  },
+  "builds": {
+    "production_kernel": {"status": "PASS", "log": "target/vfs-c2a/check-2.log"},
+    "release_vfs_and_storagectl": {"status": "PASS", "log": "target/vfs-c2a/check-3.log"},
+    "isolated_service_and_kernel": {"status": "PASS", "log": "target/vfs-c2a/check-4.log"}
+  },
+  "native": {
+    "status": "PASS",
+    "vcpu": 1,
+    "memory_mib": 2048,
+    "populated": {"status": "PASS", "log": "target/vfs-c2a/native-populated.log", "serial": "target/vfs-n1o-qemu-fgdiqdaf/serial.log"},
+    "unknown": {"status": "PASS", "log": "target/vfs-c2a/native-unknown.log", "serial": "target/vfs-n1o-qemu-plfwrhtb/serial.log"},
+    "publication_mutation_mmap_and_metadata": "PASS",
+    "service_loss_fail_closed_and_exact_exit": "PASS",
+    "closed_image_fsck_payload_and_fsinfo": "PASS",
+    "ordinary_storagectl_binary_mounting_reserved_partition": "NOT_RUN",
+    "exec_with_live_committed_fat_descriptor": "NOT_RUN",
+    "concurrent_exec_during_parked_mmap": "BLOCKED",
+    "accounting": {
+      "lease_settlements_per_run": 7,
+      "pending_commands": 0,
+      "mapping_users": 0,
+      "retained_dma_bytes": 20480,
+      "final_service_rows": 0,
+      "final_service_references": 0,
+      "caller_user_frames_after_unmap": 22320,
+      "caller_vm_regions_after_unmap": 4,
+      "caller_page_tables_after_unmap": 50,
+      "reaped_caller_swap_blocks": 0,
+      "reaped_caller_ipc_entries": 0
+    }
+  },
+  "diskless_lifecycle": {
+    "status": "PASS",
+    "scope": "D1B/D2A/D2B at one, two, and four vCPUs",
+    "build": "target/vfs-c2a/d2b-build.log",
+    "serial": ["target/vfs-c2a/d2b-1.serial.log", "target/vfs-c2a/d2b-2.serial.log", "target/vfs-c2a/d2b-4.serial.log"],
+    "settlements_per_run": 7,
+    "final_service_rows": 0,
+    "final_service_references": 0,
+    "final_owned_frames": 0
+  },
+  "guard": {
+    "status": "FAIL",
+    "before": ["target/vfs-c2a/guard-before.log", "target/vfs-c2a/full-before.log"],
+    "after": ["target/vfs-c2a/guard-after.log", "target/vfs-c2a/full-after.log"],
+    "references_before_and_after": 71,
+    "unmatched_before_and_after": 4,
+    "removed": 0,
+    "live": ["storage::mount", "linux_procfs::mountinfo_snapshot", "sys_linux_statfs", "process::mmap::sys_mmap"]
+  },
+  "guarded_ordinary_boot": {"status": "NOT_RUN", "gate": "BLOCKED"},
+  "d3": "NOT_RUN",
+  "historical_evidence": "vfs-committed-fat-private-mmap-results.json"
+}
