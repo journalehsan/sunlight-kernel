@@ -1,0 +1,45 @@
+{
+  "milestone": "VFS-C2F",
+  "status": "PARTIAL",
+  "candidate_feature": "vfs_c2e_candidate",
+  "subtree": "/root/Downloads",
+  "qualification": {
+    "filesystem_host": {"status": "PASS", "tests": 126, "log": "target/vfs-c2f/fs-verified.log"},
+    "service_host": {"status": "PASS", "tests": 94, "log": "target/vfs-c2f/service-final.log"},
+    "registration_host": {"status": "PASS", "tests": 113, "log": "target/vfs-c2f/registration-final.log"},
+    "descriptor_host": {"status": "PASS", "tests": 20, "log": "target/vfs-c2f/descriptors.log"},
+    "file_transport_host": {"status": "PASS", "tests": 10, "log": "target/vfs-c2f/ipc-final.log"},
+    "production_release": {"status": "PASS", "log": "target/vfs-c2f/production-verified.log"},
+    "candidate_debug": {"status": "PASS", "log": "target/vfs-c2f/candidate-verified.log"},
+    "ordinary_boot": {"status": "BLOCKED", "log": "target/vfs-c2f/boot.log"},
+    "native_and_linux_guest_syscalls": {"status": "NOT_RUN"},
+    "guest_regressions": {
+      "status": "NOT_RUN",
+      "coverage": ["C2E", "C2D", "C2B", "C1E10", "C1E11", "C1E12", "C1E6A", "C1E6B", "descriptor and namespace lifetime"]
+    },
+    "c2c_fixture": {"status": "PASS", "log": "target/vfs-c2f/fixture.log"}
+  },
+  "guard": {
+    "inventory": {"status": "PASS", "before": 71, "after": 71},
+    "no_growth": {"status": "FAIL", "before_unmatched": 4, "after_unmatched": 4},
+    "final_removal": {"status": "FAIL"},
+    "logs": "target/vfs-c2f/guard-{before,after}-{0,1,2}.log",
+    "historical_findings": {
+      "storage::mount": "REMAINS_LEGACY_FAT_ATTACHMENT",
+      "linux_procfs::mountinfo_snapshot": "REMAINS_LEGACY_MOUNT_TOPOLOGY",
+      "sys_linux_statfs": "REMAINS_LEGACY_MOUNT_AND_FAT_CAPACITY",
+      "process::mmap::sys_mmap": "REMAINS_LEGACY_PRIVATE_MAPPINGS"
+    }
+  },
+  "directory_description": {
+    "status": "PARTIAL",
+    "implemented": ["O_DIRECTORY", "openat", "mkdirat", "unlinkat(0)", "same-description renameat", "fstat", "newfstatat(AT_EMPTY_PATH)"],
+    "remaining": ["distinct-anchor renameat", "nonempty relative stat", "directory enumeration", "AT_REMOVEDIR"],
+    "host_reference_accounting": "PASS"
+  },
+  "generic_retained_cwd": {
+    "status": "PARTIAL",
+    "service_backend_enter_rename_leave": "PASS",
+    "ordinary_syscall_integration": "INCOMPLETE"
+  }
+}

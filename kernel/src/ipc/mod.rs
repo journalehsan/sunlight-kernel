@@ -20,7 +20,7 @@ pub(crate) use vfs_registration::{
     provision_inheritance as provision_vfs_inheritance,
 };
 pub(crate) use vfs_registration::{
-    chdir_call as vfs_chdir_call, chdir_context as vfs_chdir_context,
+    route_vfs_directory, DirectoryRoute, LegacyCwdCommit, chdir_busy as vfs_chdir_busy, chdir_call as vfs_chdir_call, chdir_context as vfs_chdir_context,
     chdir_finish as vfs_chdir_finish, chdir_resume as vfs_chdir_resume,
 };
 pub(crate) use vfs_registration::{

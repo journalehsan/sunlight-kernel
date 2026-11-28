@@ -3228,6 +3228,7 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     thread.native_thread = true;
     thread.capability_mode = sched.current_process().capability_mode;
     thread.native_shared_owner = shared_descriptors.then_some(shared_owner);
+    thread.vfs_downloads_cwd = sched.current_shared_process().vfs_downloads_cwd;
     let parent = sched.current_process();
     thread.shared_quota_owner = Some(parent.shared_quota_owner.unwrap_or(
         crate::memory::shared_quota::ProcessIdentity {
@@ -3679,6 +3680,7 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
         },
     ));
     child.linux_tgid = parent.linux_tgid;
+    child.vfs_downloads_cwd = sched.current_shared_process().vfs_downloads_cwd;
     child.capability_mode = parent.capability_mode;
     child.service_lookup_restrictions = parent.service_lookup_restrictions;
     child.personality = parent.personality;
@@ -6044,15 +6046,35 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         Err(_) => return ERR_EINVAL,
     };
     let (flags, mode) = (frame.rsi, frame.rdx);
-    if file_open_routed() {
+    if file_open_routed() || (downloads_cwd() && !raw.starts_with('/')) {
         return open_resolved_path(frame, raw, flags, mode);
     }
     let path = resolve_current_path(raw);
     open_resolved_path(frame, &path, flags, mode)
 }
 
+fn downloads_cwd() -> bool {
+    cfg!(feature = "vfs_c2e_candidate")
+        && crate::sched::with_scheduler(|sched| sched.current_shared_process().vfs_downloads_cwd)
+}
+
 fn file_open_routed() -> bool {
     crate::sched::with_scheduler(|sched| sched.current_process().vfs_file_routed)
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+fn downloads_route(path: &str) -> bool {
+    sunlight_fs::path::service_downloads(path)
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+fn downloads_route_valid(path: &str) -> bool {
+    sunlight_fs::path::validate_absolute(path).is_ok()
+        && !path.contains("//")
+        && !crate::sched::with_scheduler(|sched| {
+            sched.current_process().vfs_root_rebased
+                || sched.current_shared_process().vfs_root_rebased
+        })
 }
 
 fn open_resolved_path(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64) -> u64 {
@@ -6084,7 +6106,14 @@ fn open_resolved_path(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u6
     }
     // An explicitly selected caller never recovers kernel traversal. The copied
     // route admits supported regular-file opens.
-    if file_open_routed() {
+    if file_open_routed() || (downloads_cwd() && !path.starts_with('/')) {
+        return service_open(frame, path, flags, mode, current_is_linux());
+    }
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if downloads_route(path) {
+        if !downloads_route_valid(path) {
+            return ERR_EINVAL;
+        }
         return service_open(frame, path, flags, mode, current_is_linux());
     }
     if path == "/var/lib/sunlight-kv/broker.store"
@@ -6511,45 +6540,82 @@ fn resolve_native_existing(
     let cwd = crate::sched::with_scheduler(|s| s.current_shared_process().cwd.clone());
     let host_key_admin = has_host_key_admin();
     let trusted_kv = crate::sched::with_scheduler(|s| s.current_process().trusted_kv_service);
+    let result = resolve_legacy_existing(
+        &cwd,
+        path,
+        sunlight_fs::Credential { uid, gid },
+        host_key_admin,
+        trusted_kv,
+        LegacyLookup::Observe { search_final },
+    )?;
+    match result {
+        Some(sunlight_fs::vfs::LegacyCwd::Directory(resolved)) => Ok(resolved),
+        _ => unreachable!("observation returns its resolved path"),
+    }
+}
+
+enum LegacyLookup<'a> {
+    Observe { search_final: bool },
+    Chdir,
+    Commit(&'a mut dyn FnMut(alloc::string::String) -> Result<(), u64>),
+}
+
+fn resolve_legacy_existing(
+    cwd: &str,
+    path: &str,
+    credential: sunlight_fs::Credential,
+    host_key_admin: bool,
+    trusted_kv: bool,
+    lookup: LegacyLookup<'_>,
+) -> Result<Option<sunlight_fs::vfs::LegacyCwd>, u64> {
+    use sunlight_fs::{vfs::LegacyCwd, FsError};
     let mut guard = crate::KERNEL_VFS.lock();
     let vfs = guard.as_mut().ok_or(ERR_EIO)?;
-    let resolved = vfs
-        .resolve_existing_authorized(
-            &cwd,
-            path,
-            &sunlight_fs::Credential { uid, gid },
-            &mut |name| {
-                if (private_secret_child(name) && !host_key_admin)
-                    || (name == "/var/lib/sunlight-kv/broker.store" && !trusted_kv)
-                {
-                    Err(sunlight_fs::FsError::PermissionDenied)
-                } else {
-                    Ok(())
-                }
-            },
-        )
-        .map_err(|error| {
-            // The syscall has already bounded and decoded its C string; the
-            // remaining InvalidPath is an overlong cwd-plus-component result.
-            if error == sunlight_fs::FsError::InvalidPath {
-                ERR_ERANGE
-            } else {
-                fs_error_raw(error)
+    let mut authorize = |name: &str| {
+        if (private_secret_child(name) && !host_key_admin)
+            || (name == "/var/lib/sunlight-kv/broker.store" && !trusted_kv)
+        {
+            Err(FsError::PermissionDenied)
+        } else {
+            Ok(())
+        }
+    };
+    let result = match lookup {
+        LegacyLookup::Chdir => vfs
+            .resolve_legacy_cwd(cwd, path, &credential, &mut authorize)
+            .map(Some),
+        LegacyLookup::Commit(commit) => {
+            match vfs.with_legacy_cwd(path, &credential, &mut authorize, commit) {
+                Ok(result) => return result.map(|()| None),
+                Err(error) => Err(error),
             }
-        })?;
-    if search_final {
-        if resolved.metadata.native.file_type != sunlight_fs::FileType::Directory {
-            return Err(ERR_ENOTDIR);
         }
-        if !sunlight_fs::check_permission(
-            &resolved.metadata.native,
-            &sunlight_fs::Credential { uid, gid },
-            sunlight_fs::PermCheck::Execute,
-        ) {
-            return Err(ERR_EACCES);
+        LegacyLookup::Observe { search_final } => vfs
+            .resolve_existing_authorized(cwd, path, &credential, &mut authorize)
+            .and_then(|resolved| {
+                let stat = &resolved.metadata.native;
+                if search_final {
+                    if stat.file_type != sunlight_fs::FileType::Directory {
+                        return Err(FsError::NotDir);
+                    }
+                    if !sunlight_fs::check_permission(
+                        stat,
+                        &credential,
+                        sunlight_fs::PermCheck::Execute,
+                    ) {
+                        return Err(FsError::PermissionDenied);
+                    }
+                }
+                Ok(Some(LegacyCwd::Directory(resolved)))
+            }),
+    };
+    result.map_err(|error| {
+        if error == FsError::InvalidPath {
+            ERR_ERANGE
+        } else {
+            fs_error_raw(error)
         }
-    }
-    Ok(resolved)
+    })
 }
 
 /// Linux x86-64 statfs, for mounts with a live FAT allocation count.
@@ -6695,54 +6761,55 @@ fn sys_resolve_path(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
-    if crate::sched::with_scheduler(|s| {
-        s.current_process().vfs_stat_routed || s.current_shared_process().vfs_stat_routed
-    }) {
-        return sys_service_chdir(frame);
-    }
-    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
-        Ok(bytes) => bytes,
-        Err(error) => return user_memory_failure(error),
-    };
-    let path = match core::str::from_utf8(&path_bytes) {
-        Ok(s) => s,
-        Err(_) => return u64::MAX,
-    };
-
-    let resolved = match resolve_native_existing(path, true) {
-        Ok(value) => value,
-        Err(error) => return error,
-    };
-    if resolved.metadata.native.file_type != sunlight_fs::FileType::Directory {
-        return ERR_ENOTDIR;
-    }
-    let abs_path = resolved.path.as_str();
-
-    crate::sched::with_scheduler(|s| {
-        s.current_shared_process_mut().cwd = alloc::string::String::from(abs_path);
-        // A kernel-owned cwd change revokes selected sibling profiles under
-        // the same scheduler guard as the shared cwd commit.
-        let owner = s.shared_process_index(s.current_process_index().unwrap_or(0));
-        for idx in 0..s.processes.len() {
-            if s.shared_process_index(idx) == owner {
-                crate::ipc::withdraw_vfs_root_profile(idx, s);
-            }
-        }
-    });
-    crate::serial_println!("[HELIOS] chdir({}) -> ok", abs_path);
-    0
-}
-
-fn sys_service_chdir(frame: &mut SyscallFrame) -> u64 {
     sys_service_directory_transition(frame, false)
 }
 
-fn sys_service_directory_transition(frame: &mut SyscallFrame, root: bool) -> u64 {
-    let kind = if root {
-        ::sunlight_ipc::vfs_rpc::chdir_transport::Kind::Root
-    } else {
-        ::sunlight_ipc::vfs_rpc::chdir_transport::Kind::Directory
+fn service_to_native_chdir_error(errno: u64) -> u64 {
+    match errno {
+        12 => ERR_ENOMEM,
+        _ => ERR_EIO,
+    }
+}
+
+fn finish_legacy_chdir(
+    sched: &mut crate::sched::Scheduler,
+    waiter: usize,
+    path: &str,
+    commit: &mut crate::ipc::LegacyCwdCommit<'_>,
+) -> Result<(), u64> {
+    let caller = &sched.processes[waiter];
+    let credential = sunlight_fs::Credential {
+        uid: caller.uid,
+        gid: caller.gid,
     };
+    let admin = caller
+        .service_lookup_restrictions
+        .is_some_and(|mask| mask & crate::ipc::ServiceCapability::HostKeyAdmin.bit() != 0);
+    let trusted_kv = caller.trusted_kv_service;
+    resolve_legacy_existing(
+        "/",
+        path,
+        credential,
+        admin,
+        trusted_kv,
+        LegacyLookup::Commit(&mut |path| {
+            commit(sched, path).map_err(service_to_native_chdir_error)
+        }),
+    )
+    .map(|_| ())
+    .map_err(|error| match error {
+        ERR_NOENT => 2,
+        ERR_ENOTDIR => 20,
+        ERR_EACCES => 13,
+        ERR_ENOMEM => 12,
+        ERR_ERANGE | ERR_EINVAL => 22,
+        _ => 5,
+    })
+}
+
+fn sys_service_directory_transition(frame: &mut SyscallFrame, root: bool) -> u64 {
+    use ::sunlight_ipc::vfs_rpc::chdir_transport::Kind;
+    let kind = if root { Kind::Root } else { Kind::Directory };
     let origin = (frame.rcx, frame.rdi);
     let account = |sched: &mut crate::sched::Scheduler| {
         sched.account_and_apply_churn_penalty();
@@ -6772,14 +6839,69 @@ fn sys_service_directory_transition(frame: &mut SyscallFrame, root: bool) -> u64
                 Ok(bytes) => bytes,
                 Err(error) => return user_memory_failure(error),
             };
+            let mut sched = crate::sched::SCHEDULER.lock();
+            let pid = sched.current_pid();
+            let idx = sched.current_process_index().unwrap();
+            let owner = sched.shared_process_index(idx);
+            let service = root
+                || sched.processes[idx].vfs_stat_routed
+                || sched.processes[owner].vfs_stat_routed
+                || sched.processes[owner].vfs_downloads_cwd;
             let path = match core::str::from_utf8(&bytes) {
                 Ok(path) if !path.is_empty() => path,
-                _ => return ERR_EINVAL,
+                _ if service => return ERR_EINVAL,
+                Ok(_) => return ERR_NOENT,
+                Err(_) => return u64::MAX,
             };
-            let mut sched = crate::sched::SCHEDULER.lock();
+            use crate::ipc::DirectoryRoute;
+            let route = if root {
+                Ok(DirectoryRoute::Service(
+                    kind,
+                    alloc::borrow::Cow::Borrowed(path),
+                ))
+            } else {
+                crate::ipc::route_vfs_directory(&sched, idx, path, || {
+                    if cfg!(feature = "vfs_c2e_candidate")
+                        && crate::ipc::vfs_chdir_busy(idx, &sched)
+                    {
+                        return Err(ERR_EIO);
+                    }
+                    let caller = &sched.processes[idx];
+                    let credential = sunlight_fs::Credential {
+                        uid: caller.uid,
+                        gid: caller.gid,
+                    };
+                    let admin = caller.service_lookup_restrictions.is_some_and(|mask| {
+                        mask & crate::ipc::ServiceCapability::HostKeyAdmin.bit() != 0
+                    });
+                    resolve_legacy_existing(
+                        &sched.processes[owner].cwd,
+                        path,
+                        credential,
+                        admin,
+                        caller.trusted_kv_service,
+                        LegacyLookup::Chdir,
+                    )
+                    .map(|result| result.expect("cwd lookup returns a route"))
+                })
+            };
+            let (kind, path) = match route {
+                Ok(DirectoryRoute::Service(kind, path)) => (kind, path),
+                Ok(DirectoryRoute::Legacy(path)) => {
+                    sched.processes[owner].cwd = path;
+                    for sibling in 0..sched.processes.len() {
+                        if sched.shared_process_index(sibling) == owner
+                            && (!cfg!(feature = "vfs_c2e_candidate") || sibling != owner)
+                        {
+                            crate::ipc::withdraw_vfs_root_profile(sibling, &mut sched);
+                        }
+                    }
+                    return 0;
+                }
+                Err(error) => return error,
+            };
             let caps = crate::capability::CAP_BROKER.lock();
-            let pid = sched.current_pid();
-            let result = crate::ipc::vfs_chdir_call(pid, path, origin, kind, &mut sched, &caps);
+            let result = crate::ipc::vfs_chdir_call(pid, &path, origin, kind, &mut sched, &caps);
             if matches!(result, Ok(None)) {
                 account(&mut sched);
             }
@@ -7032,6 +7154,17 @@ fn install_service_fd(
 
 /// Admission and descriptor installation for a copied native/Linux open.
 fn service_open(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64, is_linux: bool) -> u64 {
+    service_open_at(frame, path, flags, mode, is_linux, None)
+}
+
+fn service_open_at(
+    frame: &mut SyscallFrame,
+    path: &str,
+    flags: u64,
+    mode: u64,
+    is_linux: bool,
+    directory: Option<(u64, ServiceFdAuthority)>,
+) -> u64 {
     use ::sunlight_ipc::vfs_rpc::file_transport as api;
     let parsed = if is_linux {
         sunlight_compat_linux::open_flags::parse(flags)
@@ -7043,7 +7176,10 @@ fn service_open(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64, is_
     let Ok(parsed) = parsed else {
         return service_errno_raw(22, is_linux);
     };
-    if parsed.directory || parsed.status & sunlight_compat_linux::abi::O_APPEND as u32 != 0 {
+    if parsed.status & sunlight_compat_linux::abi::O_APPEND as u32 != 0
+        || (parsed.directory && (!cfg!(feature = "vfs_c2e_candidate")
+            || parsed.write || parsed.create || parsed.exclusive || parsed.truncate))
+    {
         return service_errno_raw(95, is_linux);
     }
     let descriptor_flags = parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 };
@@ -7054,6 +7190,9 @@ fn service_open(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64, is_
         _ => api::ACCESS_WRITE,
     };
     let mut options = access;
+    if parsed.directory {
+        options |= api::OPEN_DIRECTORY;
+    }
     if parsed.create {
         options |= api::OPEN_CREATE;
     }
@@ -7074,8 +7213,13 @@ fn service_open(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64, is_
     };
     service_file(
         frame,
-        crate::ipc::FileOperation::Open { path, access: options, mode },
-        None,
+        crate::ipc::FileOperation::Open {
+            anchor: directory.map_or(0, |(token, _)| token),
+            path,
+            access: options,
+            mode,
+        },
+        directory.map(|(_, authority)| authority),
         Some((access, descriptor_flags)),
         move |_frame, completion| {
             if completion.errno != 0 {
@@ -7334,7 +7478,7 @@ fn sys_vfs_retention(frame: &mut SyscallFrame) -> u64 {
         let mut sched = crate::sched::SCHEDULER.lock();
         let caps = crate::capability::CAP_BROKER.lock();
         let pid = sched.current_pid();
-        return match crate::ipc::vfs_chdir_finish(pid, frame.r8, &bytes, &mut sched, &caps) {
+        return match crate::ipc::vfs_chdir_finish(pid, frame.r8, &bytes, &mut sched, &caps, finish_legacy_chdir) {
             Ok(()) => 0,
             Err(_) => u64::MAX,
         };
@@ -8009,7 +8153,33 @@ fn sys_linux_sendto(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_linux_openat(frame: &mut SyscallFrame) -> u64 {
     let dirfd = frame.rdi as i32;
-    let path = match linux_at_path(dirfd, frame.rsi, file_open_routed()) {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some((token, authority, rights)) = service_fd(dirfd) {
+        let path = match read_user_cstr(frame.rsi, USER_PATH_MAX) {
+            Ok(bytes) => bytes,
+            Err(error) => return user_memory_failure(error),
+        };
+        let Ok(path) = core::str::from_utf8(&path) else {
+            return linux_errno(22);
+        };
+        if path.is_empty() {
+            return linux_errno(2);
+        }
+        if !path.starts_with('/') {
+            if !rights.contains(crate::process::fd_table::CapRights::new(
+                crate::process::fd_table::CapRights::FSTAT,
+            )) {
+                return linux_errno(13);
+            }
+            return sunlight_compat_linux::abi::from_native_result(service_open_at(
+                frame, path, frame.rdx, frame.r10, true, Some((token, authority)),
+            ));
+        }
+    }
+    let path = match linux_at_path(
+        dirfd, frame.rsi, file_open_routed()
+            || (dirfd == sunlight_compat_linux::abi::AT_FDCWD && downloads_cwd()),
+    ) {
         Ok(path) => path,
         Err(error) => return error,
     };
@@ -8643,18 +8813,24 @@ fn sys_linux_faccessat(frame: &mut SyscallFrame) -> u64 {
     0
 }
 
-#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-fn namespace_mutation_routed() -> bool {
-    crate::sched::with_scheduler(|sched| {
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+fn namespace_mutation_routed(first: (i32, u64), second: Option<(i32, u64)>) -> bool {
+    let selected = crate::sched::with_scheduler(|sched| {
         let current = sched.current_process();
         let shared = sched.current_shared_process();
-        (current.vfs_stat_routed || shared.vfs_stat_routed)
+        cfg!(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))
+            && (current.vfs_stat_routed || shared.vfs_stat_routed)
             && (cfg!(feature = "vfs_c1e2_test")
                 || current.vfs_file_routed || shared.vfs_file_routed)
-    })
+    });
+    let relative_to_cwd = |(dirfd, ptr)| {
+        dirfd == sunlight_compat_linux::abi::AT_FDCWD
+            && crate::memory::user::read_value::<1>(ptr).is_ok_and(|first| first != [b'/'])
+    };
+    selected || (downloads_cwd() && (relative_to_cwd(first) || second.is_some_and(relative_to_cwd)))
 }
 
-#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
 fn service_namespace_mutation(
     frame: &mut SyscallFrame,
     op: u64,
@@ -8701,13 +8877,69 @@ fn service_namespace_mutation(
         paths.extend_from_slice(&target);
     }
     let paths = core::str::from_utf8(&paths).expect("validated mutation paths");
+    submit_service_mutation(frame, op, flags, paths)
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+fn downloads_mutation(
+    frame: &mut SyscallFrame, op: u64, flags: u64, first: &str, second: Option<&str>,
+) -> Option<u64> {
+    let first_owned = downloads_route(first);
+    let second_owned = second.is_some_and(downloads_route);
+    if !first_owned && !second_owned {
+        return None;
+    }
+    if second.is_some() && first_owned != second_owned {
+        return Some(service_errno_raw(18, current_is_linux()));
+    }
+    if !downloads_route_valid(first) || second.is_some_and(|path| !downloads_route_valid(path)) {
+        return Some(service_errno_raw(22, current_is_linux()));
+    }
+    if let Some(second) = second {
+        let mut paths = alloc::string::String::new();
+        if paths.try_reserve_exact(first.len() + 1 + second.len()).is_err() {
+            return Some(service_errno_raw(12, current_is_linux()));
+        }
+        paths.push_str(first);
+        paths.push('\0');
+        paths.push_str(second);
+        Some(submit_service_mutation(frame, op, flags, &paths))
+    } else {
+        Some(submit_service_mutation(frame, op, flags, first))
+    }
+}
+
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+fn submit_service_mutation(frame: &mut SyscallFrame, op: u64, flags: u64, paths: &str) -> u64 {
+    submit_service_mutation_at(frame, op, flags, paths, None)
+}
+
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+fn submit_service_mutation_at(
+    frame: &mut SyscallFrame,
+    op: u64,
+    flags: u64,
+    paths: &str,
+    directory: Option<(u64, ServiceFdAuthority)>,
+) -> u64 {
+    let linux = current_is_linux();
+    let error = |errno| {
+        if linux || op == ::sunlight_ipc::vfs_rpc::file_transport::MKDIR || errno == 16 {
+            service_errno_raw(errno, linux)
+        } else {
+            u64::MAX
+        }
+    };
     let storage_admin = has_storage_admin();
     let mut sched = crate::sched::SCHEDULER.lock();
     let caps = crate::capability::CAP_BROKER.lock();
     let pid = sched.current_pid();
     match crate::ipc::vfs_file_call(
-        pid, crate::ipc::FileOperation::MutateNamespace { op, flags, paths, storage_admin },
-        None, &mut sched, &caps, |_, _, _| Err(5),
+        pid, crate::ipc::FileOperation::MutateNamespace {
+            op, flags, paths, storage_admin,
+            anchor: directory.map_or(0, |(token, _)| token),
+        },
+        directory.map(|(_, authority)| authority), &mut sched, &caps, |_, _, _| Err(5),
     ) {
         Ok(crate::ipc::FileCall::Pending) => {
             sched.account_and_apply_churn_penalty();
@@ -8726,9 +8958,67 @@ fn service_namespace_mutation(
     }
 }
 
+#[cfg(feature = "vfs_c2e_candidate")]
+fn downloads_at_mutation(
+    frame: &mut SyscallFrame,
+    op: u64,
+    flags: u64,
+    first: (i32, u64),
+    second: Option<(i32, u64)>,
+) -> Option<u64> {
+    let read = |(fd, ptr)| {
+        let (token, authority, rights) = service_fd(fd)?;
+        let path = match read_user_cstr(ptr, USER_PATH_MAX) {
+            Ok(bytes) => bytes,
+            Err(error) => return Some(Err(user_memory_failure(error))),
+        };
+        if path.starts_with(b"/") {
+            return None;
+        }
+        if !rights.contains(crate::process::fd_table::CapRights::new(
+            crate::process::fd_table::CapRights::FSTAT,
+        )) {
+            return Some(Err(linux_errno(13)));
+        }
+        if path.is_empty() {
+            return Some(Err(linux_errno(2)));
+        }
+        Some(alloc::string::String::from_utf8(path)
+            .map(|path| ((token, authority), path))
+            .map_err(|_| linux_errno(22)))
+    };
+    let first = read(first);
+    let target = second.and_then(read);
+    match (first, target) {
+        (None, None) => None,
+        (Some(Err(error)), _) | (_, Some(Err(error))) => Some(error),
+        (Some(Ok((directory, path))), None) if second.is_none() => {
+            Some(submit_service_mutation_at(frame, op, flags, &path, Some(directory)))
+        }
+        (Some(Ok((directory, mut path))), Some(Ok((other, target)))) => {
+            if directory.1 != other.1 {
+                return Some(linux_errno(9));
+            }
+            if path.try_reserve_exact(1 + target.len()).is_err() {
+                return Some(linux_errno(12));
+            }
+            path.push('\0');
+            path.push_str(&target);
+            Some(submit_service_mutation_at(frame, op, other.0, &path, Some(directory)))
+        }
+        _ => Some(linux_errno(18)),
+    }
+}
+
 fn sys_linux_mkdirat(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    if namespace_mutation_routed() {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_at_mutation(
+        frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR, frame.rdx & 0o777, (frame.rdi as i32, frame.rsi), None,
+    ) {
+        return result;
+    }
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    if namespace_mutation_routed((frame.rdi as i32, frame.rsi), None) {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
             frame.rdx & 0o777, (frame.rdi as i32, frame.rsi), None);
     }
@@ -8737,6 +9027,11 @@ fn sys_linux_mkdirat(frame: &mut SyscallFrame) -> u64 {
         Ok(path) => path,
         Err(error) => return error,
     };
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
+        frame.rdx & 0o777, &path, None) {
+        return result;
+    }
     if procfs::owns(&path) {
         return linux_errno(30);
     }
@@ -10656,8 +10951,14 @@ fn sys_native_recv(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    if namespace_mutation_routed() {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_at_mutation(
+        frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME, 0, (frame.rdi as i32, frame.rsi), Some((frame.rdx as i32, frame.r10)),
+    ) {
+        return result;
+    }
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    if namespace_mutation_routed((frame.rdi as i32, frame.rsi), Some((frame.rdx as i32, frame.r10))) {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
             0, (frame.rdi as i32, frame.rsi), Some((frame.rdx as i32, frame.r10)));
     }
@@ -10669,6 +10970,11 @@ fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
         Ok(path) => path,
         Err(error) => return error,
     };
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
+        0, &old, Some(&new)) {
+        return result;
+    }
     if procfs::owns(&old) || procfs::owns(&new) {
         return linux_errno(30);
     }
@@ -10695,8 +11001,14 @@ fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
     if flags != 0 {
         return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
     }
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    if namespace_mutation_routed() {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_at_mutation(
+        frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK, 0, (frame.rdi as i32, frame.rsi), None,
+    ) {
+        return result;
+    }
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    if namespace_mutation_routed((frame.rdi as i32, frame.rsi), None) {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
             0, (frame.rdi as i32, frame.rsi), None);
     }
@@ -10704,6 +11016,11 @@ fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
         Ok(path) => path,
         Err(error) => return error,
     };
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
+        0, &path, None) {
+        return result;
+    }
     if procfs::owns(&path) {
         return linux_errno(30);
     }
@@ -10737,6 +11054,16 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
         if is_null_device_fd(dirfd) {
             return linux_null_stat(stat_ptr);
         }
+        #[cfg(feature = "vfs_c2e_candidate")]
+        if service_fd(dirfd).is_some() {
+            let (fd, buffer) = (frame.rdi, frame.rsi);
+            frame.rdi = dirfd as u64;
+            frame.rsi = stat_ptr;
+            let result = sys_fstat(frame);
+            frame.rdi = fd;
+            frame.rsi = buffer;
+            return result;
+        }
         if let Some(result) = procfs::fstat(dirfd, stat_ptr) {
             return result;
         }
@@ -10744,6 +11071,51 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
 
     if flags & !sunlight_compat_linux::abi::AT_SYMLINK_NOFOLLOW != 0 {
         return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some((token, authority, rights)) = service_fd(dirfd) {
+        let bytes = match read_user_cstr(frame.rsi, USER_PATH_MAX) {
+            Ok(bytes) => bytes,
+            Err(error) => return user_memory_failure(error),
+        };
+        if !bytes.starts_with(b"/") {
+            let path = match core::str::from_utf8(&bytes) {
+                Ok("") => return linux_errno(2),
+                Ok(path) => path,
+                Err(_) => return linux_errno(22),
+            };
+            if !rights.contains(crate::process::fd_table::CapRights::new(
+                crate::process::fd_table::CapRights::FSTAT,
+            )) {
+                return linux_errno(13);
+            }
+            return service_file(frame, crate::ipc::FileOperation::StatAt { token, path },
+                Some(authority), None, |_, completion| {
+                    if completion.errno != 0 {
+                        return linux_errno(completion.errno);
+                    }
+                    let Ok(native) = completion.payload.as_slice().try_into() else {
+                        return linux_errno(5);
+                    };
+                    let record = fill_linux_stat_from_native(native, synthetic_ino(path));
+                    copy_to_user(stat_ptr, &record).err().unwrap_or(0)
+                });
+        }
+    }
+
+    if downloads_cwd() && dirfd == sunlight_compat_linux::abi::AT_FDCWD {
+        let bytes = match read_user_cstr(frame.rsi, USER_PATH_MAX) {
+            Ok(bytes) => bytes,
+            Err(error) => return user_memory_failure(error),
+        };
+        if !bytes.starts_with(b"/") {
+            return match core::str::from_utf8(&bytes) {
+                Ok("") => linux_errno(2),
+                Ok(path) => sys_service_stat(frame, path, true),
+                Err(_) => linux_errno(22),
+            };
+        }
     }
 
     // Resolve virtual paths before choosing the native metadata route. Its
@@ -10756,9 +11128,16 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
         if procfs::owns(path) {
             return procfs::stat(path, stat_ptr, flags != 0);
         }
+        #[cfg(feature = "vfs_c2e_candidate")]
+        if downloads_route(path) {
+            if !downloads_route_valid(path) {
+                return linux_errno(22);
+            }
+            return sys_service_stat(frame, path, true);
+        }
     }
 
-    if crate::sched::SCHEDULER
+    if !downloads_cwd() && crate::sched::SCHEDULER
         .lock()
         .current_process()
         .vfs_stat_routed
@@ -11634,12 +12013,24 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
 
     // The route is sticky across profile withdrawal and exec. A selected
     // caller must never recover kernel traversal when service admission fails.
-    if crate::sched::SCHEDULER
-        .lock()
-        .current_process()
-        .vfs_stat_routed
-    {
+    let retained = if downloads_cwd() {
+        !path.starts_with('/')
+    } else {
+        crate::sched::with_scheduler(|s| s.current_process().vfs_stat_routed)
+    };
+    if retained {
         return sys_service_stat_path(frame, path);
+    }
+
+    #[cfg(feature = "vfs_c2e_candidate")]
+    {
+        let absolute = resolve_current_path(path);
+        if downloads_route(&absolute) {
+            if !downloads_route_valid(&absolute) {
+                return ERR_EINVAL;
+            }
+            return sys_service_stat(frame, &absolute, false);
+        }
     }
 
     let stat = {
@@ -11769,8 +12160,8 @@ fn sys_service_stat(frame: &mut SyscallFrame, path: &str, linux: bool) -> u64 {
 /// rdi = pathname (user-space pointer)
 /// rsi = mode bits
 fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    if namespace_mutation_routed() {
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    if namespace_mutation_routed((-100, frame.rdi), None) {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
             frame.rsi & 0o777, (-100, frame.rdi), None);
     }
@@ -11783,6 +12174,11 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
         Err(_) => return ERR_EINVAL,
     };
     let mode = frame.rsi as u16;
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
+        frame.rsi & 0o777, &resolve_current_path(path), None) {
+        return result;
+    }
 
     let (uid, gid, actor) = current_fs_actor();
     crate::serial_println!(
@@ -11823,8 +12219,8 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: unlink (65) — remove a file.
 /// rdi = NUL-terminated path
 fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    if namespace_mutation_routed() {
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    if namespace_mutation_routed((-100, frame.rdi), None) {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
             0, (-100, frame.rdi), None);
     }
@@ -11838,6 +12234,11 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
     };
     let path_buf = resolve_current_path(raw_path);
     let path = path_buf.as_str();
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
+        0, path, None) {
+        return result;
+    }
 
     let (_, _, actor) = current_fs_actor();
     let decision =
@@ -11859,8 +12260,8 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: rename (66), or RenameNoReplace (149) for atomic collision checking.
 /// rdi = NUL-terminated old path, rsi = NUL-terminated new path
 fn sys_rename(frame: &mut SyscallFrame, no_replace: bool) -> u64 {
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    if namespace_mutation_routed() {
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    if namespace_mutation_routed((-100, frame.rdi), Some((-100, frame.rsi))) {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
             u64::from(no_replace), (-100, frame.rdi), Some((-100, frame.rsi)));
     }
@@ -11884,6 +12285,11 @@ fn sys_rename(frame: &mut SyscallFrame, no_replace: bool) -> u64 {
     let new_path_buf = resolve_current_path(new_raw);
     let old_path = old_path_buf.as_str();
     let new_path = new_path_buf.as_str();
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = downloads_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
+        u64::from(no_replace), old_path, Some(new_path)) {
+        return result;
+    }
 
     let (_, _, actor) = current_fs_actor();
     // Require Delete permission on source and Create permission on destination.

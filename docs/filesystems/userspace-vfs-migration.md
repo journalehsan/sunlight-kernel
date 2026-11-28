@@ -3504,6 +3504,53 @@ ordinary boot guard is unchanged. See the
 [C2D report](vfs-legacy-tmpfs-authority-migration.md) and
 [results](vfs-legacy-tmpfs-authority-migration-results.json).
 
+VFS-C2E is **PARTIAL**. The opt-in candidate reserves the existing empty
+`/root/Downloads` directory before legacy root publication and mounts it
+in the service before C1A lease publication. Generic native and Linux path
+adapters use service-backed regular-file descriptions there. The host
+tests cover the cold-start ownership fence, retained lookup, stable handles
+across rename and handle accounting. Retained generic cwd and executable
+admission remain incomplete. The unchanged guard still blocks ordinary
+guest qualification. Keep the C2C GPT fixture for guarded acceptance.
+See the [C2E report](vfs-coherent-subtree-ownership-retirement.md) and
+[results](vfs-coherent-subtree-ownership-retirement-results.json).
+
+VFS-C2F is **PARTIAL**. Downloads directory descriptions use the existing
+authenticated file tables. Candidate Linux callers can create or open files,
+create directories, unlink files, and rename within one retained directory
+description. The service retains the directory across rename and releases the
+pin on final close. Ordinary retained cwd handoff across the ownership boundary,
+nonempty relative stat, and rename across distinct directory descriptions
+remain open. The unchanged ownership guard still blocks ordinary guest
+qualification. See the
+[C2F report](vfs-authoritative-directory-references.md) and
+[results](vfs-authoritative-directory-references-results.json).
+
+VFS-C2F1 is **PARTIAL**. Candidate renameat across two directory
+descriptions and nonempty directory-relative newfstatat are implemented
+and covered through the copied host channel. The selected cwd transaction
+preserves the old binding on rejected finish. The generic boundary handoff
+remains open. Qualification requires routing relative operations from the
+committed authority, demonstrating both crossings through ordinary native
+and Linux chdir, and checking exit and exec cleanup in a guest. Ordinary
+boot remains **BLOCKED** by the unchanged guard.
+See the [C2F1 report](vfs-transactional-cwd-ownership-handoff.md) and
+[results](vfs-transactional-cwd-ownership-handoff-results.json).
+
+VFS-C2F2 is **PARTIAL**. The opt-in Downloads candidate now exercises
+generic entry and exit through the shared native and translated Linux
+chdir route in the copied host integration. Entry retains the service
+directory. Exit validates the legacy target and retains only the service
+root for independent absolute operations and open directory descriptions.
+The copied host matrix covers relative operation routing after rename,
+both crossings, compensation, shared cwd publication and retirement.
+Ordinary boot remains **BLOCKED** at 71 references with the same four
+historical unmatched sites. Native and Linux guest qualification is
+**NOT_RUN**. Keep the C2C GPT fixture and qualify the syscall and
+retirement matrix after the ordinary ownership gate passes.
+See the [C2F2 report](vfs-generic-cross-authority-cwd.md) and
+[results](vfs-generic-cross-authority-cwd-results.json).
+
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact
    launch from a shared namespace owner. Complete explicit service

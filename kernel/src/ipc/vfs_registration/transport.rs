@@ -532,7 +532,7 @@ pub(crate) fn file_control(
     use sunlight_ipc::vfs_rpc::file_transport as file;
     let mut runtime = RUNTIME.lock();
     let registration = authenticate(&mut runtime, pid, epoch, sched, caps)?;
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
     if operation == file::NEXT {
         runtime.revalidate_storage_files(sched);
     }

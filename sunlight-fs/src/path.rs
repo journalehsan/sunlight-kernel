@@ -1,5 +1,11 @@
 use crate::FsError;
 
+pub const SERVICE_DOWNLOADS: &str = "/root/Downloads";
+
+pub fn service_downloads(path: &str) -> bool {
+    strip_mount(path, SERVICE_DOWNLOADS).is_some()
+}
+
 pub fn validate_absolute(path: &str) -> Result<(), FsError> {
     if path.is_empty() || !path.starts_with('/') || path.as_bytes().contains(&0) {
         return Err(FsError::InvalidPath);

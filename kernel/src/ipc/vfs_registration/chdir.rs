@@ -1,4 +1,4 @@
-//! Selected-profile cwd and root transactions. Retention owns provisional pins; this
+//! Authenticated cwd and root transactions. Retention owns provisional pins; this
 //! bounded continuation owns the captured path and the single commit decision.
 use super::*;
 use crate::process::ProcessState;
@@ -13,7 +13,7 @@ pub(super) struct Call {
     pub(super) waiter: Caller,
     origin: (u64, u64),
     woken: bool,
-    old: Scope,
+    previous: Option<Scope>,
     kind: api::Kind,
     path: String,
     cwd: String,
@@ -87,7 +87,7 @@ impl Runtime {
         registration: Registration,
         bytes: &[u8],
         sched: &Scheduler,
-    ) -> Result<&Call, IpcError> {
+    ) -> Result<(&Call, Scope), IpcError> {
         let Frame::Retain {
             registration: claimed,
             request_id,
@@ -140,7 +140,10 @@ impl Runtime {
         let valid = sched.processes.iter().enumerate().any(|(idx, p)| {
             process_identity(p) == c.identity.caller
                 && !p.is_exiting()
-                && p.vfs_root_metadata
+                && (p.vfs_root_metadata || c.kind == api::Kind::EnterDownloads)
+                && (c.kind != api::Kind::Downloads || (p.vfs_downloads_cwd && !p.vfs_root_rebased))
+                && (c.kind != api::Kind::EnterDownloads
+                    || (!p.vfs_downloads_cwd && !p.vfs_root_rebased && !p.vfs_stat_routed))
                 && (c.kind != api::Kind::Root || p.uid == 0)
                 && p.uid == c.identity.uid
                 && p.gid == c.identity.gid
@@ -154,10 +157,20 @@ impl Runtime {
                 && process_identity(&sched.processes[sched.shared_process_index(idx)])
                     == c.identity.caller
         });
-        if !valid || !waiter_valid || self.namespaces.lookup(c.identity).is_err() {
+        let current = self
+            .namespaces
+            .lookup(c.identity)
+            .and_then(|binding| binding.validate(c.identity))
+            .ok()
+            .map(|n| Scope {
+                caller: c.identity.caller,
+                namespace_id: n.id,
+                namespace_generation: n.generation,
+            });
+        if !valid || !waiter_valid || current != c.previous {
             return Err(IpcError::InvalidCapability);
         }
-        Ok(c)
+        Ok((c, expected))
     }
 }
 
@@ -194,7 +207,9 @@ pub(super) fn resume_runtime(
     };
     let c = runtime.chdirs[slot].as_ref().unwrap();
     if c.origin != origin
-        || c.kind != kind
+        || (c.kind != kind
+            && !(kind == api::Kind::Directory
+                && matches!(c.kind, api::Kind::EnterDownloads | api::Kind::Downloads)))
         || sched.processes[idx].pending_call.is_some()
         || sched.processes[idx].ipc_reply_target.is_some()
     {
@@ -213,6 +228,48 @@ pub(super) fn resume_runtime(
     }
     sched.processes[idx].state = ProcessState::BlockedOnIpc;
     Ok(Some(None))
+}
+
+pub(crate) enum DirectoryRoute<'a> {
+    Legacy(String),
+    Service(api::Kind, alloc::borrow::Cow<'a, str>),
+}
+
+/// Common native chdir route, also reached by the Linux syscall translation.
+pub(crate) fn route_directory<'a, E>(
+    sched: &Scheduler,
+    idx: usize,
+    path: &'a str,
+    legacy: impl FnOnce() -> Result<sunlight_fs::vfs::LegacyCwd, E>,
+) -> Result<DirectoryRoute<'a>, E> {
+    use alloc::borrow::Cow;
+    let owner = &sched.processes[sched.shared_process_index(idx)];
+    let current = &sched.processes[idx];
+    if owner.vfs_downloads_cwd {
+        return Ok(DirectoryRoute::Service(
+            api::Kind::Downloads,
+            Cow::Borrowed(path),
+        ));
+    }
+    if current.vfs_stat_routed || owner.vfs_stat_routed {
+        return Ok(DirectoryRoute::Service(
+            api::Kind::Directory,
+            Cow::Borrowed(path),
+        ));
+    }
+    match legacy()? {
+        sunlight_fs::vfs::LegacyCwd::Directory(resolved) => {
+            Ok(DirectoryRoute::Legacy(resolved.path))
+        }
+        sunlight_fs::vfs::LegacyCwd::Downloads(target) => Ok(DirectoryRoute::Service(
+            api::Kind::EnterDownloads,
+            Cow::Owned(target),
+        )),
+    }
+}
+
+pub(crate) fn busy(idx: usize, sched: &Scheduler) -> bool {
+    RUNTIME.lock().chdir_busy(idx, sched)
 }
 
 pub(crate) fn chdir_call(
@@ -277,7 +334,7 @@ pub(super) fn transition_call_runtime(
         .ok_or(stat::Error::Identity)?;
     let waiter = process_identity(&sched.processes[idx]);
     let owner = sched.shared_process_index(idx);
-    if !sched.processes[owner].vfs_root_metadata {
+    if !sched.processes[owner].vfs_root_metadata && kind != api::Kind::EnterDownloads {
         return Err(stat::Error::Identity);
     }
     if kind == api::Kind::Root && (sched.processes[owner].uid != 0 || sched.processes[idx].uid != 0)
@@ -335,22 +392,49 @@ pub(super) fn transition_call_runtime(
     if sched.processes[idx].uid != identity.uid || sched.processes[idx].gid != identity.gid {
         return Err(stat::Error::Identity);
     }
-    let n = runtime
+    let previous = runtime
         .namespaces
         .lookup(identity)
         .and_then(|b| b.validate(identity))
-        .map_err(|_| stat::Error::Prepare)?;
-    let old = Scope {
-        caller,
-        namespace_id: n.id,
-        namespace_generation: n.generation,
-    };
+        .ok()
+        .map(|n| Scope {
+            caller,
+            namespace_id: n.id,
+            namespace_generation: n.generation,
+        });
+    if previous.is_none() && kind != api::Kind::EnterDownloads {
+        return Err(stat::Error::Prepare);
+    }
+    if matches!(kind, api::Kind::EnterDownloads | api::Kind::Downloads) {
+        let process = &sched.processes[owner];
+        if !cfg!(feature = "vfs_c2e_candidate")
+            || process.vfs_root_rebased
+            || process.vfs_downloads_cwd != (kind == api::Kind::Downloads)
+            || (kind == api::Kind::EnterDownloads
+                && (!sunlight_fs::path::service_downloads(path) || process.vfs_stat_routed))
+        {
+            return Err(stat::Error::Identity);
+        }
+    }
     let path = string(path)?;
-    api::encode_transition(old, identity.uid, identity.gid, &path, kind)
-        .map_err(|_| stat::Error::Protocol)?;
+    // Validate the path before queuing. A new entry uses its own provisional
+    // scope in the context when there is no previous service binding.
+    let placeholder = Scope {
+        caller,
+        namespace_id: 1,
+        namespace_generation: 1,
+    };
+    api::encode_transition(
+        previous.unwrap_or(placeholder),
+        identity.uid,
+        identity.gid,
+        &path,
+        kind,
+    )
+    .map_err(|_| stat::Error::Protocol)?;
     let cwd = string(&sched.processes[owner].cwd)?;
     let id = runtime
-        .queue_namespace_inner(identity, LOOKUP_METADATA, Some(old))
+        .queue_namespace_inner(identity, LOOKUP_METADATA, previous)
         .map_err(|_| stat::Error::Capacity)?;
     runtime.chdirs[slot] = Some(Call {
         id,
@@ -358,7 +442,7 @@ pub(super) fn transition_call_runtime(
         waiter,
         origin: (0, 0),
         woken: false,
-        old,
+        previous,
         kind,
         path,
         cwd,
@@ -368,7 +452,7 @@ pub(super) fn transition_call_runtime(
     // Preserve service routing if the shared owner exits before this worker
     // resumes. A withdrawn namespace must never resume in the kernel resolver.
     #[cfg(not(test))]
-    {
+    if matches!(kind, api::Kind::Directory | api::Kind::Root) {
         sched.processes[idx].vfs_stat_routed = true;
     }
     sched.processes[idx].state = ProcessState::BlockedOnIpc;
@@ -433,10 +517,18 @@ pub(super) fn context_runtime(
     caps: &CapabilityBroker,
 ) -> Result<[u8; api::CONTEXT_BYTES], IpcError> {
     let registration = super::transport::authenticate(runtime, pid, epoch, sched, caps)?;
-    let c = runtime.transition(registration, input, sched)?;
-    api::encode_transition(c.old, c.identity.uid, c.identity.gid, &c.path, c.kind)
-        .map_err(|_| IpcError::InvalidCapability)
+    let (c, next) = runtime.transition(registration, input, sched)?;
+    api::encode_transition(
+        c.previous.unwrap_or(next),
+        c.identity.uid,
+        c.identity.gid,
+        &c.path,
+        c.kind,
+    )
+    .map_err(|_| IpcError::InvalidCapability)
 }
+
+pub(crate) type LegacyCwdCommit<'a> = dyn FnMut(&mut Scheduler, String) -> Result<(), u64> + 'a;
 
 pub(crate) fn finish(
     pid: usize,
@@ -444,8 +536,9 @@ pub(crate) fn finish(
     input: &[u8; api::FINISH_BYTES],
     sched: &mut Scheduler,
     caps: &CapabilityBroker,
+    legacy: impl FnOnce(&mut Scheduler, usize, &str, &mut LegacyCwdCommit<'_>) -> Result<(), u64>,
 ) -> Result<(), IpcError> {
-    let result = finish_runtime(&mut RUNTIME.lock(), pid, epoch, input, sched, caps);
+    let result = finish_with_legacy(&mut RUNTIME.lock(), pid, epoch, input, sched, caps, legacy);
     #[cfg(not(test))]
     crate::serial_println!(
         "[VFS-RPC] chdir commit validated={} errno={} epoch={}",
@@ -456,6 +549,7 @@ pub(crate) fn finish(
     result
 }
 
+#[cfg(test)]
 pub(super) fn finish_runtime(
     runtime: &mut Runtime,
     pid: usize,
@@ -464,13 +558,27 @@ pub(super) fn finish_runtime(
     sched: &mut Scheduler,
     caps: &CapabilityBroker,
 ) -> Result<(), IpcError> {
+    finish_with_legacy(runtime, pid, epoch, input, sched, caps, |_, _, _, _| Err(5))
+}
+
+pub(super) fn finish_with_legacy(
+    runtime: &mut Runtime,
+    pid: usize,
+    epoch: u64,
+    input: &[u8; api::FINISH_BYTES],
+    sched: &mut Scheduler,
+    caps: &CapabilityBroker,
+    legacy: impl FnOnce(&mut Scheduler, usize, &str, &mut LegacyCwdCommit<'_>) -> Result<(), u64>,
+) -> Result<(), IpcError> {
     use sunlight_ipc::vfs_rpc::retention::transport::{decode_cwd, CWD_BYTES};
     let frame = Frame::decode(&input[..FRAME_BYTES]).map_err(|_| IpcError::InvalidCapability)?;
     let errno = u64::from_le_bytes(input[FRAME_BYTES..FRAME_BYTES + 8].try_into().unwrap());
     let cwd: &[u8; CWD_BYTES] = input[FRAME_BYTES + 8..].try_into().unwrap();
     let cwd = decode_cwd(cwd).map_err(|_| IpcError::InvalidCapability)?;
     let (registration, id, scope) = match frame {
-        Frame::Retained(r) if errno == 0 => (r.registration(), r.request_id(), r.scope()),
+        Frame::Retained(r) if errno == 0 || errno == api::LEGACY_BOUNDARY => {
+            (r.registration(), r.request_id(), r.scope())
+        }
         Frame::Refused { request, .. } if (1..=4095).contains(&errno) => {
             let Frame::Retain {
                 registration,
@@ -497,7 +605,7 @@ pub(super) fn finish_runtime(
     .encode()
     .map_err(|_| IpcError::InvalidCapability)?;
     let c = match runtime.transition(authenticated, &retain, sched) {
-        Ok(c) => c,
+        Ok((c, _)) => c,
         Err(_) => {
             // A late authenticated success still owns compensation, even if
             // timeout/exit already discarded the syscall continuation.
@@ -519,14 +627,34 @@ pub(super) fn finish_runtime(
                 {
                     remote.delivered = None;
                 }
+                if let Some(call) = runtime.chdirs.iter_mut().flatten().find(|call| {
+                    call.id == id
+                        && call.identity.registration == authenticated
+                        && call.result.is_none()
+                }) {
+                    call.result = Some(5);
+                    runtime.poll_chdirs(sched, sched.global_tick);
+                }
             }
             return Err(IpcError::InvalidCapability);
         }
     };
-    let changes_root = c.kind == api::Kind::Root;
-    if errno == 0 && changes_root && cwd != "/" {
+    let legacy_boundary_valid =
+        if c.path.starts_with('/') && !sunlight_fs::path::service_downloads(&c.path) {
+            cwd == c.path
+        } else {
+            sunlight_fs::path::strip_mount(cwd, "/root").is_some()
+        };
+    let previous = c.previous;
+    let kind = c.kind;
+    if kind == api::Kind::Root && errno == 0 && cwd != "/" {
         return Err(IpcError::InvalidCapability);
     }
+    let waiter = c.waiter;
+    let changes_root = kind == api::Kind::Root;
+    let downloads = matches!(kind, api::Kind::EnterDownloads | api::Kind::Downloads);
+    let mut terminal = errno;
+    let mut accepted = true;
     let identity = c.identity;
     let slot = runtime
         .chdirs
@@ -536,43 +664,91 @@ pub(super) fn finish_runtime(
                 .is_some_and(|c| c.id == id && c.identity == identity)
         })
         .unwrap();
-    if errno != 0 {
+    let owner = sched
+        .processes
+        .iter()
+        .position(|p| process_identity(p) == identity.caller)
+        .unwrap();
+    if let Frame::Refused { .. } = frame {
         runtime
             .refused(authenticated, id, &input[..FRAME_BYTES])
             .map_err(|_| IpcError::InvalidCapability)?;
     } else {
-        // All allocations and structural checks precede cwd mutation.
-        let cwd = string(cwd).map_err(|_| IpcError::InvalidCapability)?;
-        runtime
-            .namespaces
-            .withdraw(identity)
-            .map_err(|_| IpcError::InvalidCapability)?;
-        let installed =
-            runtime.install_retained(authenticated, id, &input[..FRAME_BYTES], Some(identity));
-        if !matches!(installed, Ok(None)) {
-            runtime.chdirs[slot].as_mut().unwrap().result = Some(5);
-            runtime.poll_chdirs(sched, sched.global_tick);
-            return Err(IpcError::InvalidCapability);
-        }
-        let idx = sched
-            .processes
-            .iter()
-            .position(|p| process_identity(p) == identity.caller)
-            .unwrap();
-        let owner = sched.shared_process_index(idx);
-        sched.processes[owner].cwd = cwd;
-        sched.processes[owner].vfs_boot_root = false;
-        if changes_root {
-            sched.processes[owner].vfs_root_rebased = true;
-        }
-        // Sibling profiles refer to the previous cwd. Revoke them atomically
-        // with the shared-process commit; sticky routing prevents fallback.
-        for i in 0..sched.processes.len() {
-            if i != idx && sched.shared_process_index(i) == owner {
-                runtime.withdraw_root_profile(i, sched);
+        let leaving = errno == api::LEGACY_BOUNDARY;
+        let entering_or_staying = downloads && !leaving;
+        let mut receipt_settled = false;
+        let mut publish = |sched: &mut Scheduler, path| {
+            receipt_settled = true;
+            match runtime.install_transition_receipt(
+                authenticated,
+                id,
+                &input[..FRAME_BYTES],
+                Some(identity),
+                previous,
+            ) {
+                Ok(None) => {}
+                _ => return Err(5),
             }
-        }
-        runtime.reconcile_namespaces();
+            let process = &mut sched.processes[owner];
+            process.cwd = path;
+            process.vfs_boot_root = false;
+            if downloads {
+                process.vfs_stat_routed = entering_or_staying;
+                process.vfs_root_metadata = true;
+            }
+            if changes_root {
+                process.vfs_root_rebased = true;
+            }
+            for i in 0..sched.processes.len() {
+                if sched.shared_process_index(i) == owner {
+                    if downloads || changes_root {
+                        sched.processes[i].vfs_downloads_cwd = entering_or_staying;
+                    }
+                    if i != owner {
+                        runtime.withdraw_root_profile(i, sched);
+                    }
+                }
+            }
+            runtime.reconcile_namespaces();
+            Ok(())
+        };
+
+        let result = if leaving {
+            let waiter = sched
+                .processes
+                .iter()
+                .position(|p| process_identity(p) == waiter)
+                .unwrap();
+            if kind == api::Kind::Downloads && legacy_boundary_valid {
+                legacy(sched, waiter, cwd, &mut publish)
+            } else {
+                Err(5)
+            }
+        } else if downloads && !sunlight_fs::path::service_downloads(cwd) {
+            Err(5)
+        } else {
+            string(cwd)
+                .map_err(|_| 12u64)
+                .and_then(|path| publish(sched, path))
+        };
+        terminal = match result {
+            Ok(()) => 0,
+            Err(error) => {
+                if !receipt_settled {
+                    // The legacy resolver may fail before publication. Settle
+                    // the authenticated provisional retain without changing admission.
+                    let _ = runtime.install_transition_receipt(
+                        authenticated,
+                        id,
+                        &input[..FRAME_BYTES],
+                        None,
+                        previous,
+                    );
+                }
+                accepted = false;
+                error
+            }
+        };
     }
     if let Some(remote) = runtime
         .remote
@@ -582,7 +758,11 @@ pub(super) fn finish_runtime(
     {
         remote.delivered = None;
     }
-    runtime.chdirs[slot].as_mut().unwrap().result = Some(errno);
+    runtime.chdirs[slot].as_mut().unwrap().result = Some(terminal);
     runtime.poll_chdirs(sched, sched.global_tick);
-    Ok(())
+    if accepted {
+        Ok(())
+    } else {
+        Err(IpcError::InvalidCapability)
+    }
 }

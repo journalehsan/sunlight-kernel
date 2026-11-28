@@ -1,0 +1,106 @@
+{
+  "milestone": "VFS-C2F2",
+  "status": "PARTIAL",
+  "feature": "vfs_c2e_candidate",
+  "subtree": "/root/Downloads",
+  "transitions": {
+    "prechange_rejection": {
+      "source_confirmation": "PASS",
+      "native_syscall_reproduction": "NOT_RUN",
+      "observation": "The original generic adapter returned error 95 for Downloads."
+    },
+    "legacy_to_service": {
+      "status": "PASS",
+      "level": "host integration",
+      "cases": ["absolute entry", "relative entry from legacy parent", "entry into retained child", "rejected finish preserves previous binding", "shared owner commits worker request"]
+    },
+    "service_to_legacy": {
+      "status": "PASS",
+      "level": "host integration",
+      "cases": ["dot-dot exit", "absolute exit", "repeat crossings", "missing legacy destination", "legacy walk reentering reservation rejected", "shared owner commits worker exit", "open Downloads directory description still supplies relative stat after exit"]
+    },
+    "relative_creation_and_lookup": {
+      "status": "PASS",
+      "level": "host integration",
+      "cases": ["copied open with create after cwd directory rename", "copied metadata lookup from retained cwd after rename", "independent absolute Downloads open after exit"]
+    },
+    "shared_worker_relative_file_and_metadata": {
+      "status": "PARTIAL",
+      "detail": "Shared cwd publication and wake/resume pass. Relative file and metadata channels retain their existing per-caller admission requirements."
+    },
+    "failure_and_settlement": {
+      "status": "PASS",
+      "level": "host integration",
+      "cases": ["failed entry compensation", "failed service and legacy lookup preserve old binding", "service loss with no legacy fallback", "caller retirement under active epoch", "registration retirement drains all backend handles"],
+      "legacy_validation_handles_after_commit": 0,
+      "service_handles_after_live_exit": 2,
+      "service_handles_after_retirement": 0,
+      "outstanding_retains_after_retirement": 0
+    }
+  },
+  "qualification": {
+    "filesystem_host": {
+      "status": "PASS", "tests": 126,
+      "command": "cargo test --offline -p sunlight-fs --lib --target x86_64-unknown-linux-gnu",
+      "log": "target/vfs-c2f2/fs.log"
+    },
+    "service_host": {
+      "status": "PASS", "tests": 94,
+      "command": "cargo test --offline -p sunlight-vfs-server --lib --features vfs-c2e-candidate --target x86_64-unknown-linux-gnu",
+      "log": "target/vfs-c2f2/service.log"
+    },
+    "registration_and_cwd_host": {
+      "status": "PASS", "tests": 115,
+      "command": "python3 tools/test_vfs_registration_host.py",
+      "log": "target/vfs-c2f2/registration.log"
+    },
+    "descriptor_host": {
+      "status": "PASS", "tests": 20,
+      "command": "cargo test --offline --manifest-path tools/tests/fd-description/Cargo.toml --target x86_64-unknown-linux-gnu",
+      "log": "target/vfs-c2f2/descriptor.log"
+    },
+    "vfs_transport_host": {
+      "status": "PASS", "tests": 76,
+      "command": "cargo test --offline -p sunlight-ipc --lib --target x86_64-unknown-linux-gnu vfs_rpc",
+      "log": "target/vfs-c2f2/ipc.log"
+    },
+    "production_release": {
+      "status": "PASS",
+      "command": "cargo build --offline -p sunlight-kernel --release",
+      "log": "target/vfs-c2f2/production-final.log"
+    },
+    "candidate_debug": {
+      "status": "PASS",
+      "command": "cargo build --offline -p sunlight-kernel --features vfs_c2e_candidate",
+      "log": "target/vfs-c2f2/candidate-final.log"
+    },
+    "ordinary_boot": {
+      "status": "BLOCKED", "command": "bash tools/test.sh",
+      "reason": "The unchanged ownership guard rejects four historical ownership sites before guest launch.",
+      "log": "target/vfs-c2f2/boot.log"
+    },
+    "native_guest_syscalls": {"status": "NOT_RUN"},
+    "linux_guest_syscalls": {"status": "NOT_RUN"},
+    "guest_exit_exec_and_regressions": {
+      "status": "NOT_RUN",
+      "coverage": ["C2E", "C2F", "C2D", "C2B", "C1E10", "C1E11", "C1E12", "C1E6A", "C1E6B", "descriptor and process retirement"]
+    },
+    "c2c_fixture": {
+      "status": "PASS",
+      "command": "sha256sum -c target/vfs-c2e/c2c-fixture.sha256",
+      "log": "target/vfs-c2f2/fixture.log"
+    }
+  },
+  "guard": {
+    "inventory": {"status": "PASS", "before": 71, "after": 71, "added": 0, "removed": 0, "relocated": 0},
+    "no_growth": {"status": "FAIL", "before_unmatched": 4, "after_unmatched": 4},
+    "final_removal": {"status": "FAIL", "before": 71, "after": 71},
+    "historical_findings": {
+      "storage::mount": {"commit": "dd00fa775", "reason": "existing FAT constructor binding rewritten"},
+      "linux_procfs::mountinfo_snapshot": {"commit": "dd00fa775", "reason": "unreviewed direct legacy topology lookup"},
+      "sys_linux_statfs": {"commit": "dd00fa775", "reason": "unreviewed direct legacy capacity lookup"},
+      "process::mmap::sys_mmap": {"commit": "5b8579f1d", "reason": "unreviewed legacy private mmap lookup"}
+    },
+    "logs": "target/vfs-c2f2/guard-{before,after}-{0,1,2}.log"
+  }
+}

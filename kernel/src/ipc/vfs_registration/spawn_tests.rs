@@ -237,6 +237,8 @@ fn reserve(sched: &mut Scheduler, pid: usize) -> Identity {
                 vfs_boot_root: false,
                 vfs_file_routed: false,
                 vfs_root_rebased: false,
+                vfs_downloads_cwd: false,
+                shared_owner: None,
                 vfs_stat_routed: false,
                 cwd: "/".into(),
                 uid: 1000,
@@ -571,6 +573,8 @@ fn spawn_vfs_policy_and_lease_settlement_release_private_pid() {
                 sched,
                 caps: &caps,
                 reject_commit: false,
+                legacy: None,
+                file: None,
             },
             &namespace,
         );

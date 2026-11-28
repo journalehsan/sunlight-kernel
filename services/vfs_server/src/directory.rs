@@ -19,6 +19,7 @@ pub struct DirectoryPair<D: BlockDevice = NullDevice> {
     filesystem: Backend<D>,
     root: FileHandle,
     directory: FileHandle,
+    downloads_cwd: bool,
 }
 
 enum Backend<D: BlockDevice> {
@@ -107,6 +108,7 @@ impl<D: BlockDevice> DirectoryNamespace<D> {
             filesystem: self.filesystem.clone(),
             root,
             directory,
+            downloads_cwd: false,
         })
     }
 }
@@ -145,7 +147,31 @@ impl<D: BlockDevice> DirectoryPair<D> {
             filesystem: self.filesystem.clone(),
             root,
             directory,
+            downloads_cwd: false,
         })
+    }
+
+    pub(crate) fn downloads_exit(
+        &self,
+        path: &str,
+        caller: sunlight_fs::Credential,
+    ) -> Result<Option<alloc::string::String>, FsError> {
+        match &self.filesystem {
+            Backend::Mounted(fs) => fs.lock().downloads_exit(self.root, self.directory, path, caller),
+            Backend::Isolated(_) => Err(FsError::Unsupported),
+        }
+    }
+
+    pub(crate) fn change_downloads(
+        &self,
+        path: &str,
+        caller: sunlight_fs::Credential,
+    ) -> Result<Self, FsError> {
+        let (root, directory) = match &self.filesystem {
+            Backend::Mounted(fs) => fs.lock().pin_downloads_beneath(self.root, self.directory, path, caller)?,
+            Backend::Isolated(_) => return Err(FsError::Unsupported),
+        };
+        Ok(Self { filesystem: self.filesystem.clone(), root, directory, downloads_cwd: true })
     }
 
     /// Trusted root-policy narrowing. Reset cwd to the new root so no retained
@@ -166,6 +192,7 @@ impl<D: BlockDevice> DirectoryPair<D> {
             filesystem: self.filesystem.clone(),
             root,
             directory,
+            downloads_cwd: false,
         })
     }
 
@@ -177,18 +204,23 @@ impl<D: BlockDevice> DirectoryPair<D> {
         caller: sunlight_fs::Credential,
     ) -> Result<sunlight_fs::vfs::ObjectMetadata, FsError> {
         match &self.filesystem {
-            Backend::Mounted(fs) => fs
-                .lock()
-                .stat_beneath(self.root, self.directory, path, caller),
+            Backend::Mounted(fs) => {
+                let mut fs = fs.lock();
+                if self.downloads_cwd {
+                    fs.check_downloads_beneath(self.root, self.directory, path, caller)?;
+                }
+                fs.stat_beneath(self.root, self.directory, path, caller)
+            }
             Backend::Isolated(_) => Err(FsError::Unsupported),
         }
     }
 }
 
 impl<Device: BlockDevice> DirectoryPair<Device> {
-    #[cfg(feature = "vfs-c1e2-test")]
+    #[cfg(any(feature = "vfs-c1e2-test", feature = "vfs-c2e-candidate"))]
     pub(crate) fn mutate(
         &self,
+        anchors: (Option<FileHandle>, Option<FileHandle>),
         request: sunlight_ipc::vfs_rpc::file_transport::Request<'_>,
     ) -> Result<(), FsError> {
         use sunlight_fs::{Credential, FsOperation};
@@ -198,23 +230,34 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
         };
         let caller = Credential { uid: request.uid, gid: request.gid };
         let authorize = |fs: &Vfs<Device>, path: &str, op| {
-            authorize_write(fs, path, caller, op, request.arg1 == 1)
+            authorize_write(fs, path, caller, op, request.arg1 & 1 != 0)
         };
         let paths = core::str::from_utf8(request.payload).map_err(|_| FsError::InvalidPath)?;
         let mut fs = fs.lock();
+        let (anchor, target_anchor) = anchors;
+        let cwd = anchor.unwrap_or(self.directory);
+        if self.downloads_cwd || anchor.is_some() {
+            let first = paths.split('\0').next().ok_or(FsError::InvalidPath)?;
+            fs.check_downloads_beneath(self.root, cwd, first, caller)?;
+        }
         match request.op {
             api::MKDIR => fs.mkdir_beneath(
-                self.root, self.directory, paths, caller, request.arg0 as u16,
+                self.root, cwd, paths, caller, request.arg0 as u16,
                 |fs, path| authorize(fs, path, FsOperation::Mkdir),
             ),
             api::UNLINK => fs.unlink_beneath(
-                self.root, self.directory, paths, caller,
+                self.root, cwd, paths, caller,
                 |fs, path| authorize(fs, path, FsOperation::Delete),
             ),
             api::RENAME => {
                 let (old, new) = paths.split_once('\0').ok_or(FsError::InvalidPath)?;
-                fs.rename_beneath(
-                    self.root, self.directory, old, new, caller, request.arg0 != 0,
+                let target = target_anchor.unwrap_or(cwd);
+                if self.downloads_cwd || anchor.is_some() {
+                    fs.check_downloads_beneath(self.root, target, new, caller)?;
+                }
+                fs.rename_between(
+                    self.root, (cwd, old), (target, new), caller,
+                    target_anchor.is_none() && request.arg0 != 0,
                     |fs, old, new| {
                         authorize(fs, old, FsOperation::Delete)?;
                         authorize(fs, new, FsOperation::Create)
@@ -225,18 +268,41 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
         }
     }
 
+    #[cfg(feature = "vfs-c2e-candidate")]
+    pub(crate) fn stat_at(
+        &self, anchor: FileHandle, path: &str, caller: sunlight_fs::Credential,
+    ) -> Result<sunlight_fs::FileStat, FsError> {
+        let Backend::Mounted(fs) = &self.filesystem else {
+            return Err(FsError::Unsupported);
+        };
+        let mut fs = fs.lock();
+        fs.check_downloads_beneath(self.root, anchor, path, caller)?;
+        Ok(fs.stat_beneath(self.root, anchor, path, caller)?.stat)
+    }
+
     pub(crate) fn open_file(
         &self,
         path: &str,
         caller: sunlight_fs::Credential,
         options: sunlight_fs::vfs::OpenOptions,
         storage_admin: bool,
+        directory_open: bool,
+        anchor: Option<FileHandle>,
     ) -> Result<crate::open::File<Device>, FsError> {
         match &self.filesystem {
             Backend::Mounted(fs) => {
-                let handle = fs.lock().open_file_options_beneath(
+                let cwd = anchor.unwrap_or(self.directory);
+                let mut namespace = fs.lock();
+                if self.downloads_cwd || directory_open || anchor.is_some() {
+                    namespace.check_downloads_beneath(self.root, cwd, path, caller)?;
+                }
+                if directory_open {
+                    let handle = namespace.open_directory_beneath(self.root, cwd, path, caller)?;
+                    return Ok(crate::open::File::directory(Arc::clone(fs), handle));
+                }
+                let handle = namespace.open_file_options_beneath(
                     self.root,
-                    self.directory,
+                    cwd,
                     path,
                     caller,
                     options,

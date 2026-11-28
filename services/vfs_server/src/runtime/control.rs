@@ -180,7 +180,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
                     break;
                 };
                 if let Some(context) = control.chdir(registration.epoch, &bytes) {
-                    if !self.chdir_control(control, registration, &bytes, &context) {
+                    if !self.chdir_control(control, registration, &bytes, &context, namespace) {
                         break;
                     }
                     continue;
@@ -220,6 +220,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         authenticated: Registration,
         bytes: &[u8; FRAME_BYTES],
         context: &[u8; sunlight_ipc::vfs_rpc::chdir_transport::CONTEXT_BYTES],
+        namespace: Option<&crate::directory::DirectoryNamespace<Device>>,
     ) -> bool {
         use super::wire::Frame;
         use crate::policy::Error;
@@ -244,22 +245,27 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             .policy_mut(authenticated)
             .and_then(|p| p.save_directory(c.old))
             .ok();
-        let change = match c.kind {
-            sunlight_ipc::vfs_rpc::chdir_transport::Kind::Directory => Self::change_directory,
-            sunlight_ipc::vfs_rpc::chdir_transport::Kind::Root => Self::change_root,
+        use sunlight_ipc::vfs_rpc::chdir_transport::{Kind, LEGACY_BOUNDARY};
+        let caller = sunlight_fs::Credential { uid: c.uid, gid: c.gid };
+        let revalidate = || control.chdir(authenticated.epoch, bytes).as_ref() == Some(context);
+        let changed = match c.kind {
+            Kind::Directory => self.change_directory(authenticated, c.old, scope, c.path, caller, revalidate).map(|()| None),
+            Kind::Root => self.change_root(authenticated, c.old, scope, c.path, caller, revalidate).map(|()| None),
+            Kind::EnterDownloads => namespace.ok_or(Error::Scope).and_then(|namespace| {
+                self.policy_mut(authenticated)?.enter_downloads(c.old, scope, namespace, c.path, caller, revalidate)
+            }).map(|()| None),
+            Kind::Downloads => self.policy_mut(authenticated).and_then(|policy| {
+                let exit = policy.downloads_exit(c.old, c.path, caller)?;
+                if exit.is_some() {
+                    // Preserve the caller's root scope for independent absolute
+                    // operations and open directory descriptions after exit.
+                    policy.restore_boot_directory(c.old, scope, caller, revalidate)?;
+                } else {
+                    policy.change_downloads(c.old, scope, c.path, caller, revalidate)?;
+                }
+                Ok(exit)
+            }),
         };
-        let changed = change(
-            self,
-            authenticated,
-            c.old,
-            scope,
-            c.path,
-            sunlight_fs::Credential {
-                uid: c.uid,
-                gid: c.gid,
-            },
-            || control.chdir(authenticated.epoch, bytes).as_ref() == Some(context),
-        );
         let errno_for = |error: &Error| match error {
             Error::Filesystem(FsError::NotFound) => 2,
             Error::Filesystem(FsError::NotDir) => 20,
@@ -270,18 +276,25 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             _ => 5,
         };
         let mut errno = changed.as_ref().err().map_or(0, errno_for);
-        let prepared = if changed.is_ok() {
-            self.policy_mut(authenticated)
-                .and_then(|p| p.cwd(scope))
-                .and_then(|cwd| self.request(authenticated, bytes).map(|reply| (reply, cwd)))
-        } else {
-            self.policy_mut(authenticated)
+        let changed_policy = changed.is_ok();
+        let prepared = match changed {
+            Ok(exit) => {
+                let cwd = match exit {
+                    Some(path) => {
+                        errno = LEGACY_BOUNDARY;
+                        Ok(path)
+                    }
+                    None => self.policy_mut(authenticated).and_then(|p| p.cwd(scope)),
+                };
+                cwd.and_then(|cwd| self.request(authenticated, bytes).map(|reply| (reply, cwd)))
+            }
+            Err(_) => self.policy_mut(authenticated)
                 .and_then(|p| p.refuse(authenticated, bytes))
-                .map(|reply| (reply, alloc::string::String::from("/")))
+                .map(|reply| (reply, alloc::string::String::from("/"))),
         };
         let (reply, cwd) = match prepared {
             Ok((reply, cwd)) => {
-                if changed.is_ok() && !matches!(reply, Frame::Retained(_)) {
+                if changed_policy && !matches!(reply, Frame::Retained(_)) {
                     if let Some(saved) = saved.take() {
                         self.policy_mut(authenticated)
                             .unwrap()
@@ -291,7 +304,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
                 }
                 (reply, cwd)
             }
-            Err(error) if changed.is_ok() => {
+            Err(error) if changed_policy => {
                 // Failure obtaining a representable getcwd result must leave
                 // the old policy intact. Refusal owns replay accounting.
                 if let Some(saved) = saved.take() {
@@ -316,6 +329,11 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         let retained = matches!(reply, Frame::Retained(_));
         let accepted = control.finish_chdir(authenticated.epoch, &encoded, errno, &cwd);
         if !accepted || !retained {
+            if retained {
+                if let Some(saved) = saved.take() {
+                    self.policy_mut(authenticated).unwrap().restore_directory(scope, saved);
+                }
+            }
             let _ = self.withdraw(authenticated, scope);
             if let Frame::Retained(receipt) = reply {
                 // A rejected commit cannot leak the provisional remote lease.

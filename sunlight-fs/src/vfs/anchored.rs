@@ -119,8 +119,20 @@ impl<D: BlockDevice> Vfs<D> {
         no_replace: bool,
         authorize: impl FnOnce(&Self, &str, &str) -> Result<(), FsError>,
     ) -> Result<(), FsError> {
-        let source = self.mutation_leaf(root, cwd, old, caller)?;
-        let target = self.mutation_leaf(root, cwd, new, caller)?;
+        self.rename_between(root, (cwd, old), (cwd, new), caller, no_replace, authorize)
+    }
+
+    pub fn rename_between(
+        &mut self,
+        root: FileHandle,
+        (source_dir, old): (FileHandle, &str),
+        (target_dir, new): (FileHandle, &str),
+        caller: Credential,
+        no_replace: bool,
+        authorize: impl FnOnce(&Self, &str, &str) -> Result<(), FsError>,
+    ) -> Result<(), FsError> {
+        let source = self.mutation_leaf(root, source_dir, old, caller)?;
+        let target = self.mutation_leaf(root, target_dir, new, caller)?;
         let source = source.as_str();
         let target = target.as_str();
         authorize(self, source, target)?;
@@ -184,6 +196,118 @@ impl<D: BlockDevice> Vfs<D> {
         }
         resolved.append(leaf)?;
         Ok(resolved)
+    }
+
+    /// Keep directory-descriptor traversal within the mounted Downloads tree.
+    /// Walking only the parents also permits an absent final creation target.
+    pub fn check_downloads_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+    ) -> Result<(), FsError> {
+        if self.downloads_authority != super::DownloadsAuthority::Mounted {
+            return Err(FsError::Unsupported);
+        }
+        let relative = !path.starts_with('/');
+        let resolved = self.walk_beneath(root, cwd, path, caller, |fs, parent, _| {
+            if relative && !crate::path::service_downloads(parent) {
+                return Err(FsError::Unsupported);
+            }
+            fs.lookup_metadata(parent).map(|metadata| metadata.stat)
+        })?;
+        if !crate::path::service_downloads(resolved.as_str()) {
+            return Err(FsError::Unsupported);
+        }
+        Ok(())
+    }
+
+
+    /// Walk from an authenticated Downloads cwd up to the first legacy component.
+    /// The returned path includes the unwalked suffix for the legacy owner.
+    pub fn downloads_exit(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+    ) -> Result<Option<alloc::string::String>, FsError> {
+        if self.downloads_authority != super::DownloadsAuthority::Mounted
+            || self.lookup_anchor(root)?.as_str() != "/"
+            || !crate::path::service_downloads(self.lookup_anchor(cwd)?.as_str())
+        {
+            return Err(FsError::PermissionDenied);
+        }
+        let absolute = path.starts_with('/');
+        if absolute && !crate::path::service_downloads(path) {
+            return Ok(Some(copy_boundary_path("", path)?));
+        }
+        let mut exit = None;
+        let mut entered = !absolute;
+        let result = self.walk_beneath(root, cwd, path, caller, |fs, parent, suffix| {
+            let owned = crate::path::service_downloads(parent);
+            if entered && !owned {
+                exit = Some(copy_boundary_path(parent, suffix)?);
+                return Err(FsError::Unsupported);
+            }
+            entered |= owned;
+            fs.lookup_metadata(parent).map(|metadata| metadata.stat)
+        });
+        match (result, exit) {
+            (_, Some(path)) => Ok(Some(path)),
+            (Ok(final_path), None) if !crate::path::service_downloads(final_path.as_str()) => {
+                Ok(Some(copy_boundary_path(final_path.as_str(), "")?))
+            }
+            (Ok(_), None) => Ok(None),
+            (Err(error), None) => Err(error),
+        }
+    }
+
+    /// Verify that traversal ends on the mounted authority and does not leave
+    /// Downloads after entering it. Hold the same borrow through pinning.
+    pub fn pin_downloads_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+    ) -> Result<(FileHandle, FileHandle), FsError> {
+        if self.downloads_authority != super::DownloadsAuthority::Mounted {
+            return Err(FsError::Unsupported);
+        }
+        let mut entered = false;
+        let resolved = self.walk_beneath(root, cwd, path, caller, |fs, parent, _| {
+            let owned = crate::path::service_downloads(parent);
+            if entered && !owned {
+                return Err(FsError::Unsupported);
+            }
+            entered |= owned;
+            fs.lookup_metadata(parent).map(|metadata| metadata.stat)
+        })?;
+        if !crate::path::service_downloads(resolved.as_str()) {
+            return Err(FsError::Unsupported);
+        }
+        let stat = self.lookup_metadata(resolved.as_str())?.stat;
+        self.pin_resolved_directory(root, resolved, stat, caller, false)
+    }
+
+    /// Open a searchable directory for a read-only directory description.
+    pub fn open_directory_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+    ) -> Result<FileHandle, FsError> {
+        let (resolved, metadata) = self.resolve_beneath(root, cwd, path, caller)?;
+        if metadata.stat.file_type != FileType::Directory {
+            return Err(FsError::NotDir);
+        }
+        if !check_permission(&metadata.stat, &caller, PermCheck::Read) {
+            return Err(FsError::PermissionDenied);
+        }
+        self.open(resolved.as_str())
     }
 
     /// Open an existing regular file under retained anchors. Search, access
@@ -323,10 +447,21 @@ impl<D: BlockDevice> Vfs<D> {
         replace_root: bool,
     ) -> Result<(FileHandle, FileHandle), FsError> {
         let (resolved, metadata) = self.resolve_beneath(root, cwd, path, caller)?;
-        if metadata.stat.file_type != FileType::Directory {
+        self.pin_resolved_directory(root, resolved, metadata.stat, caller, replace_root)
+    }
+
+    fn pin_resolved_directory(
+        &mut self,
+        root: FileHandle,
+        resolved: LookupPath,
+        stat: FileStat,
+        caller: Credential,
+        replace_root: bool,
+    ) -> Result<(FileHandle, FileHandle), FsError> {
+        if stat.file_type != FileType::Directory {
             return Err(FsError::NotDir);
         }
-        if !check_permission(&metadata.stat, &caller, PermCheck::Execute) {
+        if !check_permission(&stat, &caller, PermCheck::Execute) {
             return Err(FsError::PermissionDenied);
         }
         let root_path = if replace_root {
@@ -352,7 +487,7 @@ impl<D: BlockDevice> Vfs<D> {
         path: &str,
         caller: Credential,
     ) -> Result<(LookupPath, ObjectMetadata), FsError> {
-        let current = self.walk_beneath(root, cwd, path, caller, |fs, parent| {
+        let current = self.walk_beneath(root, cwd, path, caller, |fs, parent, _| {
             fs.lookup_metadata(parent).map(|metadata| metadata.stat)
         })?;
         let result = self.lookup_metadata(current.as_str())?;
@@ -368,7 +503,7 @@ impl<D: BlockDevice> Vfs<D> {
         cwd: FileHandle,
         path: &str,
         caller: Credential,
-        mut stat_parent: impl FnMut(&mut Self, &str) -> Result<FileStat, FsError>,
+        mut stat_parent: impl FnMut(&mut Self, &str, &str) -> Result<FileStat, FsError>,
     ) -> Result<LookupPath, FsError> {
         if path.is_empty() || path.len() > LOOKUP_PATH_MAX || path.as_bytes().contains(&0) {
             return Err(FsError::InvalidPath);
@@ -383,7 +518,8 @@ impl<D: BlockDevice> Vfs<D> {
             return Err(FsError::PermissionDenied);
         }
         for component in path.split('/').filter(|part| !part.is_empty()) {
-            let parent = stat_parent(self, current.as_str())?;
+            let start = component.as_ptr() as usize - path.as_ptr() as usize;
+            let parent = stat_parent(self, current.as_str(), &path[start..])?;
             if parent.file_type != FileType::Directory {
                 return Err(FsError::NotDir);
             }
@@ -499,3 +635,19 @@ fn beneath(root: &str, path: &str) -> bool {
 #[cfg(test)]
 #[path = "anchored_tests.rs"]
 mod tests;
+
+fn copy_boundary_path(parent: &str, suffix: &str) -> Result<alloc::string::String, FsError> {
+    let separator = !parent.is_empty() && parent != "/" && !suffix.is_empty();
+    let len = parent.len() + usize::from(separator) + suffix.len();
+    if len > LOOKUP_PATH_MAX {
+        return Err(FsError::InvalidPath);
+    }
+    let mut path = alloc::string::String::new();
+    path.try_reserve_exact(len).map_err(|_| FsError::NoMemory)?;
+    path.push_str(parent);
+    if separator {
+        path.push('/');
+    }
+    path.push_str(suffix);
+    Ok(path)
+}

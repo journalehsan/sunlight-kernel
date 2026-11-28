@@ -272,6 +272,8 @@ pub struct Process {
     /// An opaque service root replaced the boot root; the kernel cannot
     /// project its mount table into that view.
     pub vfs_root_rebased: bool,
+    /// The shared cwd is owned by the opt-in Downloads authority.
+    pub vfs_downloads_cwd: bool,
     /// Sticky native StatPath routing choice. Withdrawal and exec must not
     /// restore kernel traversal. Selected parents pass this choice to children.
     pub vfs_stat_routed: bool,
@@ -674,6 +676,7 @@ impl Process {
             vfs_root_metadata: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
+            vfs_downloads_cwd: false,
             vfs_stat_routed: false,
             vfs_file_routed: false,
             service_identity: 0,
@@ -927,6 +930,7 @@ impl Process {
             vfs_root_metadata: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
+            vfs_downloads_cwd: false,
             vfs_stat_routed: false,
             vfs_file_routed: false,
             service_identity: 0,

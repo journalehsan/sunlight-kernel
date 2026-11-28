@@ -8,7 +8,7 @@ mod storage_tests;
 
 mod lookup;
 mod mountinfo;
-pub use lookup::{BackendCapabilities, Metadata, MetadataSource, ResolvedPath, RESOLVE_PATH_MAX};
+pub use lookup::{LegacyCwd, BackendCapabilities, Metadata, MetadataSource, ResolvedPath, RESOLVE_PATH_MAX};
 
 pub const MAX_MOUNTS: usize = 8;
 /// Maximum file-name length reported by `read_dir`.
@@ -1022,9 +1022,17 @@ pub struct MountInfo<'a> {
     pub path: &'a str,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DownloadsAuthority {
+    Legacy,
+    Reserved,
+    Mounted,
+}
+
 pub struct Vfs<D: BlockDevice = NullDevice> {
     mounts: [Option<Mount<D>>; MAX_MOUNTS],
     count: usize,
+    downloads_authority: DownloadsAuthority,
     #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
     topology_revision: u64,
     // Upper handle byte: 3 slot bits and 5 incarnation bits. Retire a slot
@@ -1037,10 +1045,72 @@ impl<D: BlockDevice> Vfs<D> {
         Self {
             mounts: [const { None }; MAX_MOUNTS],
             count: 0,
+            downloads_authority: DownloadsAuthority::Legacy,
             #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
             topology_revision: 0,
             next_tags: [0, 1, 2, 3, 4, 5, 6, 7],
         }
+    }
+
+    /// Fence the empty boot mountpoint before any legacy backend is installed.
+    pub fn reserve_service_downloads(&mut self, seed: &[crate::RamEntry]) -> Result<(), FsError> {
+        if self.count != 0 {
+            return Err(FsError::Busy);
+        }
+        let mut entries = seed.iter().filter(|entry| path::service_downloads(entry.path));
+        if !entries.next().is_some_and(|entry| {
+            entry.path == path::SERVICE_DOWNLOADS && entry.is_dir
+                && entry.uid == 0 && entry.gid == 0 && entry.mode == mode::DIR_700
+        }) || entries.next().is_some() {
+            return Err(FsError::InvalidPath);
+        }
+        self.downloads_authority = DownloadsAuthority::Reserved;
+        Ok(())
+    }
+
+    fn check_service_reservation(&self, path: &str) -> Result<(), FsError> {
+        if self.downloads_authority == DownloadsAuthority::Reserved && path::service_downloads(path) {
+            return Err(FsError::Unsupported);
+        }
+        Ok(())
+    }
+
+    fn check_downloads_mountpoint(&self, path: &str) -> Result<(), FsError> {
+        let target = crate::path::SERVICE_DOWNLOADS;
+        if self.downloads_authority != DownloadsAuthority::Legacy
+            && path::strip_mount(target, path).is_some()
+        {
+            return Err(FsError::Busy);
+        }
+        Ok(())
+    }
+
+    /// Install the service-owned mount before publishing any namespace leases.
+    pub fn mount_service_downloads(&mut self) -> Result<(), FsError> {
+        const ROOT: &[crate::RamEntry] = &[crate::RamEntry::dir("/", 0, 0, mode::DIR_700)];
+        let target = path::SERVICE_DOWNLOADS;
+        if self.open_handle_count() != 0 {
+            return Err(FsError::Busy);
+        }
+        let stat = self.stat(target)?;
+        if stat.file_type != FileType::Directory
+            || stat.uid != 0
+            || stat.gid != 0
+            || stat.mode != mode::DIR_700
+        {
+            return Err(FsError::InvalidPath);
+        }
+        let mut empty = true;
+        self.read_dir(target, &mut |_| {
+            empty = false;
+            false
+        })?;
+        if !empty {
+            return Err(FsError::Busy);
+        }
+        self.mount_tmpfs(target, crate::Tmpfs::new(ROOT))?;
+        self.downloads_authority = DownloadsAuthority::Mounted;
+        Ok(())
     }
 
     /// Mount a filesystem at `path`. Path resolution picks the
@@ -1067,6 +1137,14 @@ impl<D: BlockDevice> Vfs<D> {
         backend: impl FnOnce() -> FsNode<D>,
     ) -> Result<usize, FsError> {
         path::validate_absolute(path)?;
+        self.check_service_reservation(path)?;
+        if self.downloads_authority != DownloadsAuthority::Legacy
+            && path != "/"
+            && (path::service_downloads(path)
+                || path::strip_mount(path::SERVICE_DOWNLOADS, path).is_some())
+        {
+            return Err(FsError::Unsupported);
+        }
         if self.count >= MAX_MOUNTS {
             return Err(FsError::TooManyOpenFiles);
         }
@@ -1478,6 +1556,8 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     pub fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+        self.check_service_reservation(path)?;
+        self.check_downloads_mountpoint(path)?;
         #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
         self.check_attachment_ancestor(path)?;
         let (mount_idx, local_path) = self.resolve_mount(path)?;
@@ -1499,6 +1579,10 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     pub fn rename(&mut self, old_path: &str, new_path: &str) -> Result<(), FsError> {
+        self.check_service_reservation(old_path)?;
+        self.check_service_reservation(new_path)?;
+        self.check_downloads_mountpoint(old_path)?;
+        self.check_downloads_mountpoint(new_path)?;
         #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
         {
             self.check_attachment_ancestor(old_path)?;
@@ -1611,6 +1695,7 @@ impl<D: BlockDevice> Vfs<D> {
 
     fn resolve_mount<'a>(&self, path: &'a str) -> Result<(usize, &'a str), FsError> {
         path::validate_absolute(path)?;
+        self.check_service_reservation(path)?;
         let mut best: Option<(usize, usize, &'a str)> = None;
         for (idx, mount) in self.mounts.iter().enumerate() {
             let Some(mount) = mount else {
@@ -1640,6 +1725,7 @@ impl<D: BlockDevice> Vfs<D> {
 
     fn resolve_mount_for_create<'a>(&self, path: &'a str) -> Result<(usize, &'a str), FsError> {
         path::validate_absolute(path)?;
+        self.check_service_reservation(path)?;
         let parent = parent_path(path)?;
         let (mount_idx, _) = self.resolve_mount(parent)?;
         let mount = self.mounts[mount_idx].as_ref().ok_or(FsError::NotFound)?;
@@ -1728,6 +1814,100 @@ mod tests {
         mode::FILE_644,
         b"boot volume\n",
     )];
+
+    static DOWNLOADS_SEED: &[RamEntry] = &[
+        RamEntry::dir("/root", 0, 0, mode::DIR_700),
+        RamEntry::dir(path::SERVICE_DOWNLOADS, 0, 0, mode::DIR_700),
+        RamEntry::file("/root/boot", 0, 0, mode::FILE_644, b"boot"),
+    ];
+
+    #[test]
+    fn downloads_reservation_blocks_legacy_producers_before_first_mount() {
+        const FILE: &str = "/root/Downloads/file";
+        let mut legacy: Vfs = Vfs::new();
+        legacy.reserve_service_downloads(DOWNLOADS_SEED).unwrap();
+        legacy.mount_tmpfs("/", crate::Tmpfs::new(DOWNLOADS_SEED)).unwrap();
+        assert_eq!(legacy.open(path::SERVICE_DOWNLOADS), Err(FsError::Unsupported));
+        assert_eq!(legacy.create_file(FILE, 0, 0, mode::FILE_644), Err(FsError::Unsupported));
+        assert_eq!(legacy.mkdir("/root/Downloads/dir", 0, 0, mode::DIR_700), Err(FsError::Unsupported));
+        assert_eq!(legacy.rename("/root/boot", FILE), Err(FsError::Unsupported));
+        assert_eq!(legacy.mount_tmpfs("/root", crate::Tmpfs::new(&[])), Err(FsError::Unsupported));
+        assert_eq!(legacy.rename("/root", "/moved"), Err(FsError::Busy));
+        assert_eq!(legacy.unlink("/root"), Err(FsError::Busy));
+        assert_eq!(legacy.reserve_service_downloads(DOWNLOADS_SEED), Err(FsError::Busy));
+        let handle = legacy.open("/root/boot").unwrap();
+        let mut data = [0; 4];
+        assert_eq!(legacy.read(handle, 0, &mut data), Ok(4));
+        assert_eq!(&data, b"boot");
+        legacy.close(handle).unwrap();
+    }
+
+    #[test]
+    fn downloads_reservation_rejects_a_nonempty_seed() {
+        let seed = [
+            RamEntry::dir(path::SERVICE_DOWNLOADS, 0, 0, mode::DIR_700),
+            RamEntry::file("/root/Downloads/data", 0, 0, mode::FILE_644, b"preserve"),
+        ];
+        let mut legacy: Vfs = Vfs::new();
+        assert_eq!(legacy.reserve_service_downloads(&seed), Err(FsError::InvalidPath));
+    }
+
+    #[test]
+    fn downloads_mount_refuses_live_references_and_existing_data() {
+        const FILE: &str = "/root/Downloads/existing";
+        let mut service: Vfs = Vfs::new();
+        service.mount_tmpfs("/", crate::Tmpfs::new(DOWNLOADS_SEED)).unwrap();
+        let cwd = service.open(path::SERVICE_DOWNLOADS).unwrap();
+        assert_eq!(service.mount_service_downloads(), Err(FsError::Busy));
+        service.close(cwd).unwrap();
+        let handle = service.create_file(FILE, 0, 0, mode::FILE_644).unwrap();
+        service.write(handle, 0, b"preserve").unwrap();
+        service.close(handle).unwrap();
+        assert_eq!(service.mount_service_downloads(), Err(FsError::Busy));
+        let handle = service.open(FILE).unwrap();
+        let mut contents = [0; 8];
+        assert_eq!(service.read(handle, 0, &mut contents), Ok(8));
+        assert_eq!(&contents, b"preserve");
+        service.close(handle).unwrap();
+        assert_eq!(service.open_handle_count(), 0);
+    }
+
+    #[test]
+    fn downloads_mount_preserves_open_file_across_rename() {
+        const FILE: &str = "/root/Downloads/file";
+        const MOVED: &str = "/root/Downloads/moved";
+        let mut service: Vfs = Vfs::new();
+        service.mount_tmpfs("/", crate::Tmpfs::new(DOWNLOADS_SEED)).unwrap();
+        service.mount_service_downloads().unwrap();
+        assert_eq!(service.mount_tmpfs("/root", crate::Tmpfs::new(&[])), Err(FsError::Unsupported));
+        assert_eq!(service.rename("/root", "/moved"), Err(FsError::Busy));
+        assert_eq!(service.unlink(path::SERVICE_DOWNLOADS), Err(FsError::Busy));
+        let baseline = service.open_handle_count();
+        let root = service.open("/").unwrap();
+        let cwd = service.open(path::SERVICE_DOWNLOADS).unwrap();
+        let actor = crate::Credential { uid: 0, gid: 0 };
+        let owner = service.stat_beneath(root, cwd, ".", actor).unwrap().mount_id;
+        assert_ne!(owner, service.stat_beneath(root, root, "/root", actor).unwrap().mount_id);
+        service.mkdir_beneath(root, cwd, "new-dir", actor, 0o700, |_, _| Ok(())).unwrap();
+        assert_eq!(service.stat_beneath(root, cwd, "new-dir", actor).unwrap().mount_id, owner);
+        let handle = service.open_file_options_beneath(
+            root, cwd, "file", actor,
+            OpenOptions { read: true, write: true, create_mode: Some(0o644), ..OpenOptions::default() },
+            |_, _| Ok(()),
+        ).unwrap();
+        service.write(handle, 0, b"one").unwrap();
+        assert_eq!(service.rename(FILE, "/root/moved"), Err(FsError::Unsupported));
+        service.rename_beneath(root, cwd, "file", "moved", actor, false, |_, _, _| Ok(())).unwrap();
+        assert_eq!(service.stat(FILE), Err(FsError::NotFound));
+        assert_eq!(service.stat(MOVED).unwrap().size, 3);
+        let mut data = [0; 3];
+        assert_eq!(service.read(handle, 0, &mut data), Ok(3));
+        assert_eq!(&data, b"one");
+        service.close(handle).unwrap();
+        service.close(cwd).unwrap();
+        service.close(root).unwrap();
+        assert_eq!(service.open_handle_count(), baseline);
+    }
 
     #[test]
     fn no_replace_move_preserves_existing_target_and_source() {

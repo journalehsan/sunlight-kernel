@@ -287,3 +287,78 @@ fn transfer_rekeys_one_description_and_survives_old_owner_teardown() {
     let stat = drive(&mut rt, &mut channel, stat);
     assert_eq!(stat.errno, 0);
 }
+
+#[cfg(feature = "vfs-c2e-candidate")]
+#[test]
+fn copied_downloads_mutations_require_a_live_directory_description() {
+    let mut fs: sunlight_fs::Vfs = sunlight_fs::Vfs::new();
+    const SEED: &[sunlight_fs::RamEntry] = &[
+        sunlight_fs::RamEntry::dir("/root", 0, 0, 0o40700),
+        sunlight_fs::RamEntry::dir("/root/Downloads", 0, 0, 0o40700),
+    ];
+    fs.mount_tmpfs("/", Tmpfs::new(SEED)).unwrap();
+    fs.mount_service_downloads().unwrap();
+    let namespace = DirectoryNamespace::mounted(fs).unwrap();
+    let mut rt = Runtime::<2, 4, 2>::new();
+    rt.bind(registration()).unwrap();
+    rt.install(registration(), scope(), &namespace, "/", "/").unwrap();
+    acquire(&mut rt, registration(), scope(), 1);
+    let mut channel = Channel { current: None, replies: 0 };
+    let root_request = |op, token, arg0, arg1, payload| api::Request {
+        uid: 0,
+        gid: 0,
+        ..request(op, token, arg0, arg1, payload)
+    };
+    let baseline = namespace.shared().lock().open_handle_count();
+    let opened = drive(&mut rt, &mut channel, root_request(
+        api::OPEN, 0, api::ACCESS_READ | api::OPEN_DIRECTORY, 0, b"/root/Downloads",
+    ));
+    assert_eq!(opened.errno, 0);
+    let directory = opened.result0;
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::MKDIR, directory, 0o700, 0, b"subdir",
+    )).errno, 0);
+    let file = drive(&mut rt, &mut channel, root_request(
+        api::OPEN, directory, api::ACCESS_WRITE | api::OPEN_CREATE, 0o600, b"subdir/old",
+    ));
+    assert_eq!(file.errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::MKDIR, file.result0, 0o700, 0, b"denied",
+    )).errno, 20);
+    assert_eq!(drive(&mut rt, &mut channel, io(api::CLOSE, file.result0, 0, 0, b"")).errno, 0);
+    let target = drive(&mut rt, &mut channel, root_request(
+        api::OPEN, directory, api::ACCESS_READ | api::OPEN_DIRECTORY, 0, b"subdir",
+    ));
+    assert_eq!(target.errno, 0);
+    let stale = drive(&mut rt, &mut channel, root_request(
+        api::OPEN, directory, api::ACCESS_READ | api::OPEN_DIRECTORY, 0, b"subdir",
+    ));
+    assert_eq!(stale.errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, io(api::CLOSE, stale.result0, 0, 0, b"")).errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::RENAME, directory, stale.result0, api::RENAME_DISTINCT_DIRS, b"subdir/old\0new",
+    )).errno, 9);
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::STAT_AT, target.result0, 0, 0, b"old",
+    )).errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::RENAME, directory, target.result0, api::RENAME_DISTINCT_DIRS, b"subdir/old\0new",
+    )).errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::RENAME, target.result0, directory, api::RENAME_DISTINCT_DIRS, b"new\0../escaped",
+    )).errno, 18);
+    let stat = drive(&mut rt, &mut channel, root_request(
+        api::STAT_AT, target.result0, 0, 0, b"./new",
+    ));
+    assert_eq!(stat.errno, 0);
+    assert_eq!(stat.payload[18], 1);
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::UNLINK, target.result0, 0, 0, b"new",
+    )).errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, io(api::CLOSE, target.result0, 0, 0, b"")).errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, io(api::CLOSE, directory, 0, 0, b"")).errno, 0);
+    assert_eq!(drive(&mut rt, &mut channel, root_request(
+        api::MKDIR, directory, 0o700, 0, b"stale",
+    )).errno, 9);
+    assert_eq!(namespace.shared().lock().open_handle_count(), baseline);
+}

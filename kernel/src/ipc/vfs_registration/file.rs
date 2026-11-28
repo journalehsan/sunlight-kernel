@@ -29,18 +29,18 @@ pub(super) struct Publication {
     token: u64,
     compensation: bool,
     buffer: alloc::vec::Vec<u8>,
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    observation: Option<(Receipt, alloc::vec::Vec<u8>)>,
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    observation: Option<(Receipt, alloc::vec::Vec<u8>, u64)>,
     dispatched: bool,
 }
 
 /// One caller-owned file request. Borrowed paths and payloads stay valid only
 /// for the duration of the syscall that admits them.
 pub(crate) enum FileOperation<'a> {
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
     ObserveMount { path: Option<&'a str> },
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-    MutateNamespace { op: u64, flags: u64, paths: &'a str, storage_admin: bool },
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+    MutateNamespace { op: u64, flags: u64, anchor: u64, paths: &'a str, storage_admin: bool },
     #[cfg(feature = "vfs_c1e1_test")]
     PrepareStorage { source: u64, path: &'a str },
     #[cfg(feature = "vfs_c1e2_test")]
@@ -52,6 +52,7 @@ pub(crate) enum FileOperation<'a> {
     #[cfg(feature = "vfs_c1e2_test")]
     UnmountStorage { token: u64 },
     Open {
+        anchor: u64,
         path: &'a str,
         access: u64,
         mode: u64,
@@ -71,6 +72,8 @@ pub(crate) enum FileOperation<'a> {
         whence: u64,
         offset: i64,
     },
+    #[cfg(feature = "vfs_c2e_candidate")]
+    StatAt { token: u64, path: &'a str },
     Stat {
         token: u64,
     },
@@ -88,10 +91,10 @@ pub(crate) enum FileOperation<'a> {
 impl FileOperation<'_> {
     fn token(&self) -> u64 {
         match *self {
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             Self::ObserveMount { .. } => 0,
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-            Self::MutateNamespace { flags, .. } => flags,
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+            Self::MutateNamespace { anchor, .. } => anchor,
             #[cfg(feature = "vfs_c1e1_test")]
             Self::PrepareStorage { source, .. } => source,
             #[cfg(feature = "vfs_c1e2_test")]
@@ -99,9 +102,11 @@ impl FileOperation<'_> {
             | Self::UnmountStorage { token } => token,
             #[cfg(feature = "vfs_c1e2_test")]
             Self::InventoryStorage { index } => index,
-            Self::Open { .. } => 0,
+            Self::Open { anchor, .. } => anchor,
             #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             Self::Pread { token, .. } => token,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            Self::StatAt { token, .. } => token,
             Self::Read { token, .. }
             | Self::Write { token, .. }
             | Self::Seek { token, .. }
@@ -114,11 +119,11 @@ impl FileOperation<'_> {
 
     fn op(&self) -> u64 {
         match self {
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             Self::ObserveMount { path: None } => api::MOUNTINFO,
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             Self::ObserveMount { path: Some(_) } => api::STATFS,
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             Self::MutateNamespace { op, .. } => *op,
             #[cfg(feature = "vfs_c1e1_test")]
             Self::PrepareStorage { .. } => api::PREPARE_STORAGE,
@@ -137,6 +142,8 @@ impl FileOperation<'_> {
             Self::Write { .. } => api::WRITE,
             Self::Seek { .. } => api::SEEK,
             Self::Stat { .. } => api::STAT,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            Self::StatAt { .. } => api::STAT_AT,
             Self::Truncate { .. } => api::TRUNCATE,
             Self::Close { .. } => api::CLOSE,
             Self::Dup { .. } => api::DUP,
@@ -320,20 +327,22 @@ impl Runtime {
             .ok_or(Error::Capacity)?;
         let request_id = self.file_ids.allocate().ok_or(Error::Capacity)?;
         let (op, token, arg0, arg1, payload, receipt_words) = match &operation {
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             FileOperation::ObserveMount { path } => {
                 let receipt = receipt.ok_or(Error::NotReady)?;
                 (operation.op(), 0, 0, 0, path.unwrap_or("").as_bytes(),
                     Some((receipt.scope().namespace_id, receipt.scope().namespace_generation,
                         receipt.request_id(), receipt.generation())))
             }
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-            FileOperation::MutateNamespace { op, flags, paths, storage_admin } => {
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+            FileOperation::MutateNamespace { op, flags, anchor, paths, storage_admin } => {
                 let receipt = receipt.ok_or(Error::NotReady)?;
                 if !api::namespace_mutation(*op) {
                     return Err(Error::Protocol);
                 }
-                (*op, 0, *flags, u64::from(*storage_admin), paths.as_bytes(),
+                let distinct = *op == api::RENAME && *anchor != 0 && *flags != 0;
+                let options = u64::from(*storage_admin) | if distinct { api::RENAME_DISTINCT_DIRS } else { 0 };
+                (*op, *anchor, *flags, options, paths.as_bytes(),
                     Some((receipt.scope().namespace_id, receipt.scope().namespace_generation,
                         receipt.request_id(), receipt.generation())))
             }
@@ -355,11 +364,11 @@ impl Runtime {
             FileOperation::UnmountStorage { token } => {
                 (api::UNMOUNT_STORAGE, *token, 0, 0, &[][..], None)
             }
-            FileOperation::Open { path, access, mode } => {
+            FileOperation::Open { anchor, path, access, mode } => {
                 let receipt = receipt.ok_or(Error::NotReady)?;
                 (
                     api::OPEN,
-                    0,
+                    *anchor,
                     *access,
                     *mode,
                     path.as_bytes(),
@@ -384,6 +393,13 @@ impl Runtime {
                 whence,
                 offset,
             } => (api::SEEK, *token, *whence, *offset as u64, &[][..], None),
+            #[cfg(feature = "vfs_c2e_candidate")]
+            FileOperation::StatAt { token, path } => {
+                let receipt = receipt.ok_or(Error::NotReady)?;
+                (api::STAT_AT, *token, 0, 0, path.as_bytes(),
+                    Some((receipt.scope().namespace_id, receipt.scope().namespace_generation,
+                        receipt.request_id(), receipt.generation())))
+            }
             FileOperation::Stat { token } => (api::STAT, *token, 0, 0, &[][..], None),
             FileOperation::Truncate { token } => (api::TRUNCATE, *token, 0, 0, &[][..], None),
             FileOperation::Close { token } => (api::CLOSE, *token, 0, 0, &[][..], None),
@@ -396,9 +412,11 @@ impl Runtime {
         // authenticated caller against an already-open token, and the codec
         // rejects credential words on those operations.
         let (uid, gid) = match &operation {
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             FileOperation::ObserveMount { .. } | FileOperation::MutateNamespace { .. } => (identity.uid, identity.gid),
             FileOperation::Open { .. } => (identity.uid, identity.gid),
+            #[cfg(feature = "vfs_c2e_candidate")]
+            FileOperation::StatAt { .. } => (identity.uid, identity.gid),
             #[cfg(feature = "vfs_c1e2_test")]
             FileOperation::InventoryStorage { .. } => (identity.uid, identity.gid),
             _ => (0, 0),
@@ -426,12 +444,12 @@ impl Runtime {
             .try_reserve_exact(api::FRAME_BYTES)
             .map_err(|_| Error::Capacity)?;
         buffer.extend_from_slice(&bytes);
-        #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+        #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
         let observation = if api::retained_path(op) {
             let mut path = alloc::vec::Vec::new();
             path.try_reserve_exact(payload.len()).map_err(|_| Error::Capacity)?;
             path.extend_from_slice(payload);
-            Some((receipt.ok_or(Error::NotReady)?, path))
+            Some((receipt.ok_or(Error::NotReady)?, path, arg0))
         } else {
             None
         };
@@ -446,7 +464,7 @@ impl Runtime {
             token: operation.token(),
             compensation: false,
             buffer,
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             observation,
             dispatched: false,
         });
@@ -494,7 +512,7 @@ impl Runtime {
                 registration,
             },
             op: api::CLOSE,
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             observation: None,
             dispatched: false,
             replied: false,
@@ -581,11 +599,11 @@ impl Runtime {
         Ok(Some(id))
     }
 
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
     pub(super) fn revalidate_storage_files(&mut self, sched: &mut Scheduler) {
         for slot in 0..self.file_publications.len() {
             let invalid = self.file_publications[slot].as_ref().is_some_and(|publication| {
-                api::namespace_mutation(publication.op) && !publication.replied
+                (api::namespace_mutation(publication.op) || publication.op == api::STAT_AT) && !publication.replied
                     && !self.namespace_mutation_live(publication, sched)
             });
             if invalid {
@@ -607,11 +625,11 @@ impl Runtime {
         self.wake_file_callers(sched);
     }
 
-    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
     fn namespace_mutation_live(&self, publication: &Publication, sched: &Scheduler) -> bool {
         let identity = publication.identity;
         self.registry.active() == Some(identity.registration)
-            && publication.observation.as_ref().is_some_and(|(receipt, _)| {
+            && publication.observation.as_ref().is_some_and(|(receipt, _, _)| {
                 self.caller_receipt(identity) == Some(*receipt)
             })
             && sched.processes.iter().enumerate().any(|(idx, process)| {
@@ -650,8 +668,8 @@ impl Runtime {
                 })
             })
             .ok_or(Error::Identity)?;
-        #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
-        if api::namespace_mutation(reply.op)
+        #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
+        if (api::namespace_mutation(reply.op) || reply.op == api::STAT_AT)
             && !self.namespace_mutation_live(self.file_publications[slot].as_ref().unwrap(), sched)
         {
             self.revalidate_storage_files(sched);
@@ -813,7 +831,7 @@ impl Runtime {
                 registration,
             },
             op: api::TRANSFER,
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             observation: None,
             dispatched: false,
             replied: false,
@@ -983,7 +1001,9 @@ pub(crate) fn file_call(
         || (cfg!(feature = "vfs_c1e2_test")
             && matches!(operation.op(), api::ABORT_STORAGE | api::PUBLISH_STORAGE
                 | api::UNMOUNT_STORAGE | api::INVENTORY_STORAGE));
-    if !routed && !storage {
+    let candidate_path = cfg!(feature = "vfs_c2e_candidate")
+        && (operation.op() == api::OPEN || api::retained_path(operation.op()) || descriptor.is_some());
+    if !routed && !storage && !candidate_path {
         return Err(Error::Identity);
     }
     if sched
@@ -1018,20 +1038,23 @@ pub(crate) fn file_call(
             let publication = runtime.file_publications[slot].as_ref().unwrap();
             if publication.op != op
                 || publication.token != operation.token()
+                || descriptor.is_some_and(|(_, epoch)| epoch != publication.identity.registration.epoch)
                 || (op != api::OPEN && !storage && !api::retained_path(op)
                     && descriptor != Some((caller, publication.identity.registration.epoch)))
             {
                 return Err(Error::Busy);
             }
-            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+            #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             if let Some((path, flags)) = match &operation {
                 FileOperation::ObserveMount { path } => Some((path.unwrap_or(""), 0)),
                 FileOperation::MutateNamespace { paths, flags, .. } => Some((*paths, *flags)),
+                #[cfg(feature = "vfs_c2e_candidate")]
+                FileOperation::StatAt { path, .. } => Some((*path, 0)),
                 _ => None,
             } {
-                let valid = publication.observation.as_ref().is_some_and(|(receipt, original)| {
+                let valid = publication.observation.as_ref().is_some_and(|(receipt, original, original_flags)| {
                     original == path.as_bytes()
-                        && publication.token == flags
+                        && *original_flags == flags
                         && runtime.registry.active() == Some(publication.identity.registration)
                         && runtime.caller_receipt(publication.identity) == Some(*receipt)
                         && sched.processes[idx].uid == publication.identity.uid
@@ -1080,12 +1103,16 @@ pub(crate) fn file_call(
         return Err(Error::Identity);
     }
     let mut runtime = RUNTIME.lock();
-    if op != api::OPEN && !storage && !api::retained_path(op) {
+    if descriptor.is_some() || (op != api::OPEN && !storage && !api::retained_path(op)) {
         runtime.check_descriptor(identity, descriptor)?;
     }
     let receipt = match &operation {
-        #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
+        #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
         FileOperation::ObserveMount { .. } | FileOperation::MutateNamespace { .. } => {
+            Some(runtime.caller_receipt(identity).ok_or(Error::NotReady)?)
+        }
+        #[cfg(feature = "vfs_c2e_candidate")]
+        FileOperation::StatAt { .. } => {
             Some(runtime.caller_receipt(identity).ok_or(Error::NotReady)?)
         }
         FileOperation::Open { .. } => {
@@ -1093,6 +1120,11 @@ pub(crate) fn file_call(
         }
         _ => None,
     };
+    if (op == api::OPEN || op == api::STAT_AT || api::namespace_mutation(op))
+        && operation.token() != 0 && descriptor.is_none()
+    {
+        return Err(Error::Identity);
+    }
     runtime.publish_file(identity, operation, receipt, sched)?;
     Ok(FileCall::Pending)
 }

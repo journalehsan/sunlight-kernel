@@ -31,10 +31,16 @@ pub enum Seek {
 pub(crate) struct File<Device: BlockDevice> {
     filesystem: Arc<Mutex<Vfs<Device>>>,
     handle: FileHandle,
+    directory: bool,
 }
 impl<Device: BlockDevice> File<Device> {
     pub(crate) fn new(filesystem: Arc<Mutex<Vfs<Device>>>, handle: FileHandle) -> Self {
-        Self { filesystem, handle }
+        Self { filesystem, handle, directory: false }
+    }
+}
+impl<Device: BlockDevice> File<Device> {
+    pub(crate) fn directory(filesystem: Arc<Mutex<Vfs<Device>>>, handle: FileHandle) -> Self {
+        Self { filesystem, handle, directory: true }
     }
 }
 impl<Device: BlockDevice> Drop for File<Device> {
@@ -130,6 +136,14 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
             .unwrap()
             .description)
     }
+    pub(crate) fn directory_handle(&self, owner: Caller, token: u64) -> Result<FileHandle, FsError> {
+        let description = self.description(owner, token)?.lock();
+        if !description.file.directory {
+            return Err(FsError::NotDir);
+        }
+        Ok(description.file.handle)
+    }
+
     pub(crate) fn duplicate(&mut self, owner: Caller, token: u64) -> Result<u64, FsError> {
         let index = self.index(owner, token)?;
         let description = Arc::clone(&self.entries[index].as_ref().unwrap().description);
@@ -176,6 +190,9 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
         output: &mut [u8],
     ) -> Result<usize, FsError> {
         let mut d = self.description(owner, token)?.lock();
+        if d.file.directory {
+            return Err(FsError::IsDir);
+        }
         if !d.access.read() {
             return Err(FsError::PermissionDenied);
         }
@@ -204,6 +221,9 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
         output: &mut [u8],
     ) -> Result<usize, FsError> {
         let d = self.description(owner, token)?.lock();
+        if d.file.directory {
+            return Err(FsError::IsDir);
+        }
         if !d.access.read() {
             return Err(FsError::PermissionDenied);
         }
@@ -222,6 +242,9 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
     }
     pub(crate) fn write(&self, owner: Caller, token: u64, input: &[u8]) -> Result<usize, FsError> {
         let mut d = self.description(owner, token)?.lock();
+        if d.file.directory {
+            return Err(FsError::IsDir);
+        }
         if !d.access.write() {
             return Err(FsError::PermissionDenied);
         }
@@ -243,6 +266,9 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
     }
     pub(crate) fn truncate(&self, owner: Caller, token: u64) -> Result<(), FsError> {
         let d = self.description(owner, token)?.lock();
+        if d.file.directory {
+            return Err(FsError::IsDir);
+        }
         if !d.access.write() {
             return Err(FsError::PermissionDenied);
         }
@@ -251,6 +277,9 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
     }
     pub(crate) fn seek(&self, owner: Caller, token: u64, seek: Seek) -> Result<usize, FsError> {
         let mut d = self.description(owner, token)?.lock();
+        if d.file.directory {
+            return Err(FsError::IsDir);
+        }
         let position = match seek {
             Seek::Start(offset) => i128::from(offset),
             Seek::Current(delta) => d.offset as i128 + i128::from(delta),

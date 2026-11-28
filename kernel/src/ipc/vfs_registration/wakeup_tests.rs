@@ -21,6 +21,8 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             vfs_root_metadata: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
+            vfs_downloads_cwd: false,
+            shared_owner: None,
             vfs_stat_routed: false,
             vfs_file_routed: false,
             cwd: alloc::string::String::from("/"),

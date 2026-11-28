@@ -417,3 +417,68 @@ fn copied_file_owner_barrier_authenticates_origin_and_preserves_other_lifetimes(
     rt.withdraw(r, next).unwrap();
     assert_eq!(ns.shared().lock().open_handle_count(), 0);
 }
+
+#[test]
+fn downloads_directory_description_survives_rename_until_final_close() {
+    use sunlight_ipc::vfs_rpc::file_transport as api;
+    let mut fs: sunlight_fs::Vfs = sunlight_fs::Vfs::new();
+    const SEED: &[sunlight_fs::RamEntry] = &[
+        sunlight_fs::RamEntry::dir("/root", 0, 0, 0o40700),
+        sunlight_fs::RamEntry::dir("/root/Downloads", 0, 0, 0o40700),
+    ];
+    fs.mount_tmpfs("/", Tmpfs::new(SEED)).unwrap();
+    fs.mount_service_downloads().unwrap();
+    fs.mkdir("/root/Downloads/old", 0, 0, 0o700).unwrap();
+    let ns = DirectoryNamespace::mounted(fs).unwrap();
+    let mut rt = Runtime::<2, 4, 2>::new();
+    let r = registration();
+    let caller = scope().caller;
+    let root = Credential { uid: 0, gid: 0 };
+    rt.bind(r).unwrap();
+    rt.install(r, scope(), &ns, "/", "/").unwrap();
+    let receipt = acquire(&mut rt, r, scope(), 1);
+    let baseline = ns.shared().lock().open_handle_count();
+    let directory = rt.open_file_with_options(
+        r, receipt, "/root/Downloads/old", root, Access::Read,
+        Some((api::ACCESS_READ | api::OPEN_DIRECTORY, 0, 0)), || true,
+    ).unwrap();
+    let duplicate = rt.duplicate_file(r, caller, directory).unwrap();
+    assert_eq!(ns.shared().lock().open_handle_count(), baseline + 1);
+    assert_eq!(rt.stat_file(r, caller, directory).unwrap().file_type, sunlight_fs::FileType::Directory);
+    assert_eq!(rt.read_file(r, caller, directory, &mut [0; 1]), Err(Error::Filesystem(FsError::IsDir)));
+    let outside = ns.pin("/", "/root").unwrap();
+    let cwd = outside.change_directory("Downloads/old", root).unwrap();
+    assert_eq!(cwd.cwd().unwrap(), "/root/Downloads/old");
+    ns.shared().lock().rename("/root/Downloads/old", "/root/Downloads/new").unwrap();
+    assert_eq!(cwd.cwd().unwrap(), "/root/Downloads/new");
+    let outside_again = cwd.change_directory("../..", root).unwrap();
+    assert_eq!(outside_again.cwd().unwrap(), "/root");
+    drop(outside_again);
+    drop(cwd);
+    drop(outside);
+    rt.close_file(r, caller, directory).unwrap();
+    let create = api::ACCESS_WRITE | api::OPEN_CREATE;
+    assert_eq!(rt.open_file_with_options(
+        r, receipt, "data", root, Access::Write, Some((create, 0o600, directory)), || true,
+    ), Err(Error::Filesystem(FsError::BadHandle)));
+    assert_eq!(rt.open_file_with_options(
+        r, receipt, "../..", root, Access::Read,
+        Some((api::ACCESS_READ, 0, duplicate)), || true,
+    ), Err(Error::Filesystem(FsError::Unsupported)));
+    let file = rt.open_file_with_options(
+        r, receipt, "data", root, Access::Write, Some((create, 0o600, duplicate)), || true,
+    ).unwrap();
+    rt.write_file(r, caller, file, b"retained").unwrap();
+    rt.close_file(r, caller, file).unwrap();
+    assert_eq!(ns.shared().lock().stat("/root/Downloads/new/data").unwrap().size, 8);
+    rt.close_file(r, caller, duplicate).unwrap();
+    assert_eq!(ns.shared().lock().open_handle_count(), baseline);
+
+    let directory = rt.open_file_with_options(
+        r, receipt, "/root/Downloads/new", root, Access::Read,
+        Some((api::ACCESS_READ | api::OPEN_DIRECTORY, 0, 0)), || true,
+    ).unwrap();
+    rt.retire_registration(r).unwrap();
+    assert_eq!(rt.stat_file(r, caller, directory), Err(Error::Identity));
+    assert!(ns.shared().lock().open_handle_count() < baseline + 1);
+}

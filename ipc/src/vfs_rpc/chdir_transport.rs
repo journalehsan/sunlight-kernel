@@ -6,6 +6,8 @@ use super::{
 };
 pub const CONTEXT: u64 = 6;
 pub const FINISH: u64 = 7;
+/// A root-only replacement receipt carrying an authenticated legacy boundary path.
+pub const LEGACY_BOUNDARY: u64 = 4096;
 const HEADER_BYTES: usize = 72;
 
 /// Authenticated operation kind supplied only by the copied kernel context.
@@ -14,6 +16,8 @@ const HEADER_BYTES: usize = 72;
 pub enum Kind {
     Directory = 0,
     Root = 1,
+    EnterDownloads = 2,
+    Downloads = 3,
 }
 pub const CONTEXT_BYTES: usize = HEADER_BYTES + 4096;
 pub const FINISH_BYTES: usize = FRAME_BYTES + 8 + CWD_BYTES;
@@ -78,6 +82,8 @@ pub fn decode_context(bytes: &[u8; CONTEXT_BYTES]) -> Result<Context<'_>, Protoc
     let kind = match word(64) {
         0 => Kind::Directory,
         1 => Kind::Root,
+        2 => Kind::EnterDownloads,
+        3 => Kind::Downloads,
         _ => return Err(ProtocolError::Operation),
     };
     let old = Scope {
@@ -163,12 +169,17 @@ mod tests {
             namespace_id: 5,
             namespace_generation: 6,
         };
-        for kind in [Kind::Directory, Kind::Root] {
+        for kind in [
+            Kind::Directory,
+            Kind::Root,
+            Kind::EnterDownloads,
+            Kind::Downloads,
+        ] {
             let encoded = encode_transition(scope, 10, 11, "/narrow", kind).unwrap();
             assert_eq!(decode_context(&encoded).unwrap().kind, kind);
         }
         let mut bad_kind = encode_context(scope, 0, 0, ".").unwrap();
-        bad_kind[64..72].copy_from_slice(&2u64.to_le_bytes());
+        bad_kind[64..72].copy_from_slice(&4u64.to_le_bytes());
         assert!(decode_context(&bad_kind).is_err());
         for path in ["relative/..", "/", "../mounted"] {
             let encoded = encode_context(scope, 10, 11, path).unwrap();

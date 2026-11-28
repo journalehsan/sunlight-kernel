@@ -76,7 +76,7 @@ impl<D: BlockDevice> Vfs<D> {
         path: &str,
         caller: Credential,
     ) -> Result<AttachmentCapacity, FsError> {
-        let resolved = self.walk_beneath(root, cwd, path, caller, Self::stat)?;
+        let resolved = self.walk_beneath(root, cwd, path, caller, |fs, parent, _| fs.stat(parent))?;
         let stat = self.stat(resolved.as_str())?;
         if path.ends_with('/') && stat.file_type != FileType::Directory {
             return Err(FsError::NotDir);

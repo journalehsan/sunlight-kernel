@@ -1,0 +1,58 @@
+{
+  "milestone": "VFS-C2F1",
+  "status": "PARTIAL",
+  "feature": "vfs_c2e_candidate",
+  "subtree": "/root/Downloads",
+  "changes": {
+    "selected_profile_cwd_commit": {
+      "status": "PASS",
+      "qualification": "host copied continuation",
+      "coverage": ["rejected finish compensation", "failed lookup", "retained rename", "stale epoch", "retirement", "backend handle baseline"]
+    },
+    "generic_cwd_handoff": {
+      "status": "FAIL",
+      "legacy_to_service": "ordinary entry still rejects",
+      "service_to_legacy": "legacy target publication remains unimplemented",
+      "relative_operations_after_handoff": "NOT_RUN",
+      "guest_exit_and_exec_cleanup": "NOT_RUN"
+    },
+    "distinct_dirfd_renameat": {
+      "status": "PASS",
+      "qualification": "host copied channel",
+      "coverage": ["distinct retained directories", "closed target rejection", "cross-boundary EXDEV", "namespace unchanged on rejection", "backend handle baseline"]
+    },
+    "nonempty_dirfd_newfstatat": {
+      "status": "PASS",
+      "qualification": "host copied channel",
+      "coverage": ["relative lookup from retained target", "dot traversal"]
+    }
+  },
+  "qualification": {
+    "filesystem_host": {"status": "PASS", "tests": 126, "log": "target/vfs-c2f1/fs.log"},
+    "service_host": {"status": "PASS", "tests": 94, "log": "target/vfs-c2f1/service.log"},
+    "registration_and_cwd_host": {"status": "PASS", "tests": 113, "log": "target/vfs-c2f1/registration.log"},
+    "descriptor_host": {"status": "PASS", "tests": 20, "log": "target/vfs-c2f1/descriptor.log"},
+    "file_transport_host": {"status": "PASS", "tests": 10, "log": "target/vfs-c2f1/ipc.log"},
+    "production_release": {"status": "PASS", "log": "target/vfs-c2f1/production.log"},
+    "candidate_debug": {"status": "PASS", "log": "target/vfs-c2f1/candidate.log"},
+    "ordinary_boot": {"status": "BLOCKED", "log": "target/vfs-c2f1/boot.log"},
+    "native_and_linux_guest_syscalls": {"status": "NOT_RUN"},
+    "guest_regressions": {
+      "status": "NOT_RUN",
+      "coverage": ["C2E", "C2F", "C2D", "C2B", "C1E10", "C1E11", "C1E12", "C1E6A", "C1E6B", "descriptor and process retirement"]
+    },
+    "c2c_fixture": {"status": "PASS", "log": "target/vfs-c2f1/fixture.log", "checksum_file": "target/vfs-c2e/c2c-fixture.sha256"}
+  },
+  "guard": {
+    "inventory": {"status": "PASS", "before": 71, "after": 71},
+    "no_growth": {"status": "FAIL", "before_unmatched": 4, "after_unmatched": 4, "c2f1_new_or_relocated": 0},
+    "final_removal": {"status": "FAIL"},
+    "logs": "target/vfs-c2f1/guard-{before,after}-{0,1,2}.log",
+    "historical_findings": {
+      "storage::mount": {"commit": "dd00fa775", "reason": "existing FAT constructor binding rewritten"},
+      "linux_procfs::mountinfo_snapshot": {"commit": "dd00fa775", "reason": "unreviewed direct legacy topology lookup"},
+      "sys_linux_statfs": {"commit": "dd00fa775", "reason": "unreviewed direct legacy capacity lookup"},
+      "process::mmap::sys_mmap": {"commit": "5b8579f1d", "reason": "unreviewed legacy private mmap lookup"}
+    }
+  }
+}

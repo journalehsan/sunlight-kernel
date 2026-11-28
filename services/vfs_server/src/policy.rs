@@ -111,7 +111,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         caller: sunlight_fs::Credential,
         revalidate: impl FnOnce() -> bool,
     ) -> Result<(), Error> {
-        self.transition(old, next, path, caller, false, revalidate)
+        self.transition(old, next, path, caller, DirectoryPair::change_directory, true, revalidate)
     }
 
     pub(crate) fn change_root(
@@ -122,7 +122,73 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         caller: sunlight_fs::Credential,
         revalidate: impl FnOnce() -> bool,
     ) -> Result<(), Error> {
-        self.transition(old, next, path, caller, true, revalidate)
+        self.transition(old, next, path, caller, DirectoryPair::change_root, true, revalidate)
+    }
+
+    pub(crate) fn enter_downloads(
+        &mut self,
+        old: Scope,
+        next: Scope,
+        namespace: &DirectoryNamespace<Device>,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        if self.retired || !sunlight_fs::path::service_downloads(path) {
+            return Err(Error::Scope);
+        }
+        wire::PendingRetain::new(self.registration, next, 1).map_err(Error::Protocol)?;
+        if next.namespace_generation <= self.last_generation {
+            return Err(Error::Generation);
+        }
+        let slot = match self.bindings.iter().position(|entry| {
+            entry.as_ref().is_some_and(|b| b.scope.caller == next.caller)
+        }) {
+            Some(slot) if self.bindings[slot].as_ref().unwrap().scope == old => slot,
+            Some(_) => return Err(Error::Scope),
+            None if old == next => self.bindings.iter().position(Option::is_none).ok_or(Error::Capacity)?,
+            None => return Err(Error::Scope),
+        };
+        self.last_generation = next.namespace_generation;
+        let seed = namespace.pin("/", "/").map_err(Error::Filesystem)?;
+        let pair = seed.change_downloads(path, caller).map_err(Error::Filesystem)?;
+        let pair = Arc::try_new(pair).map_err(|_| Error::Filesystem(FsError::NoMemory))?;
+        if !revalidate() {
+            return Err(Error::Identity);
+        }
+        self.bindings[slot] = Some(Binding { scope: next, pair });
+        Ok(())
+    }
+
+    pub(crate) fn downloads_exit(
+        &self,
+        old: Scope,
+        path: &str,
+        caller: sunlight_fs::Credential,
+    ) -> Result<Option<alloc::string::String>, Error> {
+        self.bindings.iter().flatten().find(|b| b.scope == old)
+            .ok_or(Error::Scope)?.pair.downloads_exit(path, caller).map_err(Error::Filesystem)
+    }
+
+    pub(crate) fn change_downloads(
+        &mut self,
+        old: Scope,
+        next: Scope,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        self.transition(old, next, path, caller, DirectoryPair::change_downloads, false, revalidate)
+    }
+
+    pub(crate) fn restore_boot_directory(
+        &mut self,
+        old: Scope,
+        next: Scope,
+        caller: sunlight_fs::Credential,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<(), Error> {
+        self.transition(old, next, "/", caller, DirectoryPair::change_directory, false, revalidate)
     }
 
     fn transition(
@@ -131,7 +197,8 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         next: Scope,
         path: &str,
         caller: sunlight_fs::Credential,
-        replace_root: bool,
+        change: impl FnOnce(&DirectoryPair<Device>, &str, sunlight_fs::Credential) -> Result<DirectoryPair<Device>, FsError>,
+        withdraw_on_rejection: bool,
         revalidate: impl FnOnce() -> bool,
     ) -> Result<(), Error> {
         if self.retired {
@@ -152,15 +219,12 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         // Failed attempts cannot reuse generations, including failed lookup.
         self.last_generation = next.namespace_generation;
         let previous = &self.bindings[slot].as_ref().unwrap().pair;
-        let pair = if replace_root {
-            previous.change_root(path, caller)
-        } else {
-            previous.change_directory(path, caller)
-        }
-        .map_err(Error::Filesystem)?;
+        let pair = change(previous, path, caller).map_err(Error::Filesystem)?;
         let pair = Arc::try_new(pair).map_err(|_| Error::Filesystem(FsError::NoMemory))?;
         if !revalidate() {
-            self.withdraw(old)?;
+            if withdraw_on_rejection {
+                self.withdraw(old)?;
+            }
             return Err(Error::Identity);
         }
         self.bindings[slot] = Some(Binding { scope: next, pair });
@@ -448,6 +512,8 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         caller: sunlight_fs::Credential,
         options: sunlight_fs::vfs::OpenOptions,
         storage_admin: bool,
+        directory_open: bool,
+        anchor: Option<sunlight_fs::FileHandle>,
     ) -> Result<crate::open::File<Device>, Error> {
         if self.retired || authenticated != self.registration {
             return Err(Error::Identity);
@@ -464,16 +530,17 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         {
             return Err(Error::Scope);
         }
-        pair.open_file(path, caller, options, storage_admin)
+        pair.open_file(path, caller, options, storage_admin, directory_open, anchor)
             .map_err(Error::Filesystem)
     }
 
-    #[cfg(feature = "vfs-c1e2-test")]
+    #[cfg(any(feature = "vfs-c1e2-test", feature = "vfs-c2e-candidate"))]
     pub(crate) fn mutate_namespace(
         &self,
         authenticated: Registration,
         receipt: Receipt,
         request: sunlight_ipc::vfs_rpc::file_transport::Request<'_>,
+        anchors: (Option<sunlight_fs::FileHandle>, Option<sunlight_fs::FileHandle>),
     ) -> Result<(), Error> {
         if self.retired || authenticated != self.registration {
             return Err(Error::Identity);
@@ -482,7 +549,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
             return Err(Error::Scope);
         }
         self.leases.get(authenticated, receipt).map_err(|_| Error::Scope)?
-            .mutate(request).map_err(Error::Filesystem)
+            .mutate(anchors, request).map_err(Error::Filesystem)
     }
 
     #[cfg(feature = "vfs-c1e2-test")]
@@ -501,6 +568,24 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         }
         self.leases.get(authenticated, receipt).map_err(|_| Error::Stale)?
             .mount_observation(caller, authenticated.epoch, path)
+    }
+
+    #[cfg(feature = "vfs-c2e-candidate")]
+    pub(crate) fn stat_at(
+        &self,
+        authenticated: Registration,
+        receipt: Receipt,
+        anchor: sunlight_fs::FileHandle,
+        path: &str,
+        caller: sunlight_fs::Credential,
+    ) -> Result<FileStat, Error> {
+        if self.retired || authenticated != self.registration
+            || !self.bindings.iter().flatten().any(|b| b.scope == receipt.scope())
+        {
+            return Err(Error::Scope);
+        }
+        self.leases.get(authenticated, receipt).map_err(|_| Error::Scope)?
+            .stat_at(anchor, path, caller).map_err(Error::Filesystem)
     }
 
     /// Diagnostics of retained objects, with no pathname lookup or new authority.

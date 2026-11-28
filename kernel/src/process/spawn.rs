@@ -1666,6 +1666,7 @@ pub(crate) fn spawn_with_session_attachment(
     if let Some(idx) = parent_idx {
         process.vfs_stat_routed = sched.processes[idx].vfs_stat_routed;
         process.vfs_root_rebased = sched.processes[idx].vfs_root_rebased;
+        process.vfs_downloads_cwd = sched.processes[idx].vfs_downloads_cwd;
         if process.vfs_stat_routed {
             process.cwd = sched.processes[idx].cwd.clone();
         }

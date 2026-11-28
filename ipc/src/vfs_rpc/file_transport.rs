@@ -34,13 +34,16 @@ pub const STATFS: u64 = 18;
 pub const MKDIR: u64 = 19;
 pub const UNLINK: u64 = 20;
 pub const RENAME: u64 = 21;
+pub const STAT_AT: u64 = 22;
+/// The rename argument names a second directory token instead of flags.
+pub const RENAME_DISTINCT_DIRS: u64 = 2;
 
 pub fn namespace_mutation(op: u64) -> bool {
     matches!(op, MKDIR | UNLINK | RENAME)
 }
 
 pub fn retained_path(op: u64) -> bool {
-    mount_observation(op) || namespace_mutation(op)
+    mount_observation(op) || namespace_mutation(op) || op == STAT_AT
 }
 
 pub fn mount_observation(op: u64) -> bool {
@@ -77,6 +80,7 @@ pub const OPEN_CREATE: u64 = 4;
 pub const OPEN_EXCLUSIVE: u64 = 8;
 pub const OPEN_TRUNCATE: u64 = 16;
 pub const OPEN_STORAGE_ADMIN: u64 = 32;
+pub const OPEN_DIRECTORY: u64 = 64;
 pub const OPEN_ACCESS: u64 = ACCESS_READ | ACCESS_WRITE;
 
 pub const SEEK_START: u64 = 0;
@@ -235,13 +239,24 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
         MKDIR | UNLINK | RENAME => {
             let path = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
             let valid_path = |part: &str| !part.is_empty() && !part.as_bytes().contains(&0);
+            let distinct = request.arg1 & RENAME_DISTINCT_DIRS != 0;
             let valid = match request.op {
                 MKDIR => request.arg0 <= 0o777 && valid_path(path),
                 UNLINK => request.arg0 == 0 && valid_path(path),
-                _ => request.arg0 <= 1 && path.split_once('\0')
+                _ => (if distinct { request.token != 0 && request.arg0 != 0 } else { request.arg0 <= 1 }) && path.split_once('\0')
                     .is_some_and(|(old, new)| valid_path(old) && valid_path(new)),
             };
-            if !valid || request.token != 0 || request.arg1 > 1
+            if !valid || (request.token != 0 && path.split('\0').any(|part| part.starts_with('/'))) || request.arg1 > (if request.op == RENAME { 1 | RENAME_DISTINCT_DIRS } else { 1 })
+                || request.namespace_id == 0 || request.namespace_generation == 0
+                || request.receipt_id == 0 || request.receipt_generation == 0
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        STAT_AT => {
+            let path = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
+            if request.token == 0 || request.arg0 != 0 || request.arg1 != 0
+                || path.is_empty() || path.starts_with('/') || path.as_bytes().contains(&0)
                 || request.namespace_id == 0 || request.namespace_generation == 0
                 || request.receipt_id == 0 || request.receipt_generation == 0
             {
@@ -260,8 +275,9 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
             }
         }
         OPEN => {
-            if request.token != 0
-                || request.arg0 & !(OPEN_ACCESS | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE | OPEN_STORAGE_ADMIN) != 0
+            if request.arg0 & !(OPEN_ACCESS | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE | OPEN_STORAGE_ADMIN | OPEN_DIRECTORY) != 0
+                || (request.arg0 & OPEN_DIRECTORY != 0 && request.arg0 != ACCESS_READ | OPEN_DIRECTORY)
+                || (request.token != 0 && (request.payload.is_empty() || request.payload.starts_with(b"/")))
                 || request.arg0 & OPEN_ACCESS == 0
                 || (request.arg0 & OPEN_EXCLUSIVE != 0 && request.arg0 & OPEN_CREATE == 0)
                 || (request.arg0 & OPEN_TRUNCATE != 0 && request.arg0 & ACCESS_WRITE == 0)
@@ -567,7 +583,7 @@ fn validate_reply(reply: &Reply<'_>) -> Result<(), ProtocolError> {
                 return Err(ProtocolError::Encoding);
             }
         }
-        STAT => {
+        STAT | STAT_AT => {
             if reply.result0 != 0 || reply.result1 != 0 || reply.length != STAT_BYTES {
                 return Err(ProtocolError::Encoding);
             }

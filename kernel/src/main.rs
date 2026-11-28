@@ -118,14 +118,14 @@ static SUNLIGHT_USB_MOUSE_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-usb-mouse");
 static DEVICED_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/deviced");
-#[cfg(not(any(feature = "boot_resources", feature = "vfs-n1j-test", all(debug_assertions, feature = "vfs_d1b_test"))))]
+#[cfg(not(any(feature = "vfs_c2e_candidate", feature = "boot_resources", feature = "vfs-n1j-test", all(debug_assertions, feature = "vfs_d1b_test"))))]
 static VFS_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
-#[cfg(all(feature = "boot_resources", not(feature = "vfs-n1j-test"), not(all(debug_assertions, feature = "vfs_d1b_test"))))]
+#[cfg(all(feature = "boot_resources", not(feature = "vfs_c2e_candidate"), not(feature = "vfs-n1j-test"), not(all(debug_assertions, feature = "vfs_d1b_test"))))]
 static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(env!("SUNLIGHT_BOOT_RESOURCE_VFS"));
-#[cfg(all(debug_assertions, feature = "vfs_d1b_test", not(feature = "vfs-n1j-test")))]
+#[cfg(any(feature = "vfs_c2e_candidate", all(debug_assertions, feature = "vfs_d1b_test", not(feature = "vfs-n1j-test"))))]
 static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight-vfs-server"));
-#[cfg(feature = "vfs-n1j-test")]
+#[cfg(all(feature = "vfs-n1j-test", not(feature = "vfs_c2e_candidate")))]
 static VFS_SERVER_ELF_BYTES: &[u8] = include_bytes!(env!("SUNLIGHT_VFS_N1J_ELF"));
 static TTY_SERVER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
@@ -2668,6 +2668,9 @@ mod usb_storage;
 /// See docs/storage/partitioned-storage.md for selection and trust policy.
 fn init_kernel_vfs(seed: &'static [sunlight_fs::RamEntry]) {
     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
+    #[cfg(feature = "vfs_c2e_candidate")]
+    vfs.reserve_service_downloads(seed)
+        .expect("C2E requires the empty Downloads boot mountpoint");
 
     if vfs
         .mount_tmpfs("/", sunlight_fs::Tmpfs::new(seed))

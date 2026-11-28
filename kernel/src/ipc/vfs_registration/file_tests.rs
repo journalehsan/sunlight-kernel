@@ -31,6 +31,8 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             vfs_root_metadata: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
+            vfs_downloads_cwd: false,
+            shared_owner: None,
             vfs_stat_routed: false,
             vfs_file_routed: true,
             cwd: alloc::string::String::from("/"),
@@ -253,6 +255,7 @@ fn open_requires_a_retained_receipt_and_carries_exact_correlation() {
         runtime.publish_file(
             identity,
             FileOperation::Open {
+                anchor: 0,
                 path: "data",
                 access: api::ACCESS_READ,
                 mode: 0,
@@ -277,6 +280,7 @@ fn open_requires_a_retained_receipt_and_carries_exact_correlation() {
         .publish_file(
             identity,
             FileOperation::Open {
+                anchor: 0,
                 path: "data",
                 access: api::ACCESS_READ,
                 mode: 0,
@@ -324,6 +328,7 @@ fn complete_open(runtime: &mut Runtime, sched: &mut Scheduler, identity: Admissi
         .publish_file(
             identity,
             FileOperation::Open {
+                anchor: 0,
                 path: "data",
                 access: api::ACCESS_READ,
                 mode: 0,

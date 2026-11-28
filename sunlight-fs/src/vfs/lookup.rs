@@ -66,6 +66,21 @@ pub struct ResolvedPath {
     pub metadata: Metadata,
 }
 
+pub enum LegacyCwd {
+    Directory(ResolvedPath),
+    Downloads(String),
+}
+
+fn check_searchable(stat: &FileStat, cred: &Credential) -> Result<(), FsError> {
+    if stat.file_type != FileType::Directory {
+        return Err(FsError::NotDir);
+    }
+    if !check_permission(stat, cred, PermCheck::Execute) {
+        return Err(FsError::PermissionDenied);
+    }
+    Ok(())
+}
+
 impl<D: BlockDevice> Vfs<D> {
     pub fn metadata(&mut self, path: &str) -> Result<Metadata, FsError> {
         let (idx, local) = self.resolve_mount(path)?;
@@ -113,6 +128,81 @@ impl<D: BlockDevice> Vfs<D> {
         cred: &Credential,
         authorize: &mut dyn FnMut(&str) -> Result<(), FsError>,
     ) -> Result<ResolvedPath, FsError> {
+        self.resolve_existing_components(cwd, input, cred, &mut |name, _| authorize(name))
+    }
+
+    /// Resolve a cwd change in the legacy namespace. A reserved Downloads
+    /// component is returned with its still-unwalked suffix, before lookup.
+    pub fn resolve_legacy_cwd(
+        &mut self,
+        cwd: &str,
+        input: &str,
+        cred: &Credential,
+        authorize: &mut dyn FnMut(&str) -> Result<(), FsError>,
+    ) -> Result<LegacyCwd, FsError> {
+        let reserved = self.downloads_authority == super::DownloadsAuthority::Reserved;
+        let mut boundary = None;
+        let resolved = self.resolve_existing_components(cwd, input, cred, &mut |name, suffix| {
+            authorize(name)?;
+            if reserved && crate::path::service_downloads(name) {
+                let len = name.len() + suffix.len();
+                if len > RESOLVE_PATH_MAX {
+                    return Err(FsError::InvalidPath);
+                }
+                let mut target = String::new();
+                target
+                    .try_reserve_exact(len)
+                    .map_err(|_| FsError::NoMemory)?;
+                target.push_str(name);
+                target.push_str(suffix);
+                boundary = Some(target);
+                return Err(FsError::Unsupported);
+            }
+            Ok(())
+        });
+        if let Some(path) = boundary {
+            return Ok(LegacyCwd::Downloads(path));
+        }
+        let resolved = resolved?;
+        check_searchable(&resolved.metadata.native, cred)?;
+        Ok(LegacyCwd::Directory(resolved))
+    }
+
+    /// Validate a temporary pin before committing the legacy cwd string.
+    /// Traversal, pinning and commit all use the caller's exclusive VFS borrow.
+    pub fn with_legacy_cwd<T>(
+        &mut self,
+        input: &str,
+        cred: &Credential,
+        authorize: &mut dyn FnMut(&str) -> Result<(), FsError>,
+        commit: impl FnOnce(String) -> T,
+    ) -> Result<T, FsError> {
+        if self.downloads_authority != super::DownloadsAuthority::Reserved
+            || !input.starts_with('/')
+        {
+            return Err(FsError::PermissionDenied);
+        }
+        let LegacyCwd::Directory(resolved) =
+            self.resolve_legacy_cwd("/", input, cred, authorize)?
+        else {
+            return Err(FsError::PermissionDenied);
+        };
+        let pin = self.open(&resolved.path)?;
+        let checked = self
+            .fstat_handle(pin)
+            .and_then(|stat| check_searchable(&stat, cred));
+        let result = checked.map(|()| commit(resolved.path));
+        self.close(pin).expect("legacy cwd validation pin remains owned");
+        result
+    }
+
+    fn resolve_existing_components(
+        &mut self,
+        cwd: &str,
+        input: &str,
+        cred: &Credential,
+        authorize: &mut dyn FnMut(&str, &str) -> Result<(), FsError>,
+    ) -> Result<ResolvedPath, FsError> {
         if input.is_empty() || input.len() > RESOLVE_PATH_MAX || input.contains('\0') {
             return Err(FsError::InvalidPath);
         }
@@ -127,7 +217,7 @@ impl<D: BlockDevice> Vfs<D> {
             self.walk_components(&mut path, cwd, cred, authorize)?;
         }
         self.walk_components(&mut path, input, cred, authorize)?;
-        authorize(&path)?;
+        authorize(&path, "")?;
         let metadata = self.metadata(&path)?;
         Ok(ResolvedPath { path, metadata })
     }
@@ -148,9 +238,9 @@ impl<D: BlockDevice> Vfs<D> {
         path: &mut String,
         input: &str,
         cred: &Credential,
-        authorize: &mut dyn FnMut(&str) -> Result<(), FsError>,
+        authorize: &mut dyn FnMut(&str, &str) -> Result<(), FsError>,
     ) -> Result<(), FsError> {
-        authorize(path)?;
+        authorize(path, input)?;
         for component in input.split('/').filter(|part| !part.is_empty()) {
             self.search_directory(path, cred)?;
             match component {
@@ -171,6 +261,12 @@ impl<D: BlockDevice> Vfs<D> {
             }
             let name_start = path.len();
             path.push_str(component);
+            let end = component.as_ptr() as usize - input.as_ptr() as usize + component.len();
+            if self.downloads_authority == super::DownloadsAuthority::Reserved
+                && crate::path::service_downloads(path)
+            {
+                authorize(path, &input[end..])?;
+            }
             let (idx, local) = self.resolve_mount(path)?;
             // Mounted roots use the mount table's spelling. FAT names need
             // backend spelling, not the user's case-insensitive lookup text.
@@ -201,7 +297,7 @@ impl<D: BlockDevice> Vfs<D> {
                 path.truncate(name_start);
                 path.push_str(name);
             }
-            authorize(path)?;
+            authorize(path, &input[end..])?;
             // Existence is checked before a later '..' can discard the name.
             self.stat(path)?;
         }

@@ -264,6 +264,17 @@ impl Runtime {
         bytes: &[u8],
         live: Option<AdmissionIdentity>,
     ) -> Result<Option<Frame>, NamespaceRetentionError> {
+        self.install_transition_receipt(authenticated, id, bytes, live, None)
+    }
+
+    fn install_transition_receipt(
+        &mut self,
+        authenticated: Registration,
+        id: u64,
+        bytes: &[u8],
+        live: Option<AdmissionIdentity>,
+        previous: Option<Scope>,
+    ) -> Result<Option<Frame>, NamespaceRetentionError> {
         use NamespaceRetentionError::{Ownership, Resource};
         let remote = self
             .remote
@@ -301,7 +312,7 @@ impl Runtime {
                 if live != Some(identity) || self.registry.active() != Some(authenticated) {
                     return remote.ownership.release(id).map(Some).map_err(Ownership);
                 }
-                match self.namespaces.install_receipt(identity, receipt, grants) {
+                match self.namespaces.publish_receipt(identity, receipt, grants, previous) {
                     Ok(binding) => {
                         remote.local[slot] = Some(LocalLease::Bound { receipt, binding });
                         Ok(None)
@@ -674,7 +685,7 @@ pub(crate) use file::retire_storage_fixture_caller;
 #[path = "vfs_registration/stat.rs"]
 mod stat;
 pub(crate) use chdir::{
-    chdir_call, context as chdir_context, finish as chdir_finish, resume as chdir_resume,
+    route_directory as route_vfs_directory, DirectoryRoute, LegacyCwdCommit, busy as chdir_busy, chdir_call, context as chdir_context, finish as chdir_finish, resume as chdir_resume,
 };
 #[path = "vfs_registration/inheritance.rs"]
 mod inheritance;

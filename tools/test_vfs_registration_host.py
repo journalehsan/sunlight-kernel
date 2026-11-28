@@ -31,6 +31,21 @@ fn mounted_cwd_namespace(uid: u32, gid: u32) -> sunlight_vfs_server::directory::
     }
     namespace
 }
+fn downloads_namespaces() -> (sunlight_fs::Vfs, sunlight_vfs_server::directory::DirectoryNamespace) {
+    use sunlight_fs::{RamEntry, Tmpfs, Vfs, vfs::mode};
+    const SEED: &[RamEntry] = &[
+        RamEntry::dir("/root", 0, 0, mode::DIR_755),
+        RamEntry::dir("/root/Downloads", 0, 0, mode::DIR_700),
+        RamEntry::dir("/etc", 0, 0, mode::DIR_755),
+    ];
+    let mut legacy = Vfs::new();
+    legacy.reserve_service_downloads(SEED).unwrap();
+    legacy.mount_tmpfs("/", Tmpfs::new(SEED)).unwrap();
+    let mut service = Vfs::new();
+    service.mount_tmpfs("/", Tmpfs::new(SEED)).unwrap();
+    service.mount_service_downloads().unwrap();
+    (legacy, sunlight_vfs_server::directory::DirectoryNamespace::mounted(service).unwrap())
+}
 pub mod timekeeping { pub const TICK_HZ: u64 = 100; }
 pub mod capability {
     #[path = "DELIVERY_PATH"]
@@ -58,19 +73,21 @@ pub mod sched {
     }
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum ProcessState { Ready, Running, BlockedOnIpc }
-    #[derive(Default)]
+    #[derive(Clone, Default)]
     pub struct Foreground {
         pub incarnation: u64, pub session_broker: u64, pub session: u64,
         pub generation: u64, pub member: u64, pub cancel: u8, pub forced_exit: Option<i32>,
     }
     impl Foreground { pub fn execution(&self) -> u64 { self.member } }
+    #[derive(Clone)]
     pub struct AddressSpace { pub generation: u64 }
     impl AddressSpace { pub fn identity(&self) -> &Self { self } }
+    #[derive(Clone)]
     pub struct Process {
         pub pid: usize, pub trusted_vfs_service: bool, pub exiting: bool,
         pub vfs_root_metadata: bool, pub vfs_boot_root: bool, pub vfs_file_routed: bool,
-        pub vfs_root_rebased: bool, pub vfs_stat_routed: bool,
-        pub cwd: String,
+        pub vfs_root_rebased: bool, pub vfs_stat_routed: bool, pub vfs_downloads_cwd: bool,
+        pub cwd: String, pub shared_owner: Option<usize>,
         pub uid: u32, pub gid: u32,
         pub state: ProcessState, pub pending_call: Option<()>,
         pub ipc_reply_target: Option<()>, pub ipc_endpoint: Option<u32>,
@@ -81,7 +98,11 @@ pub mod sched {
         pub global_tick: u64, pub processes: Vec<Process>,
         pub(crate) pending_children: crate::process::pending_state::Pending<Box<Process>, 8>,
     }
-    impl Scheduler { pub fn shared_process_index(&self, idx: usize) -> usize { idx } }
+    impl Scheduler {
+        pub fn shared_process_index(&self, idx: usize) -> usize {
+            self.processes[idx].shared_owner.unwrap_or(idx)
+        }
+    }
 }
 pub mod process {
     pub use crate::sched::{Process, ProcessState};
@@ -117,7 +138,7 @@ mod ipc {
         use crate::sched::{AddressSpace, Foreground, Process, Scheduler};
         let mut sched = Scheduler { global_tick: 0, pending_children: crate::process::pending_state::Pending::new(), processes: vec![Process {
             pid: 3, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
-            vfs_root_rebased: false, vfs_stat_routed: false,
+            vfs_root_rebased: false, vfs_stat_routed: false, vfs_downloads_cwd: false, shared_owner: None,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
             foreground: Foreground { incarnation: 5, ..Default::default() }, address_space: AddressSpace { generation: 7 },
@@ -144,7 +165,7 @@ mod ipc {
         assert_eq!(vfs_registration::register(3, 8, &sched, &caps), Ok(()));
         sched.processes.push(Process {
             pid: 4, trusted_vfs_service: true, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
-            vfs_root_rebased: false, vfs_stat_routed: false,
+            vfs_root_rebased: false, vfs_stat_routed: false, vfs_downloads_cwd: false, shared_owner: None,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
             foreground: Foreground { incarnation: 6, ..Default::default() }, address_space: AddressSpace { generation: 8 },
@@ -168,7 +189,7 @@ mod ipc {
         // from process records, independently of the service's credentials.
         sched.processes.push(Process {
             pid: 10, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
-            vfs_root_rebased: false, vfs_stat_routed: false,
+            vfs_root_rebased: false, vfs_stat_routed: false, vfs_downloads_cwd: false, shared_owner: None,
             state: crate::sched::ProcessState::Running, pending_call: None,
             ipc_reply_target: None, ipc_endpoint: None, uid: 1001, gid: 1002,
             foreground: Foreground { incarnation: 11, ..Default::default() }, address_space: AddressSpace { generation: 12 },
@@ -286,11 +307,12 @@ def main():
         (work / 'src').mkdir()
         (work / 'Cargo.toml').write_text(
             '[package]\nname = "vfs-registration-host"\nversion = "0.0.0"\n'
-            'edition = "2021"\n[workspace]\n[dependencies]\nspin = "0.9"\n'
+            'edition = "2021"\n[workspace]\n[features]\nvfs_c2e_candidate = []\n[dependencies]\nspin = "0.9"\n'
             f'sunlight-ipc = {{ path = "{ROOT / "ipc"}" }}\n'
             f'sunlight-fs = {{ path = "{ROOT / "sunlight-fs"}" }}\n'
             f'sunlight-mm = {{ path = "{ROOT / "sunlight-mm"}", features = ["testutil"] }}\n'
-            f'sunlight-vfs-server = {{ path = "{ROOT / "services/vfs_server"}" }}\n')
+            f'sunlight-vfs-server = {{ path = "{ROOT / "services/vfs_server"}", features = ["vfs-c2e-candidate"] }}\n'
+            f'sunlight-compat-linux = {{ path = "{ROOT / "compat-linux"}" }}\n')
         (work / 'src/lib.rs').write_text(SOURCE.replace(
             'ADAPTER_PATH', str(ROOT / 'kernel/src/ipc/vfs_registration.rs')).replace(
             'RESOURCES_PATH', str(ROOT / 'kernel/src/ipc/vfs_resources.rs')).replace(
@@ -301,6 +323,7 @@ def main():
         subprocess.run([
             'cargo', 'test', '--manifest-path', str(work / 'Cargo.toml'),
             '--target', 'x86_64-unknown-linux-gnu', '--target-dir', str(target), '--offline',
+            '--features', 'vfs_c2e_candidate',
         ], cwd=ROOT, check=True, timeout=120)
 
 

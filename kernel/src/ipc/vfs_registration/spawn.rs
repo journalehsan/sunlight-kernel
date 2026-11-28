@@ -18,6 +18,7 @@ pub(super) struct LaunchAttribution {
     pub(super) execution: u64,
     stat_routed: bool,
     root_rebased: bool,
+    downloads_cwd: bool,
 }
 
 impl LaunchAttribution {
@@ -34,6 +35,7 @@ impl LaunchAttribution {
             execution: foreground.execution(),
             stat_routed: process.vfs_stat_routed,
             root_rebased: process.vfs_root_rebased,
+            downloads_cwd: process.vfs_downloads_cwd,
         })
     }
 }
@@ -825,6 +827,7 @@ fn take_bound_child(
     let stat_routed = launch.stat_routed;
     process.vfs_stat_routed = stat_routed;
     process.vfs_root_rebased = launch.root_rebased;
+    process.vfs_downloads_cwd = launch.downloads_cwd;
     debug_assert_eq!(process.ppid, launch.parent.pid);
     process.foreground.parent_generation = launch.parent.incarnation;
     process.foreground.session_broker = launch.session_broker;

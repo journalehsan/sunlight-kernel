@@ -1,0 +1,51 @@
+{
+  "stage": "VFS-C2E",
+  "status": "PARTIAL",
+  "candidate": {
+    "feature": "vfs_c2e_candidate",
+    "mount": "/root/Downloads",
+    "production_enabled": false,
+    "kernel_cold_start_fence": "PASS",
+    "authenticated_mount_retirement_in_guest": "NOT_RUN",
+    "generic_retained_cwd": "BLOCKED",
+    "service_backed_executable_sources": "BLOCKED",
+    "legacy_descriptor_producer_source_sites_removed": 0
+  },
+  "host": {
+    "filesystem": {"status": "PASS", "tests": 126, "focused": 4, "log": "target/vfs-c2e/fs-after-host.log"},
+    "service_library": {"status": "PASS", "tests": 92, "log": "target/vfs-c2e/service-host-lib.log"},
+    "service_binary_as_host_test": {"status": "FAIL", "reason": "no_std binary and host test harness both define panic_impl", "log": "target/vfs-c2e/service-host.log"},
+    "registration": {"status": "PASS", "tests": 113, "log": "target/vfs-c2e/registration-host.log"},
+    "downloads_handle_baseline_and_seeded_sibling": "PASS"
+  },
+  "builds": {
+    "candidate_debug": {"status": "PASS", "log": "target/vfs-c2e/candidate-after-build.log"},
+    "production_release": {"status": "PASS", "log": "target/vfs-c2e/production-build.log"}
+  },
+  "guard": {
+    "status": "FAIL",
+    "before": {"references": 73, "unmatched": 6, "inventory_exit": 0, "no_growth_exit": 1, "final_removal_exit": 1},
+    "after": {"references": 71, "unmatched": 4, "inventory_exit": 0, "no_growth_exit": 1, "final_removal_exit": 1},
+    "historical": {
+      "storage::mount": "REMAINS",
+      "linux_procfs::mountinfo_snapshot": "REMAINS",
+      "sys_linux_statfs": "REMAINS",
+      "process::mmap::sys_mmap": "REMAINS"
+    },
+    "logs": "target/vfs-c2e/guard-{before,after}-{inventory,no-growth,check}.log"
+  },
+  "guest": {
+    "ordinary_boot": {"status": "BLOCKED", "log": "target/vfs-c2e/ordinary-gate.log"},
+    "ordinary_mkdir_stat_cp_cat": "NOT_RUN",
+    "generic_native_open_write_rename": "NOT_RUN",
+    "generic_linux_open_write_rename": "NOT_RUN",
+    "descriptor_duplication_and_private_mmap": "NOT_RUN",
+    "exit_and_exec_cleanup": "NOT_RUN",
+    "service_loss": "NOT_RUN",
+    "frame_descriptor_and_namespace_accounting": "NOT_RUN",
+    "boot_resource_integrity": "NOT_RUN",
+    "c1e10_c1e11_c1e12_c2b_replays": "NOT_RUN",
+    "c2c_gpt_fstab_acceptance": "NOT_RUN"
+  },
+  "c2c_fixture": {"status": "PASS", "verification": "unchanged image checksum", "checksum_file": "target/vfs-c2e/c2c-fixture.sha256"}
+}

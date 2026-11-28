@@ -276,6 +276,8 @@ pub extern "C" fn _start() -> ! {
     #[cfg(not(feature = "boot-resources"))]
     let seed = sunlight_fs::INITRAMFS;
     let boot_mountpoint = mount_from_fstab(&mut vfs, &mut boot, seed);
+    #[cfg(feature = "vfs-c2e-candidate")]
+    vfs.mount_service_downloads().expect("C2E Downloads mount");
     #[cfg(feature = "vfs-c1e2-test")]
     for path in ["/mnt", "/mnt/volume", "/mnt/bad", "/mnt/other", "/mnt/exit"] {
         if matches!(vfs.stat(path), Err(FsError::NotFound)) {

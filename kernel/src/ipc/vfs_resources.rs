@@ -70,21 +70,40 @@ impl<const N: usize> NamespacePolicy<N> {
         receipt: Receipt,
         grants: u64,
     ) -> Result<Arc<NamespaceBinding>, Error> {
+        self.publish_receipt(identity, receipt, grants, None)
+    }
+
+    pub(super) fn publish_receipt(
+        &mut self,
+        identity: AdmissionIdentity,
+        receipt: Receipt,
+        grants: u64,
+        previous: Option<Scope>,
+    ) -> Result<Arc<NamespaceBinding>, Error> {
         if receipt.registration() != identity.registration
             || receipt.scope().caller != identity.caller
-            || self
-                .bindings
-                .iter()
-                .flatten()
-                .any(|b| b.caller == identity.caller)
         {
             return Err(Error::StaleNamespace);
         }
-        let slot = self
-            .bindings
-            .iter()
-            .position(Option::is_none)
-            .ok_or(Error::NamespaceCapacity)?;
+        let current = self.bindings.iter().position(|entry| {
+            entry.as_ref().is_some_and(|binding| binding.caller == identity.caller)
+        });
+        let slot = match (previous, current) {
+            (None, None) => self.bindings.iter().position(Option::is_none)
+                .ok_or(Error::NamespaceCapacity)?,
+            (Some(scope), Some(slot)) => {
+                let current = self.bindings[slot].as_ref().unwrap().validate(identity)?;
+                if scope.caller != identity.caller || scope.namespace_id != current.id
+                    || scope.namespace_generation != current.generation
+                    || receipt.scope().namespace_id != current.id
+                    || receipt.scope().namespace_generation <= current.generation
+                {
+                    return Err(Error::StaleNamespace);
+                }
+                slot
+            }
+            _ => return Err(Error::StaleNamespace),
+        };
         let scope = receipt.scope();
         let root = Directory::new(
             identity.registration,
@@ -99,7 +118,9 @@ impl<const N: usize> NamespacePolicy<N> {
             receipt.generation(),
         )?;
         let binding = NamespaceBinding::new(identity.caller, root, directory, grants)?;
-        self.bindings[slot] = Some(Arc::clone(&binding));
+        if let Some(old) = self.bindings[slot].replace(Arc::clone(&binding)) {
+            old.retire();
+        }
         Ok(binding)
     }
 
