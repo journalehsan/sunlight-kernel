@@ -1,0 +1,63 @@
+{
+  "stage": "VFS-C2C",
+  "status": "PARTIAL",
+  "primary_acceptance": "NOT_RUN",
+  "fixture": {
+    "status": "PASS",
+    "partuuid": "7e435232-1fd5-4704-a0bf-21de06ea232c",
+    "target": "/mnt",
+    "partition_start": 2048,
+    "partition_blocks": 128990,
+    "disk_blocks": 131072,
+    "baseline_read_only_fsck_and_exact_payload": "PASS",
+    "post_guest_integrity": "NOT_RUN",
+    "image": "target/vfs-c2c/fixture/disposable.raw",
+    "metadata": "target/vfs-c2c/fixture/fixture.json"
+  },
+  "host": {
+    "fstab": {"status": "PASS", "tests": 5, "log": "target/vfs-c2c/host.log"},
+    "block": {"status": "PASS", "tests": 70, "log": "target/vfs-c2c/block.log"},
+    "ipc_storage": {"status": "PASS", "tests": 6, "log": "target/vfs-c2c/ipc.log"},
+    "service": {"status": "PASS", "tests": 92, "log": "target/vfs-c2c/service-host.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c2c/registration.log"}
+  },
+  "builds": {
+    "production_kernel_release": {"status": "PASS", "log": "target/vfs-c2c/production-build.log"},
+    "candidate_kernel_debug": {"status": "PASS", "log": "target/vfs-c2c/candidate-build.log"},
+    "storagectl_release": "PASS",
+    "candidate_service_release": "PASS"
+  },
+  "native": {
+    "planned_vcpus": 1,
+    "planned_memory_mib": 2048,
+    "guarded_boot": {"status": "NOT_RUN", "gate": "BLOCKED"},
+    "standalone_fstab_and_partuuid_resolution": "NOT_RUN",
+    "early_reservation_and_no_kernel_backend": "NOT_RUN",
+    "committed_mount_count": null,
+    "publication_failure_compensation": "NOT_RUN",
+    "ordinary_reader_writer_inheritance_same_incarnation": "NOT_RUN",
+    "stat_chdir_read_write_rename_unlink_dup": "NOT_RUN",
+    "native_linux_private_mmap": "NOT_RUN",
+    "inventory_mountinfo_statfs": "NOT_RUN",
+    "repeat_fstab_idempotence": "NOT_RUN",
+    "exit_cleanup": "NOT_RUN",
+    "withdraw_sync_reattach_persistence": "NOT_RUN",
+    "service_loss": "NOT_RUN",
+    "resource_accounting": "NOT_RUN",
+    "boot_disk_guest_regression": "NOT_RUN"
+  },
+  "guard": {
+    "status": "FAIL",
+    "inventory_exit": 0,
+    "no_growth_exit": 1,
+    "references": 71,
+    "unmatched": 4,
+    "logs": ["target/vfs-c2c/guard.log", "target/vfs-c2c/guard-full.log", "target/vfs-c2c/guarded-boot.log"],
+    "findings": {
+      "storage::mount": "BLOCKED",
+      "linux_procfs::mountinfo_snapshot": "BLOCKED",
+      "sys_linux_statfs": "PARTIAL",
+      "process::mmap::sys_mmap": "PARTIAL"
+    }
+  }
+}

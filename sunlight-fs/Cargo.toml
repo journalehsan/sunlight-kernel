@@ -679,6 +679,7 @@ version = "0.2.9485-alpha.2"
 edition = "2021"
 
 [features]
+vfs-c2c-fixture = []
 attachment-transactions = []
 boot-resources = ["dep:lz4_flex"]
 helios-git = []

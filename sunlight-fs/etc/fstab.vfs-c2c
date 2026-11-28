@@ -1,0 +1,3 @@
+/dev/sda1 /boot bootfs defaults
+/dev/ram0 / tmpfs defaults
+PARTUUID=7e435232-1fd5-4704-a0bf-21de06ea232c /mnt fat32 rw

@@ -1,0 +1,43 @@
+{
+  "stage": "VFS-C2D",
+  "status": "PARTIAL",
+  "candidate": {
+    "feature": "vfs_c2d_candidate",
+    "adapter": "native Spawn",
+    "commands": ["mkdir", "stat", "cp", "cat"],
+    "complete_mount_retirement": "BLOCKED",
+    "production_enabled": false
+  },
+  "host": {
+    "registration": {"status": "PASS", "tests": 113, "log": "target/vfs-c2d/registration.log"},
+    "service": {"status": "PASS", "tests": 92, "log": "target/vfs-c2d/service-host.log"}
+  },
+  "builds": {
+    "production_release": {"status": "PASS", "log": "target/vfs-c2d/production-build.log"},
+    "candidate_debug": {"status": "PASS", "log": "target/vfs-c2d/candidate-build.log"},
+    "initial_candidate_debug": {"status": "FAIL", "log": "target/vfs-c2d/candidate-build-initial-failure.log"}
+  },
+  "guard": {
+    "status": "FAIL",
+    "inventory_exit": 0,
+    "no_growth_exit": 1,
+    "final_removal_exit": 1,
+    "references_before": 71,
+    "references_after": 71,
+    "unmatched_before": 4,
+    "unmatched_after": 4,
+    "findings_remaining": ["storage::mount", "linux_procfs::mountinfo_snapshot", "sys_linux_statfs", "process::mmap::sys_mmap"],
+    "logs": ["target/vfs-c2d/guard-before.log", "target/vfs-c2d/guard-after.log", "target/vfs-c2d/guard-check-after.log"]
+  },
+  "guest": {
+    "ordinary_boot": "BLOCKED",
+    "c2c_gpt_fstab_acceptance": "NOT_RUN",
+    "native_and_linux_namespace_and_file_calls": "NOT_RUN",
+    "dup_and_private_mmap": "NOT_RUN",
+    "exit_and_exec_cleanup": "NOT_RUN",
+    "service_loss": "NOT_RUN",
+    "frame_and_reference_accounting": "NOT_RUN",
+    "boot_resource_integrity": "NOT_RUN",
+    "c1e10_c1e11_c1e12_c2b_native_replays": "NOT_RUN"
+  }
+}

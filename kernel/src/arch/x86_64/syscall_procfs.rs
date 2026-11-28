@@ -19,7 +19,7 @@ pub(super) fn open(_frame: &mut SyscallFrame, path: &str, flags: u64) -> u64 {
         return linux_errno(20);
     }
     let status = parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 };
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if matches!(node, Node::MountInfo(_)) && mount_observation_routed() {
         return service_mount_observation(_frame, None, |sched, completion| {
             install(sched, node, Some(completion.payload), status)

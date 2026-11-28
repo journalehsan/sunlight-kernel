@@ -4751,7 +4751,19 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         child.vfs_file_routed = parent.vfs_file_routed;
         #[cfg(all(debug_assertions, feature = "vfs_c1a_test"))]
         select_c1a_file_probe(path_str, parent, &mut child);
+        #[cfg(feature = "vfs_c2d_candidate")]
+        if argv_bytes.first().is_some_and(|argv0| {
+            crate::ipc::vfs_registration::spawn::tmpfs_utility(path_str, argv0)
+        }) {
+            child.vfs_stat_routed = true;
+            child.vfs_file_routed = true;
+        }
         let streams = core::array::from_fn(|fd| stdio_entries[fd].map(|entry| (stdio_fds[fd] as i32, entry)));
+        #[cfg(feature = "vfs_c2d_candidate")]
+        if child.vfs_file_routed && streams.iter().flatten().any(|(_, entry)| entry.handle.is_vfs()) {
+            unsafe { crate::process::spawn::rollback_initial_image(&mut child, &mut pmm, hhdm) };
+            return ERR_EBADF;
+        }
         // The current service owner contract cannot transfer an open token
         // into another caller. Legacy pipes and other local streams keep
         // their ordinary installation at the publication boundary.
@@ -6553,7 +6565,7 @@ fn sys_linux_statfs(frame: &mut SyscallFrame) -> u64 {
     let Ok(path) = core::str::from_utf8(&bytes) else {
         return linux_errno(22);
     };
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if mount_observation_routed() {
         if path.is_empty() {
             return linux_errno(2);
@@ -6604,14 +6616,14 @@ fn linux_fat_statfs(unit: u32, blocks: u32, free: u32) -> [u8; 120] {
     record
 }
 
-#[cfg(feature = "vfs_c1e2_test")]
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
 fn mount_observation_routed() -> bool {
     crate::sched::with_scheduler(|sched| {
         sched.current_process().vfs_file_routed || sched.current_shared_process().vfs_file_routed
     })
 }
 
-#[cfg(feature = "vfs_c1e2_test")]
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
 fn service_mount_observation(
     frame: &mut SyscallFrame,
     path: Option<&str>,
@@ -8631,14 +8643,18 @@ fn sys_linux_faccessat(frame: &mut SyscallFrame) -> u64 {
     0
 }
 
-#[cfg(feature = "vfs_c1e2_test")]
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
 fn namespace_mutation_routed() -> bool {
     crate::sched::with_scheduler(|sched| {
-        sched.current_process().vfs_stat_routed || sched.current_shared_process().vfs_stat_routed
+        let current = sched.current_process();
+        let shared = sched.current_shared_process();
+        (current.vfs_stat_routed || shared.vfs_stat_routed)
+            && (cfg!(feature = "vfs_c1e2_test")
+                || current.vfs_file_routed || shared.vfs_file_routed)
     })
 }
 
-#[cfg(feature = "vfs_c1e2_test")]
+#[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
 fn service_namespace_mutation(
     frame: &mut SyscallFrame,
     op: u64,
@@ -8711,7 +8727,7 @@ fn service_namespace_mutation(
 }
 
 fn sys_linux_mkdirat(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if namespace_mutation_routed() {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
             frame.rdx & 0o777, (frame.rdi as i32, frame.rsi), None);
@@ -10640,7 +10656,7 @@ fn sys_native_recv(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if namespace_mutation_routed() {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
             0, (frame.rdi as i32, frame.rsi), Some((frame.rdx as i32, frame.r10)));
@@ -10679,7 +10695,7 @@ fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
     if flags != 0 {
         return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
     }
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if namespace_mutation_routed() {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
             0, (frame.rdi as i32, frame.rsi), None);
@@ -11753,7 +11769,7 @@ fn sys_service_stat(frame: &mut SyscallFrame, path: &str, linux: bool) -> u64 {
 /// rdi = pathname (user-space pointer)
 /// rsi = mode bits
 fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if namespace_mutation_routed() {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
             frame.rsi & 0o777, (-100, frame.rdi), None);
@@ -11807,7 +11823,7 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: unlink (65) — remove a file.
 /// rdi = NUL-terminated path
 fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if namespace_mutation_routed() {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
             0, (-100, frame.rdi), None);
@@ -11843,7 +11859,7 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: rename (66), or RenameNoReplace (149) for atomic collision checking.
 /// rdi = NUL-terminated old path, rsi = NUL-terminated new path
 fn sys_rename(frame: &mut SyscallFrame, no_replace: bool) -> u64 {
-    #[cfg(feature = "vfs_c1e2_test")]
+    #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate"))]
     if namespace_mutation_routed() {
         return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
             u64::from(no_replace), (-100, frame.rdi), Some((-100, frame.rsi)));

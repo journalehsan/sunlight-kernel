@@ -894,7 +894,7 @@ pub static INITRAMFS: &[RamEntry] = &[
         0,
         0,
         mode::FILE_644,
-        include_bytes!("../etc/fstab"),
+        crate::fstab::FSTAB_TEXT.as_bytes(),
     ),
     // /etc/hosts for DNS resolver (hosts first, then hardcoded fallback)
     RamEntry::file(

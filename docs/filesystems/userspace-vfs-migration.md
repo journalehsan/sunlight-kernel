@@ -3488,6 +3488,22 @@ target, and prove namespace publication for the selected ordinary callers.
 See the [C2B report](vfs-early-storage-ownership-reservation.md) and
 [results](vfs-early-storage-ownership-reservation-results.json).
 
+VFS-C2C is **PARTIAL**. An opt-in GPT FAT32 fixture and matching fstab
+configuration pass host checks using the existing PARTUUID parser and
+resolver. The unchanged ownership guard still blocks ordinary boot.
+Standalone publication, ordinary reader and writer inheritance, and
+persistence and settlement on the GPT fixture remain unqualified. See the
+[C2C report](vfs-ordinary-fstab-namespace-inheritance.md) and
+[results](vfs-ordinary-fstab-namespace-inheritance-results.json).
+
+VFS-C2D is **PARTIAL**. The opt-in native Spawn candidate moves the existing
+`mkdir`, `stat`, `cp` and `cat` utilities together to the authenticated
+service namespace. Whole-mount retirement remains blocked by legacy
+callers, live object lifetime and non-embedded executable loading. The
+ordinary boot guard is unchanged. See the
+[C2D report](vfs-legacy-tmpfs-authority-migration.md) and
+[results](vfs-legacy-tmpfs-authority-migration-results.json).
+
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact
    launch from a shared namespace owner. Complete explicit service

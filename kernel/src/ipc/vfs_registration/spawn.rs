@@ -773,6 +773,42 @@ pub(crate) fn wait_for_publication(
 #[cfg(all(not(test), feature = "vfs_c1a_candidate"))]
 pub(crate) mod ordinary;
 
+#[cfg(any(test, feature = "vfs_c2d_candidate"))]
+pub(crate) fn tmpfs_utility(path: &str, argv0: &[u8]) -> bool {
+    let Some((directory, applet)) = path.rsplit_once('/') else {
+        return false;
+    };
+    let supported = match directory {
+        "/bin" | "/usr/bin" => matches!(applet, "mkdir" | "stat" | "cp" | "cat"),
+        "/sunlight-utils" => applet == "cat",
+        _ => false,
+    };
+    supported && argv0.rsplit(|byte| *byte == b'/').next() == Some(applet.as_bytes())
+}
+
+#[cfg(test)]
+#[test]
+fn tmpfs_utility_requires_supported_embedded_path_and_applet() {
+    for (path, argv0) in [
+        ("/bin/mkdir", "mkdir"),
+        ("/usr/bin/stat", "stat"),
+        ("/bin/cp", "/bin/cp"),
+        ("/sunlight-utils/cat", "cat"),
+    ] {
+        assert!(tmpfs_utility(path, argv0.as_bytes()));
+    }
+    for (path, argv0) in [
+        ("/bin/mkdir", "ls"),
+        ("/bin/mkdir", "sunlight-utils"),
+        ("/tmp/cat", "cat"),
+        ("/bin/tee", "tee"),
+        ("/sunlight-utils/cp", "cp"),
+    ] {
+        assert!(!tmpfs_utility(path, argv0.as_bytes()));
+    }
+}
+
+
 #[cfg(not(test))]
 fn take_bound_child(
     sched: &mut Scheduler,
@@ -783,7 +819,11 @@ fn take_bound_child(
     let mut process = sched.pending_children.transfer(identity, true)
         .expect("exclusive scheduler publication owner");
     process.vfs_root_metadata = true;
-    process.vfs_stat_routed = launch.stat_routed;
+    #[cfg(feature = "vfs_c2d_candidate")]
+    let stat_routed = launch.stat_routed || process.vfs_stat_routed;
+    #[cfg(not(feature = "vfs_c2d_candidate"))]
+    let stat_routed = launch.stat_routed;
+    process.vfs_stat_routed = stat_routed;
     process.vfs_root_rebased = launch.root_rebased;
     debug_assert_eq!(process.ppid, launch.parent.pid);
     process.foreground.parent_generation = launch.parent.incarnation;

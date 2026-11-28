@@ -1,6 +1,9 @@
 //! The single boot mount configuration, shared by the legacy VFS and storagectl.
 pub const MAX_FSTAB_ENTRIES: usize = 8;
+#[cfg(not(feature = "vfs-c2c-fixture"))]
 pub const FSTAB_TEXT: &str = include_str!("../etc/fstab");
+#[cfg(feature = "vfs-c2c-fixture")]
+pub const FSTAB_TEXT: &str = include_str!("../etc/fstab.vfs-c2c");
 pub const MAX_FSTAB_BYTES: usize = 4096;
 
 #[derive(Debug, Clone, Copy)]
@@ -193,6 +196,20 @@ pub fn resolve_entry(
 mod tests {
     use super::*;
     const ID: &str = "PARTUUID=12345678-1234-5678-9abc-123456789abc";
+    #[cfg(feature = "vfs-c2c-fixture")]
+    #[test]
+    fn c2c_resolves_only_the_gpt_partition() {
+        let table = parse_fstab(FSTAB_TEXT).unwrap();
+        let entry = table[2].unwrap();
+        let partition = [
+            0x32, 0x52, 0x43, 0x7e, 0xd5, 0x1f, 0x04, 0x47, 0xa0, 0xbf, 0x21, 0xde, 0x06,
+            0xea, 0x23, 0x2c,
+        ];
+        assert_eq!(entry.mountpoint, "/mnt");
+        assert_eq!(resolve_entry(&entry, [(1, [0; 16]), (2, partition)]), Ok(Some(2)));
+        assert_eq!(resolve_entry(&entry, [(1, [0; 16])]), Err(ResolveError::Missing));
+        assert!(defer_uuid_to_runtime(FSTAB_TEXT, &partition));
+    }
     #[test]
     fn legacy_and_comments() {
         let table = parse_fstab(FSTAB_TEXT).unwrap();
