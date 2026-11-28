@@ -11,6 +11,8 @@ use sunlight_virtio::{ResetState, VirtioBlk, QUEUE_PAGES};
 use x86_64::PhysAddr;
 
 struct Binding {
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    committed_generation: Option<u64>,
     #[cfg(feature = "vfs_c1e1_test")]
     storage: Option<StorageReservation>,
     registration: Registration,
@@ -128,6 +130,8 @@ pub(crate) fn bind(registration: Registration) {
         .bind_registration(registration)
         .unwrap();
     test.binding = Some(Binding {
+        #[cfg(feature = "vfs_c2i1_candidate")]
+        committed_generation: None,
         #[cfg(feature = "vfs_c1e1_test")]
         storage: None,
         registration,
@@ -279,8 +283,27 @@ pub(crate) fn validate_storage_publication(
             return false;
         }
         binding.storage = None;
+        #[cfg(feature = "vfs_c2i1_candidate")]
+        {
+            binding.committed_generation = Some(generation);
+        }
     }
     valid
+}
+
+#[cfg(feature = "vfs_c2i1_candidate")]
+pub(crate) fn committed_storage_live(source: u64) -> bool {
+    let slot = TEST.lock();
+    slot.as_ref().filter(|test| !test.done && test.source.id == source).is_some_and(|test| {
+        test.binding.as_ref().is_some_and(|binding| {
+            binding.retirement.is_none()
+                && binding.settled.is_none()
+                && binding.committed_generation.is_some_and(|generation| {
+                    binding.active.as_ref().is_some_and(|lease| lease.generation() == generation)
+                })
+                && test.probe.authority.snapshot().status == Status::Active
+        })
+    })
 }
 
 #[cfg(not(feature = "vfs-n1m-test"))]

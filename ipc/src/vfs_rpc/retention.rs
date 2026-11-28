@@ -235,6 +235,20 @@ impl<T, const N: usize> Table<T, N> {
             .ok_or(Error::Stale)
     }
 
+    /// Replace the objects for an independently admitted scope when its
+    /// authenticated shared-directory transaction commits. The control owner
+    /// must fence dispatch and retain delivery against the replacement.
+    pub fn replace_scope_objects(&mut self, scope: Scope, objects: &T)
+    where
+        T: Clone,
+    {
+        for entry in self.entries.iter_mut().flatten() {
+            if entry.receipt.scope == scope {
+                entry.objects = objects.clone();
+            }
+        }
+    }
+
     /// Return an acknowledgement only after the owned references are dropped.
     /// Repeating an authentic release is harmless, including after slot reuse.
     pub fn release(

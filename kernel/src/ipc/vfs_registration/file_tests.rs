@@ -29,6 +29,8 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             pid: 10,
             trusted_vfs_service: false,
             vfs_root_metadata: false,
+            vfs_shared_cwd_join: None,
+            vfs_shared_cwd_join_allowed: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
             vfs_downloads_cwd: false,
@@ -47,6 +49,7 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             state: ProcessState::Running,
             pending_call: None,
             ipc_reply_target: None,
+            service_lookup_restrictions: None,
             ipc_endpoint: None,
         }],
     };
@@ -738,4 +741,144 @@ fn cancelled_mapping_read_rejects_late_reply_and_preserves_exact_close() {
     assert!(runtime.next_file(identity.registration, &mut frame).unwrap().is_some());
     let close = api::Request::decode(&frame).unwrap();
     assert_eq!((close.op, close.token), (api::CLOSE, token));
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+#[test]
+fn protected_open_uses_exact_install_compensation_and_reserves_normal_close() {
+    let (mut runtime, mut sched, identity) = setup();
+    sched.processes[0].service_lookup_restrictions =
+        Some(sunlight_ipc::ServiceCapability::HostKeyAdmin.bit());
+    let receipt = Receipt::from_parts(
+        identity.registration,
+        Scope {
+            caller: identity.caller,
+            namespace_id: 21,
+            namespace_generation: 22,
+        },
+        31,
+        32,
+    )
+    .unwrap();
+    let mut frame = [0; api::FRAME_BYTES];
+    for (token, install) in [(10, Err(24)), (11, Ok(4))] {
+        sched.processes[0].state = ProcessState::Running;
+        runtime
+            .publish_file(
+                identity,
+                FileOperation::Open {
+                    anchor: 0,
+                    path: "/etc/sunlight/.fixture.tmp.synthetic",
+                    access: api::OPEN_PRIVATE
+                        | api::OPEN_CREATE
+                        | api::OPEN_EXCLUSIVE
+                        | api::ACCESS_WRITE,
+                    mode: 0o600,
+                },
+                Some(receipt),
+                &mut sched,
+            )
+            .unwrap();
+        let id = runtime
+            .next_file(identity.registration, &mut frame)
+            .unwrap()
+            .unwrap();
+        let reply = reply_frame(identity, id, api::OPEN, 0, token, &[]);
+        runtime
+            .reply_file(identity.registration, &reply, &mut sched)
+            .unwrap();
+        let slot = runtime.caller_publication(identity.caller).unwrap();
+        let completion = runtime
+            .finish_open(slot, |opened, epoch| {
+                assert_eq!((opened, epoch), (token, identity.registration.epoch));
+                install
+            })
+            .unwrap();
+        assert_eq!(completion.errno, install.err().unwrap_or(0));
+        if install.is_ok() {
+            runtime.expire_files(TIMEOUT_TICKS * 2);
+            assert_eq!(
+                runtime
+                    .next_file(identity.registration, &mut frame)
+                    .unwrap(),
+                None
+            );
+            runtime
+                .publish_file_close(identity.registration, identity.caller, token, 0)
+                .unwrap();
+        }
+        assert_eq!(
+            runtime
+                .next_file(identity.registration, &mut frame)
+                .unwrap(),
+            Some(id)
+        );
+        let close = api::Request::decode(&frame).unwrap();
+        assert_eq!(
+            (close.op, close.token, close.caller),
+            (api::CLOSE, token, identity.caller)
+        );
+        let reply = reply_frame(identity, id, api::CLOSE, 0, 0, &[]);
+        runtime
+            .reply_file(identity.registration, &reply, &mut sched)
+            .unwrap();
+        assert!(runtime.file_publications.iter().all(Option::is_none));
+    }
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+#[test]
+fn protected_publication_acknowledgement_rechecks_capability_and_incarnation() {
+    let (mut runtime, mut sched, identity) = setup();
+    let cap = sunlight_ipc::ServiceCapability::HostKeyAdmin.bit();
+    let mut frame = [0; api::FRAME_BYTES];
+    enum Change {
+        None,
+        Capability,
+        Incarnation,
+        Deadline,
+    }
+    for change in [Change::None, Change::Capability, Change::Incarnation, Change::Deadline] {
+        sched.processes[0].state = ProcessState::Running;
+        sched.processes[0].service_lookup_restrictions = Some(cap);
+        sched.processes[0].foreground.incarnation = identity.caller.incarnation;
+        runtime
+            .publish_file(
+                identity,
+                FileOperation::PublishPrivate {
+                    token: 10,
+                    paths: "/etc/sunlight/.fixture.tmp.synthetic\0/etc/sunlight/fixture",
+                    replace: true,
+                },
+                None,
+                &mut sched,
+            )
+            .unwrap();
+        let id = runtime
+            .next_file(identity.registration, &mut frame)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            runtime
+                .next_file(identity.registration, &mut frame)
+                .unwrap(),
+            None
+        );
+        let reply = reply_frame(identity, id, api::PUBLISH_PRIVATE, 0, 0, &[]);
+        match change {
+            Change::None => {}
+            Change::Capability => sched.processes[0].service_lookup_restrictions = None,
+            Change::Incarnation => sched.processes[0].foreground.incarnation += 1,
+            Change::Deadline => sched.global_tick += TIMEOUT_TICKS,
+        }
+        let accepted = matches!(change, Change::None);
+        assert_eq!(
+            runtime.reply_file(identity.registration, &reply, &mut sched),
+            if accepted { Ok(()) } else { Err(Error::Identity) },
+        );
+        let completion = runtime
+            .take_file(identity.caller, api::PUBLISH_PRIVATE)
+            .unwrap();
+        assert_eq!(completion.errno == 0, accepted);
+    }
 }

@@ -3,6 +3,31 @@
   "status": "PARTIAL",
   "ordinary_activation": "BLOCKED",
   "production_routing_changed": false,
+  "cold_boot_mount_policy_followup": {
+    "status": "PARTIAL",
+    "implementation": "Early GPT deferral and Ring-3 VFS startup parse the same bounded immutable fstab entry; invalid inventory suppresses early GPT automount. Raw-volume policy is unchanged.",
+    "migrated_ordinary_consumers": 0,
+    "retired_ordinary_producers": 0,
+    "guard": {
+      "inventory": {"status": "PASS", "before": 71, "after": 71, "added": 0, "removed": 0, "source_line_shifts": 2},
+      "no_growth": {"status": "FAIL", "before_unmatched": 4, "after_unmatched": 4},
+      "final_removal": {"status": "FAIL", "before": 71, "after": 71},
+      "logs": "target/vfs-c2i-followup/{before,after}-{inventory,no-growth,check}.log"
+    },
+    "qualification": {
+      "boot_seed_fstab_host": {"status": "PASS", "tests": 5, "log": "target/vfs-c2i-followup/fstab.log"},
+      "parallel_descriptor_host": {"status": "PASS", "tests": 21, "threads": 8, "log": "target/vfs-c2i-followup/descriptor.log"},
+      "candidate_service_host": {"status": "PASS", "tests": 96, "log": "target/vfs-c2i-followup/service-host.log"},
+      "production_service_release": {"status": "PASS", "log": "target/vfs-c2i-followup/service-production.log"},
+      "production_kernel_release": {"status": "PASS", "log": "target/vfs-c2i-followup/production.log"},
+      "candidate_kernel_debug": {"status": "PASS", "log": "target/vfs-c2i-followup/candidate-debug.log"},
+      "candidate_kernel_release": {"status": "PASS", "log": "target/vfs-c2i-followup/candidate-release.log"},
+      "compressed_candidate_kernel_release": {"status": "PASS", "log": "target/vfs-c2i-followup/compressed-candidate.log"},
+      "ordinary_boot": {"status": "BLOCKED", "log": "target/vfs-c2i-followup/boot.log"},
+      "ordinary_root_transition_guest": "NOT_RUN",
+      "c2c_fixture_checksum": {"status": "PASS", "log": "target/vfs-c2i-followup/fixture.log"}
+    }
+  },
   "implementation": {
     "service_root_constructor": "services/vfs_server/src/boot_root.rs",
     "writable_service_root_selection": "existing isolated vfs-c1e2-test path",

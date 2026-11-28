@@ -1,6 +1,6 @@
 //! Private service-secret storage with atomic live-system publication.
 //!
-//! The kernel-backed staging and publish calls deliberately only operate
+//! The staging and publish syscalls deliberately only operate
 //! beneath `/etc/sunlight` and require the process to have the explicit
 //! `HostKeyAdmin` service capability.  This avoids turning a helper that is
 //! convenient for host keys into an arbitrary-path privileged writer.
@@ -286,6 +286,11 @@ impl SecretStore {
         options: SecretFileOptions<'_>,
     ) -> Result<usize, SecretStoreError> {
         validate_options(options)?;
+        // The service owns each live stage until its final descriptor closes.
+        // Sweeping by name could race an authorized publisher.
+        if libc::secret_stage_owned_by_descriptor() {
+            return Ok(0);
+        }
         let base = basename(options.destination).ok_or(SecretStoreError::InvalidDestination)?;
         let mut prefix = [0u8; MAX_PATH];
         let prefix_len = PRIVATE_SECRET_DIRECTORY
@@ -375,20 +380,36 @@ impl SecretStore {
         }
 
         let mut temporary = [0u8; MAX_PATH];
-        let (fd, temporary_len) = self.create_temp(options.destination, &mut temporary)?;
+        let descriptor_owned = libc::secret_stage_owned_by_descriptor();
+        let (fd, temporary_len) = self.create_temp(
+            options.destination, &mut temporary, descriptor_owned,
+        )?;
+        let temporary = &temporary[..temporary_len];
 
-        let result = self.write_validate_close(fd, secret, options, validator);
-        if let Err(error) = result {
-            self.cleanup_temp(&temporary[..temporary_len]);
+        let mut written = self.write_validate(fd, secret, options, validator);
+        if !descriptor_owned {
+            written = self.close_stage(fd).and(written);
+        }
+        if let Err(error) = written {
+            self.discard_stage(fd, temporary, descriptor_owned);
             return Err(error);
         }
 
-        match libc::secret_publish(
-            &temporary[..temporary_len],
+        let published = libc::secret_publish(
+            fd,
+            temporary,
             options.destination,
             options.mode,
             matches!(options.publish_mode, SecretPublishMode::ReplaceExisting),
-        ) {
+        );
+        if descriptor_owned {
+            if published.is_ok() {
+                let _ = self.close_stage(fd);
+            } else {
+                self.discard_stage(fd, temporary, true);
+            }
+        }
+        match published {
             Ok(()) => {
                 match options.publish_mode {
                     SecretPublishMode::CreateIfAbsent => {
@@ -401,7 +422,9 @@ impl SecretStore {
             Err(Errno::Again)
                 if matches!(options.publish_mode, SecretPublishMode::CreateIfAbsent) =>
             {
-                self.cleanup_temp(&temporary[..temporary_len]);
+                if !descriptor_owned {
+                    self.cleanup_temp(temporary);
+                }
                 self.validate_existing(options, validator)?;
                 self.counters.secret_create_existing_total += 1;
                 self.counters.secret_create_race_lost_total += 1;
@@ -409,7 +432,9 @@ impl SecretStore {
             }
             Err(_) => {
                 self.counters.rename_failure_total += 1;
-                self.cleanup_temp(&temporary[..temporary_len]);
+                if !descriptor_owned {
+                    self.cleanup_temp(temporary);
+                }
                 Err(SecretStoreError::RenameFailed)
             }
         }
@@ -480,6 +505,7 @@ impl SecretStore {
         &mut self,
         destination: &[u8],
         temporary: &mut [u8; MAX_PATH],
+        descriptor_owned: bool,
     ) -> Result<(Fd, usize), SecretStoreError> {
         for _ in 0..TEMPORARY_RETRIES {
             let temporary_len = self.create_temp_path(destination, temporary)?;
@@ -491,8 +517,10 @@ impl SecretStore {
                         Err(_) => Err(SecretStoreError::CreateFailed),
                     };
                     if let Err(error) = validation {
-                        let _ = libc::close(fd);
-                        self.cleanup_temp(&temporary[..temporary_len]);
+                        if !descriptor_owned {
+                            let _ = libc::close(fd);
+                        }
+                        self.discard_stage(fd, &temporary[..temporary_len], descriptor_owned);
                         return Err(error);
                     }
                     return Ok((fd, temporary_len));
@@ -507,32 +535,45 @@ impl SecretStore {
         Err(SecretStoreError::TemporaryNameCollision)
     }
 
-    fn write_validate_close(
+    fn write_validate(
         &mut self,
         fd: Fd,
         secret: &[u8],
         options: SecretFileOptions<'_>,
         validator: SecretValidator,
     ) -> Result<(), SecretStoreError> {
-        let result = (|| {
-            write_exact(fd, secret)?;
-            let stat = libc::fstat(fd).map_err(|_| SecretStoreError::WriteFailed)?;
-            self.validate_stat(stat, options, false)?;
-            if stat.size as usize != secret.len() {
-                return Err(SecretStoreError::ShortWrite);
-            }
-            if !validator(secret) {
-                self.counters.validation_failure_total += 1;
-                return Err(SecretStoreError::InvalidSecretFormat);
-            }
-            Ok(())
-        })();
+        write_exact(fd, secret)?;
+        let stat = libc::fstat(fd).map_err(|_| SecretStoreError::WriteFailed)?;
+        self.validate_stat(stat, options, false)?;
+        if stat.size as usize != secret.len() {
+            return Err(SecretStoreError::ShortWrite);
+        }
+        if !validator(secret) {
+            self.counters.validation_failure_total += 1;
+            return Err(SecretStoreError::InvalidSecretFormat);
+        }
+        Ok(())
+    }
+
+    fn close_stage(&mut self, fd: Fd) -> Result<(), SecretStoreError> {
         let close = libc::close(fd);
         if close.is_err() {
             self.counters.close_failure_total += 1;
             return Err(SecretStoreError::CloseFailed);
         }
-        result
+        Ok(())
+    }
+
+    fn discard_stage(&mut self, fd: Fd, temporary: &[u8], descriptor_owned: bool) {
+        if descriptor_owned {
+            if self.close_stage(fd).is_ok() {
+                self.counters.temporary_cleanup_total += 1;
+            } else {
+                self.counters.temporary_cleanup_failure_total += 1;
+            }
+        } else {
+            self.cleanup_temp(temporary);
+        }
     }
 
     fn validate_temp_stat(&mut self, stat: Stat) -> Result<(), SecretStoreError> {

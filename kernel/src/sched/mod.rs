@@ -118,6 +118,8 @@ pub(crate) mod t3r_fixture;
 #[cfg_attr(feature = "futex_lifecycle_test", path = "t4b_fixture.rs")]
 pub(crate) mod t4a_fixture;
 mod thread_admission;
+#[cfg(feature = "vfs_c2e_candidate")]
+pub(crate) use thread_admission::ThreadSlot;
 mod native_group;
 const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
 #[cfg(all(debug_assertions, feature = "pin_release_test"))]

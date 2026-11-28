@@ -6,7 +6,7 @@
 
 use super::vfs_registration::AdmissionIdentity;
 use alloc::{sync::Arc, vec::Vec};
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use sunlight_ipc::vfs_rpc::{
     codec::Request,
     context::{Context, Dispatch, Namespace, LOOKUP_METADATA},
@@ -272,6 +272,7 @@ pub(super) struct NamespaceBinding {
     caller: Caller,
     root: Arc<Directory>,
     directory: Arc<Directory>,
+    shared_directory_generation: AtomicU64,
     grants: u64,
     live: AtomicBool,
 }
@@ -308,6 +309,7 @@ impl NamespaceBinding {
             caller,
             root,
             directory,
+            shared_directory_generation: AtomicU64::new(0),
             grants,
             live: AtomicBool::new(true),
         }))
@@ -319,6 +321,14 @@ impl NamespaceBinding {
 
     pub(super) fn grants(&self) -> u64 {
         self.grants
+    }
+
+    pub(super) fn set_shared_directory_generation(&self, generation: u64) {
+        self.shared_directory_generation.store(generation, Ordering::Release);
+    }
+
+    pub(super) fn shared_directory_generation(&self) -> u64 {
+        self.shared_directory_generation.load(Ordering::Acquire)
     }
 
     pub(super) fn retire(&self) {
@@ -334,11 +344,12 @@ impl NamespaceBinding {
         {
             return Err(Error::StaleNamespace);
         }
+        let shared = self.shared_directory_generation();
         Ok(Namespace {
             id: self.root.namespace_id,
             generation: self.root.namespace_generation,
             root: self.root.object,
-            directory: self.directory.object,
+            directory: if shared == 0 { self.directory.object } else { shared },
         })
     }
 }

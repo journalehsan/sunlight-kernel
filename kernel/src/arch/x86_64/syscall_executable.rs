@@ -38,6 +38,7 @@ pub(super) struct Acquisition {
     spawn: bool,
     parked: bool,
     authority: Option<executable::Authority>,
+    buffer_slot: Option<executable::BufferSlot>,
 }
 
 impl Acquisition {
@@ -49,6 +50,7 @@ impl Acquisition {
             spawn,
             parked: false,
             authority: None,
+            buffer_slot: None,
         }
     }
 
@@ -116,6 +118,9 @@ impl Acquisition {
         } else {
             executable::settle(self.caller);
             self.authority = Some(authority);
+            if matches!(result, Ok(Some(_))) {
+                self.buffer_slot = source.buffer_slot.take();
+            }
         }
         Some(result.map_err(|_| ()))
     }
@@ -123,6 +128,10 @@ impl Acquisition {
     pub(super) fn park(&mut self, frame: &mut SyscallFrame) -> u64 {
         self.parked = true;
         super::park_ordinary_spawn(frame)
+    }
+
+    pub(super) fn release_loaded_input(&mut self) {
+        self.buffer_slot = None;
     }
 
     pub(super) fn live(&self, sched: &sched::Scheduler) -> bool {

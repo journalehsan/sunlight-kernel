@@ -711,6 +711,7 @@ vfs-c1e7-test = ["vfs-c1e2-test"]
 vfs-c1e10-test = ["vfs-c1e7-test"]
 vfs-c1e11-test = ["vfs-c1e10-test"]
 vfs-c1e12-test = ["vfs-c1e11-test", "sunlight-libc/private-file-mmap"]
+vfs-c2i1-candidate = ["vfs-c1e12-test"]
 
 [dev-dependencies]
 sunlight-fat = { path = "../../sunlight-fat", features = ["testutil"] }

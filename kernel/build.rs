@@ -574,13 +574,17 @@ fn main() {
     }
 
     if env::var_os("CARGO_FEATURE_VFS_C2E_CANDIDATE").is_some() {
+        println!("cargo:rerun-if-changed=../services/secret_store_test");
+        println!("cargo:rerun-if-changed=../sunlight-libc/src");
         println!("cargo:rerun-if-changed=../services/vfs_server");
         let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-        let feature = if env::var_os("CARGO_FEATURE_BOOT_RESOURCES").is_some() {
-            "vfs-c2e-candidate,boot-resources"
-        } else {
-            "vfs-c2e-candidate"
-        };
+        let mut features = String::from("vfs-c2e-candidate");
+        if env::var_os("CARGO_FEATURE_VFS_C2I1_CANDIDATE").is_some() {
+            features.push_str(",vfs-c2i1-candidate");
+        }
+        if env::var_os("CARGO_FEATURE_BOOT_RESOURCES").is_some() {
+            features.push_str(",boot-resources");
+        }
         build_package(
             workspace_root,
             &scratch_target_dir.join("vfs-c2e"),
@@ -589,7 +593,18 @@ fn main() {
                 package: "sunlight-vfs-server",
                 output: "sunlight-vfs-server",
                 rustflags: service_rustflags,
-                args: &["--release", "--features", feature],
+                args: &["--release", "--features", &features],
+            },
+        );
+        build_package(
+            workspace_root,
+            &scratch_target_dir.join("vfs-c2e"),
+            &out,
+            EmbeddedBinary {
+                package: "secret_store_test",
+                output: "secret_store_test",
+                rustflags: service_rustflags,
+                args: &["--release"],
             },
         );
     } else if env::var_os("CARGO_FEATURE_VFS_D1B_TEST").is_some() {

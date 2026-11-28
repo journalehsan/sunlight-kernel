@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 use sunlight_fat::{FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 use sunlight_fs::{
-    check_permission, parse_fstab, parse_group, parse_passwd, Credential, FileHandle, FileType,
+    check_permission, parse_group, parse_passwd, Credential, FileHandle, FileType,
     FsError, FstabEntry, PermCheck, RamEntry, Vfs,
 };
 use sunlight_ipc::{
@@ -28,7 +28,6 @@ const ERR_INVALID: u64 = 22;
 const ERR_ROFS: u64 = 30;
 const MAX_PATH_BYTES: usize = 32;
 const READ_REPLY_BYTES: usize = 16;
-const FSTAB_MAX_BYTES: usize = sunlight_fs::fstab::MAX_FSTAB_BYTES + 1;
 const OPEN_META_SLOTS: usize = 64;
 
 // Handle encoding: high byte = mount (0=ram, 1=boot), lower bytes = local handle
@@ -278,7 +277,7 @@ pub extern "C" fn _start() -> ! {
     let boot_mountpoint = mount_from_fstab(&mut vfs, &mut boot, seed);
     #[cfg(feature = "vfs-c2e-candidate")]
     vfs.mount_service_downloads().expect("C2E Downloads mount");
-    #[cfg(feature = "vfs-c1e2-test")]
+    #[cfg(all(feature = "vfs-c1e2-test", not(feature = "vfs-c2i1-candidate")))]
     for path in ["/mnt", "/mnt/volume", "/mnt/bad", "/mnt/other", "/mnt/exit"] {
         if matches!(vfs.stat(path), Err(FsError::NotFound)) {
             vfs.mkdir(path, 0, 0, 0o755).expect("storage fixture target");
@@ -877,20 +876,10 @@ fn drain_files(state: &mut State) {
 // ---------------------------------------------------------------------------
 
 fn mount_from_fstab(vfs: &mut Vfs<StorageDevice>, boot: &mut Option<BootFs>, entries_seed: &'static [RamEntry]) -> Option<&'static str> {
-    let mut fstab_buf = [0u8; FSTAB_MAX_BYTES];
-    let fstab_len = sunlight_vfs_server::boot_root::read_seed_file(entries_seed, "/etc/fstab", &mut fstab_buf);
-    if fstab_len > sunlight_fs::fstab::MAX_FSTAB_BYTES {
-        debug_log("[FSTAB] oversized configuration rejected");
-        return None;
-    }
-    let fstab_text = match core::str::from_utf8(&fstab_buf[..fstab_len]) {
-        Ok(text) => text,
-        Err(_) => {
-            debug_log("[FSTAB] invalid UTF-8 configuration rejected");
-            return None;
-        }
-    };
-    let entries = match parse_fstab(fstab_text) {
+    use sunlight_fs::{fstab::MAX_FSTAB_BYTES, parse_boot_fstab};
+
+    let mut fstab_buf = [0; MAX_FSTAB_BYTES];
+    let entries = match parse_boot_fstab(entries_seed, &mut fstab_buf) {
         Ok(entries) => entries,
         Err(_) => {
             debug_log("[FSTAB] invalid configuration; legacy view unchanged");
@@ -1108,6 +1097,14 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
 
 /// Open a VFS path, routing /boot/* to BootFs.
 fn open_path(state: &mut State, path: &str) -> IpcMsg {
+    if cfg!(feature = "vfs-c2e-candidate")
+        && sunlight_ipc::vfs_rpc::file_transport::private_child(path)
+    {
+        return error_reply(FsError::PermissionDenied);
+    }
+    if cfg!(feature = "vfs-c2e-candidate") && state.open_meta.iter().all(|row| row.len != 0) {
+        return error_reply(FsError::TooManyOpenFiles);
+    }
     // Password material is UAC-private. The legacy daemon's RAMFS is not
     // an authentication database and must never expose its seeded shadow.
     if path == "/etc/shadow" {
@@ -1134,6 +1131,12 @@ fn open_path(state: &mut State, path: &str) -> IpcMsg {
         match opened {
             Ok(handle) => {
                 let packed = pack_handle(MOUNT_RAM, handle);
+                if cfg!(feature = "vfs-c2e-candidate") && unpack_handle(packed).1 != handle {
+                    // The raw compatibility ABI cannot encode every mount tag.
+                    // Do not register an alias of a live service description.
+                    let _ = state.vfs.lock().close(handle);
+                    return error_reply(FsError::Unsupported);
+                }
                 remember_open(state, packed, path);
                 ok_reply().word(1, packed.0 as u64)
             }
@@ -1214,6 +1217,9 @@ fn push_u8_dec(buf: &mut heapless::Vec<u8, 256>, v: u8) {
 }
 
 fn read_handle(state: &mut State, raw: FileHandle, offset: usize, requested: usize) -> IpcMsg {
+    if cfg!(feature = "vfs-c2e-candidate") && open_path_for_handle(state, raw).is_none() {
+        return error_reply(FsError::BadHandle);
+    }
     let (mount, local) = unpack_handle(raw);
     // Use a larger temp buf so we can take shm path for >48 byte reads (zero-copy grant to caller)
     let mut big_buf = [0u8; 4096];
@@ -1269,6 +1275,9 @@ fn read_handle(state: &mut State, raw: FileHandle, offset: usize, requested: usi
 }
 
 fn close_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
+    if cfg!(feature = "vfs-c2e-candidate") && open_path_for_handle(state, raw).is_none() {
+        return error_reply(FsError::BadHandle);
+    }
     let (mount, local) = unpack_handle(raw);
     let reply = match mount {
         MOUNT_BOOT => match state.boot.as_mut() {
@@ -1325,6 +1334,9 @@ fn stat_path(state: &mut State, path: &str) -> IpcMsg {
 }
 
 fn fstat_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
+    if cfg!(feature = "vfs-c2e-candidate") && open_path_for_handle(state, raw).is_none() {
+        return error_reply(FsError::BadHandle);
+    }
     if let Some(path) =
         open_path_for_handle(state, raw).filter(|p| matches!(*p, "/etc/passwd" | "/etc/group"))
     {
@@ -1381,7 +1393,18 @@ fn write_handle(state: &mut State, raw: FileHandle, offset: usize, buf: &[u8]) -
     }
 }
 
+// Unauthenticated legacy messages cannot change protected children or
+// change the directory chain that grants the staging operation its scope.
+fn protected_mutation(path: &str) -> bool {
+    cfg!(feature = "vfs-c2e-candidate")
+        && (matches!(path, "/" | "/etc" | "/etc/sunlight")
+            || sunlight_ipc::vfs_rpc::file_transport::private_child(path))
+}
+
 fn mkdir_path(state: &mut State, path: &str, uid: u32, gid: u32, mode: u16) -> IpcMsg {
+    if protected_mutation(path) {
+        return error_reply(FsError::PermissionDenied);
+    }
     if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::ReadOnlyFilesystem);
     }
@@ -1426,6 +1449,9 @@ fn debug_fs_decision(
 }
 
 fn chmod_path(state: &mut State, path: &str, mode: u16) -> IpcMsg {
+    if protected_mutation(path) {
+        return error_reply(FsError::PermissionDenied);
+    }
     if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::Unsupported);
     }
@@ -1436,6 +1462,9 @@ fn chmod_path(state: &mut State, path: &str, mode: u16) -> IpcMsg {
 }
 
 fn chown_path(state: &mut State, path: &str, uid: u32, gid: u32) -> IpcMsg {
+    if protected_mutation(path) {
+        return error_reply(FsError::PermissionDenied);
+    }
     if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::Unsupported);
     }
@@ -1446,6 +1475,9 @@ fn chown_path(state: &mut State, path: &str, uid: u32, gid: u32) -> IpcMsg {
 }
 
 fn unlink_path(state: &mut State, path: &str) -> IpcMsg {
+    if protected_mutation(path) {
+        return error_reply(FsError::PermissionDenied);
+    }
     if strip_boot_prefix(state, path).is_some() {
         return error_reply(FsError::ReadOnlyFilesystem);
     }
@@ -1456,6 +1488,9 @@ fn unlink_path(state: &mut State, path: &str) -> IpcMsg {
 }
 
 fn rename_path(state: &mut State, old: &str, new: &str) -> IpcMsg {
+    if protected_mutation(old) || protected_mutation(new) {
+        return error_reply(FsError::PermissionDenied);
+    }
     if strip_boot_prefix(state, old).is_some() || strip_boot_prefix(state, new).is_some() {
         return error_reply(FsError::ReadOnlyFilesystem);
     }

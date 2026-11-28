@@ -6,6 +6,22 @@ pub const FSTAB_TEXT: &str = include_str!("../etc/fstab");
 pub const FSTAB_TEXT: &str = include_str!("../etc/fstab.vfs-c2c");
 pub const MAX_FSTAB_BYTES: usize = 4096;
 
+pub fn parse_boot_fstab(
+    length: usize,
+    buffer: &mut [u8; MAX_FSTAB_BYTES],
+    read: impl FnOnce(&mut [u8]) -> Option<usize>,
+) -> Result<FstabTable<'_>, FstabError> {
+    if length > buffer.len() {
+        return Err(FstabError { line: 1, reason: "configuration exceeds 4096 bytes" });
+    }
+    if read(&mut buffer[..length]) != Some(length) {
+        return Err(FstabError { line: 0, reason: "incomplete boot fstab read" });
+    }
+    let text = core::str::from_utf8(&buffer[..length])
+        .map_err(|_| FstabError { line: 0, reason: "invalid boot fstab UTF-8" })?;
+    parse_fstab(text)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct FstabEntry<'a> {
     pub device: &'a str,
@@ -145,15 +161,51 @@ pub fn parse_fstab(text: &str) -> Result<FstabTable<'_>, FstabError> {
 /// fail closed for GPT boot automount rather than silently applying boot defaults
 /// to an entry whose options could not be validated. Legacy raw media is unchanged.
 pub fn defer_uuid_to_runtime(text: &str, uuid: &[u8; 16]) -> bool {
+    defer_uuid_from_table(parse_fstab(text), uuid)
+}
+
+pub fn defer_uuid_from_table(
+    table: Result<FstabTable<'_>, FstabError>,
+    uuid: &[u8; 16],
+) -> bool {
     if *uuid == [0; 16] {
         return false;
     }
-    match parse_fstab(text) {
+    match table {
         Ok(entries) => entries
             .iter()
             .flatten()
             .any(|e| parse_partuuid(e.device).as_ref() == Some(uuid)),
         Err(_) => true,
+    }
+}
+
+#[cfg(test)]
+mod boot_policy_tests {
+    use super::*;
+
+    #[test]
+    fn boot_inventory_controls_gpt_deferral() {
+        let uuid = parse_partuuid("PARTUUID=12345678-1234-5678-1234-567812345678").unwrap();
+        let seed = b"/dev/ram0 / tmpfs defaults\nPARTUUID=12345678-1234-5678-1234-567812345678 /mnt/data fat32 rw\n";
+        let mut buffer = [0; MAX_FSTAB_BYTES];
+        let table = parse_boot_fstab(seed.len(), &mut buffer, |buffer| {
+            buffer.copy_from_slice(seed);
+            Some(seed.len())
+        }).unwrap();
+        assert_eq!(table[1].unwrap().mountpoint, "/mnt/data");
+        assert!(defer_uuid_from_table(Ok(table), &uuid));
+        assert!(!defer_uuid_from_table(Ok(table), &[1; 16]));
+
+        for (length, bytes) in [(0, None), (1, Some(b'\xff')), (MAX_FSTAB_BYTES + 1, None)] {
+            let result = parse_boot_fstab(length, &mut buffer, |buffer| {
+                buffer[0] = bytes?;
+                Some(1)
+            });
+            assert!(result.is_err());
+            assert!(defer_uuid_from_table(result, &uuid));
+            assert!(!defer_uuid_from_table(result, &[0; 16]));
+        }
     }
 }
 

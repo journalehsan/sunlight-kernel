@@ -3,9 +3,29 @@ use super::{file, AdmissionIdentity, Receipt};
 #[cfg(not(test))]
 use super::{Scheduler, RUNTIME};
 use alloc::{string::String, vec::Vec};
+use core::sync::atomic::{AtomicBool, Ordering};
 use sunlight_ipc::vfs_rpc::file_transport as api;
 
 pub(crate) type Authority = (AdmissionIdentity, Receipt);
+
+static BUFFER_LIVE: AtomicBool = AtomicBool::new(false);
+
+pub(crate) struct BufferSlot;
+
+impl BufferSlot {
+    fn acquire() -> Result<Self, file::Error> {
+        BUFFER_LIVE
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| file::Error::Capacity)?;
+        Ok(Self)
+    }
+}
+
+impl Drop for BufferSlot {
+    fn drop(&mut self) {
+        BUFFER_LIVE.store(false, Ordering::Release);
+    }
+}
 
 pub(crate) fn route<'a>(
     path: &'a str,
@@ -47,6 +67,9 @@ pub(crate) struct Source {
     token: u64,
     bytes: Vec<u8>,
     size: usize,
+    pub(crate) buffer_slot: Option<BufferSlot>,
+    #[cfg(test)]
+    pub(super) fail_reserve: bool,
 }
 
 impl Source {
@@ -57,6 +80,9 @@ impl Source {
             token: 0,
             bytes: Vec::new(),
             size: 0,
+            buffer_slot: None,
+            #[cfg(test)]
+            fail_reserve: false,
         }
     }
 
@@ -91,9 +117,15 @@ impl Source {
             }
             self.token = reply.result0;
             self.size = reply.result1 as usize;
+            let slot = BufferSlot::acquire()?;
+            #[cfg(test)]
+            if self.fail_reserve {
+                return Err(file::Error::Capacity);
+            }
             self.bytes
                 .try_reserve_exact(self.size)
                 .map_err(|_| file::Error::Capacity)?;
+            self.buffer_slot = Some(slot);
         }
         while self.bytes.len() < self.size {
             let length = (self.size - self.bytes.len()).min(api::IO_BYTES);

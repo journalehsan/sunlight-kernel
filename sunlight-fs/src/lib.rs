@@ -9,6 +9,16 @@ extern crate std;
 pub mod block;
 pub mod error;
 pub mod fstab;
+
+pub fn parse_boot_fstab<'a>(
+    seed: &[RamEntry],
+    buffer: &'a mut [u8; fstab::MAX_FSTAB_BYTES],
+) -> Result<fstab::FstabTable<'a>, fstab::FstabError> {
+    let entry = seed.iter().find(|entry| entry.path == "/etc/fstab" && !entry.is_dir);
+    fstab::parse_boot_fstab(entry.map_or(0, RamEntry::len), buffer, |bytes| {
+        entry?.read(0, bytes).ok()
+    })
+}
 pub mod passwd;
 pub mod path;
 pub mod permission;

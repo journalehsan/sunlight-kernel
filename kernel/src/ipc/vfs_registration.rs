@@ -75,6 +75,7 @@ enum LocalLease {
         root_policy: bool,
         initial_cwd: Option<alloc::string::String>,
         derivation: Option<Inheritance>,
+        worker_started: Option<u64>,
     },
     Bound {
         receipt: Receipt,
@@ -248,6 +249,7 @@ impl Runtime {
             root_policy: false,
             initial_cwd: None,
             derivation: None,
+            worker_started: None,
         });
         Ok(frame)
     }
@@ -579,6 +581,11 @@ impl Runtime {
     /// owner before removing publication bookkeeping. The next call observes
     /// withdrawn authority. Never wake a nested IPC operation on its behalf.
     fn withdraw_root_profile(&mut self, idx: usize, sched: &mut Scheduler) {
+        #[cfg(feature = "vfs_c2e_candidate")]
+        if sched.processes[idx].vfs_shared_cwd_join.take().is_some() {
+            sched.processes[idx].vfs_shared_cwd_join_allowed = false;
+            self.retire_caller_profile(process_identity(&sched.processes[idx]));
+        }
         if !sched.processes[idx].vfs_root_metadata {
             return;
         }
@@ -705,7 +712,11 @@ pub(crate) fn fixture_mapping_read(caller: Caller, service: Caller, id: u64) -> 
     RUNTIME.lock().fixture_mapping_read(caller, service, id)
 }
 use inheritance::Inheritance;
+#[cfg(feature = "vfs_c2e_candidate")]
+pub(crate) use inheritance::SharedCwdJoin;
 pub(crate) use inheritance::{capture_inheritance, provision_inheritance};
+#[cfg(all(not(test), feature = "vfs_c2e_candidate"))]
+pub(crate) use spawn::worker;
 pub(crate) use stat::{
     complete_stat, copy_failed as stat_copy_failed, stat_call as stat_path_call, take_stat,
     Error as StatError, StatCall,
@@ -810,6 +821,32 @@ pub(crate) fn close_file_owner(
 
 /// Hold SCHEDULER across the cwd or credential commit and profile withdrawal.
 /// Resource destruction is deferred to syscall-return cleanup after unlock.
+#[cfg(not(test))]
+pub(crate) fn legacy_cwd_committed(owner: usize, sched: &mut Scheduler) {
+    let mut runtime = RUNTIME.lock();
+    for idx in 0..sched.processes.len() {
+        if sched.shared_process_index(idx) != owner {
+            continue;
+        }
+        #[cfg(feature = "vfs_c2e_candidate")]
+        {
+            if idx == owner {
+                continue;
+            }
+            let process = &sched.processes[idx];
+            if process.vfs_shared_cwd_join_allowed || runtime.registry.active().is_some_and(|registration| {
+                runtime.namespaces.lookup(AdmissionIdentity {
+                    caller: process_identity(process), uid: process.uid, gid: process.gid,
+                    groups: [], registration,
+                }).is_ok_and(|binding| binding.shared_directory_generation() != 0)
+            }) {
+                continue;
+            }
+        }
+        runtime.withdraw_root_profile(idx, sched);
+    }
+}
+
 pub(crate) fn withdraw_root_profile(idx: usize, sched: &mut Scheduler) {
     RUNTIME.lock().withdraw_root_profile(idx, sched);
 }

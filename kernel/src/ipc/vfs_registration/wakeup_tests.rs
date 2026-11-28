@@ -19,6 +19,8 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             pid: 3,
             trusted_vfs_service: true,
             vfs_root_metadata: false,
+            vfs_shared_cwd_join: None,
+            vfs_shared_cwd_join_allowed: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
             vfs_downloads_cwd: false,
@@ -34,6 +36,7 @@ fn setup() -> (Runtime, Scheduler, AdmissionIdentity) {
             state: ProcessState::BlockedOnIpc,
             pending_call: None,
             ipc_reply_target: None,
+            service_lookup_restrictions: None,
             ipc_endpoint: Some(0),
         }],
     };

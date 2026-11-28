@@ -341,6 +341,12 @@ pub(super) fn transition_call_runtime(
     {
         return Ok(Some(13));
     }
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if kind == api::Kind::Downloads
+        && !runtime.join_shared_cwd(idx, sched, caps).map_err(|_| stat::Error::Identity)?
+    {
+        return Ok(None);
+    }
     let caller = process_identity(&sched.processes[owner]);
     runtime.poll_chdirs(sched, sched.global_tick);
     if sched.processes[idx].pending_call.is_some()
@@ -376,7 +382,11 @@ pub(super) fn transition_call_runtime(
     }
     // A scope transition cannot race a sibling's copied metadata continuation.
     let owner = sched.shared_process_index(idx);
-    if runtime.publications.iter().flatten().any(|c| {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if runtime.shared_join_busy(owner, sched) {
+        return Err(stat::Error::Busy);
+    }
+    if runtime.shared_worker_publication(caller) || runtime.group_retained_file_busy(owner, sched) || runtime.publications.iter().flatten().any(|c| {
         sched.processes.iter().enumerate().any(|(i, p)| {
             process_identity(p) == c.identity.caller && sched.shared_process_index(i) == owner
         })
@@ -404,6 +414,22 @@ pub(super) fn transition_call_runtime(
         });
     if previous.is_none() && kind != api::Kind::EnterDownloads {
         return Err(stat::Error::Prepare);
+    }
+    if cfg!(feature = "vfs_c2e_candidate") && idx != owner
+        && matches!(kind, api::Kind::Directory | api::Kind::Downloads)
+    {
+        let worker = &sched.processes[idx];
+        let worker_identity = AdmissionIdentity {
+            caller: waiter, uid: worker.uid, gid: worker.gid,
+            groups: [], registration: identity.registration,
+        };
+        let shared = runtime.namespaces.lookup(worker_identity)
+            .map_err(|_| stat::Error::Identity)?;
+        if !previous.is_some_and(|scope| {
+            shared.shared_directory_generation() == scope.namespace_generation
+        }) {
+            return Err(stat::Error::Identity);
+        }
     }
     if matches!(kind, api::Kind::EnterDownloads | api::Kind::Downloads) {
         let process = &sched.processes[owner];
@@ -704,8 +730,26 @@ pub(super) fn finish_with_legacy(
                     if downloads || changes_root {
                         sched.processes[i].vfs_downloads_cwd = entering_or_staying;
                     }
-                    if i != owner {
-                        runtime.withdraw_root_profile(i, sched);
+                    if cfg!(feature = "vfs_c2e_candidate") && i != owner && !changes_root {
+                        let worker = &sched.processes[i];
+                        let identity = AdmissionIdentity {
+                            caller: process_identity(worker),
+                            uid: worker.uid,
+                            gid: worker.gid,
+                            groups: [],
+                            registration: authenticated,
+                        };
+                        if let Ok(binding) = runtime.namespaces.lookup(identity) {
+                            if binding.shared_directory_generation() != 0 {
+                                binding.set_shared_directory_generation(scope.namespace_generation);
+                            }
+                        }
+                    }
+                    if downloads && i != owner {
+                        // The shared owner selects service routing while inside
+                        // Downloads. Clear a worker's sticky route only on a
+                        // successfully authenticated transition back to legacy.
+                        sched.processes[i].vfs_stat_routed = entering_or_staying;
                     }
                 }
             }
@@ -758,7 +802,18 @@ pub(super) fn finish_with_legacy(
     {
         remote.delivered = None;
     }
-    runtime.chdirs[slot].as_mut().unwrap().result = Some(terminal);
+    let mut completed = runtime.chdirs[slot].take().unwrap();
+    completed.result = Some(terminal);
+    if terminal == 0 && matches!(frame, Frame::Retained(_)) {
+        for idx in 0..sched.processes.len() {
+            if idx != owner && sched.shared_process_index(idx) == owner
+                && (!cfg!(feature = "vfs_c2e_candidate") || changes_root)
+            {
+                runtime.withdraw_root_profile(idx, sched);
+            }
+        }
+    }
+    runtime.chdirs[slot] = Some(completed);
     runtime.poll_chdirs(sched, sched.global_tick);
     if accepted {
         Ok(())

@@ -69,6 +69,7 @@ fn request(op: u64, token: u64, arg0: u64, arg1: u64, payload: &[u8]) -> api::Re
         namespace_generation: scope().namespace_generation,
         receipt_id: 1,
         receipt_generation: 1,
+        directory_generation: 0,
         uid: OWNER.uid,
         gid: OWNER.gid,
         payload,
@@ -81,6 +82,7 @@ fn io(op: u64, token: u64, arg0: u64, arg1: u64, payload: &[u8]) -> api::Request
         namespace_generation: 0,
         receipt_id: 0,
         receipt_generation: 0,
+        directory_generation: 0,
         uid: 0,
         gid: 0,
         ..request(op, token, arg0, arg1, payload)
@@ -261,6 +263,7 @@ fn transfer_rekeys_one_description_and_survives_old_owner_teardown() {
         namespace_generation: 0,
         receipt_id: 0,
         receipt_generation: 0,
+        directory_generation: 0,
         uid: 0,
         gid: 0,
         payload: &payload,
@@ -436,4 +439,277 @@ fn boot_root_seed_precedes_registration_and_writable_service_publication() {
     assert_eq!(shared.lock().open_handle_count(), 0);
     shared.lock().unlink("/tmp/c2i-test").unwrap();
     assert!(INITRAMFS.iter().all(|entry| entry.path != "/tmp/c2i-test"));
+}
+
+#[cfg(feature = "vfs-c2e-candidate")]
+#[test]
+fn protected_staging_publication_and_retirement_use_the_same_service_objects() {
+    struct PublicationChannel {
+        acknowledged: bool,
+        errno: Option<u64>,
+    }
+
+    impl Control for PublicationChannel {
+        fn snapshot(&mut self) -> Option<Registration> {
+            None
+        }
+        fn status(&mut self, _: u64) -> Result<(Registration, bool), ()> {
+            Err(())
+        }
+        fn next(&mut self, _: u64) -> Result<Option<[u8; wire::FRAME_BYTES]>, ()> {
+            Ok(None)
+        }
+        fn reply(&mut self, _: u64, _: &[u8; wire::FRAME_BYTES]) -> bool {
+            false
+        }
+        fn file_reply(&mut self, _: u64, bytes: &[u8; api::FRAME_BYTES]) -> bool {
+            assert!(self.errno.is_none());
+            self.errno = Some(api::Reply::decode(bytes).unwrap().errno);
+            self.acknowledged
+        }
+    }
+
+    const DESTINATION: &[u8] = b"/etc/sunlight/test-private";
+    const TEMPORARY: &[u8] = b"/etc/sunlight/.test-private.tmp.synthetic";
+    const PATHS: &[u8] = b"/etc/sunlight/.test-private.tmp.synthetic\0/etc/sunlight/test-private";
+    let mut fs = sunlight_fs::Vfs::new();
+    let tmpfs = Tmpfs::with_limits(&[], TmpfsLimits::new(2 * 4096, 16)).unwrap();
+    fs.mount_tmpfs("/", tmpfs).unwrap();
+    fs.mkdir("/etc", 0, 0, 0o755).unwrap();
+    fs.mkdir("/etc/sunlight", 0, 0, 0o755).unwrap();
+    let namespace = DirectoryNamespace::mounted(fs).unwrap();
+    let shared = namespace.shared();
+    let mut runtime = Runtime::<2, 5, 2>::new();
+    let registration = registration();
+    runtime.bind(registration).unwrap();
+    runtime
+        .install(registration, scope(), &namespace, "/", "/etc")
+        .unwrap();
+    let receipt = acquire(&mut runtime, registration, scope(), 1);
+    let mut channel = Channel {
+        current: None,
+        replies: 0,
+    };
+    let stage_request = || {
+        request(
+            api::OPEN,
+            0,
+            api::OPEN_PRIVATE | api::ACCESS_WRITE | api::OPEN_CREATE | api::OPEN_EXCLUSIVE,
+            0o600,
+            TEMPORARY,
+        )
+    };
+    let reopen_request = || {
+        request(
+            api::OPEN,
+            0,
+            api::OPEN_PRIVATE | api::ACCESS_READ,
+            0,
+            DESTINATION,
+        )
+    };
+    let publish = |runtime: &mut Runtime<2, 5, 2>, token, replace, accepted, paths| {
+        let request = api::Request {
+            uid: OWNER.uid,
+            gid: OWNER.gid,
+            ..io(api::PUBLISH_PRIVATE, token, u64::from(replace), 0, paths)
+        };
+        let mut control = PublicationChannel {
+            acknowledged: accepted,
+            errno: None,
+        };
+        assert_eq!(
+            runtime.dispatch_file(&mut control, registration, &request.encode().unwrap()),
+            accepted
+        );
+        control.errno.unwrap()
+    };
+    let baseline = shared.lock().open_handle_count();
+    assert_eq!(
+        drive(
+            &mut runtime,
+            &mut channel,
+            request(
+                api::OPEN,
+                0,
+                api::ACCESS_WRITE | api::OPEN_CREATE,
+                0o600,
+                TEMPORARY
+            )
+        )
+        .errno,
+        13,
+    );
+    assert_eq!(drive(&mut runtime, &mut channel, reopen_request()).errno, 2);
+
+    // An OPEN whose revalidation is refused rolls back the provisional inode.
+    let bytes = stage_request().encode().unwrap();
+    channel.current = None;
+    let reply = runtime
+        .file_request(&mut channel, registration, &bytes)
+        .unwrap();
+    assert_ne!(api::Reply::decode(&reply).unwrap().errno, 0);
+    assert_eq!(shared.lock().open_handle_count(), baseline);
+    assert!(matches!(
+        shared.lock().stat(core::str::from_utf8(TEMPORARY).unwrap()),
+        Err(FsError::NotFound)
+    ));
+
+    let stage = drive(&mut runtime, &mut channel, stage_request());
+    assert_eq!(stage.errno, 0);
+    assert_eq!(drive(&mut runtime, &mut channel, stage_request()).errno, 17);
+    let token = stage.result0;
+    let stat = drive(&mut runtime, &mut channel, io(api::STAT, token, 0, 0, &[]));
+    assert_eq!(stat.errno, 0);
+    assert_eq!(
+        u16::from_le_bytes(stat.payload[16..18].try_into().unwrap()),
+        0o100600
+    );
+    assert_eq!(
+        drive(&mut runtime, &mut channel, io(api::READ, token, 0, 1, &[])).errno,
+        13
+    );
+    assert_eq!(
+        drive(
+            &mut runtime,
+            &mut channel,
+            io(api::WRITE, token, 0, 0, &[1])
+        )
+        .result0,
+        1
+    );
+    assert_eq!(publish(&mut runtime, token, false, true, PATHS), 0);
+    assert_eq!(
+        drive(
+            &mut runtime,
+            &mut channel,
+            io(api::WRITE, token, 0, 0, &[2])
+        )
+        .errno,
+        13
+    );
+    assert_eq!(
+        drive(&mut runtime, &mut channel, io(api::CLOSE, token, 0, 0, &[])).errno,
+        0
+    );
+    assert_eq!(publish(&mut runtime, token, true, true, PATHS), 9);
+
+    let old = drive(&mut runtime, &mut channel, reopen_request()).result0;
+    let wrong_credentials = api::Request {
+        uid: OWNER.uid + 1,
+        gid: OWNER.gid + 1,
+        ..reopen_request()
+    };
+    assert_eq!(
+        drive(&mut runtime, &mut channel, wrong_credentials).errno,
+        13
+    );
+    let ordinary_read = request(api::OPEN, 0, api::ACCESS_READ, 0, b"sunlight/test-private");
+    assert_eq!(drive(&mut runtime, &mut channel, ordinary_read).errno, 13);
+    for (replace, accepted, expected) in [(false, true, 17), (true, false, 0), (true, true, 0)] {
+        let stage = drive(&mut runtime, &mut channel, stage_request());
+        assert_eq!(stage.errno, 0);
+        assert_eq!(
+            drive(
+                &mut runtime,
+                &mut channel,
+                io(api::WRITE, stage.result0, 0, 0, &[2])
+            )
+            .result0,
+            1
+        );
+        assert_eq!(
+            publish(&mut runtime, stage.result0, replace, accepted, PATHS),
+            expected
+        );
+        assert_eq!(
+            drive(
+                &mut runtime,
+                &mut channel,
+                io(api::CLOSE, stage.result0, 0, 0, &[])
+            )
+            .errno,
+            0
+        );
+        let latest = drive(&mut runtime, &mut channel, reopen_request()).result0;
+        let data = drive(&mut runtime, &mut channel, io(api::READ, latest, 0, 1, &[]));
+        assert!(data.payload == [if replace && accepted { 2 } else { 1 }]);
+        assert_eq!(
+            drive(
+                &mut runtime,
+                &mut channel,
+                io(api::CLOSE, latest, 0, 0, &[])
+            )
+            .errno,
+            0
+        );
+        assert_eq!(shared.lock().open_handle_count(), baseline + 1);
+    }
+    // The pinned old inode and the committed replacement exhaust this
+    // fixture's page budget. Closing an unwritten stage drops its inode.
+    let unwritten = drive(&mut runtime, &mut channel, stage_request());
+    assert_eq!(unwritten.errno, 0);
+    assert_eq!(
+        drive(
+            &mut runtime,
+            &mut channel,
+            io(api::WRITE, unwritten.result0, 0, 0, &[3])
+        )
+        .errno,
+        28
+    );
+    assert_eq!(
+        drive(
+            &mut runtime,
+            &mut channel,
+            io(api::CLOSE, unwritten.result0, 0, 0, &[])
+        )
+        .errno,
+        0
+    );
+    assert_eq!(shared.lock().open_handle_count(), baseline + 1);
+    assert!(drive(&mut runtime, &mut channel, io(api::READ, old, 0, 1, &[])).payload == [1]);
+    assert_eq!(
+        drive(&mut runtime, &mut channel, io(api::CLOSE, old, 0, 0, &[])).errno,
+        0
+    );
+
+    // Abrupt retirement of the exact owner drops its stage. A later cleanup
+    // for that token must never remove a replacement at the staging name.
+    let stage = drive(&mut runtime, &mut channel, stage_request());
+    assert_eq!(stage.errno, 0);
+    let temporary = core::str::from_utf8(TEMPORARY).unwrap();
+    {
+        let mut fs = shared.lock();
+        fs.unlink(temporary).unwrap();
+        let replacement = fs
+            .create_private_file_exclusive(temporary, OWNER.uid, OWNER.gid, 0o600)
+            .unwrap();
+        fs.close(replacement).unwrap();
+    }
+    assert_ne!(publish(&mut runtime, stage.result0, true, true, PATHS), 0);
+    let different_incarnation = Caller {
+        incarnation: scope().caller.incarnation + 1,
+        ..scope().caller
+    };
+    runtime.retire_file_owner(different_incarnation);
+    assert_eq!(shared.lock().open_handle_count(), baseline + 1);
+    runtime.retire_file_owner(scope().caller);
+    assert_eq!(shared.lock().open_handle_count(), baseline);
+    assert!(shared.lock().stat(temporary).is_ok());
+    shared.lock().unlink(temporary).unwrap();
+
+    assert_eq!(drive(&mut runtime, &mut channel, stage_request()).errno, 0);
+    runtime.retire_registration(registration).unwrap();
+    assert!(shared.lock().stat(temporary).is_err());
+    assert_eq!(shared.lock().open_handle_count(), baseline);
+    runtime
+        .request(
+            registration,
+            &wire::Frame::Release(receipt).encode().unwrap(),
+        )
+        .unwrap();
+    assert_eq!(shared.lock().open_handle_count(), 0);
+    let bytes = reopen_request().encode().unwrap();
+    assert!(!runtime.dispatch_file(&mut channel, registration, &bytes));
 }

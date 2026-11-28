@@ -7,7 +7,7 @@ use crate::process::{
 };
 use sunlight_ipc::vfs_rpc::retention::wire::Refusal;
 
-const WAIT_TICKS: u64 = 5 * crate::timekeeping::TICK_HZ;
+pub(super) const WAIT_TICKS: u64 = 5 * crate::timekeeping::TICK_HZ;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct LaunchAttribution {
@@ -57,6 +57,8 @@ pub(crate) enum Error {
     Busy,
     Capacity,
     Preparation,
+    #[cfg(all(not(test), feature = "vfs_c2e_candidate"))]
+    UserMemory,
 }
 
 pub(super) struct Call {
@@ -73,6 +75,9 @@ pub(super) struct Call {
     capture: Option<Inheritance>,
     detached: bool,
     ordinary_admission: bool,
+    worker: bool,
+    #[cfg(all(not(test), feature = "vfs_c2e_candidate"))]
+    worker_launch: Option<worker::Launch>,
     #[cfg(not(test))]
     owner: Option<crate::process::pending::Child>,
     #[cfg(all(not(test), feature = "vfs_c1a_candidate"))]
@@ -96,6 +101,13 @@ fn parent(caller: Caller) -> Parent {
 }
 
 impl Runtime {
+    pub(super) fn shared_worker_publication(&self, owner: Caller) -> bool {
+        self.spawns.iter().flatten().any(|call| {
+            call.worker && !call.detached && call.parent.caller == owner
+                && matches!(call.result, None | Some(Terminal::Retained(_)))
+        })
+    }
+
     pub(super) fn spawn_request(&self, registration: Registration, id: u64) -> Option<&Call> {
         self.spawns
             .iter()
@@ -114,7 +126,25 @@ impl Runtime {
             && process_identity(process) == call.child.caller
             && process.uid == call.child.uid
             && process.gid == call.child.gid
-            && if call.detached {
+            && if call.worker {
+                !call.detached && sched.processes.iter().enumerate().any(|(idx, waiter)| {
+                    if parent(process_identity(waiter)) != call.launch.parent
+                        || LaunchAttribution::capture(waiter) != Some(call.launch)
+                        || waiter.is_exiting()
+                    {
+                        return false;
+                    }
+                    let owner = &sched.processes[sched.shared_process_index(idx)];
+                    process_identity(owner) == call.parent.caller
+                        && !owner.is_exiting()
+                        && owner.vfs_root_metadata
+                        && owner.uid == call.parent.uid
+                        && owner.gid == call.parent.gid
+                        && owner.cwd == process.cwd
+                        && self.capture_inheritance(call.parent)
+                            .and_then(|source| self.source_receipt(&source)) == Some(call.source_receipt)
+                })
+            } else if call.detached {
                 call.capture.as_ref().and_then(|pin| self.source_receipt(pin))
                     == Some(call.source_receipt)
             } else {
@@ -156,10 +186,27 @@ impl Runtime {
         capture: bool,
         ordinary_admission: bool,
     ) -> Result<RemoteClaim, Error> {
+        self.stage_spawn_from(idx, idx, child, sched, caps, capture, ordinary_admission, false)
+    }
+
+    pub(super) fn stage_spawn_from(
+        &mut self,
+        idx: usize,
+        source_idx: usize,
+        child: Identity,
+        sched: &mut Scheduler,
+        caps: &CapabilityBroker,
+        capture: bool,
+        ordinary_admission: bool,
+        worker: bool,
+    ) -> Result<RemoteClaim, Error> {
         let waiter = sched.processes.get(idx).ok_or(Error::Identity)?;
+        let source_process = &sched.processes[source_idx];
         if waiter.is_exiting()
-            || !waiter.vfs_root_metadata
-            || sched.shared_process_index(idx) != idx
+            || source_process.is_exiting()
+            || !source_process.vfs_root_metadata
+            || sched.shared_process_index(idx) != source_idx
+            || (worker && self.chdir_busy(idx, sched))
         {
             return Err(Error::Identity);
         }
@@ -172,7 +219,11 @@ impl Runtime {
             .pending_children
             .private(child)
             .ok_or(Error::Identity)?;
-        if process_identity(process) != caller(child) || process.cwd != waiter.cwd {
+        if process_identity(process) != caller(child)
+            || process.cwd != source_process.cwd
+            || (worker && (child.image_generation != source_process.address_space.identity().generation
+                || child.incarnation == source_process.foreground.incarnation))
+        {
             return Err(Error::Identity);
         }
         if !matches!(waiter.state, ProcessState::Ready | ProcessState::Running)
@@ -183,7 +234,7 @@ impl Runtime {
                 .spawns
                 .iter()
                 .flatten()
-                .any(|call| !call.detached && call.parent.caller == exact)
+                .any(|call| !call.detached && call.launch.parent == parent(exact))
             || self
                 .chdirs
                 .iter()
@@ -204,9 +255,9 @@ impl Runtime {
             .ok_or(Error::Capacity)?;
         let registration = live_registration(self, sched, caps).ok_or(Error::Identity)?;
         let parent = AdmissionIdentity {
-            caller: exact,
-            uid: waiter.uid,
-            gid: waiter.gid,
+            caller: process_identity(source_process),
+            uid: source_process.uid,
+            gid: source_process.gid,
             groups: [],
             registration,
         };
@@ -227,7 +278,7 @@ impl Runtime {
         };
         let pin = capture.then(|| source.clone());
         let request_id = self
-            .stage_inheritance(source, identity, &process.cwd)
+            .stage_inheritance(source, identity, &process.cwd, worker.then_some(sched.global_tick))
             .map_err(|error| match error {
                 NamespaceRetentionError::Ownership(OwnershipError::Capacity)
                 | NamespaceRetentionError::Resource(
@@ -246,7 +297,7 @@ impl Runtime {
             launch,
             parent,
             source: Scope {
-                caller: exact,
+                caller: parent.caller,
                 namespace_id: namespace.id,
                 namespace_generation: namespace.generation,
             },
@@ -259,6 +310,9 @@ impl Runtime {
             capture: pin,
             detached: false,
             ordinary_admission,
+            worker,
+            #[cfg(all(not(test), feature = "vfs_c2e_candidate"))]
+            worker_launch: None,
             #[cfg(not(test))]
             owner: None,
             #[cfg(all(not(test), feature = "vfs_c1a_candidate"))]
@@ -276,7 +330,7 @@ impl Runtime {
         self.wait_spawn_inner(idx, claim, sched, false)
     }
 
-    fn wait_spawn_inner(
+    pub(super) fn wait_spawn_inner(
         &mut self,
         idx: usize,
         claim: RemoteClaim,
@@ -294,7 +348,7 @@ impl Runtime {
             .iter()
             .position(|call| {
                 call.as_ref()
-                    .is_some_and(|call| !call.detached && call.claim == claim && call.parent.caller == exact)
+                    .is_some_and(|call| !call.detached && call.claim == claim && call.launch.parent == parent(exact))
             })
             .ok_or(Error::Identity)?;
         let call = self.spawns[slot].as_ref().unwrap();
@@ -318,7 +372,7 @@ impl Runtime {
             }
             if !keep_retained || !matches!(result, Terminal::Retained(_)) {
                 #[cfg(not(test))]
-                if call.owner.is_some() {
+                if call.owner.is_some() || call.worker {
                     call.detached = true;
                     return Ok(Some(result));
                 }
@@ -353,8 +407,8 @@ impl Runtime {
         if call.detached || call.parked
             || sched.global_tick.wrapping_sub(call.started) >= WAIT_TICKS
             || !sched.processes.get(idx).is_some_and(|process| {
-                process_identity(process) == call.parent.caller
-                    && sched.shared_process_index(idx) == idx
+                parent(process_identity(process)) == call.launch.parent
+                    && (call.worker || sched.shared_process_index(idx) == idx)
                     && LaunchAttribution::capture(process) == Some(call.launch)
             })
             || !self.spawn_live(call, sched)
@@ -379,9 +433,12 @@ impl Runtime {
         prepare(sched)?;
         let binding = self.namespaces.install_receipt(identity, receipt, grants)
             .map_err(|_| Error::Preparation)?;
+        if call.worker {
+            binding.set_shared_directory_generation(call.source.namespace_generation);
+        }
         *local = Some(LocalLease::Bound { receipt, binding });
         #[cfg(all(not(test), debug_assertions, feature = "vfs_d1b_test"))]
-        if !self.spawns[slot].as_ref().unwrap().ordinary_admission {
+        if !self.spawns[slot].as_ref().unwrap().ordinary_admission && !call.worker {
             fixture::record_native_descriptor_receipt(receipt);
         }
         #[cfg(not(test))]
@@ -508,7 +565,7 @@ impl Runtime {
         }
     }
 
-    fn finish_spawn(&mut self, claim: RemoteClaim, result: Terminal) {
+    pub(super) fn finish_spawn(&mut self, claim: RemoteClaim, result: Terminal) {
         self.handoff_spawn(claim);
         if let Some(call) = self
             .spawns
@@ -537,7 +594,7 @@ impl Runtime {
         for slot in 0..self.spawns.len() {
             if let Some(call) = self.spawns[slot]
                 .as_ref()
-                .filter(|call| !call.detached && call.parent.caller == caller)
+                .filter(|call| !call.detached && (call.parent.caller == caller || call.launch.parent == parent(caller)))
             {
                 self.finish_spawn(call.claim, Terminal::Cancelled);
             }
@@ -545,8 +602,8 @@ impl Runtime {
     }
 
     pub(super) fn detach_spawns_for(&mut self, caller: Caller) {
-        for call in self.spawns.iter_mut().flatten().filter(|call| call.parent.caller == caller) {
-            if call.capture.is_some() {
+        for call in self.spawns.iter_mut().flatten().filter(|call| call.launch.parent == parent(caller)) {
+            if call.capture.is_some() || call.worker {
                 call.detached = true;
                 call.parked = false;
             }
@@ -554,7 +611,7 @@ impl Runtime {
         // Ordinary syscalls cancel when their exact continuation disappears.
         for slot in 0..self.spawns.len() {
             if let Some(call) = self.spawns[slot].as_ref().filter(|call| {
-                call.parent.caller == caller && call.ordinary_admission
+                call.launch.parent == parent(caller) && (call.ordinary_admission || call.worker)
             }) {
                 self.finish_spawn(call.claim, Terminal::Cancelled);
             }
@@ -564,11 +621,15 @@ impl Runtime {
     pub(super) fn expire_spawns(&mut self, now: u64) {
         for slot in 0..self.spawns.len() {
             if let Some(call) = self.spawns[slot].as_ref().filter(|call| {
-                call.result.is_none() && now.wrapping_sub(call.started) >= WAIT_TICKS
+                (call.result.is_none() || (call.worker && matches!(call.result, Some(Terminal::Retained(_)))))
+                    && now.wrapping_sub(call.started) >= WAIT_TICKS
             }) {
                 let claim = call.claim;
+                let reply_missing = call.result.is_none();
                 self.finish_spawn(claim, Terminal::Timeout);
-                self.retire_registration(claim.registration);
+                if reply_missing {
+                    self.retire_registration(claim.registration);
+                }
             }
         }
     }
@@ -602,12 +663,16 @@ impl Runtime {
                 continue;
             }
             let waiter = sched.processes.iter().position(|waiter| {
-                process_identity(waiter) == call.parent.caller && !waiter.is_exiting()
+                parent(process_identity(waiter)) == call.launch.parent && !waiter.is_exiting()
             });
             let Some(idx) = waiter else {
                 let claim = call.claim;
-                if call.capture.is_some() {
-                    self.detach_spawns_for(call.parent.caller);
+                if call.capture.is_some() || call.worker {
+                    self.detach_spawns_for(Caller {
+                        pid: call.launch.parent.pid as u64,
+                        incarnation: call.launch.parent.incarnation,
+                        address_space_generation: call.launch.parent.image_generation,
+                    });
                     continue;
                 }
                 self.spawns[slot] = None;
@@ -707,7 +772,7 @@ pub(crate) fn reap_owned() {
     let (owner, _claim) = {
         let Some(mut runtime) = RUNTIME.try_lock() else { return };
         let Some(call) = runtime.spawns.iter_mut().flatten().find(|call| {
-            call.detached && call.owner.is_some()
+            (call.detached || call.worker) && call.owner.is_some()
                 && matches!(call.result, Some(result) if !matches!(result, Terminal::Retained(_)))
         }) else { return };
         (call.owner.take(), call.claim)
@@ -774,6 +839,10 @@ pub(crate) fn wait_for_publication(
 
 #[cfg(all(not(test), feature = "vfs_c1a_candidate"))]
 pub(crate) mod ordinary;
+
+#[cfg(all(not(test), feature = "vfs_c2e_candidate"))]
+#[path = "worker.rs"]
+pub(crate) mod worker;
 
 #[cfg(any(test, feature = "vfs_c2d_candidate"))]
 pub(crate) fn tmpfs_utility(path: &str, argv0: &[u8]) -> bool {

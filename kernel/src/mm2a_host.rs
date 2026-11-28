@@ -7,6 +7,9 @@ mod candidate_queue;
 
 extern crate alloc;
 
+#[cfg(all(test, feature = "vfs_c2i1_candidate"))]
+mod persistent_boot_mount;
+
 #[cfg(test)]
 #[path = "ipc/deferred_token.rs"]
 mod deferred_token;

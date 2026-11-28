@@ -1,0 +1,44 @@
+{
+  "milestone": "VFS-C2I3",
+  "status": "PARTIAL",
+  "log_directory": "target/vfs-c2i3",
+  "shared_cwd": {
+    "status": "PARTIAL",
+    "host_independent_retention_and_relative_open": "PASS",
+    "host_transition_out_and_reference_drain": "PASS",
+    "worker_readmission_after_transition": "BLOCKED",
+    "actual_guest_clone_open_mkdir_stat_rename_retirement_and_withdrawal": "NOT_RUN"
+  },
+  "protected_ssh": {
+    "status": "BLOCKED",
+    "service_owned_producer": false,
+    "legacy_synthetic_publication_and_replacement": "PASS",
+    "guest_protected_file_matrix": "NOT_RUN",
+    "retired_producers": 0
+  },
+  "host": {
+    "registration_lifecycle_transport": {"status": "PASS", "tests": 116, "log": "registration.log"},
+    "filesystem_block_ipc_linux_elf": {"status": "PASS", "log": "core.log"},
+    "service": {"status": "PASS", "tests": 95, "log": "service.log"},
+    "descriptor_parallel": {"status": "PASS", "tests": 21, "threads": 8, "log": "descriptor.log"},
+    "c2c_gpt_fixture_checksum": {"status": "PASS", "log": "fixture.log"}
+  },
+  "builds": {
+    "production": {"status": "PASS", "log": "production-final.log"},
+    "candidate": {"status": "PASS", "log": "candidate-final.log"},
+    "compressed_candidate": {"status": "PASS", "log": "compressed-final.log"}
+  },
+  "ownership_guards": {
+    "inventory": {"before": "PASS", "after": "PASS", "before_count": 71, "after_count": 71},
+    "no_growth": {"before": "FAIL", "after": "FAIL"},
+    "final_removal": {"before": "FAIL", "after": "FAIL"},
+    "historical_findings": {
+      "storage::mount": "legacy FAT constructor",
+      "linux_procfs::mountinfo_snapshot": "legacy mount topology",
+      "sys_linux_statfs": "legacy capacity",
+      "process::mmap::sys_mmap": "legacy descriptor backend"
+    }
+  },
+  "guest": {"guarded_boot": "BLOCKED", "qualification": "NOT_RUN"},
+  "runtime_root_activation": "BLOCKED"
+}

@@ -68,6 +68,7 @@ fn io(op: u64, token: u64, arg0: u64, arg1: u64, payload: &[u8]) -> api::Request
         namespace_generation: 0,
         receipt_id: 0,
         receipt_generation: 0,
+        directory_generation: 0,
         uid: 0,
         gid: 0,
         payload,
@@ -87,6 +88,7 @@ fn rejected_open_reply_and_repeated_close_restore_backend_baseline() {
         namespace_generation: scope().namespace_generation,
         receipt_id: receipt.request_id(),
         receipt_generation: receipt.generation(),
+        directory_generation: 0,
         uid: OWNER.uid,
         gid: OWNER.gid,
         ..io(api::OPEN, 0, api::ACCESS_READ, 0, b"data")

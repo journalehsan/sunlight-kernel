@@ -328,6 +328,13 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         };
         let retained = matches!(reply, Frame::Retained(_));
         let accepted = control.finish_chdir(authenticated.epoch, &encoded, errno, &cwd);
+        #[cfg(feature = "vfs-c2e-candidate")]
+        if accepted && retained && c.kind != Kind::Root {
+            // This is the same exclusive control owner that dispatches stat
+            // and file requests. No copied operation can observe half a commit.
+            self.policy_mut(authenticated).expect("live accepted transition")
+                .commit_shared_directory(scope);
+        }
         if !accepted || !retained {
             if retained {
                 if let Some(saved) = saved.take() {

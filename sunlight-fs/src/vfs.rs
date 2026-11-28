@@ -1615,6 +1615,36 @@ impl<D: BlockDevice> Vfs<D> {
         mode: u16,
         replace: bool,
     ) -> Result<(), FsError> {
+        let (fs, old_local, new_local) = self.prepare_private_publication(
+            old_path, new_path, uid, gid, mode, replace,
+        )?;
+        fs.rename(old_local, new_local)?;
+        validate_private_stat(fs.stat(new_local)?, uid, gid, mode)
+    }
+
+    /// The service serializes the prepared rename through the copied reply.
+    /// Its root tmpfs can commit without allocating or replacing a pinned
+    /// destination inode after the kernel accepts the reply.
+    pub fn publish_private_if(
+        &mut self, old_path: &str, new_path: &str, uid: u32, gid: u32,
+        mode: u16, replace: bool, acknowledge: impl FnOnce() -> bool,
+    ) -> Result<(), FsError> {
+        if old_path == new_path {
+            return Err(FsError::InvalidPath);
+        }
+        let (fs, old_local, new_local) = self.prepare_private_publication(
+            old_path, new_path, uid, gid, mode, replace,
+        )?;
+        match fs {
+            FsNode::Ram(fs) => fs.rename_private_if(old_local, new_local, acknowledge),
+            FsNode::Fat(_) => Err(FsError::Unsupported),
+        }
+    }
+
+    fn prepare_private_publication<'a>(
+        &mut self, old_path: &'a str, new_path: &'a str, uid: u32, gid: u32,
+        mode: u16, replace: bool,
+    ) -> Result<(&mut FsNode<D>, &'a str, &'a str), FsError> {
         if parent_path(old_path)? != parent_path(new_path)? {
             return Err(FsError::Unsupported);
         }
@@ -1636,8 +1666,7 @@ impl<D: BlockDevice> Vfs<D> {
             Err(FsError::NotFound) => {}
             Err(error) => return Err(error),
         }
-        fs.rename(old_local, new_local)?;
-        validate_private_stat(fs.stat(new_local)?, uid, gid, mode)
+        Ok((fs, old_local, new_local))
     }
 
     pub fn read_dir(

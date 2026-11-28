@@ -82,9 +82,27 @@ and the immutable archive do not create user file descriptions. C2H's
 incarnation retirement and failed SSH descriptor publication changes remain
 in place.
 
+## Cold-boot mount policy prerequisite
+
+Early kernel GPT deferral and Ring-3 VFS startup now parse the same
+immutable `/etc/fstab` inventory entry. The kernel previously consulted
+the compiled text even when Limine provided a separate boot inventory.
+A GPT source named by that inventory now skips early legacy automount.
+Missing, oversized, unreadable or invalid fstab also suppresses early GPT
+automount. Raw volumes without a PARTUUID retain their existing policy;
+valid stock configuration keeps its existing routing. The kernel uses
+heap scratch for the bounded read and creates no filesystem handle.
+
+This changes when a configured GPT source can first be mounted. It does
+not change which owner StorageCtl assigns it, so it retires zero ordinary
+producers. A focused host regression covers matched and unmatched GPT
+sources and invalid seed entries.
+
 ## Activation dependencies
 
-The next source dependency is mount ownership at cold boot. Early
+The next source dependency is to reserve the eligible persistent extent
+before its first mutable mount and publish its committed service mount
+through the authenticated VFS before ordinary dispatch. Early
 `/state`, `/mnt` and `/boot` FAT and unreserved runtime StorageCtl devices
 still have legacy owners. The read-only boot share is a boot resource,
 independent of a full FAT mount. A service-root switch without the
@@ -139,8 +157,8 @@ for the current snapshot protocol.
 
 ## Ownership guard
 
-Inventory **PASS**, 71 before and after. Added, removed and relocated
-references are all zero. The before and after outputs match byte-for-byte.
+Inventory **PASS**, 71 before and after. No ownership sites were added or
+removed. Two existing lines in kernel startup shifted due to the policy edit.
 No-growth **FAIL** on the same four historical findings. Final removal
 **FAIL** on the same 71 references. Guarded ordinary boot is **BLOCKED**
 before QEMU.

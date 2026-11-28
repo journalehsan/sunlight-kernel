@@ -29,10 +29,17 @@ pub(super) struct Publication {
     token: u64,
     compensation: bool,
     executable: bool,
+    private: bool,
     buffer: alloc::vec::Vec<u8>,
     #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
     observation: Option<(Receipt, alloc::vec::Vec<u8>, u64)>,
     dispatched: bool,
+}
+
+impl Publication {
+    fn holds_private_close(&self) -> bool {
+        self.private && self.op == api::CLOSE && self.compensation && self.replied
+    }
 }
 
 /// One caller-owned file request. Borrowed paths and payloads stay valid only
@@ -58,6 +65,8 @@ pub(crate) enum FileOperation<'a> {
         access: u64,
         mode: u64,
     },
+    #[cfg(feature = "vfs_c2e_candidate")]
+    PublishPrivate { token: u64, paths: &'a str, replace: bool },
     Read {
         token: u64,
         length: usize,
@@ -90,6 +99,15 @@ pub(crate) enum FileOperation<'a> {
 }
 
 impl FileOperation<'_> {
+    fn private(&self) -> bool {
+        match *self {
+            Self::Open { access, .. } => access & api::OPEN_PRIVATE != 0,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            Self::PublishPrivate { .. } => true,
+            _ => false,
+        }
+    }
+
     fn token(&self) -> u64 {
         match *self {
             #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
@@ -104,6 +122,8 @@ impl FileOperation<'_> {
             #[cfg(feature = "vfs_c1e2_test")]
             Self::InventoryStorage { index } => index,
             Self::Open { anchor, .. } => anchor,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            Self::PublishPrivate { token, .. } => token,
             #[cfg(any(test, feature = "vfs_c2e_candidate", all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             Self::Pread { token, .. } => token,
             #[cfg(feature = "vfs_c2e_candidate")]
@@ -137,6 +157,8 @@ impl FileOperation<'_> {
             #[cfg(feature = "vfs_c1e2_test")]
             Self::UnmountStorage { .. } => api::UNMOUNT_STORAGE,
             Self::Open { .. } => api::OPEN,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            Self::PublishPrivate { .. } => api::PUBLISH_PRIVATE,
             Self::Read { .. } => api::READ,
             #[cfg(any(test, feature = "vfs_c2e_candidate", all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             Self::Pread { .. } => api::PREAD,
@@ -168,6 +190,16 @@ pub(crate) enum FileCall {
 }
 
 impl Runtime {
+    pub(super) fn group_retained_file_busy(&self, owner: usize, sched: &Scheduler) -> bool {
+        self.file_publications.iter().flatten().any(|publication| {
+            !publication.compensation
+                && (publication.op == api::OPEN || api::retained_path(publication.op))
+                && sched.processes.iter().enumerate().any(|(idx, process)| {
+                    process_identity(process) == publication.identity.caller
+                        && sched.shared_process_index(idx) == owner
+                })
+        })
+    }
     #[cfg(all(not(test), debug_assertions, feature = "vfs_d2b_test"))]
     pub(crate) fn fixture_mapping_read(
         &self,
@@ -248,7 +280,7 @@ impl Runtime {
         for slot in &mut self.file_publications {
             if slot.as_ref().is_some_and(|publication| {
                 matches!(publication.op, api::TRANSFER | api::CLOSE) && publication.replied
-                    && !publication.executable
+                    && !publication.executable && !publication.holds_private_close()
             }) {
                 *slot = None;
             }
@@ -314,9 +346,9 @@ impl Runtime {
             .into_iter()
             .flat_map(|r| r.local.iter().flatten())
             .filter_map(|lease| match lease {
-                LocalLease::Bound { receipt, .. } if receipt.scope().caller == identity.caller => {
-                    Some(*receipt)
-                }
+                LocalLease::Bound { receipt, binding }
+                    if receipt.scope().caller == identity.caller
+                        && binding.validate(identity).is_ok() => Some(*receipt),
                 _ => None,
             })
             .max_by_key(|receipt| receipt.request_id())
@@ -349,6 +381,15 @@ impl Runtime {
             .iter()
             .position(Option::is_none)
             .ok_or(Error::Capacity)?;
+        // Leave request capacity for I/O and publication while protected
+        // descriptions reserve their exact CLOSE frames.
+        if operation.op() == api::OPEN && operation.private()
+            && self.file_publications.iter().flatten().filter(|p| {
+                p.private && matches!(p.op, api::OPEN | api::CLOSE)
+            }).count() >= self.file_publications.len() / 2
+        {
+            return Err(Error::Capacity);
+        }
         let request_id = self.file_ids.allocate().ok_or(Error::Capacity)?;
         let (op, token, arg0, arg1, payload, receipt_words) = match &operation {
             #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
@@ -404,6 +445,10 @@ impl Runtime {
                     )),
                 )
             }
+            #[cfg(feature = "vfs_c2e_candidate")]
+            FileOperation::PublishPrivate { token, paths, replace } => {
+                (api::PUBLISH_PRIVATE, *token, u64::from(*replace), 0, paths.as_bytes(), None)
+            }
             FileOperation::Read { token, length } => {
                 (api::READ, *token, 0, *length as u64, &[][..], None)
             }
@@ -440,10 +485,18 @@ impl Runtime {
             FileOperation::ObserveMount { .. } | FileOperation::MutateNamespace { .. } => (identity.uid, identity.gid),
             FileOperation::Open { .. } => (identity.uid, identity.gid),
             #[cfg(feature = "vfs_c2e_candidate")]
+            FileOperation::PublishPrivate { .. } => (identity.uid, identity.gid),
+            #[cfg(feature = "vfs_c2e_candidate")]
             FileOperation::StatAt { .. } => (identity.uid, identity.gid),
             #[cfg(feature = "vfs_c1e2_test")]
             FileOperation::InventoryStorage { .. } => (identity.uid, identity.gid),
             _ => (0, 0),
+        };
+        let directory_generation = if op == api::OPEN || api::retained_path(op) {
+            self.namespaces.lookup(identity)
+                .map_or(0, |binding| binding.shared_directory_generation())
+        } else {
+            0
         };
         let request = api::Request {
             registration: identity.registration,
@@ -458,6 +511,7 @@ impl Runtime {
             namespace_generation,
             receipt_id,
             receipt_generation,
+            directory_generation,
             uid,
             gid,
             payload,
@@ -488,6 +542,7 @@ impl Runtime {
             token: operation.token(),
             compensation: false,
             executable: op == api::OPEN && arg0 & api::OPEN_EXECUTABLE != 0,
+            private: operation.private(),
             buffer,
             #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             observation,
@@ -514,6 +569,16 @@ impl Runtime {
     ) -> Result<(), Error> {
         if self.registry.active() != Some(registration) {
             return Err(Error::NotReady);
+        }
+        if let Some(reserved) = self.file_publications.iter_mut().flatten().find(|p| {
+            p.holds_private_close() && p.identity.registration == registration
+                && p.token == token
+        }) {
+            // The final local reference can be in a shared fd table. Use
+            // the exact original service owner already encoded in the frame.
+            reserved.replied = false;
+            reserved.private = false;
+            return Ok(());
         }
         let slot = self
             .file_publications
@@ -547,6 +612,7 @@ impl Runtime {
             token,
             compensation: false,
             executable: false,
+            private: false,
             buffer,
         });
         Ok(())
@@ -571,6 +637,7 @@ impl Runtime {
             namespace_generation: 0,
             receipt_id: 0,
             receipt_generation: 0,
+            directory_generation: 0,
             uid: 0,
             gid: 0,
             payload: &[],
@@ -606,7 +673,7 @@ impl Runtime {
         }
         output.copy_from_slice(&publication.buffer);
         publication.dispatched =
-            api::namespace_mutation(publication.op) || publication.op == api::PUBLISH_STORAGE;
+            api::namespace_mutation(publication.op) || matches!(publication.op, api::PUBLISH_STORAGE | api::PUBLISH_PRIVATE);
         let id = publication.id;
         #[cfg(feature = "vfs_c1e10_test")]
         if publication.op == api::PUBLISH_STORAGE {
@@ -629,8 +696,12 @@ impl Runtime {
     pub(super) fn revalidate_storage_files(&mut self, sched: &mut Scheduler) {
         for slot in 0..self.file_publications.len() {
             let invalid = self.file_publications[slot].as_ref().is_some_and(|publication| {
-                (api::namespace_mutation(publication.op) || publication.op == api::STAT_AT) && !publication.replied
-                    && !self.namespace_mutation_live(publication, sched)
+                !publication.replied && (
+                    ((api::namespace_mutation(publication.op) || publication.op == api::STAT_AT)
+                        && !self.namespace_mutation_live(publication, sched))
+                    || (publication.private && publication.op != api::CLOSE
+                        && !private_caller_live(publication.identity, sched))
+                )
             });
             if invalid {
                 let publication = self.file_publications[slot].as_mut().unwrap();
@@ -658,10 +729,9 @@ impl Runtime {
             && publication.observation.as_ref().is_some_and(|(receipt, _, _)| {
                 self.caller_receipt(identity) == Some(*receipt)
             })
-            && sched.processes.iter().enumerate().any(|(idx, process)| {
+            && sched.processes.iter().any(|process| {
                 !process.is_exiting() && process_identity(process) == identity.caller
                     && process.uid == identity.uid && process.gid == identity.gid
-                    && sched.shared_process_index(idx) == idx
             })
     }
 
@@ -689,7 +759,7 @@ impl Runtime {
                         && p.id == reply.request_id
                         && p.op == reply.op
                         && !p.replied
-                        && (!(api::namespace_mutation(p.op) || p.op == api::PUBLISH_STORAGE)
+                        && (!(api::namespace_mutation(p.op) || matches!(p.op, api::PUBLISH_STORAGE | api::PUBLISH_PRIVATE))
                             || p.dispatched)
                 })
             })
@@ -699,6 +769,18 @@ impl Runtime {
             && !self.namespace_mutation_live(self.file_publications[slot].as_ref().unwrap(), sched)
         {
             self.revalidate_storage_files(sched);
+            return Err(Error::Identity);
+        }
+        let publication = self.file_publications[slot].as_ref().unwrap();
+        if publication.private && publication.op != api::CLOSE
+            && (self.registry.active() != Some(registration)
+                || !private_caller_live(publication.identity, sched)
+                || sched.global_tick.wrapping_sub(publication.started_tick) >= TIMEOUT_TICKS)
+        {
+            let publication = self.file_publications[slot].as_mut().unwrap();
+            publication.failed = true;
+            publication.replied = true;
+            self.wake_file_callers(sched);
             return Err(Error::Identity);
         }
         #[cfg(feature = "vfs_c1e2_test")]
@@ -837,6 +919,7 @@ impl Runtime {
             namespace_generation: 0,
             receipt_id: 0,
             receipt_generation: 0,
+            directory_generation: 0,
             uid: 0,
             gid: 0,
             payload: &payload,
@@ -867,6 +950,7 @@ impl Runtime {
             token,
             compensation: false,
             executable: false,
+            private: false,
             buffer,
         });
         Ok(())
@@ -922,7 +1006,7 @@ impl Runtime {
             install(token, registration.epoch)
         };
         let (errno, result0) = match result {
-            Ok(value) if !publication.executable => {
+            Ok(value) if !publication.executable && !publication.private => {
                 self.file_publications[slot] = None;
                 (0, value)
             }
@@ -943,8 +1027,11 @@ impl Runtime {
                 publication.op = api::CLOSE;
                 publication.token = token;
                 publication.compensation = true;
-                publication.executable = result.is_ok();
-                publication.replied = result.is_ok(); // Held until the executable reader settles.
+                publication.executable &= result.is_ok();
+                publication.private &= result.is_ok();
+                // A successful install holds the frame until the executable
+                // reader settles or the protected fd's last reference closes.
+                publication.replied = result.is_ok();
                 publication.woken = true;
                 match result {
                     Ok(value) => (0, value),
@@ -970,6 +1057,12 @@ impl Runtime {
             else {
                 continue;
             };
+            if publication.holds_private_close() {
+                // The authenticated file-owner retirement barrier settles
+                // descriptors that the caller did not close explicitly.
+                self.file_publications[slot] = None;
+                continue;
+            }
             if publication.compensation {
                 if publication.executable {
                     let publication = self.file_publications[slot].as_mut().unwrap();
@@ -1029,6 +1122,24 @@ impl Runtime {
     }
 }
 
+fn private_caller_authorized(idx: usize, sched: &Scheduler) -> bool {
+    let process = &sched.processes[idx];
+    cfg!(feature = "vfs_c2e_candidate")
+        && !process.vfs_root_rebased
+        && !sched.processes[sched.shared_process_index(idx)].vfs_root_rebased
+        && process.service_lookup_restrictions.is_some_and(|mask| {
+            mask & sunlight_ipc::ServiceCapability::HostKeyAdmin.bit() != 0
+        })
+}
+
+fn private_caller_live(identity: AdmissionIdentity, sched: &Scheduler) -> bool {
+    sched.processes.iter().enumerate().any(|(idx, process)| {
+        !process.is_exiting() && process_identity(process) == identity.caller
+            && process.uid == identity.uid && process.gid == identity.gid
+            && private_caller_authorized(idx, sched)
+    })
+}
+
 /// Kernel-origin entry only. The caller must yield through the scheduler and
 /// retain its exact operation until terminal delivery or cleanup.
 pub(crate) fn file_call(
@@ -1067,6 +1178,9 @@ pub(crate) fn file_call(
         .position(|p| p.pid == pid && !p.is_exiting())
         .ok_or(Error::Identity)?;
     let caller = process_identity(&sched.processes[idx]);
+    if operation.private() && !private_caller_authorized(idx, sched) {
+        return Err(Error::Identity);
+    }
     #[cfg(feature = "vfs_c1e1_test")]
     if storage && op != api::INVENTORY_STORAGE && !storage_caller_live(sched, caller) {
         return Err(Error::Identity);
@@ -1105,7 +1219,6 @@ pub(crate) fn file_call(
                         && runtime.caller_receipt(publication.identity) == Some(*receipt)
                         && sched.processes[idx].uid == publication.identity.uid
                         && sched.processes[idx].gid == publication.identity.gid
-                        && sched.shared_process_index(idx) == idx
                 });
                 if !valid {
                     runtime.file_publications[slot] = None;
@@ -1113,8 +1226,11 @@ pub(crate) fn file_call(
                 }
             }
             if op == api::OPEN && publication.replied {
+                let authorized = !publication.private || private_caller_live(publication.identity, sched);
                 return runtime
-                    .finish_open(slot, |token, epoch| install(sched, token, epoch))
+                    .finish_open(slot, |token, epoch| {
+                        if authorized { install(sched, token, epoch) } else { Err(13) }
+                    })
                     .map(FileCall::Complete);
             }
             #[cfg(feature = "vfs_c1e1_test")]
@@ -1138,10 +1254,13 @@ pub(crate) fn file_call(
             return Ok(FileCall::Pending);
         }
     }
-    let identity = capture(pid, sched, caps).map_err(|_| Error::Identity)?;
-    if api::retained_path(op) && sched.shared_process_index(idx) != idx {
-        return Err(Error::Identity);
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if (op == api::OPEN || api::retained_path(op))
+        && !RUNTIME.lock().join_shared_cwd(idx, sched, caps).map_err(|_| Error::Identity)?
+    {
+        return Ok(FileCall::Pending);
     }
+    let identity = capture(pid, sched, caps).map_err(|_| Error::Identity)?;
     #[cfg(feature = "vfs_c1e2_test")]
     if (op == api::INVENTORY_STORAGE || api::mount_mutation(op))
         && !storage_view_live(sched, identity, op)
@@ -1149,6 +1268,15 @@ pub(crate) fn file_call(
         return Err(Error::Identity);
     }
     let mut runtime = RUNTIME.lock();
+    if (op == api::OPEN || api::retained_path(op))
+        && sched.shared_process_index(idx) != idx
+        && !sched.processes[idx].vfs_root_metadata
+    {
+        return Err(Error::Identity);
+    }
+    if (op == api::OPEN || api::retained_path(op)) && runtime.chdir_busy(idx, sched) {
+        return Err(Error::Busy);
+    }
     if descriptor.is_some() || (op != api::OPEN && !storage && !api::retained_path(op)) {
         runtime.check_descriptor(identity, descriptor)?;
     }

@@ -632,3 +632,17 @@ fn find_xargs_pipeline_utilities_have_path_visible_stubs() {
         );
     }
 }
+
+#[test]
+fn exclusive_create_releases_inode_when_handle_generations_are_exhausted() {
+    let mut fs = Tmpfs::new(&[]);
+    fs.generations.fill((1 << (22 - crate::vfs::HANDLE_SLOT_BITS)) - 1);
+    let baseline = fs.usage();
+
+    assert_eq!(
+        fs.create_file_exclusive("/fixture", 0, 0, 0o600),
+        Err(FsError::TooManyOpenFiles)
+    );
+    assert!(matches!(fs.stat("/fixture"), Err(FsError::NotFound)));
+    assert_eq!(fs.usage(), baseline);
+}

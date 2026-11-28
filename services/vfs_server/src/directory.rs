@@ -1,6 +1,7 @@
 //! Owning directory references in the service mounted namespace. Paths supplied to `pin` are trusted policy,
 //! never decoded object numbers or application cwd strings.
 use alloc::sync::Arc;
+use core::sync::atomic::AtomicBool;
 use spin::Mutex;
 use sunlight_fs::{BlockDevice, NullDevice};
 use sunlight_fs::{FileHandle, FileStat, FileSystem, FileType, FsError, Tmpfs, Vfs};
@@ -10,6 +11,7 @@ use sunlight_fs::{FileHandle, FileStat, FileSystem, FileType, FsError, Tmpfs, Vf
 /// The separate boot share-page adapter is not part of this mount table.
 pub struct DirectoryNamespace<D: BlockDevice = NullDevice> {
     filesystem: Backend<D>,
+    executable_slot: Arc<AtomicBool>,
 }
 
 /// Root and relative starting directory acquired in one serialized operation.
@@ -17,6 +19,7 @@ pub struct DirectoryNamespace<D: BlockDevice = NullDevice> {
 /// Store this value in `retention::Table`; Drop closes both handles exactly once.
 pub struct DirectoryPair<D: BlockDevice = NullDevice> {
     filesystem: Backend<D>,
+    executable_slot: Arc<AtomicBool>,
     root: FileHandle,
     directory: FileHandle,
     downloads_cwd: bool,
@@ -44,6 +47,7 @@ impl DirectoryNamespace {
             filesystem: Backend::Isolated(
                 Arc::try_new(Mutex::new(filesystem)).map_err(|_| FsError::NoMemory)?,
             ),
+            executable_slot: Arc::try_new(AtomicBool::new(false)).map_err(|_| FsError::NoMemory)?,
         })
     }
 
@@ -58,6 +62,7 @@ impl<D: BlockDevice> DirectoryNamespace<D> {
             filesystem: Backend::Mounted(
                 Arc::try_new(Mutex::new(filesystem)).map_err(|_| FsError::NoMemory)?,
             ),
+            executable_slot: Arc::try_new(AtomicBool::new(false)).map_err(|_| FsError::NoMemory)?,
         })
     }
 
@@ -106,6 +111,7 @@ impl<D: BlockDevice> DirectoryNamespace<D> {
         };
         Ok(DirectoryPair {
             filesystem: self.filesystem.clone(),
+            executable_slot: self.executable_slot.clone(),
             root,
             directory,
             downloads_cwd: false,
@@ -145,6 +151,7 @@ impl<D: BlockDevice> DirectoryPair<D> {
         };
         Ok(Self {
             filesystem: self.filesystem.clone(),
+            executable_slot: self.executable_slot.clone(),
             root,
             directory,
             downloads_cwd: false,
@@ -171,7 +178,13 @@ impl<D: BlockDevice> DirectoryPair<D> {
             Backend::Mounted(fs) => fs.lock().pin_downloads_beneath(self.root, self.directory, path, caller)?,
             Backend::Isolated(_) => return Err(FsError::Unsupported),
         };
-        Ok(Self { filesystem: self.filesystem.clone(), root, directory, downloads_cwd: true })
+        Ok(Self {
+            filesystem: self.filesystem.clone(),
+            executable_slot: self.executable_slot.clone(),
+            root,
+            directory,
+            downloads_cwd: true,
+        })
     }
 
     /// Trusted root-policy narrowing. Reset cwd to the new root so no retained
@@ -190,6 +203,7 @@ impl<D: BlockDevice> DirectoryPair<D> {
         };
         Ok(Self {
             filesystem: self.filesystem.clone(),
+            executable_slot: self.executable_slot.clone(),
             root,
             directory,
             downloads_cwd: false,
@@ -288,6 +302,7 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
         storage_admin: bool,
         directory_open: bool,
         executable: bool,
+        private: bool,
         anchor: Option<FileHandle>,
     ) -> Result<crate::open::File<Device>, FsError> {
         match &self.filesystem {
@@ -301,12 +316,49 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
                     let handle = namespace.open_directory_beneath(self.root, cwd, path, caller)?;
                     return Ok(crate::open::File::directory(Arc::clone(fs), handle));
                 }
-                let handle = namespace.open_file_options_beneath(
+                #[cfg(feature = "vfs-c2e-candidate")]
+                if private {
+                    use sunlight_ipc::vfs_rpc::file_transport as api;
+                    let mut root_path = [0; 1];
+                    if namespace.handle_path(self.root, &mut root_path) != Ok(1)
+                        || root_path != *b"/"
+                    {
+                        return Err(FsError::PermissionDenied);
+                    }
+                    let parent = namespace.resolve_existing("/", api::PRIVATE_DIRECTORY, &caller)?;
+                    if parent.metadata.mount_id != namespace.metadata_handle(self.root)?.mount_id
+                        || parent.metadata.native.file_type != FileType::Directory
+                        || parent.metadata.native.uid != 0 || parent.metadata.native.gid != 0
+                        || parent.metadata.native.mode & 0o022 != 0
+                        || parent.metadata.capabilities != sunlight_fs::vfs::BackendCapabilities::TMPFS
+                    {
+                        return Err(FsError::PermissionDenied);
+                    }
+                    if api::private_temp(path) && options.write && options.exclusive {
+                        let mut staging = alloc::string::String::new();
+                        staging.try_reserve_exact(path.len()).map_err(|_| FsError::NoMemory)?;
+                        staging.push_str(path);
+                        let handle = namespace.create_private_file_exclusive(
+                            path, caller.uid, caller.gid, api::PRIVATE_MODE,
+                        )?;
+                        return Ok(crate::open::File::new(Arc::clone(fs), handle).staging(staging));
+                    }
+                }
+                let handle = namespace.open_file_guarded_beneath(
                     self.root,
                     cwd,
                     path,
                     caller,
                     options,
+                    |path| {
+                        if cfg!(feature = "vfs-c2e-candidate")
+                            && sunlight_ipc::vfs_rpc::file_transport::private_child(path)
+                            && !private
+                        {
+                            return Err(FsError::PermissionDenied);
+                        }
+                        Ok(())
+                    },
                     |fs, path| authorize_write(fs, path, caller, sunlight_fs::FsOperation::Create, storage_admin),
                 )?;
                 let snapshot = if executable {
@@ -317,26 +369,21 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
                         {
                             return Err(FsError::PermissionDenied);
                         }
-                        if stat.size > sunlight_ipc::vfs_rpc::file_transport::MAX_EXECUTABLE_BYTES {
-                            return Err(FsError::NoMemory);
-                        }
-                        let mut bytes = alloc::vec::Vec::new();
-                        bytes.try_reserve_exact(stat.size).map_err(|_| FsError::NoMemory)?;
-                        bytes.resize(stat.size, 0);
-                        let mut filled = 0;
-                        while filled < bytes.len() {
-                            let end = (filled + sunlight_ipc::vfs_rpc::file_transport::IO_BYTES)
-                                .min(bytes.len());
-                            let count = namespace.read(handle, filled, &mut bytes[filled..end])?;
-                            if count == 0 || count > end - filled {
+                        let mut snapshot =
+                            crate::open::Snapshot::allocate(stat.size, &self.executable_slot)?;
+                        for (index, chunk) in snapshot.as_mut_slice()
+                            .chunks_mut(sunlight_ipc::vfs_rpc::file_transport::IO_BYTES)
+                            .enumerate()
+                        {
+                            let offset = index * sunlight_ipc::vfs_rpc::file_transport::IO_BYTES;
+                            if namespace.read(handle, offset, chunk)? != chunk.len() {
                                 return Err(FsError::Io);
                             }
-                            filled += count;
                         }
-                        Ok(bytes)
+                        Ok((snapshot, stat))
                     })();
                     match result {
-                        Ok(bytes) => Some(bytes),
+                        Ok(snapshot) => Some(snapshot),
                         Err(error) => {
                             namespace.close(handle)?;
                             return Err(error);
@@ -347,7 +394,7 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
                 };
                 let file = crate::open::File::new(Arc::clone(fs), handle);
                 Ok(match snapshot {
-                    Some(bytes) => file.executable(bytes),
+                    Some((bytes, stat)) => file.executable(bytes, stat),
                     None => file,
                 })
             }

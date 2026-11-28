@@ -3587,6 +3587,8 @@ VFS-C2I is **PARTIAL**. The VFS startup path reads the immutable resolver
 and permission inputs without a native root write, native account-file
 descriptions or a lookup of a service that init starts after readiness.
 The isolated writable root uses the existing mount and retention owner.
+Early GPT deferral now uses the same validated immutable fstab entry as
+the VFS service, including for Limine-supplied boot inventories.
 Production routing is unchanged. Before activating ordinary service root
 ownership, select and publish exclusive owners for the early persistent
 FAT mounts and remaining StorageCtl attachments. Use the resulting
@@ -3597,6 +3599,73 @@ ordinary artifacts before switching executable sources. Guarded ordinary
 boot remains **BLOCKED** at 71 references and four historical findings.
 See the [C2I report](vfs-runtime-root-authority-transition.md) and
 [results](vfs-runtime-root-authority-transition-results.json).
+
+VFS-C2I1 is **PARTIAL**. The opt-in boot path resolves the shared fstab
+against registered GPT sources and assigns the selected non-boot transport
+to the existing lease owner before mutable storage attachment. Init can
+launch its embedded fstab coordinator with a retained service root while
+ordinary launch waits for accepted publication of the required extent.
+The current candidate is bounded to one extent and one transport.
+Guarded ordinary guest qualification is **BLOCKED**. Before accepting
+runtime root activation, verify the actual init and storagectl sequence,
+failure compensation, withdrawal and exact guest resource accounting.
+See the [C2I1 report](vfs-pre-admission-persistent-mounts.md) and
+[results](vfs-pre-admission-persistent-mounts-results.json).
+
+VFS-C2I2 is **PARTIAL**. Mutable executable acquisition uses a temporary
+service mapping and a fallible kernel loader buffer, with one slot on
+each side and a 2 MiB source limit. The authenticated copied host path
+passed exact-byte and ELF planning checks above 1 MiB, including the
+1,217,328-byte TLS artifact. Preserve embedded bootstrap provenance and
+the C2I1 publication prerequisite. Ordinary boot is **BLOCKED** by the
+unchanged ownership guard; guest loading and memory settlement are
+**NOT_RUN**. Whole runtime root routing and retirement of the remaining
+kernel filesystem authority are separate activation prerequisites.
+See the [C2I2 report](vfs-scalable-executable-sources.md) and
+[results](vfs-scalable-executable-sources-results.json).
+
+VFS-C2I3 is **PARTIAL**. New shared workers can stage independent retained
+admission for the authoritative Downloads cwd. Existing workers still need
+readmission across shared cwd changes, and protected SSH operations still use
+the legacy owner. Both remain activation prerequisites. See the
+[C2I3 report](vfs-shared-cwd-protected-file-ownership.md) and
+[results](vfs-shared-cwd-protected-file-ownership-results.json).
+
+VFS-C2I3A is **PARTIAL** pending guest qualification. Native shared-worker
+creation and Linux thread clone now use the private C1A publication path
+when their shared cwd requires service admission. Cwd replacement preserves
+the workers' independent receipts and updates the retained directory
+generation in both pathname channels. A worker created with legacy cwd
+joins on its first service pathname operation. Copied-channel host tests
+cover the publication, rollback, concurrency, rename, credential, and
+reference-settlement boundaries. Both ownership gates still fail. Guarded
+guest lifecycle and scheduler replay are **NOT_RUN**. Protected SSH routing
+is deferred to C2I3B. See the
+[C2I3A report](vfs-worker-admission-continuity.md) and
+[results](vfs-worker-admission-continuity-results.json).
+
+VFS-C2I3B is **PARTIAL** pending guarded native qualification. The opt-in
+candidate routes the protected SSH staging syscall, ordinary descriptor
+I/O, publication, rollback, and published reopen through the retained
+Ring-3 service. The protected staging and reopen paths no longer produce
+legacy regular-file descriptions in the candidate. The service uses exact
+stage identity, mode 0600, the original authorization and publication
+checks, and the existing compensating CLOSE for failed installation.
+Production still uses legacy ownership. Both unchanged gates **FAIL** with
+71 references and the same four historical findings. Ordinary protected
+guest replay is **NOT_RUN**. See the
+[C2I3B report](vfs-protected-ssh-file-ownership.md) and
+[results](vfs-protected-ssh-file-ownership-results.json).
+
+C2I4 must qualify the protected and shared-worker paths in guarded native
+boot, install authoritative root and cwd admission for remaining ordinary
+callers, publish the remaining exclusive persistent mounts and runtime
+storage, and switch topology, capacity and regular-file mapping to that
+graph. Qualify executable, directory, account, KV, stdio and descriptor
+lifecycle together, including service withdrawal. Keep embedded bootstrap
+provenance and the 2 MiB executable source ceiling. Retire all remaining
+legacy producers before removing legacy mmap or turning on runtime root
+routing by default.
 
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact

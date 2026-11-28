@@ -377,6 +377,47 @@ impl Tmpfs {
         }
     }
 
+    // Returns true when removing the entry shifted later indices.
+    fn unlink_dynamic_entry(&mut self, index: usize) -> bool {
+        let entry = &mut self.dynamic.entries[index - self.entries.len()];
+        entry.linked = false;
+        entry.path.clear();
+        if self.handles.iter().flatten().any(|h| h.entry_idx == index) {
+            return false;
+        }
+        self.remove_dynamic_entry(index);
+        true
+    }
+
+    /// Complete an authorized private publication with no fallible work
+    /// after the acknowledgement. An open destination keeps its old inode.
+    pub(crate) fn rename_private_if(
+        &mut self, old: &str, new: &str, acknowledge: impl FnOnce() -> bool,
+    ) -> Result<(), FsError> {
+        let source = self.entry_idx(old)?;
+        if source < self.entries.len() || source == usize::MAX {
+            return Err(FsError::ReadOnlyFilesystem);
+        }
+        let mut source = source - self.entries.len();
+        let destination = match self.entry_idx(new) {
+            Ok(index) if index >= self.entries.len() && index != usize::MAX => Some(index),
+            Ok(_) => return Err(FsError::ReadOnlyFilesystem),
+            Err(FsError::NotFound) => None,
+            Err(error) => return Err(error),
+        };
+        let new_path = copy_path(new.as_bytes())?;
+        if !acknowledge() {
+            return Err(FsError::OperationNotPermitted);
+        }
+        if let Some(index) = destination {
+            if self.unlink_dynamic_entry(index) && index - self.entries.len() < source {
+                source -= 1;
+            }
+        }
+        self.dynamic.entries[source].path = new_path;
+        Ok(())
+    }
+
     fn alloc_handle(&mut self, entry_idx: usize) -> Result<FileHandle, FsError> {
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
@@ -495,7 +536,13 @@ impl FileSystem for Tmpfs {
             return Err(FsError::TooManyOpenFiles);
         }
         let idx = self.add_entry(path, uid, gid, mode::S_IFREG | (mode & 0o7777), false)?;
-        self.alloc_handle(idx)
+        match self.alloc_handle(idx) {
+            Ok(handle) => Ok(handle),
+            Err(error) => {
+                self.remove_dynamic_entry(idx);
+                Err(error)
+            }
+        }
     }
 
     fn read(
@@ -682,17 +729,7 @@ impl FileSystem for Tmpfs {
         if entry_idx == usize::MAX || entry_idx < self.entries.len() {
             return Err(FsError::ReadOnlyFilesystem);
         }
-        let entry = &mut self.dynamic.entries[entry_idx - self.entries.len()];
-        entry.linked = false;
-        entry.path.clear();
-        if !self
-            .handles
-            .iter()
-            .flatten()
-            .any(|h| h.entry_idx == entry_idx)
-        {
-            self.remove_dynamic_entry(entry_idx);
-        }
+        self.unlink_dynamic_entry(entry_idx);
         Ok(())
     }
 

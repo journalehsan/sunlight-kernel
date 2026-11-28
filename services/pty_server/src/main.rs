@@ -16,8 +16,9 @@ use sunlight_ipc::{
 #[cfg(not(test))]
 use sunlight_ipc::{
     endpoint_create, entropy_u64, ipc_complete_deferred_reply, ipc_defer_reply,
-    ipc_deferred_reply_is_live, ipc_recv_timeout, ipc_reply_and_recv_timeout, nameserver_register,
-    process_is_alive_generation, secure_entropy_ready,
+    ipc_deferred_reply_is_live, ipc_recv_result, ipc_recv_timeout_result, ipc_reply,
+    nameserver_register, process_is_alive_generation, secure_entropy_ready, EndpointId, IpcError,
+    ProcessExit,
 };
 
 #[cfg(not(test))]
@@ -705,6 +706,24 @@ fn reap_dead_owners(server: &mut PtyServer, waiters: &mut [Option<WriteWait>; MA
 }
 
 #[cfg(not(test))]
+fn recv_request(server: &PtyServer, endpoint: EndpointId) -> Option<IpcMsg> {
+    let has_live_sessions = server.sessions.iter().any(|session| session.live);
+    let result = if has_live_sessions {
+        ipc_recv_timeout_result(endpoint, 50)
+    } else {
+        ipc_recv_result(endpoint)
+    };
+    match result {
+        Ok(msg) => Some(msg),
+        Err(IpcError::DeadlineExpired) if has_live_sessions => None,
+        Err(_) => {
+            debug_log("[PTY] IPC receive failed\n");
+            ProcessExit::exit(1);
+        }
+    }
+}
+
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     debug_log("[PTY] pty_server started\n");
@@ -714,12 +733,12 @@ pub extern "C" fn _start() -> ! {
 
     let mut server = PtyServer::new();
     let mut waiters = [None; MAX_SESSIONS];
-    let mut msg = ipc_recv_timeout(endpoint, 50);
+    let mut msg = recv_request(&server, endpoint);
     loop {
         reap_dead_owners(&mut server, &mut waiters);
         complete_write_waiters(&server, &mut waiters);
         let Some(current_msg) = msg else {
-            msg = ipc_recv_timeout(endpoint, 50);
+            msg = recv_request(&server, endpoint);
             continue;
         };
         let mut reply = handle_message(&mut server, &current_msg);
@@ -775,11 +794,10 @@ pub extern "C" fn _start() -> ! {
             }
         }
         complete_write_waiters(&server, &mut waiters);
-        msg = if deferred {
-            ipc_recv_timeout(endpoint, 50)
-        } else {
-            ipc_reply_and_recv_timeout(endpoint, reply, 50)
-        };
+        if !deferred {
+            ipc_reply(reply);
+        }
+        msg = recv_request(&server, endpoint);
     }
 }
 

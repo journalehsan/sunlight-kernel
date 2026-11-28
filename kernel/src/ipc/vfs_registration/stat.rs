@@ -279,6 +279,8 @@ pub(super) fn wake_stat_callers(sched: &mut Scheduler, now_tick: u64) {
     runtime.wake_stat_callers(sched);
     runtime.poll_chdirs(sched, now_tick);
     runtime.poll_spawns(sched, now_tick);
+    #[cfg(feature = "vfs_c2e_candidate")]
+    runtime.poll_shared_cwd_joins(sched, now_tick);
 }
 
 #[cfg(test)]
@@ -334,8 +336,15 @@ pub(crate) fn stat_call(
     let idx = sched
         .processes
         .iter()
-        .position(|p| p.pid == pid && !p.is_exiting() && p.vfs_root_metadata)
+        .position(|p| p.pid == pid && !p.is_exiting())
         .ok_or(Error::Identity)?;
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if !RUNTIME.lock().join_shared_cwd(idx, sched, caps).map_err(|_| Error::Identity)? {
+        return Ok(StatCall::Pending);
+    }
+    if !sched.processes[idx].vfs_root_metadata {
+        return Err(Error::Identity);
+    }
     if sched.processes[idx].pending_call.is_some() {
         return Err(Error::Busy);
     }

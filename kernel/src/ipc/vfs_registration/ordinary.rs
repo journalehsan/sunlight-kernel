@@ -12,6 +12,8 @@ pub(crate) enum Launch {
         streams: [Option<(i32, FileDescriptor)>; 3],
         trace: crate::launch_trace::LaunchTrace,
         path: alloc::string::String,
+        #[cfg(feature = "vfs_c2i1_candidate")]
+        bootstrap_fstab: bool,
     },
     Capability {
         attachment: Option<LaunchAttachment>,
@@ -77,7 +79,7 @@ pub(crate) fn stage(
     Ok(Progress::Parked)
 }
 
-fn park(sched: &mut Scheduler, idx: usize) {
+pub(super) fn park(sched: &mut Scheduler, idx: usize) {
     sched.account_and_apply_churn_penalty();
     sched.processes[idx].block_start_tick = sched.global_tick;
     sched.remove_from_ready_queues(idx);
@@ -125,6 +127,13 @@ pub(crate) fn resume(
         idx, claim, sched, caps,
         |sched| {
             let parent = &sched.processes[idx];
+            #[cfg(feature = "vfs_c2i1_candidate")]
+            if !crate::persistent_boot_mount::ready()
+                && !(matches!(&*launch, Launch::Native { bootstrap_fstab: true, .. })
+                    && sched.supervision.is_bootstrap(Scheduler::supervision_identity(parent)))
+            {
+                return Err(Error::Preparation);
+            }
             let valid = match &*launch {
                 Launch::Native { membership, streams, .. } => {
                     parent.account_membership == *membership
@@ -208,7 +217,7 @@ pub(crate) fn resume(
     }
 }
 
-fn abandon(runtime: &mut Runtime, row: usize, claim: RemoteClaim) {
+pub(super) fn abandon(runtime: &mut Runtime, row: usize, claim: RemoteClaim) {
     let call = runtime.spawns[row].as_mut().unwrap();
     call.detached = true;
     if matches!(call.result, None | Some(Terminal::Retained(_))) {

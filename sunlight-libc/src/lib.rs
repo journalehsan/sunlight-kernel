@@ -577,7 +577,13 @@ pub(crate) fn secret_create_temp(path: &[u8], mode: u16) -> Result<Fd, Errno> {
     checked_fd(ret)
 }
 
+pub(crate) fn secret_stage_owned_by_descriptor() -> bool {
+    let empty = [0u8];
+    unsafe { sys::syscall1(sys::SYS_SECRET_REMOVE_TEMP, empty.as_ptr() as u64) == 1 }
+}
+
 pub(crate) fn secret_publish(
+    staging: Fd,
     temporary: &[u8],
     destination: &[u8],
     mode: u16,
@@ -588,12 +594,14 @@ pub(crate) fn secret_publish(
     let temporary_ptr = cstr(&mut temporary_buf, temporary)?;
     let destination_ptr = cstr(&mut destination_buf, destination)?;
     let ret = unsafe {
-        sys::syscall4(
+        sys::syscall6(
             sys::SYS_SECRET_PUBLISH,
             temporary_ptr as u64,
             destination_ptr as u64,
             mode as u64,
             replace as u64,
+            u64::from(staging.0),
+            0,
         )
     };
     sys::check(ret).map(|_| ())

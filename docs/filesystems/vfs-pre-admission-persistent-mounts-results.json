@@ -1,0 +1,44 @@
+{
+  "milestone": "VFS-C2I1",
+  "status": "PARTIAL",
+  "log_directory": "target/vfs-c2i1",
+  "builds": {
+    "standalone_storagectl": {"status": "PASS", "log": "storagectl.log"},
+    "production": {"status": "PASS", "logs": ["production.log", "production-service.log"]},
+    "candidate": {"status": "PASS", "logs": ["candidate.log", "candidate-service.log"]},
+    "compressed_candidate": {"status": "PASS", "logs": ["compressed.log", "compressed-service.log"]}
+  },
+  "host": {
+    "boot_fstab_and_gpt_selection": {"status": "PASS", "logs": ["host-core.log", "host-kernel.log"]},
+    "kernel_library": {"status": "PASS", "tests": 224, "log": "host-kernel.log"},
+    "filesystem": {"status": "PASS", "tests": 127, "log": "host-core.log"},
+    "block": {"status": "PASS", "tests": 70, "log": "host-core.log"},
+    "ipc": {"status": "PASS", "tests": 175, "log": "host-core.log"},
+    "linux_compat": {"status": "PASS", "tests": 30, "log": "host-core.log"},
+    "registration": {"status": "PASS", "tests": 116, "log": "registration.log"},
+    "service": {"status": "PASS", "tests": 95, "log": "host-service.log"},
+    "descriptor_parallel": {"status": "PASS", "tests": 21, "threads": 8, "log": "descriptor.log"},
+    "c2c_fixture_checksum": {"status": "PASS", "command": "sha256sum -c target/vfs-c2e/c2c-fixture.sha256", "log": "fixture.log"}
+  },
+  "ownership_guards": {
+    "inventory": {"before": "PASS", "after": "PASS", "references_before": 71, "references_after": 71},
+    "no_growth": {"before": "FAIL", "after": "FAIL"},
+    "final_removal": {"before": "FAIL", "after": "FAIL"},
+    "remaining": {
+      "storage::mount": "Reachable for unreserved media and unclaimed targets",
+      "linux_procfs::mountinfo_snapshot": "Legacy mount topology",
+      "sys_linux_statfs": "Legacy capacity for unrouted Linux callers",
+      "process::mmap::sys_mmap": "Legacy readable root and FAT descriptions"
+    }
+  },
+  "native": {
+    "guarded_ordinary_boot": {"status": "BLOCKED", "log": "guarded-boot.log"},
+    "startup_and_storagectl_fstab": "NOT_RUN",
+    "authenticated_transport_handoff": "NOT_RUN",
+    "required_commit_before_admission": "NOT_RUN",
+    "failed_preparation_and_publication": "NOT_RUN",
+    "duplicate_publication": "NOT_RUN",
+    "service_loss_during_bootstrap": "NOT_RUN",
+    "reservation_attachment_and_lease_cleanup": "NOT_RUN"
+  }
+}

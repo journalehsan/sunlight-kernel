@@ -32,6 +32,8 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 pid: 3,
                 trusted_vfs_service: true,
                 vfs_root_metadata: false,
+                vfs_shared_cwd_join: None,
+                vfs_shared_cwd_join_allowed: false,
                 vfs_boot_root: false,
                 vfs_root_rebased: false,
                 vfs_downloads_cwd: false,
@@ -43,6 +45,7 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 state: crate::sched::ProcessState::Running,
                 pending_call: None,
                 ipc_reply_target: None,
+                service_lookup_restrictions: None,
                 ipc_endpoint: None,
                 uid: 0,
                 gid: 0,
@@ -53,6 +56,8 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 pid: 10,
                 trusted_vfs_service: false,
                 vfs_root_metadata: false,
+                vfs_shared_cwd_join: None,
+                vfs_shared_cwd_join_allowed: false,
                 vfs_boot_root: false,
                 vfs_root_rebased: false,
                 vfs_downloads_cwd: false,
@@ -64,6 +69,7 @@ fn setup() -> (Runtime, Scheduler, CapabilityBroker, AdmissionIdentity) {
                 state: crate::sched::ProcessState::Running,
                 pending_call: None,
                 ipc_reply_target: None,
+                service_lookup_restrictions: None,
                 ipc_endpoint: None,
                 uid: 1000,
                 gid: 100,
@@ -3796,6 +3802,7 @@ fn generic_native_and_linux_chdir_cross_downloads_and_settle() {
         namespace_id: receipt.scope().namespace_id,
         namespace_generation: receipt.scope().namespace_generation,
         receipt_id: receipt.request_id(), receipt_generation: receipt.generation(),
+        directory_generation: 0,
         uid: 0, gid: 0,
     };
     let send = |channel: &mut CwdChannel<'_>, service: &mut Service<1, 8, 1>, request: file::Request<'_>| {
@@ -3871,18 +3878,15 @@ fn generic_downloads_caller_retirement_drains_active_epoch() {
     let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
     let (mut kernel, mut sched, caps, identity) = setup();
     let (mut legacy, namespace) = crate::downloads_namespaces();
-    let mut service = Service::<1, 8, 1>::new();
+    let mut service = Service::<4, 8, 1>::new();
     sched.processes[1].uid = 0;
     let mut worker = sched.processes[1].clone();
     worker.pid = 11;
     worker.foreground.incarnation += 1;
     worker.shared_owner = Some(1);
-    sched.processes.push(worker);
 
-    // The worker parks and resumes; only its sharing group's owner receives
-    // the namespace binding and published cwd.
     assert_eq!(
-        transition_call_runtime(&mut kernel, 11, "/root/Downloads",
+        transition_call_runtime(&mut kernel, 10, "/root/Downloads",
             Kind::EnterDownloads, &mut sched, &caps),
         Ok(None)
     );
@@ -3892,14 +3896,124 @@ fn generic_downloads_caller_retirement_drains_active_epoch() {
     };
     service.poll_root_control(&mut channel, &namespace);
     use super::super::chdir::resume_runtime;
-    assert_eq!(resume_runtime(channel.kernel, 11, (0, 0), Kind::Directory, channel.sched), Ok(Some(Some(0))));
+    assert_eq!(resume_runtime(channel.kernel, 10, (0, 0), Kind::Directory, channel.sched), Ok(Some(Some(0))));
     assert!(channel.sched.processes[1].vfs_downloads_cwd);
-    assert!(channel.sched.processes[2].vfs_downloads_cwd);
-    assert_eq!(channel.sched.processes[1].cwd, "/root/Downloads");
-    assert!(!channel.sched.processes[2].vfs_root_metadata);
-    assert_eq!(namespace.shared().lock().open_handle_count(), 2);
+    worker.vfs_downloads_cwd = true;
+    worker.vfs_root_metadata = false;
+    worker.cwd = channel.sched.processes[1].cwd.clone();
+    let creator = process_identity(&channel.sched.processes[1]);
+    let ticket = channel.sched.pending_children.reserve(worker.pid,
+        crate::process::pending_state::Parent {
+            pid: creator.pid as usize, incarnation: creator.incarnation,
+            image_generation: creator.address_space_generation,
+        }, false).unwrap();
+    let child = crate::process::pending_state::Identity {
+        ticket, incarnation: worker.foreground.incarnation,
+        image_generation: worker.address_space.identity().generation,
+    };
+    assert!(channel.sched.pending_children.finish(child, alloc::boxed::Box::new(worker), |_| true).is_ok());
+    let claim = channel.kernel.stage_spawn_from(1, 1, child, channel.sched, &caps,
+        false, false, true).unwrap();
+    assert_eq!(channel.kernel.wait_spawn_inner(1, claim, channel.sched, true), Ok(None));
+    assert!(channel.sched.processes.iter().all(|p| p.pid != ticket.pid));
+    assert_eq!(transition_call_runtime(channel.kernel, 10, "..", Kind::Downloads,
+        channel.sched, &caps), Err(super::super::stat::Error::Busy));
+    service.poll_root_control(&mut channel, &namespace);
+    channel.kernel.poll_spawns(channel.sched, channel.sched.global_tick);
+    assert!(matches!(channel.kernel.wait_spawn_inner(1, claim, channel.sched, true),
+        Ok(Some(super::super::spawn::Terminal::Retained(_)))));
+    channel.kernel.publish_spawn(1, claim, channel.sched, &caps, |_| Ok(()),
+        |sched, private, _| {
+            sched.pending_children.eligible(private, true).unwrap();
+            let mut worker = sched.pending_children.transfer(private, true).unwrap();
+            sched.pending_children.published(private.ticket);
+            worker.vfs_root_metadata = true;
+            let idx = sched.processes.len();
+            sched.processes.push(*worker);
+            idx
+        }).unwrap();
+    assert!(channel.sched.processes[2].vfs_root_metadata);
+    let worker = AdmissionIdentity {
+        caller: process_identity(&channel.sched.processes[2]),
+        uid: 0,
+        gid: channel.sched.processes[2].gid,
+        ..identity
+    };
+    let worker_receipt = channel.kernel.caller_receipt(worker).unwrap();
+    assert_ne!(worker_receipt.scope().caller, identity.caller);
+    assert_eq!(channel.sched.processes[2].cwd, "/root/Downloads");
+    {
+        let shared = namespace.shared();
+        let mut fs = shared.lock();
+        let handle = fs.create_file_exclusive("/root/Downloads/data", 0, 0, 0o600).unwrap();
+        fs.close(handle).unwrap();
+    }
+    use super::super::file::FileOperation;
+    use sunlight_ipc::vfs_rpc::file_transport as file;
+    let open = |path| FileOperation::Open {
+        anchor: 0, path, access: file::ACCESS_READ, mode: 0,
+    };
+    let file_exchange = |channel: &mut CwdChannel<'_>, service: &mut Service<4, 8, 1>,
+                          (idx, caller, receipt): (usize, AdmissionIdentity, Receipt), op| {
+        channel.sched.processes[idx].state = crate::sched::ProcessState::Running;
+        channel.kernel.publish_file(caller, op, Some(receipt), channel.sched).unwrap();
+        let mut packet = [0; file::FRAME_BYTES];
+        assert!(channel.kernel.next_file(identity.registration, &mut packet).unwrap().is_some());
+        let request = file::Request::decode(&packet).unwrap();
+        assert_ne!(request.directory_generation, 0);
+        assert_eq!(request.caller, caller.caller);
+        assert_eq!((request.uid, request.gid), (caller.uid, caller.gid));
+        channel.file = Some(packet);
+        assert!(service.dispatch_file(channel, identity.registration, &packet));
+        channel.file = None;
+        let completion = if request.op == file::OPEN {
+            let row = channel.kernel.caller_publication(caller.caller).unwrap();
+            channel.kernel.finish_open(row, |token, _| Ok(token)).unwrap()
+        } else {
+            channel.kernel.take_file(caller.caller, request.op).unwrap()
+        };
+        (packet, completion)
+    };
+    let (old_packet, result) = file_exchange(&mut channel, &mut service, (2, worker, worker_receipt), open("data"));
+    assert_eq!(result.errno, 0);
+    service.close_file(identity.registration, worker.caller, result.result0).unwrap();
+
+    namespace.shared().lock().mkdir("/root/Downloads/next", 0, 0, 0o755).unwrap();
+    channel.sched.processes[1].state = crate::sched::ProcessState::Running;
+    assert_eq!(transition_call_runtime(channel.kernel, 10, "next", Kind::Downloads,
+        channel.sched, channel.caps), Ok(None));
+    service.poll_root_control(&mut channel, &namespace);
+    assert_eq!(resume_runtime(channel.kernel, 10, (0, 0), Kind::Directory,
+        channel.sched), Ok(Some(Some(0))));
+    channel.file = Some(old_packet);
+    let stale = service.file_request(&mut channel, identity.registration, &old_packet).unwrap();
+    channel.file = None;
+    assert_eq!(file::Reply::decode(&stale).unwrap().errno, 5);
+    let shared = namespace.shared();
+    {
+        let mut fs = shared.lock();
+        fs.rename("/root/Downloads/next", "/root/Downloads/renamed").unwrap();
+        fs.mkdir("/root/Downloads/next", 0, 0, 0o755).unwrap();
+    }
+    let (_, mkdir) = file_exchange(&mut channel, &mut service, (2, worker, worker_receipt), FileOperation::MutateNamespace {
+        op: file::MKDIR, flags: 0o755, anchor: 0, paths: "child", storage_admin: false,
+    });
+    assert_eq!(mkdir.errno, 0);
+    assert!(shared.lock().stat("/root/Downloads/renamed/child").is_ok());
+    assert!(shared.lock().stat("/root/Downloads/next/child").is_err());
+    channel.sched.processes[2].state = crate::sched::ProcessState::Running;
+    let mut stat_packet = [0; 8192];
+    let id = channel.kernel.publish_stat(worker, "child", channel.sched).unwrap().words()[1];
+    let (_, len) = channel.kernel.take_stat(identity.registration, &mut stat_packet).unwrap().unwrap();
+    let response = service.stat(identity.registration, &stat_packet[..len]).unwrap();
+    let reply = sunlight_ipc::vfs_rpc::stat_transport::decode_reply(&response).unwrap();
+    assert_eq!(reply.words[2], 0);
+    channel.kernel.complete_stat(identity.registration, reply).unwrap();
+    channel.kernel.wake_stat_callers(channel.sched);
+    drop(channel.kernel.reap_stat(worker.caller, id).unwrap());
+    channel.sched.processes[2].state = crate::sched::ProcessState::Running;
     assert_eq!(
-        transition_call_runtime(channel.kernel, 11, "..", Kind::Downloads, channel.sched, channel.caps),
+        transition_call_runtime(channel.kernel, 11, "../..", Kind::Downloads, channel.sched, channel.caps),
         Ok(None)
     );
     service.poll_root_control(&mut channel, &namespace);
@@ -3907,6 +4021,56 @@ fn generic_downloads_caller_retirement_drains_active_epoch() {
     assert_eq!(channel.sched.processes[1].cwd, "/root");
     assert!(!channel.sched.processes[1].vfs_downloads_cwd);
     assert!(!channel.sched.processes[2].vfs_downloads_cwd);
+    assert!(channel.sched.processes[2].vfs_root_metadata);
+    assert_eq!(channel.kernel.caller_receipt(worker), Some(worker_receipt));
+    assert!(service.open_file(identity.registration, worker_receipt, "data",
+        sunlight_fs::Credential { uid: worker.uid, gid: worker.gid },
+        sunlight_vfs_server::open::Access::Read, || true).is_err());
+    // This worker was created while the shared cwd was still legacy.
+    let mut legacy_worker = channel.sched.processes[1].clone();
+    legacy_worker.pid = 12;
+    legacy_worker.foreground.incarnation += 100;
+    legacy_worker.uid = 1000;
+    legacy_worker.shared_owner = Some(1);
+    legacy_worker.vfs_root_metadata = false;
+    legacy_worker.vfs_shared_cwd_join_allowed = true;
+    legacy_worker.state = crate::sched::ProcessState::Running;
+    channel.sched.processes.push(legacy_worker);
+    assert_eq!(transition_call_runtime(channel.kernel, 10, "/root/Downloads", Kind::EnterDownloads,
+        channel.sched, channel.caps), Ok(None));
+    service.poll_root_control(&mut channel, &namespace);
+    assert_eq!(resume_runtime(channel.kernel, 10, (0, 0), Kind::Directory,
+        channel.sched), Ok(Some(Some(0))));
+    assert_eq!(channel.kernel.join_shared_cwd(3, channel.sched, &caps), Ok(false));
+    assert!(!channel.sched.processes[3].vfs_root_metadata);
+    assert_eq!(transition_call_runtime(channel.kernel, 10, ".", Kind::Downloads,
+        channel.sched, channel.caps), Err(super::super::stat::Error::Busy));
+    service.poll_root_control(&mut channel, &namespace);
+    channel.kernel.poll_shared_cwd_joins(channel.sched, channel.sched.global_tick);
+    assert_eq!(channel.kernel.join_shared_cwd(3, channel.sched, &caps), Ok(true));
+    let legacy_worker = AdmissionIdentity {
+        caller: process_identity(&channel.sched.processes[3]),
+        uid: 1000, gid: channel.sched.processes[3].gid, ..identity
+    };
+    let legacy_receipt = channel.kernel.caller_receipt(legacy_worker).unwrap();
+    assert_eq!(transition_call_runtime(channel.kernel, 10, ".", Kind::Downloads,
+        channel.sched, channel.caps), Ok(None));
+    service.poll_root_control(&mut channel, &namespace);
+    assert_eq!(resume_runtime(channel.kernel, 10, (0, 0), Kind::Directory,
+        channel.sched), Ok(Some(Some(0))));
+    let (_, result) = file_exchange(&mut channel, &mut service,
+        (3, legacy_worker, legacy_receipt), open("data"));
+    assert_eq!(result.errno, 13);
+    channel.sched.processes[3].exiting = true;
+    channel.kernel.retire_process(legacy_worker.caller);
+    channel.kernel.retire_process(identity.caller);
+    channel.sched.processes[1].exiting = true;
+    service.poll_root_control(&mut channel, &namespace);
+    let (_, result) = file_exchange(&mut channel, &mut service, (2, worker, worker_receipt), open("data"));
+    assert_eq!(result.errno, 0);
+    service.close_file(identity.registration, worker.caller, result.result0).unwrap();
+    channel.sched.processes[2].exiting = true;
+    channel.kernel.retire_process(worker.caller);
     channel.sched.processes[1].exiting = true;
     channel.kernel.retire_process(identity.caller);
     service.poll_root_control(&mut channel, &namespace);
@@ -3985,7 +4149,13 @@ fn executable_source_selection_and_loader_input_through_copied_channel() {
 
     for (path, osabi, mode, expected) in [
         ("native", 0, 0o700, Some(Personality::Native)),
+        ("at-limit", 0, 0o700, Some(Personality::Native)),
+        ("native-large", 0, 0o700, Some(Personality::Native)),
         ("linux", 3, 0o700, Some(Personality::Linux)),
+        ("at-current-limit", 0, 0o700, Some(Personality::Native)),
+        ("tls-copy", 0, 0o700, Some(Personality::Native)),
+        ("oversized", 0, 0o700, None),
+        ("reserve-error", 0, 0o700, None),
         ("truncated", 0, 0o700, None),
         ("readable", 0, 0o600, None),
         ("short", 0, 0o700, None),
@@ -3994,7 +4164,17 @@ fn executable_source_selection_and_loader_input_through_copied_channel() {
         ("cancel", 0, 0o700, None),
         ("withdrawn", 0, 0o700, None),
     ] {
-        let mut bytes = vec![0u8; wire::IO_BYTES + 64];
+        let size = match path {
+            "at-limit" => 1024 * 1024,
+            "native-large" | "linux" => 1217328,
+            "at-current-limit" => wire::MAX_EXECUTABLE_BYTES,
+            "oversized" => wire::MAX_EXECUTABLE_BYTES + 1,
+            _ => wire::IO_BYTES + 64,
+        };
+        let mut bytes = vec![0u8; size];
+        for (index, byte) in bytes[256..].iter_mut().enumerate() {
+            *byte = (index ^ (index >> 8) ^ (index >> 16)) as u8;
+        }
         bytes[..5].copy_from_slice(b"\x7fELF\x02");
         bytes[7] = osabi;
         bytes[16..20].copy_from_slice(&[2, 0, 0x3e, 0]);
@@ -4011,6 +4191,13 @@ fn executable_source_selection_and_loader_input_through_copied_channel() {
         if path == "truncated" {
             bytes.truncate(32);
         }
+        if path == "tls-copy" {
+            let Some(artifact) = std::env::var_os("SUNLIGHT_EXEC_TEST_TLS") else {
+                continue;
+            };
+            bytes = std::fs::read(artifact).expect("read configured TLS ELF");
+            assert!(bytes.len() > 1024 * 1024);
+        }
         let absolute = format!("/root/Downloads/{path}");
         {
             let shared = namespace.shared();
@@ -4026,6 +4213,7 @@ fn executable_source_selection_and_loader_input_through_copied_channel() {
             executable::route(path, "/root/Downloads", true).unwrap()
         };
         let mut source = executable::Source::new(selected.into_owned(), (identity, receipt));
+        source.fail_reserve = path == "reserve-error";
         assert_eq!(advance(&mut channel, &mut source), Ok(None));
         exchange(&mut channel, &mut service, wire::OPEN);
         if path == "abandoned-open" {
@@ -4036,8 +4224,16 @@ fn executable_source_selection_and_loader_input_through_copied_channel() {
             continue;
         }
         let result = advance(&mut channel, &mut source);
-        if path == "readable" {
+        if matches!(path, "readable" | "oversized") {
             assert_eq!(result, Err(file::Error::Protocol));
+            assert_clean(&mut channel);
+            continue;
+        }
+        if path == "reserve-error" {
+            assert_eq!(result, Err(file::Error::Capacity));
+            assert_eq!(namespace.shared().lock().open_handle_count(), baseline + 1);
+            channel.kernel.settle_executable(identity.caller);
+            exchange(&mut channel, &mut service, wire::CLOSE);
             assert_clean(&mut channel);
             continue;
         }
@@ -4091,6 +4287,8 @@ fn executable_source_selection_and_loader_input_through_copied_channel() {
             fs.write(replacement, 0, b"replacement").unwrap();
             fs.close(replacement).unwrap();
             drop(fs);
+        }
+        while result.is_none() {
             exchange(&mut channel, &mut service, wire::PREAD);
             result = advance(&mut channel, &mut source).unwrap();
         }
@@ -4105,8 +4303,12 @@ fn executable_source_selection_and_loader_input_through_copied_channel() {
             let mut plans = Vec::new();
             plan_segments(&input, &header, 0x1000, 0x8000_0000_0000, &mut |plan| plans.push(*plan))
                 .unwrap();
-            assert_eq!(plans.len(), 1);
-            assert_eq!(plans[0].prot, sunlight_elf::SegmentProt::ReadExec);
+            if path == "tls-copy" {
+                assert!(plans.iter().any(|plan| plan.prot == sunlight_elf::SegmentProt::ReadExec));
+            } else {
+                assert_eq!(plans.len(), 1);
+                assert_eq!(plans[0].prot, sunlight_elf::SegmentProt::ReadExec);
+            }
         } else {
             assert!(parse_elf_header(&input).is_err());
         }

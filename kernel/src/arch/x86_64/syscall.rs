@@ -1776,6 +1776,11 @@ fn park_ordinary_spawn(frame: &mut SyscallFrame) -> u64 {
 /// Handle a spawn IPC call directly in the kernel.
 /// Extracts path from the message words and spawns a new process.
 fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    if !crate::persistent_boot_mount::ready() {
+        IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+        return 0;
+    }
     let path = decode_path_from_words(&msg.words);
     #[cfg(feature = "vfs_c1a_candidate")]
     {
@@ -1842,6 +1847,11 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let caller_identity = crate::sched::Scheduler::supervision_identity(sched.current_process());
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    if !crate::persistent_boot_mount::ready() {
+        IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+        return 0;
+    }
     let caller_is_init = sched.supervision.is_bootstrap(caller_identity)
         && !matches!(
             sched.current_process().state,
@@ -3098,6 +3108,14 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
         return u64::MAX;
     }
 
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if shared_descriptors {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        if let Some(result) = crate::ipc::vfs_registration::worker::resume(frame, &mut sched) {
+            return retry_worker_publication(frame, result, u64::MAX - 1);
+        }
+    }
+
     let current_cpu = crate::sched::current_cpu_id();
     let trampoline = frame.rdi;
     let user_stack_top = frame.rsi;
@@ -3124,6 +3142,7 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
     crate::sched::t2r_fixture::enter();
     let mut sched = crate::sched::SCHEDULER.lock();
+
 
     #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
     if sched.fastlane_vm_member() {
@@ -3263,6 +3282,23 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
             .session_allocation_live(reference, crate::timekeeping::global_ticks())
     }) {
         return u64::MAX - 1;
+    }
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if shared_descriptors {
+        use crate::ipc::vfs_registration::worker::{self, Launch};
+        match worker::required(&sched) {
+            Err(_) => return u64::MAX - 1,
+            Ok(false) => thread.vfs_shared_cwd_join_allowed = true,
+            Ok(true) => {
+                let Some(hhdm) = crate::HHDM_REQ.response().map(|response| VirtAddr::new(response.offset))
+                else {
+                    return u64::MAX - 1;
+                };
+                let launch = Launch::new(frame, current_cpu, None, hhdm);
+                return retry_worker_publication(frame, worker::stage(thread, slot, launch, &mut sched)
+                    .map(|()| None), u64::MAX - 1);
+            }
+        }
     }
     let published = sched.publish_thread(slot, thread, current_cpu);
     #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
@@ -3569,7 +3605,21 @@ fn reject_linux_address_space_duplication(operation: &str) -> u64 {
     linux_errno(38)
 }
 
-fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
+#[cfg(feature = "vfs_c2e_candidate")]
+fn retry_worker_publication(
+    frame: &mut SyscallFrame,
+    result: Result<Option<usize>, crate::ipc::vfs_registration::spawn::Error>,
+    failure: u64,
+) -> u64 {
+    match result {
+        Ok(Some(tid)) => tid as u64,
+        Ok(None) => replay_futex_wait(frame, frame.rax),
+        Err(crate::ipc::vfs_registration::spawn::Error::UserMemory) => linux_errno(14),
+        Err(_) => failure,
+    }
+}
+
+fn sys_linux_clone(frame: &mut SyscallFrame) -> u64 {
     use sunlight_compat_linux::clone::{
         validate_thread_flags, CloneFlagError, CLONE_PARENT_SETTID,
     };
@@ -3596,6 +3646,11 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
         return linux_errno(14);
     }
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = crate::ipc::vfs_registration::worker::resume(frame, &mut sched) {
+        return retry_worker_publication(frame, result, linux_errno(11));
+    }
+
 
     let Some(hhdm) = crate::HHDM_REQ
         .response()
@@ -3735,6 +3790,22 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
             .session_allocation_live(reference, crate::timekeeping::global_ticks())
     }) {
         return linux_errno(1);
+    }
+    #[cfg(feature = "vfs_c2e_candidate")]
+    {
+        use crate::ipc::vfs_registration::worker::{self, Launch};
+        match worker::required(&sched) {
+            Err(_) => return linux_errno(11),
+            Ok(false) => child.vfs_shared_cwd_join_allowed = true,
+            Ok(true) => {
+                let launch = Launch::new(
+                    frame, crate::sched::current_cpu_id(),
+                    (flags & CLONE_PARENT_SETTID != 0).then_some(parent_tid), hhdm,
+                );
+                return retry_worker_publication(frame, worker::stage(child, slot, launch, &mut sched)
+                    .map(|()| None), linux_errno(11));
+            }
+        }
     }
     // The prevalidated parent store is done before the child can be runnable.
     if flags & CLONE_PARENT_SETTID != 0
@@ -4107,7 +4178,7 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     // The old caller identity is gone as soon as exec installs the new VM. Keep
     // it for the file-owner barrier and the surviving-descriptor transfer.
     let old_caller = crate::ipc::vfs_process_identity(process);
-    match crate::process::spawn::exec_into_process(
+    let loaded = crate::process::spawn::exec_into_process(
         bytes,
         process,
         &mut *pmm,
@@ -4115,7 +4186,11 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         &argv_refs,
         &envp_refs,
         true,
-    ) {
+    );
+    drop(source_bytes);
+    #[cfg(feature = "vfs_c2e_candidate")]
+    source.release_loaded_input();
+    match loaded {
         Ok(entry) => {
             // Cache the installed command for this PID, not its old launcher.
             // Do this only after success: a failed exec retains its identity.
@@ -4389,7 +4464,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
                 return park_ordinary_spawn(frame);
             }
             Some(Ok(ordinary::Progress::Published(slot, launch))) => {
-                let ordinary::Launch::Native { cpu, membership, streams, mut trace, path } = *launch
+                let ordinary::Launch::Native { cpu, membership, streams, mut trace, path, .. } = *launch
                     else { unreachable!("native launch continuation") };
                 let child = &mut sched.processes[slot];
                 child.account_membership = membership;
@@ -4514,6 +4589,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    let fstab_invocation = path_str == "/bin/storagectl"
+        && argv_bytes.iter().map(Vec::as_slice).eq([&b"storagectl"[..], &b"fstab"[..]]);
     let source_bytes = match executable_bytes(
         path_str,
         #[cfg(feature = "vfs_c2e_candidate")]
@@ -4544,6 +4622,15 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     }
     let _pty_lock_acquired = if pty_lock_start != 0 { now_ns() } else { 0 };
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    if !crate::persistent_boot_mount::ready()
+        && !(fstab_invocation
+            && sched.supervision.is_bootstrap(crate::sched::Scheduler::supervision_identity(
+                sched.current_process(),
+            )))
+    {
+        return u64::MAX;
+    }
     sched.reap_finished_processes();
     if sched.reserve_task_storage().is_err() {
         return u64::MAX - 1;
@@ -4674,9 +4761,13 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // [LAUNCH-TRACE] Point 4: spawn started (about to exec_into_process)
     trace.spawn_started_ns = now_ns();
 
-    match crate::process::spawn::exec_into_process(
+    let loaded = crate::process::spawn::exec_into_process(
         bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs, false,
-    ) {
+    );
+    drop(source_bytes);
+    #[cfg(feature = "vfs_c2e_candidate")]
+    source.release_loaded_input();
+    match loaded {
         Ok(_) => {
             #[cfg(feature = "vfs_stat_failure_test")]
             {
@@ -4826,6 +4917,8 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         let result = ordinary::stage(
             child, ordinary::Launch::Native {
                 cpu: current_cpu, membership: inherited_membership, streams, trace, path,
+                #[cfg(feature = "vfs_c2i1_candidate")]
+                bootstrap_fstab: fstab_invocation,
             },
             &mut sched, &mut pmm, hhdm, &crate::capability::CAP_BROKER.lock(),
         );
@@ -5854,6 +5947,7 @@ const O_DIRECTORY: u64 = 0x1_0000;
 const O_ACCMODE: u64 = 0x3;
 static YAZI_CONFIG_LOOKUP_SEEN: core::sync::atomic::AtomicBool =
     core::sync::atomic::AtomicBool::new(false);
+#[cfg(not(feature = "vfs_c2e_candidate"))]
 const PRIVATE_SECRET_DIR: &str = "/etc/sunlight";
 const PRIVATE_SECRET_MODE: u16 = 0o600;
 
@@ -5972,6 +6066,10 @@ fn sys_storage_ctl(frame: &mut SyscallFrame) -> u64 {
         true
     }) {
         let source = frame.rsi;
+        #[cfg(feature = "vfs_c2i1_candidate")]
+        if !crate::persistent_boot_mount::permits_target(source, path) {
+            return (-1i64) as u64;
+        }
         return service_file(
             frame,
             crate::ipc::FileOperation::PrepareStorage { source, path },
@@ -6068,6 +6166,7 @@ fn legacy_storage_ctl(frame: &mut SyscallFrame, target: Option<&str>, index: u64
     1
 }
 
+#[cfg(not(feature = "vfs_c2e_candidate"))]
 fn validate_secret_parent<D: sunlight_block::BlockDevice>(vfs: &mut sunlight_fs::Vfs<D>) -> bool {
     matches!(
         vfs.stat(PRIVATE_SECRET_DIR),
@@ -6148,6 +6247,26 @@ fn open_resolved_path(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u6
     if procfs::owns(path) && current_is_linux() {
         // This namespace is kernel virtual: no native VFS or service traversal.
         return procfs::native_result(procfs::open(frame, path, flags));
+    }
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if private_secret_child(path) {
+        use ::sunlight_ipc::vfs_rpc::file_transport as api;
+        let linux = current_is_linux();
+        if !has_host_key_admin() || flags & !(O_CLOEXEC | O_NOFOLLOW) != 0
+            || api::private_temp(path) || !downloads_route_valid(path)
+        {
+            return service_errno_raw(13, linux);
+        }
+        return service_file(
+            frame,
+            crate::ipc::FileOperation::Open {
+                anchor: 0, path, access: api::ACCESS_READ | api::OPEN_PRIVATE, mode: 0,
+            },
+            None, Some((api::ACCESS_READ, flags as u32 & O_CLOEXEC as u32)),
+            |_, done| {
+                if done.errno == 0 { done.result0 } else { service_errno_raw(done.errno, linux) }
+            },
+        );
     }
     // An explicitly selected caller never recovers kernel traversal. The copied
     // route admits supported regular-file opens.
@@ -6469,39 +6588,58 @@ fn sys_secret_create(frame: &mut SyscallFrame) -> u64 {
     if frame.rsi as u16 != PRIVATE_SECRET_MODE || !has_host_key_admin() {
         return u64::MAX;
     }
-    let (uid, gid, _) = current_fs_actor();
-    let handle = {
-        let mut guard = crate::KERNEL_VFS.lock();
-        let Some(vfs) = guard.as_mut() else {
-            return u64::MAX;
-        };
-        if !validate_secret_parent(vfs) {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    {
+        use ::sunlight_ipc::vfs_rpc::file_transport as api;
+        if !downloads_route_valid(path) {
             return u64::MAX;
         }
-        match vfs.create_private_file_exclusive(path, uid, gid, PRIVATE_SECRET_MODE) {
-            Ok(handle) => handle,
-            Err(sunlight_fs::FsError::AlreadyExists) => return u64::MAX - 1,
-            Err(_) => return u64::MAX,
-        }
-    };
-    let mut sched = crate::sched::SCHEDULER.lock();
-    let rights = crate::process::fd_table::CapRights::new(
-        crate::process::fd_table::CapRights::WRITE | crate::process::fd_table::CapRights::FSTAT,
-    );
-    match sched.current_shared_process_mut().fd_table.open(
-        crate::process::fd_table::FileHandle::vfs(handle.0),
-        rights,
-        O_CLOEXEC as u32,
-    ) {
-        Ok(fd) => fd as u64,
-        Err(_) => {
-            drop(sched);
-            if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
-                // No descriptor took ownership of the staging handle.
-                let _ = vfs.close(handle);
-                let _ = vfs.unlink(path);
+        service_file(
+            frame,
+            crate::ipc::FileOperation::Open {
+                anchor: 0, path, mode: u64::from(PRIVATE_SECRET_MODE),
+                access: api::OPEN_PRIVATE | api::ACCESS_WRITE | api::OPEN_CREATE | api::OPEN_EXCLUSIVE,
+            },
+            None, Some((api::ACCESS_WRITE, O_CLOEXEC as u32)),
+            |_, done| secret_service_result(done.errno, done.result0),
+        )
+    }
+    #[cfg(not(feature = "vfs_c2e_candidate"))]
+    {
+        let (uid, gid, _) = current_fs_actor();
+        let handle = {
+            let mut guard = crate::KERNEL_VFS.lock();
+            let Some(vfs) = guard.as_mut() else {
+                return u64::MAX;
+            };
+            if !validate_secret_parent(vfs) {
+                return u64::MAX;
             }
-            u64::MAX
+            match vfs.create_private_file_exclusive(path, uid, gid, PRIVATE_SECRET_MODE) {
+                Ok(handle) => handle,
+                Err(sunlight_fs::FsError::AlreadyExists) => return u64::MAX - 1,
+                Err(_) => return u64::MAX,
+            }
+        };
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let rights = crate::process::fd_table::CapRights::new(
+            crate::process::fd_table::CapRights::WRITE | crate::process::fd_table::CapRights::FSTAT,
+        );
+        match sched.current_shared_process_mut().fd_table.open(
+            crate::process::fd_table::FileHandle::vfs(handle.0),
+            rights,
+            O_CLOEXEC as u32,
+        ) {
+            Ok(fd) => fd as u64,
+            Err(_) => {
+                drop(sched);
+                if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                    // No descriptor took ownership of the staging handle.
+                    let _ = vfs.close(handle);
+                    let _ = vfs.unlink(path);
+                }
+                u64::MAX
+            }
         }
     }
 }
@@ -6528,25 +6666,63 @@ fn sys_secret_publish(frame: &mut SyscallFrame) -> u64 {
     if frame.rdx as u16 != PRIVATE_SECRET_MODE || frame.r10 > 1 || !has_host_key_admin() {
         return u64::MAX;
     }
-    let (uid, gid, _) = current_fs_actor();
-    let mut guard = crate::KERNEL_VFS.lock();
-    let Some(vfs) = guard.as_mut() else {
-        return u64::MAX;
-    };
-    if !validate_secret_parent(vfs) {
-        return u64::MAX;
+    #[cfg(feature = "vfs_c2e_candidate")]
+    {
+        use crate::process::fd_table::CapRights;
+        let Ok(fd) = i32::try_from(frame.r8) else { return u64::MAX };
+        let Some((token, authority, rights)) = service_fd(fd) else { return u64::MAX };
+        if !rights.contains(CapRights::new(CapRights::WRITE))
+            || !downloads_route_valid(temp) || !downloads_route_valid(destination)
+        {
+            return u64::MAX;
+        }
+        let mut paths = alloc::string::String::new();
+        if paths.try_reserve_exact(temp.len() + 1 + destination.len()).is_err() {
+            return u64::MAX;
+        }
+        paths.push_str(temp);
+        paths.push('\0');
+        paths.push_str(destination);
+        service_file(
+            frame,
+            crate::ipc::FileOperation::PublishPrivate {
+                token, paths: &paths, replace: frame.r10 == 1,
+            },
+            Some(authority), None,
+            |_, done| secret_service_result(done.errno, done.result0),
+        )
     }
-    match vfs.publish_private(
-        temp,
-        destination,
-        uid,
-        gid,
-        PRIVATE_SECRET_MODE,
-        frame.r10 == 1,
-    ) {
-        Ok(()) => 0,
-        Err(sunlight_fs::FsError::AlreadyExists) => u64::MAX - 1,
-        Err(_) => u64::MAX,
+    #[cfg(not(feature = "vfs_c2e_candidate"))]
+    {
+        let (uid, gid, _) = current_fs_actor();
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
+        };
+        if !validate_secret_parent(vfs) {
+            return u64::MAX;
+        }
+        match vfs.publish_private(
+            temp,
+            destination,
+            uid,
+            gid,
+            PRIVATE_SECRET_MODE,
+            frame.r10 == 1,
+        ) {
+            Ok(()) => 0,
+            Err(sunlight_fs::FsError::AlreadyExists) => u64::MAX - 1,
+            Err(_) => u64::MAX,
+        }
+    }
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+fn secret_service_result(errno: u64, result: u64) -> u64 {
+    match errno {
+        0 => result,
+        17 => u64::MAX - 1,
+        _ => u64::MAX,
     }
 }
 
@@ -6555,6 +6731,11 @@ fn sys_secret_remove_temp(frame: &mut SyscallFrame) -> u64 {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),
     };
+    // The empty path queries whether stage cleanup follows descriptor lifetime.
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if path_bytes.is_empty() && has_host_key_admin() {
+        return 1;
+    }
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(path) if private_secret_temp(path) => path,
         _ => return u64::MAX,
@@ -6562,16 +6743,26 @@ fn sys_secret_remove_temp(frame: &mut SyscallFrame) -> u64 {
     if !has_host_key_admin() {
         return u64::MAX;
     }
-    let mut guard = crate::KERNEL_VFS.lock();
-    let Some(vfs) = guard.as_mut() else {
-        return u64::MAX;
-    };
-    if !validate_secret_parent(vfs) {
-        return u64::MAX;
+    #[cfg(feature = "vfs_c2e_candidate")]
+    {
+        // A pathname alone cannot remove a live stage. Close and retirement
+        // settle the exact description, including abandoned provisional opens.
+        let _ = path;
+        u64::MAX
     }
-    match vfs.unlink(path) {
-        Ok(()) => 0,
-        _ => u64::MAX,
+    #[cfg(not(feature = "vfs_c2e_candidate"))]
+    {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return u64::MAX;
+        };
+        if !validate_secret_parent(vfs) {
+            return u64::MAX;
+        }
+        match vfs.unlink(path) {
+            Ok(()) => 0,
+            _ => u64::MAX,
+        }
     }
 }
 
@@ -6936,13 +7127,7 @@ fn sys_service_directory_transition(frame: &mut SyscallFrame, root: bool) -> u64
                 Ok(DirectoryRoute::Service(kind, path)) => (kind, path),
                 Ok(DirectoryRoute::Legacy(path)) => {
                     sched.processes[owner].cwd = path;
-                    for sibling in 0..sched.processes.len() {
-                        if sched.shared_process_index(sibling) == owner
-                            && (!cfg!(feature = "vfs_c2e_candidate") || sibling != owner)
-                        {
-                            crate::ipc::withdraw_vfs_root_profile(sibling, &mut sched);
-                        }
-                    }
+                    crate::ipc::vfs_registration::legacy_cwd_committed(owner, &mut sched);
                     return 0;
                 }
                 Err(error) => return error,
@@ -12057,6 +12242,17 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
         Ok(s) => s,
         Err(_) => return ERR_EINVAL,
     };
+
+    #[cfg(feature = "vfs_c2e_candidate")]
+    {
+        let absolute = resolve_current_path(path);
+        if private_secret_child(&absolute) {
+            if !has_host_key_admin() || !downloads_route_valid(&absolute) {
+                return ERR_EACCES;
+            }
+            return sys_service_stat(frame, &absolute, false);
+        }
+    }
 
     // The route is sticky across profile withdrawal and exec. A selected
     // caller must never recover kernel traversal when service admission fails.

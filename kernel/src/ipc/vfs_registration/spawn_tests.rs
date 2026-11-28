@@ -208,6 +208,10 @@ fn fixture() -> (
 }
 
 fn reserve(sched: &mut Scheduler, pid: usize) -> Identity {
+    reserve_in_image(sched, pid, pid as u64 + 100)
+}
+
+fn reserve_in_image(sched: &mut Scheduler, pid: usize, image_generation: u64) -> Identity {
     let ticket = sched
         .pending_children
         .reserve(
@@ -223,7 +227,7 @@ fn reserve(sched: &mut Scheduler, pid: usize) -> Identity {
     let child = Identity {
         ticket,
         incarnation: pid as u64 + 10,
-        image_generation: pid as u64 + 100,
+        image_generation,
     };
     assert!(sched
         .pending_children
@@ -234,6 +238,8 @@ fn reserve(sched: &mut Scheduler, pid: usize) -> Identity {
                 trusted_vfs_service: false,
                 exiting: false,
                 vfs_root_metadata: false,
+                vfs_shared_cwd_join: None,
+                vfs_shared_cwd_join_allowed: false,
                 vfs_boot_root: false,
                 vfs_file_routed: false,
                 vfs_root_rebased: false,
@@ -246,6 +252,7 @@ fn reserve(sched: &mut Scheduler, pid: usize) -> Identity {
                 state: ProcessState::Ready,
                 pending_call: None,
                 ipc_reply_target: None,
+                service_lookup_restrictions: None,
                 ipc_endpoint: None,
                 foreground: Foreground {
                     incarnation: child.incarnation,
@@ -259,6 +266,118 @@ fn reserve(sched: &mut Scheduler, pid: usize) -> Identity {
         )
         .is_ok());
     child
+}
+
+#[test]
+fn c2i3_worker_order_replays_the_two_admission_gaps() {
+    let (mut runtime, mut sched, caps, parent, unused) = fixture();
+    drop(sched.pending_children.cancel(unused.ticket, Some(unused)).unwrap());
+    sched.pending_children.reclaimed(unused.ticket);
+    sched.processes[1].vfs_downloads_cwd = true;
+    let mut worker = sched.processes[1].clone();
+    worker.pid = 11;
+    worker.foreground.incarnation = 21;
+    worker.shared_owner = Some(1);
+    let identity = AdmissionIdentity { caller: process_identity(&worker), ..parent };
+
+    // C2I3 inserted/enqueued the task and then staged the VFS retain. Replay
+    // that order at the registration boundary with service delivery held back.
+    sched.processes.push(worker);
+    let source = runtime.capture_inheritance(parent).unwrap();
+    let id = runtime.stage_inheritance(source, identity, "/", None).unwrap();
+    assert_eq!(sched.processes[2].state, ProcessState::Running);
+    assert!(runtime.caller_receipt(identity).is_none());
+    assert!(matches!(runtime.publish_stat(identity, ".", &mut sched),
+        Err(registration::stat::Error::Prepare)));
+
+    let request = runtime.next_control(parent.registration).unwrap().unwrap().encode().unwrap();
+    let reply = reply_for(&request, |_, _| {}, false);
+    assert!(matches!(reply, Frame::Retained(receipt) if receipt.request_id() == id));
+    call(&mut runtime, &sched, &caps, 3, api::REPLY, parent.registration.epoch,
+        &reply.encode().unwrap()).unwrap();
+    assert!(runtime.caller_receipt(identity).is_some());
+
+    // C2I3 withdrew the sibling profile after a successful cwd publication.
+    runtime.withdraw_root_profile(2, &mut sched);
+    assert!(runtime.caller_receipt(identity).is_none());
+}
+
+#[test]
+fn worker_refusal_and_late_success_never_publish_the_private_task() {
+    for refuse in [true, false] {
+        let (mut runtime, mut sched, caps, parent, unused) = fixture();
+        drop(sched.pending_children.cancel(unused.ticket, Some(unused)).unwrap());
+        sched.pending_children.reclaimed(unused.ticket);
+        let worker = reserve_in_image(&mut sched, 11, parent.caller.address_space_generation);
+        let claim = runtime.stage_spawn_from(1, 1, worker, &mut sched, &caps, false, false, true)
+            .unwrap();
+        let request = pull(&mut runtime, &sched, &caps, claim);
+        assert!(runtime.authorize_derivation(claim.registration, &request, &sched).is_ok());
+        assert_eq!(runtime.wait_spawn_inner(1, claim, &mut sched, true), Ok(None));
+        assert!(runtime.publish_spawn(1, claim, &mut sched, &caps,
+            |_| panic!("preparing worker reached commit"),
+            |_, _, _| panic!("preparing worker became visible"),
+        ).is_err());
+        if !refuse {
+            // A source owner can retire between authorization and receipt copy.
+            runtime.retire_process(parent.caller);
+            assert!(runtime.authorize_derivation(claim.registration, &request, &sched).is_err());
+        }
+        let reply = reply_for(&request, |_, _| {}, refuse);
+        assert!(send(&mut runtime, &sched, &caps, claim, reply));
+        runtime.poll_spawns(&mut sched, 0);
+        assert!(runtime.publish_spawn(1, claim, &mut sched, &caps,
+            |_| panic!("failed worker reached commit"),
+            |_, _, _| panic!("failed worker became visible"),
+        ).is_err());
+        assert!(sched.processes.iter().all(|p| p.pid != worker.ticket.pid));
+
+        runtime.finish_spawn(claim, Terminal::Cancelled);
+        drop(sched.pending_children.cancel(worker.ticket, Some(worker)).unwrap());
+        sched.pending_children.reclaimed(worker.ticket);
+        for _ in 0..8 {
+            let Some(event) = runtime.next_control(claim.registration).unwrap() else { break };
+            let ack = match event {
+                Frame::CallerRetired { registration, caller, event_id } =>
+                    Frame::CallerRetiredAck { registration, caller, event_id },
+                Frame::FileOwnerRetired { registration, caller, event_id } =>
+                    Frame::FileOwnerRetiredAck { registration, caller, event_id },
+                Frame::Release(receipt) => Frame::Released(receipt),
+                _ => panic!("unexpected rollback control event"),
+            };
+            runtime.control_reply(claim.registration, &ack.encode().unwrap(), &sched).unwrap();
+        }
+        runtime.poll_spawns(&mut sched, 0);
+        assert!(sched.pending_children.pids().all(|pid| pid != worker.ticket.pid));
+        assert!(!runtime.remote_owner(claim.registration).unwrap().contains(claim.request_id));
+    }
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+#[test]
+fn cancelled_worker_retain_keeps_its_deadline_after_creator_exit() {
+    let (mut runtime, mut sched, caps, parent, unused) = fixture();
+    drop(sched.pending_children.cancel(unused.ticket, Some(unused)).unwrap());
+    sched.pending_children.reclaimed(unused.ticket);
+    let worker = reserve_in_image(&mut sched, 11, parent.caller.address_space_generation);
+    let claim = runtime.stage_spawn_from(1, 1, worker, &mut sched, &caps, false, false, true)
+        .unwrap();
+    let _request = pull(&mut runtime, &sched, &caps, claim);
+    sched.processes[1].exiting = true;
+    runtime.retire_process(parent.caller);
+    drop(sched.pending_children.cancel(worker.ticket, Some(worker)).unwrap());
+    sched.pending_children.reclaimed(worker.ticket);
+
+    runtime.poll_shared_cwd_joins(&mut sched, registration::spawn::WAIT_TICKS - 1);
+    assert_eq!(runtime.registry.active(), Some(claim.registration));
+    runtime.poll_shared_cwd_joins(&mut sched, registration::spawn::WAIT_TICKS);
+    assert!(runtime.registry.active().is_none());
+    runtime.complete_image_exit(
+        crate::sched::exit_proof(retirement_identity(claim.registration), true, true, true).unwrap(),
+    );
+    runtime.poll_spawns(&mut sched, registration::spawn::WAIT_TICKS);
+    assert!(sched.pending_children.pids().all(|pid| pid != worker.ticket.pid));
+    assert!(runtime.spawn_request(claim.registration, claim.request_id).is_none());
 }
 
 fn pull(

@@ -1,0 +1,145 @@
+{
+  "milestone": "VFS-C2I3B",
+  "status": "PARTIAL",
+  "feature": "vfs_c2e_candidate",
+  "log_directory": "target/vfs-c2i3b",
+  "protected_file_route": {
+    "candidate_source_and_service_integration": "PASS",
+    "authority": "Ring-3 VFS retained root tmpfs and authenticated service descriptions",
+    "kernel_attestation": "HostKeyAdmin, exact incarnation, address space, credentials and registration",
+    "permissions_octal": "0600",
+    "durability": "live atomic visibility; RequireDurability remains unsupported",
+    "native_adapter_execution": "NOT_RUN",
+    "legacy_paths_retired_in_candidate": [
+      "sys_secret_create kernel tmpfs staging description",
+      "open_resolved_path protected published reopen"
+    ],
+    "global_legacy_constructor_removals": 0
+  },
+  "acceptance": {
+    "exclusive_staging_mode_and_credential_rejection": "PASS",
+    "copied_write_fstat_publish_reopen_and_close": "PASS",
+    "replacement_and_old_open_reader": "PASS",
+    "failed_write_normal_close_and_stage_cleanup": "PASS",
+    "refused_publication_preserves_destination": "PASS",
+    "failed_descriptor_install_compensation": "PASS",
+    "stale_token_and_staging_identity_replacement": "PASS",
+    "caller_retirement_and_registration_withdrawal": "PASS",
+    "copied_transport_and_service_handle_baseline": "PASS",
+    "no_legacy_description_source_routing": "PASS",
+    "no_legacy_description_native_accounting": "NOT_RUN",
+    "native_service_withdrawal_and_no_fallback": "NOT_RUN"
+  },
+  "host": {
+    "service": {
+      "status": "PASS",
+      "tests": 97,
+      "log": "service-verified.log"
+    },
+    "registration_transport_lifecycle": {
+      "status": "PASS",
+      "tests": 121,
+      "log": "registration-verified.log"
+    },
+    "filesystem_block_ipc_linux_elf": {
+      "status": "PASS",
+      "tests": 426,
+      "log": "core-end.log"
+    },
+    "kernel_host": {
+      "status": "PASS",
+      "tests": 223,
+      "threads": 8,
+      "log": "kernel-host.log"
+    },
+    "scheduler_state_lifecycle_and_policy": {
+      "status": "PASS",
+      "log": "scheduler-final.log"
+    },
+    "descriptor_retirement_parallel": {
+      "status": "PASS",
+      "tests": 21,
+      "threads": 8,
+      "log": "descriptor-verified.log"
+    },
+    "c2c_gpt_fixture_checksum": {
+      "status": "PASS",
+      "checksum_file": "target/vfs-c2e/c2c-fixture.sha256",
+      "log": "fixture.log",
+      "sha256": "d8f4dfaa81d5c70e4eb7541fc63d80e3bd8c61640d4690529cd85bf1af7f7363"
+    },
+    "historical_failed_attempts": [
+      {
+        "status": "FAIL",
+        "log": "service-final.log",
+        "reason": "The initial host assertion expected zero handles before the retained namespace receipt was released."
+      }
+    ],
+    "libc_identity_tests_on_linux": {
+      "status": "BLOCKED",
+      "reason": "The identity tests directly issue native Sunlight syscalls, so the hosted Linux trial timed out.",
+      "log": "libc-secret-serial.log"
+    }
+  },
+  "release_builds": {
+    "production": {
+      "status": "PASS",
+      "features": [],
+      "log": "production-final.log"
+    },
+    "candidate": {
+      "status": "PASS",
+      "features": [
+        "vfs_c2e_candidate",
+        "vfs_c2i1_candidate"
+      ],
+      "log": "candidate-final.log"
+    },
+    "compressed_candidate": {
+      "status": "PASS",
+      "features": [
+        "vfs_c2e_candidate",
+        "vfs_c2i1_candidate",
+        "boot_resources"
+      ],
+      "log": "compressed-final.log"
+    }
+  },
+  "ownership_guards": {
+    "inventory": {
+      "status": "PASS",
+      "before": 71,
+      "after": 71,
+      "added": 0,
+      "removed": 0
+    },
+    "no_growth": {
+      "before": "FAIL",
+      "after": "FAIL",
+      "before_log": "before-no-growth.log",
+      "after_log": "after-no-growth.log"
+    },
+    "final_removal": {
+      "before": "FAIL",
+      "after": "FAIL",
+      "before_log": "before-final.log",
+      "after_log": "after-final.log"
+    },
+    "historical_findings": {
+      "storage::mount": "legacy FAT backend construction for unreserved devices",
+      "linux_procfs::mountinfo_snapshot": "legacy kernel mount topology",
+      "sys_linux_statfs": "legacy kernel mount capacity",
+      "process::mmap::sys_mmap": "legacy readable root and FAT descriptions"
+    }
+  },
+  "guest": {
+    "guarded_boot": {
+      "status": "BLOCKED",
+      "stage": "unchanged no-growth ownership guard",
+      "log": "guarded-boot.log"
+    },
+    "ordinary_protected_lifecycle": "NOT_RUN",
+    "prior_guest_regressions_and_physical_resource_accounting": "NOT_RUN"
+  },
+  "runtime_root_activation": "BLOCKED"
+}

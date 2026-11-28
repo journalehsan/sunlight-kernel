@@ -340,6 +340,19 @@ impl<D: BlockDevice> Vfs<D> {
         options: OpenOptions,
         authorize: impl FnOnce(&Self, &str) -> Result<(), FsError>,
     ) -> Result<FileHandle, FsError> {
+        self.open_file_guarded_beneath(root, cwd, path, caller, options, |_| Ok(()), authorize)
+    }
+
+    pub fn open_file_guarded_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+        options: OpenOptions,
+        check_path: impl FnOnce(&str) -> Result<(), FsError>,
+        authorize: impl FnOnce(&Self, &str) -> Result<(), FsError>,
+    ) -> Result<FileHandle, FsError> {
         if !options.read && !options.write
             || options.exclusive && options.create_mode.is_none()
             || options.truncate && !options.write
@@ -348,6 +361,7 @@ impl<D: BlockDevice> Vfs<D> {
         }
         let handle = match self.resolve_beneath(root, cwd, path, caller) {
             Ok((resolved, metadata)) => {
+                check_path(resolved.as_str())?;
                 if options.exclusive {
                     return Err(FsError::AlreadyExists);
                 }
@@ -366,6 +380,7 @@ impl<D: BlockDevice> Vfs<D> {
             }
             Err(FsError::NotFound) if options.create_mode.is_some() && !path.ends_with('/') => {
                 let resolved = self.mutation_leaf(root, cwd, path, caller)?;
+                check_path(resolved.as_str())?;
                 authorize(self, resolved.as_str())?;
                 self.create_file_exclusive(
                     resolved.as_str(),

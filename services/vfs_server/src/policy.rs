@@ -27,6 +27,8 @@ pub enum Error {
 pub(crate) struct Binding<Device: BlockDevice> {
     scope: Scope,
     pair: Arc<DirectoryPair<Device>>,
+    cwd_owner: Option<Caller>,
+    directory_generation: u64,
 }
 
 impl<Device: BlockDevice> Clone for Binding<Device> {
@@ -34,6 +36,8 @@ impl<Device: BlockDevice> Clone for Binding<Device> {
         Self {
             scope: self.scope,
             pair: self.pair.clone(),
+            cwd_owner: self.cwd_owner,
+            directory_generation: self.directory_generation,
         }
     }
 }
@@ -95,7 +99,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         self.last_generation = scope.namespace_generation;
         let pair = namespace.pin(root, directory).map_err(Error::Filesystem)?;
         let pair = Arc::try_new(pair).map_err(|_| Error::Filesystem(FsError::NoMemory))?;
-        self.bindings[slot] = Some(Binding { scope, pair });
+        self.bindings[slot] = Some(Binding { scope, pair, cwd_owner: None, directory_generation: 0 });
         Ok(())
     }
 
@@ -156,7 +160,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         if !revalidate() {
             return Err(Error::Identity);
         }
-        self.bindings[slot] = Some(Binding { scope: next, pair });
+        self.bindings[slot] = Some(Binding { scope: next, pair, cwd_owner: None, directory_generation: 0 });
         Ok(())
     }
 
@@ -227,7 +231,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
             }
             return Err(Error::Identity);
         }
-        self.bindings[slot] = Some(Binding { scope: next, pair });
+        self.bindings[slot] = Some(Binding { scope: next, pair, cwd_owner: None, directory_generation: 0 });
         Ok(())
     }
 
@@ -303,8 +307,40 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         if !revalidate() {
             return Err(Error::Identity);
         }
-        self.bindings[slot] = Some(Binding { scope: child, pair });
+        // Only the trusted kernel derivation path can authenticate two
+        // distinct caller incarnations in the same address space.
+        let cwd_owner = (cfg!(feature = "vfs-c2e-candidate")
+            && parent.caller.address_space_generation == child.caller.address_space_generation)
+            .then_some(parent.caller);
+        self.bindings[slot] = Some(Binding {
+            scope: child,
+            pair,
+            cwd_owner,
+            directory_generation: cwd_owner.map_or(0, |_| parent.namespace_generation),
+        });
         Ok(())
+    }
+
+    #[cfg(feature = "vfs-c2e-candidate")]
+    pub(crate) fn commit_shared_directory(&mut self, scope: Scope) {
+        let pair = self.bindings.iter().flatten()
+            .find(|binding| binding.scope == scope)
+            .expect("accepted transition retains its binding")
+            .pair.clone();
+        for binding in self.bindings.iter_mut().flatten() {
+            if binding.cwd_owner == Some(scope.caller) {
+                self.leases.replace_scope_objects(binding.scope, &pair);
+                binding.pair = pair.clone();
+                binding.directory_generation = scope.namespace_generation;
+            }
+        }
+    }
+
+    pub(crate) fn directory_generation(&self, scope: Scope) -> Result<u64, Error> {
+        self.bindings.iter().flatten()
+            .find(|binding| binding.scope == scope)
+            .map(|binding| binding.directory_generation)
+            .ok_or(Error::Scope)
     }
 
     pub(crate) fn save_directory(&self, scope: Scope) -> Result<Binding<Device>, Error> {
@@ -455,7 +491,6 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         };
         if context.grants != LOOKUP_METADATA
             || !context.groups.is_empty()
-            || context.namespace.root != context.namespace.directory
         {
             return Err(Error::Scope);
         }
@@ -466,7 +501,9 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         };
         // Withdrawal closes admission, even when an outstanding lease still
         // owns pins for late completion/release. Both records must be live.
-        if !self.bindings.iter().flatten().any(|b| b.scope == scope) {
+        let generation = self.directory_generation(scope)?;
+        let directory = if generation == 0 { context.namespace.root } else { generation };
+        if context.namespace.directory != directory {
             return Err(Error::Scope);
         }
         let pair = self
@@ -514,6 +551,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         storage_admin: bool,
         directory_open: bool,
         executable: bool,
+        private: bool,
         anchor: Option<sunlight_fs::FileHandle>,
     ) -> Result<crate::open::File<Device>, Error> {
         if self.retired || authenticated != self.registration {
@@ -531,7 +569,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         {
             return Err(Error::Scope);
         }
-        pair.open_file(path, caller, options, storage_admin, directory_open, executable, anchor)
+        pair.open_file(path, caller, options, storage_admin, directory_open, executable, private, anchor)
             .map_err(Error::Filesystem)
     }
 

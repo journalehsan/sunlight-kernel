@@ -85,10 +85,14 @@ pub mod sched {
     #[derive(Clone)]
     pub struct Process {
         pub pid: usize, pub trusted_vfs_service: bool, pub exiting: bool,
+        pub vfs_shared_cwd_join_allowed: bool,
+        #[cfg(test)]
+        pub(crate) vfs_shared_cwd_join: Option<crate::ipc::vfs_registration::SharedCwdJoin>,
         pub vfs_root_metadata: bool, pub vfs_boot_root: bool, pub vfs_file_routed: bool,
         pub vfs_root_rebased: bool, pub vfs_stat_routed: bool, pub vfs_downloads_cwd: bool,
         pub cwd: String, pub shared_owner: Option<usize>,
         pub uid: u32, pub gid: u32,
+        pub service_lookup_restrictions: Option<u64>,
         pub state: ProcessState, pub pending_call: Option<()>,
         pub ipc_reply_target: Option<()>, pub ipc_endpoint: Option<u32>,
         pub foreground: Foreground, pub address_space: AddressSpace,
@@ -129,7 +133,7 @@ mod ipc {
         sched.processes[idx].state = crate::sched::ProcessState::Ready;
     }
     #[path = "ADAPTER_PATH"]
-    mod vfs_registration;
+    pub(crate) mod vfs_registration;
     #[path = "RESOURCES_PATH"]
     mod vfs_resources;
     #[test]
@@ -137,10 +141,10 @@ mod ipc {
         use crate::capability::CapabilityBroker;
         use crate::sched::{AddressSpace, Foreground, Process, Scheduler};
         let mut sched = Scheduler { global_tick: 0, pending_children: crate::process::pending_state::Pending::new(), processes: vec![Process {
-            pid: 3, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
+            pid: 3, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_shared_cwd_join: None, vfs_shared_cwd_join_allowed: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
             vfs_root_rebased: false, vfs_stat_routed: false, vfs_downloads_cwd: false, shared_owner: None,
             state: crate::sched::ProcessState::Running, pending_call: None,
-            ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
+            ipc_reply_target: None, ipc_endpoint: None, service_lookup_restrictions: None, uid: 0, gid: 0,
             foreground: Foreground { incarnation: 5, ..Default::default() }, address_space: AddressSpace { generation: 7 },
         }] };
         let mut caps = CapabilityBroker { endpoints: vec![(0, 3), (8, 3), (9, 4)] };
@@ -164,10 +168,10 @@ mod ipc {
         assert_eq!(vfs_registration::register(3, 8, &sched, &caps), Ok(()));
         assert_eq!(vfs_registration::register(3, 8, &sched, &caps), Ok(()));
         sched.processes.push(Process {
-            pid: 4, trusted_vfs_service: true, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
+            pid: 4, trusted_vfs_service: true, exiting: false, vfs_root_metadata: false, vfs_shared_cwd_join: None, vfs_shared_cwd_join_allowed: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
             vfs_root_rebased: false, vfs_stat_routed: false, vfs_downloads_cwd: false, shared_owner: None,
             state: crate::sched::ProcessState::Running, pending_call: None,
-            ipc_reply_target: None, ipc_endpoint: None, uid: 0, gid: 0,
+            ipc_reply_target: None, ipc_endpoint: None, service_lookup_restrictions: None, uid: 0, gid: 0,
             foreground: Foreground { incarnation: 6, ..Default::default() }, address_space: AddressSpace { generation: 8 },
         });
         assert_eq!(vfs_registration::register(4, 9, &sched, &caps), denied);
@@ -188,10 +192,10 @@ mod ipc {
         // A normal caller needs no trusted service role. Its credentials come
         // from process records, independently of the service's credentials.
         sched.processes.push(Process {
-            pid: 10, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
+            pid: 10, trusted_vfs_service: false, exiting: false, vfs_root_metadata: false, vfs_shared_cwd_join: None, vfs_shared_cwd_join_allowed: false, vfs_boot_root: false, vfs_file_routed: false, cwd: String::from("/"),
             vfs_root_rebased: false, vfs_stat_routed: false, vfs_downloads_cwd: false, shared_owner: None,
             state: crate::sched::ProcessState::Running, pending_call: None,
-            ipc_reply_target: None, ipc_endpoint: None, uid: 1001, gid: 1002,
+            ipc_reply_target: None, ipc_endpoint: None, service_lookup_restrictions: None, uid: 1001, gid: 1002,
             foreground: Foreground { incarnation: 11, ..Default::default() }, address_space: AddressSpace { generation: 12 },
         });
         let snapshot = vfs_registration::capture(10, &sched, &caps).unwrap();

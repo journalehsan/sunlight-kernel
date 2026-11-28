@@ -261,8 +261,12 @@ static SUNLIGHT_ACCOUNT_BROKER_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-account-broker");
 static SUNLIGHT_TLS_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-tls");
+#[cfg(not(feature = "vfs_c2e_candidate"))]
 static SECRET_STORE_TEST_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/secret_store_test");
+#[cfg(feature = "vfs_c2e_candidate")]
+static SECRET_STORE_TEST_ELF_BYTES: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/secret_store_test"));
 static CERTIFICATECTL_ELF_BYTES: &[u8] =
     embedded_service_bytes!("../../target/x86_64-unknown-none/release/certificatectl");
 // User Access Control: daemon spawned by sunlightd + its control client.
@@ -757,11 +761,9 @@ pub extern "C" fn _start() -> ! {
         telemetry::TELEMETRY.gpu_count = gpu_count;
     }
 
-    // 5. virtio-blk + FAT32 bootstrap
-    // Initialize the block device, read FAT32 test files, and write them into a
-    // shared physical page that will be mapped into the vfs_server's address space.
+    #[cfg(not(feature = "vfs_c2i1_candidate"))]
     let fat_share_phys = init_block_and_fat(hhdm_offset);
-
+    #[cfg(not(feature = "vfs_c2i1_candidate"))]
     usb_storage::init(&mut vmm, hhdm_offset.as_u64());
 
     // 5.5. Kernel-global VFS over INITRAMFS + boot FAT volume (Phase 6.5.3)
@@ -779,6 +781,14 @@ pub extern "C" fn _start() -> ! {
     );
     #[cfg(not(feature = "boot_resources"))]
     let boot_seed = BOOT_INITRAMFS;
+
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    {
+        persistent_boot_mount::configure(boot_seed);
+        usb_storage::init(&mut vmm, hhdm_offset.as_u64());
+    }
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    let fat_share_phys = init_block_and_fat(hhdm_offset);
     init_kernel_vfs(boot_seed);
 
     // 6. Syscall MSRs
@@ -985,7 +995,7 @@ pub extern "C" fn _start() -> ! {
     #[cfg(feature = "vfs_c1e2_test")]
     process::fd_table::FdTable::qualify_retirement();
 
-    #[cfg(feature = "vfs_c1e1_test")]
+    #[cfg(all(feature = "vfs_c1e1_test", not(feature = "vfs_c2i1_candidate")))]
     for fixture_pid in ::sunlight_ipc::storage::FIXTURE_CALLER_PID
         ..=if cfg!(feature = "vfs_c1e2_test") {
             ::sunlight_ipc::storage::FIXTURE_LINUX_PID
@@ -2382,7 +2392,7 @@ fn init_discovered_virtio(
     Some((blk, queue_phys, req_phys))
 }
 
-#[cfg(feature = "vfs_c2b_test")]
+#[cfg(all(feature = "vfs_c2b_test", not(feature = "vfs_c2i1_candidate")))]
 fn reserve_non_boot_virtio(boot: (u8, u8, u8, u16), hhdm: VirtAddr) {
     let address = option_env!("SUNLIGHT_VFS_C2B_PCI").expect("C2B requires a PCI BDF");
     let selected = unsafe {
@@ -2426,10 +2436,13 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     unsafe { (share_virt as *mut u8).write_bytes(0, 4096) };
     let Some(info @ (bus, slot, function, _)) = (unsafe { sunlight_virtio::find_virtio_blk() }) else {
         serial_println!("[BLK]  No virtio-blk found — /boot will be unavailable");
-        assert!(!cfg!(feature = "vfs_c2b_test"), "C2B requires a separate boot device");
+        assert!(
+            !cfg!(feature = "vfs_c2b_test") || cfg!(feature = "vfs_c2i1_candidate"),
+            "C2B requires a separate boot device"
+        );
         return share_phys;
     };
-    #[cfg(feature = "vfs_c2b_test")]
+    #[cfg(all(feature = "vfs_c2b_test", not(feature = "vfs_c2i1_candidate")))]
     reserve_non_boot_virtio(info, hhdm_offset);
     let Some((blk, _queue_phys, _req_phys)) = init_discovered_virtio(info, hhdm_offset) else {
         return share_phys;
@@ -2511,6 +2524,8 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
             return share_phys;
         }
     };
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    persistent_boot_mount::reserve(info, hhdm_offset);
     if option_env!("SUNLIGHT_BTOP16_TRACE") == Some("1") {
         for index in 0..sunlight_block::registry::MAX_DEVICES {
             let info = storage::DEVICES.lock().enumerate(index);
@@ -2533,6 +2548,10 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     } else {
         let mut selected = None;
         for p in table.partitions().iter().filter(|p| p.fat_candidate) {
+            #[cfg(feature = "vfs_c2i1_candidate")]
+            if persistent_boot_mount::claims_mnt() || persistent_boot_mount::fences_parent(device_id) {
+                break;
+            }
             let view = sunlight_block::PartitionBlockDevice::new(
                 VirtioBootDisk {
                     blk: &mut blk,
@@ -2660,6 +2679,8 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
 #[path = "storage_partition_test.rs"]
 mod storage_partition_test;
 mod storage;
+#[cfg(feature = "vfs_c2i1_candidate")]
+mod persistent_boot_mount;
 mod usb_xhci;
 mod usb_storage;
 
@@ -2684,7 +2705,12 @@ fn init_kernel_vfs(seed: &'static [sunlight_fs::RamEntry]) {
     if let Some(partition) = partition.filter(|partition| {
         VIRTIO_BLK.lock().0.is_some()
             && option_env!("SUNLIGHT_RUNTIME_STORAGE_TEST") != Some("1")
-            && !sunlight_fs::fstab::defer_uuid_to_runtime(sunlight_fs::fstab::FSTAB_TEXT, &partition.uuid)
+            && (partition.uuid == [0; 16] || {
+                use sunlight_fs::{fstab::{defer_uuid_from_table, MAX_FSTAB_BYTES}, parse_boot_fstab};
+                let mut buffer = alloc::vec![0; MAX_FSTAB_BYTES];
+                let buffer = buffer.as_mut_slice().try_into().expect("fstab buffer size");
+                !defer_uuid_from_table(parse_boot_fstab(seed, buffer), &partition.uuid)
+            })
     }) {
         let view = sunlight_block::PartitionBlockDevice::new(
             KernelBlkDev::Virtio(storage::virtio_partition(
@@ -2732,7 +2758,7 @@ fn init_kernel_vfs(seed: &'static [sunlight_fs::RamEntry]) {
         }
     }
 
-    #[cfg(feature = "vfs_c2b_test")]
+    #[cfg(all(feature = "vfs_c2b_test", not(feature = "vfs_c2i1_candidate")))]
     storage::verify_early_reservation(|id| storage::mount(&mut vfs, id, "/mnt/volume"));
     *KERNEL_VFS.lock() = Some(vfs);
     serial_println!("[VFS] kernel mount OK");

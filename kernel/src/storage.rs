@@ -28,7 +28,7 @@ pub(crate) fn discover_virtio_partitions(
         partition: None,
     })?;
     DEVICES.lock().register_partitions(parent, &table)
-        .expect("VirtIO partition registry capacity");
+        .ok_or(sunlight_block::partition::TableError::Unsupported)?;
     Ok(table)
 }
 
@@ -66,7 +66,7 @@ pub(crate) fn virtio_partition(parent: u64, start: u64, blocks: u64) -> Option<D
     DEVICES.lock().find_extent(parent, start, blocks).filter(|info| info.parent == parent)
 }
 
-#[cfg(feature = "vfs_c2b_test")]
+#[cfg(all(feature = "vfs_c2b_test", not(feature = "vfs_c2i1_candidate")))]
 pub(crate) fn verify_early_reservation(mut try_mount: impl FnMut(u64) -> Result<(), FsError>) {
     use core::sync::atomic::Ordering;
     use sunlight_block::registry::MAX_DEVICES;
@@ -180,6 +180,13 @@ pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Res
     };
     #[cfg(feature = "vfs_c1e2_test")]
     if crate::vfs_n1j_test::reserves_storage_parent(parent) {
+        return Err(FsError::Busy);
+    }
+    #[cfg(feature = "vfs_c2i1_candidate")]
+    if crate::persistent_boot_mount::fences_parent(parent)
+        || (crate::persistent_boot_mount::claims_mnt()
+            && (target == "/mnt" || target.starts_with("/mnt/")))
+    {
         return Err(FsError::Busy);
     }
     if info.operations & (FAT32 | WRITE) != FAT32 | WRITE {

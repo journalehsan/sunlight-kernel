@@ -64,6 +64,39 @@ impl Child {
     }
 
 
+    #[cfg(feature = "vfs_c2e_candidate")]
+    pub(crate) fn adopt_worker(
+        parent: Parent,
+        process: Process,
+        sched: &mut Scheduler,
+        hhdm: VirtAddr,
+    ) -> Result<Self, Error> {
+        assert!(!process.owns_address_space && process.foreground.incarnation != 0);
+        let mut storage = thread_admission::try_box_uninit().map_err(|_| Error::NoMemory)?;
+        let occupied = sched.process_index_by_pid(process.pid).is_some();
+        let ticket = sched.pending_children.reserve(process.pid, parent, occupied)?;
+        let identity = Identity {
+            ticket,
+            incarnation: process.foreground.incarnation,
+            image_generation: process.address_space.identity().generation,
+        };
+        storage.write(process);
+        assert!(sched.pending_children.finish(identity, unsafe { storage.assume_init() }, |_| true).is_ok());
+        Ok(Self { identity, hhdm })
+    }
+
+    #[cfg(feature = "vfs_c2e_candidate")]
+    pub(crate) fn rollback_unstaged_worker(self, sched: &mut Scheduler) {
+        let identity = self.identity;
+        assert!(sched.pending_children.remote(identity).is_none());
+        let child = sched.pending_children.cancel(identity.ticket, Some(identity))
+            .expect("unstaged worker owner").expect("constructed worker");
+        assert!(!child.owns_address_space);
+        drop(child);
+        sched.pending_children.reclaimed(identity.ticket);
+        self.disarm();
+    }
+
     #[cfg(feature = "vfs_c1a_candidate")]
     pub(crate) fn rollback_unstaged(
         self,
@@ -125,7 +158,12 @@ fn release(ticket: Ticket) {
 
 fn destroy(process: &mut Process, hhdm: VirtAddr) {
     assert!(process.mapped_shared.is_empty() && process.owned_shared.is_empty());
-    assert!(process.ipc_endpoint.is_none() && process.account_membership.is_none());
+    assert!(process.ipc_endpoint.is_none());
+    if !process.owns_address_space {
+        // Pending workers have an unretained descriptor snapshot and borrow the VM.
+        return;
+    }
+    assert!(process.account_membership.is_none());
     // Only stdio descriptions without backend leases can reach this path.
     unsafe {
         spawn::rollback_initial_image(process, &mut crate::PMM.lock(), hhdm);

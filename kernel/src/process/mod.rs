@@ -266,6 +266,10 @@ pub struct Process {
     /// Withdrawable metadata admission, selected by boot provenance or an
     /// authenticated retained-object spawn/exec handoff.
     pub vfs_root_metadata: bool,
+    #[cfg(feature = "vfs_c2e_candidate")]
+    pub(crate) vfs_shared_cwd_join: Option<crate::ipc::vfs_registration::SharedCwdJoin>,
+    #[cfg(feature = "vfs_c2e_candidate")]
+    pub(crate) vfs_shared_cwd_join_allowed: bool,
     /// Boot provenance for initial `/` provisioning. Derived profiles never
     /// acquire this role, so service replacement cannot widen their roots.
     pub vfs_boot_root: bool,
@@ -674,6 +678,10 @@ impl Process {
             trusted_auth_broker: false,
             trusted_vfs_service: false,
             vfs_root_metadata: false,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            vfs_shared_cwd_join: None,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            vfs_shared_cwd_join_allowed: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
             vfs_downloads_cwd: false,
@@ -928,6 +936,10 @@ impl Process {
             trusted_auth_broker: false,
             trusted_vfs_service: false,
             vfs_root_metadata: false,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            vfs_shared_cwd_join: None,
+            #[cfg(feature = "vfs_c2e_candidate")]
+            vfs_shared_cwd_join_allowed: false,
             vfs_boot_root: false,
             vfs_root_rebased: false,
             vfs_downloads_cwd: false,

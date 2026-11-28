@@ -1,0 +1,81 @@
+{
+  "milestone": "VFS-C2I2",
+  "status": "PARTIAL",
+  "log_directory": "target/vfs-c2i2",
+  "source": {
+    "route": "/root/Downloads and authenticated Downloads cwd",
+    "max_source_bytes": 2097152,
+    "max_service_payload_span_bytes": 2097152,
+    "max_kernel_payload_bytes": 2097152,
+    "max_total_payload_bytes_excluding_metadata_and_loaded_image": 4194304,
+    "simultaneous_slots_per_side": 1,
+    "parked_acquisitions": 1,
+    "positional_read_bytes": 4096,
+    "embedded_bootstrap_policy": "unchanged",
+    "migrated_path_legacy_fallback": false
+  },
+  "host": {
+    "copied_source_and_existing_elf_planner": {
+      "status": "PASS",
+      "test": "executable_source_selection_and_loader_input_through_copied_channel",
+      "command": "SUNLIGHT_EXEC_TEST_TLS=$PWD/target/x86_64-unknown-none/release/sunlight-tls python3 tools/test_vfs_registration_host.py",
+      "cases": {
+        "small_native_elf": 4160,
+        "historical_limit_native_elf": 1048576,
+        "large_native_fixture": 1217328,
+        "large_helios_personality_fixture": 1217328,
+        "actual_tls_artifact": 1217328,
+        "maximum_native_fixture": 2097152,
+        "oversize_rejection": 2097153,
+        "kernel_reserve_failure_after_capture": "PASS",
+        "denied_execute_and_invalid_elf": "PASS",
+        "rename_replacement_write_and_truncate": "PASS",
+        "short_and_failed_pread": "PASS",
+        "abandon_cancel_withdraw_and_repeated_settlement": "PASS"
+      }
+    },
+    "registration_transport_and_lifecycle": {"status": "PASS", "tests": 116, "log": "registration.log"},
+    "filesystem": {"status": "PASS", "tests": 127, "log": "core.log"},
+    "block": {"status": "PASS", "tests": 70, "log": "core.log"},
+    "linux_compat": {"status": "PASS", "tests": 30, "log": "core.log"},
+    "elf": {"status": "PASS", "tests": 14, "log": "core.log"},
+    "ipc": {"status": "PASS", "tests": 175, "log": "core.log"},
+    "service": {"status": "PASS", "tests": 96, "log": "service.log"},
+    "descriptor_parallel": {"status": "PASS", "tests": 21, "threads": 8, "log": "descriptor.log"},
+    "c2c_gpt_fixture_checksum": {"status": "PASS", "log": "fixture.log"}
+  },
+  "builds": {
+    "production": {"status": "PASS", "log": "production.log"},
+    "candidate": {"status": "PASS", "features": ["vfs_c2e_candidate", "vfs_c2i1_candidate"], "log": "candidate.log"},
+    "compressed_candidate": {"status": "PASS", "features": ["vfs_c2e_candidate", "vfs_c2i1_candidate", "boot_resources"], "log": "compressed.log"},
+    "standalone_native_service": {"status": "PASS", "log": "native-service.log"}
+  },
+  "memory": {
+    "host_tls_payload_bytes_per_copy": 1217328,
+    "host_tls_combined_logical_payload_bytes": 2434656,
+    "native_tls_mapping_span_bytes_calculated": 1220608,
+    "guest_service_heap_baseline": "NOT_RUN",
+    "guest_acquisition_peak": "NOT_RUN",
+    "guest_after_loading": "NOT_RUN",
+    "guest_after_failed_acquisition": "NOT_RUN",
+    "guest_repeated_accounting": "NOT_RUN"
+  },
+  "guest": {
+    "guarded_ordinary_boot": {"status": "BLOCKED", "log": "guarded-boot.log"},
+    "native_and_helios_load_and_dispatch": "NOT_RUN",
+    "address_space_and_publication_failure": "NOT_RUN",
+    "guest_partial_mapping_allocation_and_reclamation": "NOT_RUN",
+    "prior_milestone_guest_replays": "NOT_RUN"
+  },
+  "ownership_guards": {
+    "inventory": {"before": "PASS", "after": "PASS", "before_count": 71, "after_count": 71, "normalized_diff": 0},
+    "no_growth": {"before": "FAIL", "after": "FAIL", "unmatched_before": 4, "unmatched_after": 4},
+    "final_removal": {"before": "FAIL", "after": "FAIL"},
+    "remaining": {
+      "storage::mount": "legacy FAT constructor",
+      "linux_procfs::mountinfo_snapshot": "legacy mount topology",
+      "sys_linux_statfs": "legacy capacity",
+      "process::mmap::sys_mmap": "private mappings from legacy descriptions"
+    }
+  }
+}

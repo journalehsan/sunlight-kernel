@@ -307,6 +307,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             flags & api::OPEN_STORAGE_ADMIN != 0,
             flags & api::OPEN_DIRECTORY != 0,
             flags & api::OPEN_EXECUTABLE != 0,
+            flags & api::OPEN_PRIVATE != 0,
             anchor,
         )?;
         if !revalidate() {
@@ -458,6 +459,12 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         bytes: &[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES],
     ) -> bool {
         use sunlight_ipc::vfs_rpc::file_transport as api;
+        #[cfg(feature = "vfs-c2e-candidate")]
+        if let Ok(request) = api::Request::decode(bytes) {
+            if request.op == api::PUBLISH_PRIVATE {
+                return self.dispatch_private_publication(control, registration, request);
+            }
+        }
         let Some(reply_bytes) = self.file_request(control, registration, bytes) else {
             return false;
         };
@@ -519,6 +526,46 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         false
     }
 
+    #[cfg(feature = "vfs-c2e-candidate")]
+    fn dispatch_private_publication(
+        &mut self,
+        control: &mut impl control::Control,
+        registration: Registration,
+        request: sunlight_ipc::vfs_rpc::file_transport::Request<'_>,
+    ) -> bool {
+        use sunlight_ipc::vfs_rpc::file_transport as api;
+        if request.registration != registration {
+            return false;
+        }
+        let Ok(entry) = self.file_entry_mut(registration) else { return false };
+        let Some((source, destination)) = core::str::from_utf8(request.payload)
+            .ok().and_then(|paths| paths.split_once('\0'))
+        else {
+            return false;
+        };
+        let mut reply = |errno| {
+            let bytes = api::Reply {
+                registration, caller: request.caller, request_id: request.request_id,
+                op: api::PUBLISH_PRIVATE, errno, result0: 0, result1: 0, length: 0, payload: &[],
+            }.encode().expect("private publication reply");
+            control.file_reply(registration.epoch, &bytes)
+        };
+        let mut acknowledged = None;
+        let result = entry.files.publish_private(
+            request.caller, request.token, source, destination,
+            request.uid, request.gid, request.arg0 == 1, || {
+                let accepted = reply(0);
+                acknowledged = Some(accepted);
+                accepted
+            },
+        );
+        match (result, acknowledged) {
+            (_, Some(accepted)) => accepted,
+            (Err(error), None) => reply(errno_for(&Error::Filesystem(error))),
+            (Ok(()), None) => unreachable!("publication requires acknowledgement"),
+        }
+    }
+
     /// Dispatch one independently authenticated copied file request. Ordinary
     /// IPC never reaches this path, regardless of frame contents. The caller
     /// identity is authenticated by the kernel transport before the frame is
@@ -551,6 +598,18 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             reply.encode().ok()
         };
         let failed = |error: &Error| reply(errno_for(error), 0, 0, &[]);
+        if request.op == api::OPEN || api::retained_path(request.op) {
+            let scope = Scope {
+                caller: request.caller,
+                namespace_id: request.namespace_id,
+                namespace_generation: request.namespace_generation,
+            };
+            let generation = self.file_entry_mut(authenticated).ok()?
+                .policy.directory_generation(scope);
+            if generation != Ok(request.directory_generation) {
+                return failed(&Error::Scope);
+            }
+        }
         match request.op {
             #[cfg(any(feature = "vfs-c1e2-test", feature = "vfs-c2e-candidate"))]
             api::MKDIR | api::UNLINK | api::RENAME => {
@@ -624,7 +683,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             }
             api::OPEN => {
                 if !cfg!(feature = "vfs-c2e-candidate")
-                    && (request.token != 0 || request.arg0 & (api::OPEN_DIRECTORY | api::OPEN_EXECUTABLE) != 0)
+                    && (request.token != 0 || request.arg0 & (api::OPEN_DIRECTORY | api::OPEN_EXECUTABLE | api::OPEN_PRIVATE) != 0)
                 {
                     return reply(95, 0, 0, &[]);
                 }

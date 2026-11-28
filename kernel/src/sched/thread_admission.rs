@@ -5,7 +5,7 @@ use crate::process::{foreground::Foreground, thread_admission::*};
 
 pub(crate) struct ThreadSlot {
     index: usize,
-    foreground: Foreground,
+    pub(crate) foreground: Foreground,
 }
 
 impl Scheduler {

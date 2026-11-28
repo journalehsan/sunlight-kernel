@@ -35,6 +35,22 @@ pub const MKDIR: u64 = 19;
 pub const UNLINK: u64 = 20;
 pub const RENAME: u64 = 21;
 pub const STAT_AT: u64 = 22;
+/// Publish the exact staging description named by the caller's token.
+pub const PUBLISH_PRIVATE: u64 = 23;
+
+pub const PRIVATE_DIRECTORY: &str = "/etc/sunlight";
+pub const PRIVATE_MODE: u16 = 0o600;
+
+pub fn private_child(path: &str) -> bool {
+    path.strip_prefix("/etc/sunlight/").is_some_and(|name| {
+        !matches!(name, "" | "." | "..") && !name.contains('/')
+    })
+}
+
+pub fn private_temp(path: &str) -> bool {
+    private_child(path) && path[PRIVATE_DIRECTORY.len() + 1..].starts_with('.')
+        && path[PRIVATE_DIRECTORY.len() + 1..].contains(".tmp.")
+}
 /// The rename argument names a second directory token instead of flags.
 pub const RENAME_DISTINCT_DIRS: u64 = 2;
 
@@ -64,7 +80,7 @@ pub const EMPTY: u64 = 1;
 /// the range alone.
 fn is_file_op(op: u64) -> bool {
     (OPEN..=TRANSFER).contains(&op)
-        || matches!(op, PREAD | PREPARE_STORAGE | ABORT_STORAGE | PUBLISH_STORAGE
+        || matches!(op, PREAD | PUBLISH_PRIVATE | PREPARE_STORAGE | ABORT_STORAGE | PUBLISH_STORAGE
             | INVENTORY_STORAGE | UNMOUNT_STORAGE) || retained_path(op)
 }
 
@@ -82,7 +98,9 @@ pub const OPEN_TRUNCATE: u64 = 16;
 pub const OPEN_STORAGE_ADMIN: u64 = 32;
 pub const OPEN_DIRECTORY: u64 = 64;
 pub const OPEN_EXECUTABLE: u64 = 128;
-pub const MAX_EXECUTABLE_BYTES: usize = 1024 * 1024;
+/// Kernel-attested HostKeyAdmin, carried exclusively on the copied channel.
+pub const OPEN_PRIVATE: u64 = 256;
+pub const MAX_EXECUTABLE_BYTES: usize = 2 * 1024 * 1024;
 pub const OPEN_ACCESS: u64 = ACCESS_READ | ACCESS_WRITE;
 
 pub const SEEK_START: u64 = 0;
@@ -109,6 +127,8 @@ pub struct Request<'a> {
     pub namespace_generation: u64,
     pub receipt_id: u64,
     pub receipt_generation: u64,
+    /// Shared worker cwd generation. Zero selects the caller's private pair.
+    pub directory_generation: u64,
     pub uid: u32,
     pub gid: u32,
     pub payload: &'a [u8],
@@ -135,7 +155,7 @@ impl<'a> Request<'a> {
             self.arg0,
             self.arg1,
             self.length as u64,
-            0,
+            self.directory_generation,
             self.namespace_id,
             self.namespace_generation,
             self.receipt_id,
@@ -161,7 +181,7 @@ impl<'a> Request<'a> {
         if w[0] != VERSION || !is_file_op(w[1]) {
             return Err(ProtocolError::Operation);
         }
-        if w[3..11].contains(&0) || w[15] != 0 {
+        if w[3..11].contains(&0) {
             return Err(ProtocolError::Encoding);
         }
         let length = usize::try_from(w[14]).map_err(|_| ProtocolError::Bounds)?;
@@ -193,6 +213,7 @@ impl<'a> Request<'a> {
             namespace_generation: w[17],
             receipt_id: w[18],
             receipt_generation: w[19],
+            directory_generation: w[15],
             uid: u32::try_from(w[20]).map_err(|_| ProtocolError::Encoding)?,
             gid: u32::try_from(w[21]).map_err(|_| ProtocolError::Encoding)?,
             payload: &bytes[HEADER_BYTES..HEADER_BYTES + length],
@@ -205,6 +226,11 @@ impl<'a> Request<'a> {
 fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
     if request.request_id == 0 || request.length > IO_BYTES {
         return Err(ProtocolError::Bounds);
+    }
+    if request.directory_generation != 0
+        && request.op != OPEN && !retained_path(request.op)
+    {
+        return Err(ProtocolError::Encoding);
     }
     match request.op {
         UNMOUNT_STORAGE | INVENTORY_STORAGE => {
@@ -276,8 +302,21 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
                 return Err(ProtocolError::Encoding);
             }
         }
+        PUBLISH_PRIVATE => {
+            let paths = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
+            let (source, destination) = paths.split_once('\0').ok_or(ProtocolError::Path)?;
+            if request.token == 0 || request.arg0 > 1 || request.arg1 != 0
+                || request.namespace_id != 0 || request.namespace_generation != 0
+                || request.receipt_id != 0 || request.receipt_generation != 0
+                || !private_temp(source) || source.len() > super::MAX_PATH_BYTES
+                || !private_child(destination) || private_temp(destination)
+                || destination.len() > super::MAX_PATH_BYTES || destination.as_bytes().contains(&0)
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
         OPEN => {
-            if request.arg0 & !(OPEN_ACCESS | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE | OPEN_STORAGE_ADMIN | OPEN_DIRECTORY | OPEN_EXECUTABLE) != 0
+            if request.arg0 & !(OPEN_ACCESS | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE | OPEN_STORAGE_ADMIN | OPEN_DIRECTORY | OPEN_EXECUTABLE | OPEN_PRIVATE) != 0
                 || (request.arg0 & OPEN_EXECUTABLE != 0 && (request.arg0 != ACCESS_READ | OPEN_EXECUTABLE || request.token != 0))
                 || (request.arg0 & OPEN_DIRECTORY != 0 && request.arg0 != ACCESS_READ | OPEN_DIRECTORY)
                 || (request.token != 0 && (request.payload.is_empty() || request.payload.starts_with(b"/")))
@@ -294,6 +333,18 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
                 return Err(ProtocolError::Encoding);
             }
             let path = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
+            if request.arg0 & OPEN_PRIVATE != 0 {
+                let flags = request.arg0 & !OPEN_PRIVATE;
+                let valid = if flags == ACCESS_READ {
+                    private_child(path) && !private_temp(path)
+                } else {
+                    flags == ACCESS_WRITE | OPEN_CREATE | OPEN_EXCLUSIVE
+                        && request.arg1 == u64::from(PRIVATE_MODE) && private_temp(path)
+                };
+                if request.token != 0 || !valid {
+                    return Err(ProtocolError::Encoding);
+                }
+            }
             if path.is_empty() || path.len() > super::MAX_PATH_BYTES || path.as_bytes().contains(&0)
             {
                 return Err(ProtocolError::Path);
@@ -596,7 +647,7 @@ fn validate_reply(reply: &Reply<'_>) -> Result<(), ProtocolError> {
                 return Err(ProtocolError::Encoding);
             }
         }
-        TRUNCATE | CLOSE => {
+        TRUNCATE | CLOSE | PUBLISH_PRIVATE => {
             if reply.result0 != 0 || reply.result1 != 0 || reply.length != 0 {
                 return Err(ProtocolError::Encoding);
             }
@@ -718,6 +769,7 @@ mod tests {
             namespace_generation: 11,
             receipt_id: 12,
             receipt_generation: 13,
+            directory_generation: 0,
             uid: 0,
             gid: 0,
             payload: b"/etc",
@@ -754,6 +806,7 @@ mod tests {
             namespace_generation: 0,
             receipt_id: 0,
             receipt_generation: 0,
+            directory_generation: 0,
             payload: b"/mnt",
             ..open_request()
         };
@@ -788,6 +841,7 @@ mod tests {
             namespace_generation: 0,
             receipt_id: 0,
             receipt_generation: 0,
+            directory_generation: 0,
             payload: &[],
             ..open_request()
         };
@@ -834,7 +888,7 @@ mod tests {
         }
         let mut altered = bytes;
         altered[15 * 8] = 1;
-        assert!(Request::decode(&altered).is_err());
+        assert_eq!(Request::decode(&altered), Ok(Request { directory_generation: 1, ..request }));
         assert!(Request::decode(&bytes[..FRAME_BYTES - 1]).is_err());
     }
 
@@ -870,6 +924,7 @@ mod tests {
             namespace_generation: 0,
             receipt_id: 0,
             receipt_generation: 0,
+            directory_generation: 0,
             payload: &[],
             ..open_request()
         };
@@ -964,6 +1019,7 @@ mod tests {
             namespace_generation: 0,
             receipt_id: 0,
             receipt_generation: 0,
+            directory_generation: 0,
             uid: 0,
             gid: 0,
             payload: &payload,
@@ -1019,6 +1075,7 @@ mod tests {
             namespace_generation: 0,
             receipt_id: 0,
             receipt_generation: 0,
+            directory_generation: 0,
             uid: 0,
             gid: 0,
             payload: &[],

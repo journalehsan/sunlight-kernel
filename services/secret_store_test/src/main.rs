@@ -20,10 +20,10 @@ fn valid(bytes: &[u8]) -> bool {
     bytes.len() == TEST_SIZE && bytes[0] == 0xa5 && (bytes[1] == 1 || bytes[1] == 2)
 }
 
-fn fill(secret: &mut [u8], version: u8) -> bool {
-    secret[0] = 0xa5;
-    secret[1] = version;
-    sunlight_libc::getrandom(&mut secret[2..], 0) == (secret.len() - 2) as isize
+fn fill_fixture(bytes: &mut [u8], version: u8) {
+    bytes.fill(0x41);
+    bytes[0] = 0xa5;
+    bytes[1] = version;
 }
 
 #[no_mangle]
@@ -34,10 +34,7 @@ extern "C" fn _start() -> ! {
     let mut loaded = [0u8; TEST_SIZE];
     let _ = store.cleanup_stale_temps(options);
 
-    if !fill(&mut candidate, 1) {
-        debug_log("[SECRET-TEST] secure randomness unavailable");
-        sunlight_libc::exit(1);
-    }
+    fill_fixture(&mut candidate, 1);
 
     match store.create_if_absent(options, &mut candidate, valid) {
         Ok(CreateResult::Created) => debug_log("[SECRET-TEST] create published"),
@@ -61,10 +58,7 @@ extern "C" fn _start() -> ! {
     }
     wipe(&mut loaded);
 
-    if !fill(&mut candidate, 2) {
-        debug_log("[SECRET-TEST] secure randomness unavailable");
-        sunlight_libc::exit(1);
-    }
+    fill_fixture(&mut candidate, 2);
     options.publish_mode = SecretPublishMode::ReplaceExisting;
     if store.replace(options, &mut candidate, valid).is_err() {
         debug_log("[SECRET-TEST] replace failed");

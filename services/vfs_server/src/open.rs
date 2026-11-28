@@ -5,6 +5,9 @@ use spin::Mutex;
 use sunlight_fs::{BlockDevice, FileHandle, FileStat, FsError, NullDevice, Vfs};
 use sunlight_ipc::vfs_rpc::lifecycle::{Caller, RequestIds};
 
+mod snapshot;
+pub(crate) use snapshot::Snapshot;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
     Read,
@@ -32,33 +35,88 @@ pub(crate) struct File<Device: BlockDevice> {
     filesystem: Arc<Mutex<Vfs<Device>>>,
     handle: FileHandle,
     directory: bool,
-    executable: Option<alloc::vec::Vec<u8>>,
+    #[cfg(feature = "vfs-c2e-candidate")]
+    staging: Option<alloc::string::String>,
+    #[cfg(feature = "vfs-c2e-candidate")]
+    sealed: bool,
+    executable: Option<(Snapshot, FileStat)>,
 }
 impl<Device: BlockDevice> File<Device> {
     pub(crate) fn new(filesystem: Arc<Mutex<Vfs<Device>>>, handle: FileHandle) -> Self {
-        Self { filesystem, handle, directory: false, executable: None }
+        Self {
+            filesystem, handle, directory: false, executable: None,
+            #[cfg(feature = "vfs-c2e-candidate")]
+            staging: None,
+            #[cfg(feature = "vfs-c2e-candidate")]
+            sealed: false,
+        }
     }
 }
 impl<Device: BlockDevice> File<Device> {
     pub(crate) fn directory(filesystem: Arc<Mutex<Vfs<Device>>>, handle: FileHandle) -> Self {
-        Self { filesystem, handle, directory: true, executable: None }
+        Self {
+            filesystem, handle, directory: true, executable: None,
+            #[cfg(feature = "vfs-c2e-candidate")]
+            staging: None,
+            #[cfg(feature = "vfs-c2e-candidate")]
+            sealed: false,
+        }
     }
 }
 impl<Device: BlockDevice> File<Device> {
-    pub(crate) fn executable(mut self, bytes: alloc::vec::Vec<u8>) -> Self {
-        self.executable = Some(bytes);
+    pub(crate) fn executable(mut self, bytes: Snapshot, stat: FileStat) -> Self {
+        self.executable = Some((bytes, stat));
         self
     }
 
     pub(crate) fn executable_size(&self) -> usize {
-        self.executable.as_ref().map_or(0, |bytes| bytes.len())
+        self.executable.as_ref().map_or(0, |(_, stat)| stat.size)
+    }
+}
+#[cfg(feature = "vfs-c2e-candidate")]
+impl<Device: BlockDevice> File<Device> {
+    pub(crate) fn staging(mut self, path: alloc::string::String) -> Self {
+        self.staging = Some(path);
+        self
+    }
+
+    fn matches_staging(&self, fs: &mut Vfs<Device>, path: &str) -> Result<(), FsError> {
+        let opened = fs.metadata_handle(self.handle)?;
+        let named = fs.metadata(path)?;
+        if opened.object_id.is_none() || opened.object_id != named.object_id
+            || opened.mount_id != named.mount_id
+        {
+            return Err(FsError::BadHandle);
+        }
+        Ok(())
+    }
+
+    fn publish_private(
+        &mut self, source: &str, destination: &str, uid: u32, gid: u32, replace: bool,
+        acknowledge: impl FnOnce() -> bool,
+    ) -> Result<(), FsError> {
+        if self.staging.as_deref() != Some(source) {
+            return Err(FsError::BadHandle);
+        }
+        let mut fs = self.filesystem.lock();
+        self.matches_staging(&mut fs, source)?;
+        fs.publish_private_if(source, destination, uid, gid,
+            sunlight_ipc::vfs_rpc::file_transport::PRIVATE_MODE, replace, acknowledge)?;
+        self.staging = None;
+        self.sealed = true;
+        Ok(())
     }
 }
 impl<Device: BlockDevice> Drop for File<Device> {
     fn drop(&mut self) {
-        self.filesystem
-            .lock()
-            .close(self.handle)
+        let mut fs = self.filesystem.lock();
+        #[cfg(feature = "vfs-c2e-candidate")]
+        if let Some(path) = self.staging.as_deref() {
+            if self.matches_staging(&mut fs, path).is_ok() {
+                let _ = fs.unlink(path);
+            }
+        }
+        fs.close(self.handle)
             .expect("private open handle remains owned");
     }
 }
@@ -147,6 +205,15 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
             .unwrap()
             .description)
     }
+    #[cfg(feature = "vfs-c2e-candidate")]
+    pub(crate) fn publish_private(
+        &self, owner: Caller, token: u64, source: &str, destination: &str,
+        uid: u32, gid: u32, replace: bool, acknowledge: impl FnOnce() -> bool,
+    ) -> Result<(), FsError> {
+        self.description(owner, token)?.lock().file
+            .publish_private(source, destination, uid, gid, replace, acknowledge)
+    }
+
     pub(crate) fn directory_handle(&self, owner: Caller, token: u64) -> Result<FileHandle, FsError> {
         let description = self.description(owner, token)?.lock();
         if !description.file.directory {
@@ -242,8 +309,8 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
         offset
             .checked_add(output.len())
             .ok_or(FsError::InvalidPath)?;
-        if let Some(bytes) = &d.file.executable {
-            let remaining = bytes.get(offset..).unwrap_or_default();
+        if let Some((bytes, _)) = &d.file.executable {
+            let remaining = bytes.as_slice().get(offset..).unwrap_or_default();
             let count = remaining.len().min(output.len());
             output[..count].copy_from_slice(&remaining[..count]);
             return Ok(count);
@@ -257,6 +324,10 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
         let mut d = self.description(owner, token)?.lock();
         if d.file.directory {
             return Err(FsError::IsDir);
+        }
+        #[cfg(feature = "vfs-c2e-candidate")]
+        if d.file.sealed {
+            return Err(FsError::PermissionDenied);
         }
         if !d.access.write() {
             return Err(FsError::PermissionDenied);
@@ -274,6 +345,9 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
     }
     pub(crate) fn stat(&self, owner: Caller, token: u64) -> Result<FileStat, FsError> {
         let d = self.description(owner, token)?.lock();
+        if let Some((_, stat)) = &d.file.executable {
+            return Ok(*stat);
+        }
         let result = d.file.filesystem.lock().fstat_handle(d.file.handle);
         result
     }
@@ -281,6 +355,10 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
         let d = self.description(owner, token)?.lock();
         if d.file.directory {
             return Err(FsError::IsDir);
+        }
+        #[cfg(feature = "vfs-c2e-candidate")]
+        if d.file.sealed {
+            return Err(FsError::PermissionDenied);
         }
         if !d.access.write() {
             return Err(FsError::PermissionDenied);

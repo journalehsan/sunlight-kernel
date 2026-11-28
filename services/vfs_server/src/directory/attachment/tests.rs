@@ -168,7 +168,7 @@ fn withdrawal_waits_for_retained_root_and_last_description() {
             retained.pair.open_file("/data", USER, sunlight_fs::vfs::OpenOptions {
                 read: true,
                 ..Default::default()
-            }, false, false, false, None).unwrap(),
+            }, false, false, false, false, None).unwrap(),
             Access::Read,
         )
         .unwrap();

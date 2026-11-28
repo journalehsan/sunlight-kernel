@@ -429,6 +429,20 @@ impl Runtime {
         } else {
             live
         };
+        #[cfg(feature = "vfs_c2e_candidate")]
+        let shared_generation = live.and_then(|identity| {
+            sched.processes.iter().any(|process| {
+                process_identity(process) == identity.caller
+                    && super::inheritance::is_shared_cwd_join(process, identity, id)
+            }).then(|| {
+                remote.local.iter().flatten().find_map(|lease| match lease {
+                    LocalLease::Preparing { id: request, derivation: Some(source), .. }
+                        if *request == id => self.source_receipt(source)
+                            .map(|receipt| receipt.scope().namespace_generation),
+                    _ => None,
+                })
+            }).flatten()
+        });
         let result = match decoded {
             Frame::Retained(_) => self
                 .install_retained(authenticated, id, bytes, live)
@@ -439,6 +453,14 @@ impl Runtime {
                 .map_err(NamespaceRetentionError::Ownership),
             _ => unreachable!(),
         };
+        #[cfg(feature = "vfs_c2e_candidate")]
+        if let (Some(identity), Some(generation), true, Frame::Retained(_)) =
+            (live, shared_generation, result.is_ok(), decoded)
+        {
+            if let Ok(binding) = self.namespaces.lookup(identity) {
+                binding.set_shared_directory_generation(generation);
+            }
+        }
         #[cfg(not(test))]
         if result.is_ok() && matches!(decoded, Frame::Retained(_)) {
             if let Some(identity) = live.filter(|identity| {
