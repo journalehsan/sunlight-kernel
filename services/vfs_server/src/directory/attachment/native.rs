@@ -186,15 +186,20 @@ pub fn storage_caller(log: fn(&str)) -> ! {
             log("[VFS-C1E5] prepared mount absent; stale service identity rejected");
             assert_eq!(prepare(source, b"/mnt/other\0"), (-5i64) as u64);
             assert_eq!(storage_call(api::PUBLISH_PREPARATION, token + 100, 0), (-2i64) as u64);
-            assert_eq!(storage_call(api::PUBLISH_PREPARATION, token, 0), (-95i64) as u64);
-            assert_eq!(storage_call(api::PUBLISH_PREPARATION, token, 0), (-95i64) as u64);
+            if !cfg!(feature = "vfs-c1e10-test") {
+                assert_eq!(storage_call(api::PUBLISH_PREPARATION, token, 0), (-95i64) as u64);
+                assert_eq!(storage_call(api::PUBLISH_PREPARATION, token, 0), (-95i64) as u64);
+            }
             assert_eq!(storage_call(api::ABORT_PREPARATION, token + 100, 0), (-2i64) as u64);
             assert_eq!(storage_call(api::ABORT_PREPARATION, token, 0), 0);
             assert_eq!(storage_call(api::ABORT_PREPARATION, token, 0), (-2i64) as u64);
             assert_eq!(storage_call(api::PUBLISH_PREPARATION, token, 0), (-2i64) as u64);
             previous = token;
         }
+        #[cfg(not(feature = "vfs-c1e10-test"))]
         log("[VFS-C1E3] PASS wrong cookies rejected; publish blocked and preparation retryable");
+        #[cfg(feature = "vfs-c1e10-test")]
+        committed_fixture(source, log);
         let interrupted = prepare(source, b"/mnt/exit\0");
         assert!((interrupted as i64) < 0);
         let mut mount = [0; api::MOUNT_RECORD_SIZE];
@@ -211,6 +216,229 @@ pub fn storage_caller(log: fn(&str)) -> ! {
     loop {
         process_yield();
     }
+}
+
+#[cfg(feature = "vfs-c1e10-test")]
+fn committed_fixture(source: u64, log: fn(&str)) {
+    use sunlight_ipc::storage as api;
+    use sunlight_libc::{chdir, close, dup, lseek, open, read, stat};
+    let mut previous_mount = None;
+    for _cycle in 0..2 {
+        let cookie = storage_call(api::MOUNT_FAT32, source, b"/mnt/volume\0".as_ptr() as u64);
+        assert!(cookie != 0 && cookie <= i64::MAX as u64);
+        assert_eq!(storage_call(api::PUBLISH_PREPARATION, cookie, 0), 0);
+        assert_eq!(storage_call(api::PUBLISH_PREPARATION, cookie, 0), (-2i64) as u64);
+        assert_eq!(storage_call(api::ABORT_PREPARATION, cookie, 0), (-2i64) as u64);
+        let mut record = [0; api::MOUNT_RECORD_SIZE];
+        let mut mount = None;
+        for op in [api::LIST_MOUNTS, api::INVENTORY_MOUNTS] {
+            let mut found = None;
+            for index in 0..8 {
+                let result = storage_call(op, index, record.as_mut_ptr() as u64);
+                if result == 0 {
+                    break;
+                }
+                assert_eq!(result, 1);
+                let id = u64::from_le_bytes(record[..8].try_into().unwrap());
+                if id & api::SERVICE_MOUNT_BIT != 0 {
+                    assert_eq!(u64::from_le_bytes(record[8..16].try_into().unwrap()), source);
+                    assert_eq!(&record[32..43], b"/mnt/volume");
+                    assert!(found.replace(id).is_none());
+                }
+            }
+            let id = found.unwrap();
+            assert_eq!(mount.replace(id).unwrap_or(id), id);
+        }
+        let mount = mount.unwrap();
+        assert_ne!(previous_mount.replace(mount), Some(mount));
+        stat(b"/mnt/volume/KEEP.TXT").unwrap();
+        chdir(b"/mnt/volume").unwrap();
+        let fd = open(b"KEEP.TXT").unwrap();
+        let alias = dup(fd).unwrap();
+        lseek(fd, 1, 0).unwrap();
+        let mut payload = [0; 8];
+        assert_eq!(read(alias, &mut payload).unwrap(), 8);
+        assert_eq!(&payload, b"ntouched");
+        close(alias).unwrap();
+        close(fd).unwrap();
+        #[cfg(feature = "vfs-c1e11-test")]
+        committed_writes(_cycle, log);
+        chdir(b"/").unwrap();
+        #[cfg(feature = "vfs-c1e12-test")]
+        committed_mapping(_cycle, mount, source, log);
+        assert_eq!(storage_call(api::UNMOUNT, mount, 0), 0);
+        assert_eq!(storage_call(api::UNMOUNT, mount, 0), (-2i64) as u64);
+        assert!(stat(b"/mnt/volume/KEEP.TXT").is_err());
+        log("[VFS-C1E10] exactly one attachment committed and withdrawn; payload verified");
+    }
+}
+
+#[cfg(feature = "vfs-c1e11-test")]
+fn committed_writes(cycle: usize, log: fn(&str)) {
+    use sunlight_libc::{
+        chdir, close, dup, fstat, lseek, mkdir, open, open_with_flags_mode, read,
+        rename, stat, unlink, write, Errno, O_CREAT, O_EXCL, O_RDWR, O_TRUNC, O_WRONLY,
+    };
+    if cycle == 0 {
+        mkdir(b"DIR", 0o755).unwrap();
+        stat(b"DIR").unwrap();
+        chdir(b"DIR").unwrap();
+        mkdir(b"CHILD", 0o755).unwrap();
+        let fd = open_with_flags_mode(b"DATA.TXT", O_RDWR | O_CREAT | O_EXCL, 0o600).unwrap();
+        assert_eq!(
+            open_with_flags_mode(b"DATA.TXT", O_RDWR | O_CREAT | O_EXCL, 0o600),
+            Err(Errno::Exists)
+        );
+        assert_eq!(write(fd, b"retained").unwrap(), 8);
+        assert_eq!(lseek(fd, 520, 0).unwrap(), 520);
+        assert_eq!(write(fd, b"!").unwrap(), 1);
+        assert_eq!(fstat(fd).unwrap().size, 521);
+        assert_eq!(unlink(b"DATA.TXT"), Err(Errno::Busy));
+        rename(b"DATA.TXT", b"MOVED.TXT").unwrap();
+        rename(b"/mnt/volume/DIR", b"/mnt/volume/LIVE").unwrap();
+        stat(b"CHILD").unwrap();
+        let alias = dup(fd).unwrap();
+        close(fd).unwrap();
+        lseek(alias, 0, 0).unwrap();
+        let mut retained = [0; 8];
+        assert_eq!(read(alias, &mut retained).unwrap(), 8);
+        assert_eq!(&retained, b"retained");
+        close(alias).unwrap();
+        let fd = open_with_flags_mode(b"MOVED.TXT", O_RDWR | O_CREAT, 0o600).unwrap();
+        assert_eq!(fstat(fd).unwrap().size, 521);
+        close(fd).unwrap();
+        let fd = open_with_flags_mode(b"MOVED.TXT", O_WRONLY | O_TRUNC, 0).unwrap();
+        assert_eq!(fstat(fd).unwrap().size, 0);
+        assert_eq!(read(fd, &mut retained), Err(Errno::Access));
+        assert_eq!(write(fd, b"persistent FAT data").unwrap(), 19);
+        close(fd).unwrap();
+        let temporary = open_with_flags_mode(b"TEMP.TXT", O_CREAT, 0o644).unwrap();
+        close(temporary).unwrap();
+        unlink(b"TEMP.TXT").unwrap();
+        assert_eq!(stat(b"TEMP.TXT").err(), Some(Errno::NoEntry));
+        log("[VFS-C1E11] ordinary committed FAT mutations passed");
+    }
+    chdir(b"/mnt/volume/LIVE").unwrap();
+    stat(b"CHILD").unwrap();
+    let fd = open(b"MOVED.TXT").unwrap();
+    let mut payload = [0; 20];
+    assert_eq!(read(fd, &mut payload).unwrap(), 19);
+    assert_eq!(&payload[..19], b"persistent FAT data");
+    close(fd).unwrap();
+    if cycle == 1 {
+        log("[VFS-C1E11] reattached payload and directory verified");
+    }
+}
+
+#[cfg(feature = "vfs-c1e12-test")]
+pub const FAT_MAPPING_BYTES: usize = 8192 + 9;
+
+#[cfg(feature = "vfs-c1e12-test")]
+pub fn fat_mapping_byte(offset: usize) -> u8 {
+    ((offset * 29 + offset / 512 * 17) % 251) as u8
+}
+
+#[cfg(feature = "vfs-c1e12-test")]
+fn committed_mapping(cycle: usize, mount: u64, source: u64, log: fn(&str)) {
+    use sunlight_ipc::storage as api;
+    use sunlight_libc::mman::{c_mprotect, mmap, munmap, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE};
+    use sunlight_libc::{close, dup, fstat, lseek, open, open_with_flags_mode, read, unlink, write};
+    use sunlight_libc::{O_CREAT, O_EXCL, O_RDWR};
+    const FILE: &[u8] = b"/mnt/volume/MMAP.BIN";
+    const DONE: &[u8] = b"/tmp/c1e12-linux-done";
+    const PAGE: usize = 4096;
+    let sample = |address: *mut u8| unsafe { sunlight_libc::sys::syscall1(0xf1c7, address as u64) };
+    const USER_RO_NX: u64 = (1 << 63) | 5;
+    let mut buffer = [0u8; PAGE];
+    if cycle != 0 {
+        let fd = open(FILE).unwrap();
+        for offset in (0..FAT_MAPPING_BYTES).step_by(PAGE) {
+            let size = PAGE.min(FAT_MAPPING_BYTES - offset);
+            assert_eq!(read(fd, &mut buffer).unwrap(), size);
+            assert!(buffer[..size].iter().enumerate().all(|(i, &b)| b == fat_mapping_byte(offset + i)));
+        }
+        assert_eq!(read(fd, &mut buffer).unwrap(), 0);
+        close(fd).unwrap();
+        log("[VFS-C1E12] reattached original mmap payload verified");
+        return;
+    }
+
+    assert_eq!(sample(core::ptr::null_mut()), 0);
+    let fd = open_with_flags_mode(FILE, O_RDWR | O_CREAT | O_EXCL, 0o600).unwrap();
+    for offset in (0..FAT_MAPPING_BYTES).step_by(PAGE) {
+        let size = PAGE.min(FAT_MAPPING_BYTES - offset);
+        for (i, byte) in buffer[..size].iter_mut().enumerate() {
+            *byte = fat_mapping_byte(offset + i);
+        }
+        assert_eq!(write(fd, &buffer[..size]).unwrap(), size);
+    }
+    assert_eq!(fstat(fd).unwrap().size, FAT_MAPPING_BYTES as u64);
+    let alias = dup(fd).unwrap();
+    assert_eq!(lseek(alias, 37, 0).unwrap(), 37);
+    assert_eq!(sample(core::ptr::null_mut()), 0);
+    for _ in 0..3 {
+        let address = mmap(core::ptr::null_mut(), 3 * PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd.0 as i32, PAGE as u64).unwrap();
+        for page in 0..3 {
+            assert_eq!(sample(address.wrapping_add(page * PAGE)), USER_RO_NX | 2);
+        }
+        for i in 0..3 * PAGE {
+            let expected = if PAGE + i < FAT_MAPPING_BYTES { fat_mapping_byte(PAGE + i) } else { 0 };
+            assert_eq!(unsafe { address.add(i).read_volatile() }, expected);
+        }
+        unsafe { address.write_volatile(0xff) };
+        assert_eq!(unsafe { c_mprotect(address, PAGE, (PROT_READ | PROT_EXEC) as i32) }, 0);
+        assert_eq!(sample(address), 5);
+        assert_eq!(unsafe { c_mprotect(address, PAGE, PROT_READ as i32) }, 0);
+        assert_eq!(sample(address), USER_RO_NX);
+        munmap(address, 3 * PAGE).unwrap();
+        for page in 0..3 {
+            assert_eq!(sample(address.wrapping_add(page * PAGE)), 0);
+        }
+        assert_eq!(sample(core::ptr::null_mut()), 0);
+    }
+    assert_eq!(lseek(fd, 0, 1).unwrap(), 37);
+    assert_eq!(read(alias, &mut buffer[..1]).unwrap(), 1);
+    assert_eq!(buffer[0], fat_mapping_byte(37));
+    assert_eq!(lseek(alias, PAGE as i64, 0).unwrap(), PAGE as u64);
+    assert_eq!(read(fd, &mut buffer[..1]).unwrap(), 1);
+    assert_eq!(buffer[0], fat_mapping_byte(PAGE));
+
+    let address = mmap(core::ptr::null_mut(), PAGE, PROT_READ, MAP_PRIVATE, fd.0 as i32, 0).unwrap();
+    let ready = open_with_flags_mode(b"/tmp/c1e12-native-ready", O_CREAT | O_EXCL, 0o600).unwrap();
+    close(ready).unwrap();
+    let linux = (0..8192).find_map(|_| {
+        let result = open(DONE).ok();
+        if result.is_none() {
+            sunlight_ipc::process_yield();
+        }
+        result
+    }).expect("Linux FAT mapping probe did not finish");
+    let mut observation = [0u8; 16];
+    assert_eq!(read(linux, &mut observation).unwrap(), observation.len());
+    close(linux).unwrap();
+    unlink(DONE).unwrap();
+    unlink(b"/tmp/c1e12-native-ready").unwrap();
+    if u64::from_le_bytes(observation[..8].try_into().unwrap()) == mount
+        && u64::from_le_bytes(observation[8..].try_into().unwrap()) == source
+    {
+        log(&alloc::format!(
+            "[VFS-C1E12] StorageCtl and Linux mountinfo identity and source agree mount={mount} source={source}",
+        ));
+    } else {
+        log("[VFS-C1E12] Linux mountinfo identity/source mismatch");
+    }
+
+    assert_eq!(storage_call(api::UNMOUNT, mount, 0), (-16i64) as u64);
+    assert_eq!(lseek(alias, 0, 0).unwrap(), 0);
+    assert_eq!(read(alias, &mut buffer[..1]).unwrap(), 1);
+    assert_eq!(buffer[0], fat_mapping_byte(0));
+    close(alias).unwrap();
+    close(fd).unwrap();
+    assert_eq!(unsafe { address.read_volatile() }, fat_mapping_byte(0));
+    munmap(address, PAGE).unwrap();
+    assert_eq!(sample(address), 0);
+    assert_eq!(sample(core::ptr::null_mut()), 0);
+    log("[VFS-C1E12] ordinary native FAT private mmap and busy withdrawal passed");
 }
 
 #[cfg(all(feature = "vfs-c1e1-test", not(feature = "vfs-c1e2-test")))]
@@ -292,7 +520,7 @@ fn settle(lease: &Lease) -> Result<(), Error> {
 #[cfg(feature = "vfs-c1e2-test")]
 #[derive(Default)]
 pub struct RetainedStorage {
-    retained: Option<(sunlight_ipc::vfs_rpc::lifecycle::Caller, u64, Ready)>,
+    retained: Option<(sunlight_ipc::vfs_rpc::lifecycle::Caller, u64, u64, Ready)>,
 }
 
 #[cfg(feature = "vfs-c1e2-test")]
@@ -346,9 +574,9 @@ impl RetainedStorage {
 
     pub fn reap_cancelled(&mut self, log: fn(&str)) {
         let retained = &mut self.retained;
-        if let Some((_, _, ready)) = retained.as_ref() {
+        if let Some((_, _, _, ready)) = retained.as_ref() {
             if call(0x10b, 0, 0, ready.lease.0) == 1 {
-                let (_, _, ready) = retained.take().unwrap();
+                let (_, _, _, ready) = retained.take().unwrap();
                 abort_ready(ready, log).expect("cancelled preparation settlement");
             }
         }
@@ -402,10 +630,10 @@ impl RetainedStorage {
                 }
             }
             api::ABORT_STORAGE => {
-                if retained.as_ref().is_some_and(|(caller, id, _)| {
+                if retained.as_ref().is_some_and(|(caller, id, _, _)| {
                     *caller == request.caller && *id == request.token
                 }) {
-                    let (_, _, ready) = retained.take().unwrap();
+                    let (_, _, _, ready) = retained.take().unwrap();
                     if abort_ready(ready, log).is_err() {
                         reply.errno = 5;
                     }
@@ -413,9 +641,47 @@ impl RetainedStorage {
                     reply.errno = 2;
                 }
             }
+            #[cfg(feature = "vfs-c1e10-test")]
+            api::PUBLISH_STORAGE => {
+                use sunlight_ipc::storage::service_mount_id;
+                match retained.take() {
+                    Some((caller, cookie, source, ready))
+                        if caller == request.caller && cookie == request.token =>
+                    {
+                        let Ready { reservation, backend, lease } = ready;
+                        let mut backend = Some(backend);
+                        let installed = (|| {
+                            service_mount_id(registration.epoch, 256).ok_or(Error::Stale)?;
+                            if call(0x10b, 0, 0, lease.0) != 0 {
+                                return Err(Error::Stale);
+                            }
+                            let mut fs = reservation.lock(namespace)?;
+                            Ok(fs.publish_retained_device(&reservation.target, source, false,
+                                || backend.take().unwrap())?)
+                        })();
+                        match installed {
+                            Ok(id) => {
+                                reply.result0 = service_mount_id(registration.epoch, id).unwrap();
+                                reply.result1 = lease.0;
+                            }
+                            Err(error) => {
+                                *retained = Some((caller, cookie, source, Ready {
+                                    reservation, backend: backend.unwrap(), lease,
+                                }));
+                                reply.errno = storage_errno(error);
+                            }
+                        }
+                    }
+                    other => {
+                        *retained = other;
+                        reply.errno = 2;
+                    }
+                }
+            }
+            #[cfg(not(feature = "vfs-c1e10-test"))]
             api::PUBLISH_STORAGE => {
                 reply.errno = match retained.as_ref() {
-                    Some((caller, cookie, ready))
+                    Some((caller, cookie, _, ready))
                         if *caller == request.caller && *cookie == request.token =>
                     {
                         match ready.reservation.lock(namespace) {
@@ -456,7 +722,7 @@ impl RetainedStorage {
                             log("[VFS-C1E2] parked caller retired; late reply rejected");
                             return Some(true);
                         }
-                        *retained = Some((request.caller, request.request_id, ready));
+                        *retained = Some((request.caller, request.request_id, request.token, ready));
                     }
                     Err(_) => reply.errno = 5,
                 }
@@ -476,8 +742,14 @@ impl RetainedStorage {
         if accepted {
             assert!(!api::reply(registration.epoch, &encoded));
         } else if reply.op == api::PREPARE_STORAGE && reply.errno == 0 {
-            let (_, _, ready) = retained.take().unwrap();
+            let (_, _, _, ready) = retained.take().unwrap();
             abort_ready(ready, log).expect("unacknowledged preparation settlement");
+        } else if reply.op == api::PUBLISH_STORAGE && reply.errno == 0 {
+            if Self::unmount(namespace, registration.epoch, reply.result0).is_err() {
+                log("[VFS-C1E10] compensation uncertain; retiring runtime owner");
+                sunlight_ipc::ProcessExit::exit(1);
+            }
+            log("[VFS-C1E10] unacknowledged insertion withdrawn and settled");
         }
         Some(accepted)
     }
@@ -494,7 +766,7 @@ fn storage_errno(error: Error) -> u64 {
     }
 }
 
-#[cfg(feature = "vfs-c1e2-test")]
+#[cfg(all(feature = "vfs-c1e2-test", not(feature = "vfs-c1e10-test")))]
 fn publication_gate() -> u64 {
     // Inventory and withdrawal are routed. Commit still needs ordinary
     // mountinfo, statfs, mmap and the FAT ownership handoff.

@@ -683,6 +683,7 @@ libm = { path = "vendor/libm", default-features = false, optional = true }
 sunlight-ipc = { path = "../ipc" }
 
 [features]
+private-file-mmap = []
 helios-wayland-sunapp-test = []
 helios-dynamic-elf-probe = []
 helios-dynamic-elf-relocation-fixture = ["helios-dynamic-elf-probe"]

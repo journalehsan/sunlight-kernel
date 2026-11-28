@@ -729,7 +729,7 @@ impl FdTable {
         (pool.iter().flatten().count(), pool.iter().flatten().map(|row| row.refs).sum())
     }
 
-    #[cfg(all(debug_assertions, feature = "vfs_d1b_test"))]
+    #[cfg(all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_c1e12_test")))]
     pub(crate) fn service_description_counts() -> (usize, usize) {
         let pool = SERVICE_DESCRIPTIONS.lock();
         (pool.iter().flatten().count(), pool.iter().flatten().map(|row| row.refs).sum())

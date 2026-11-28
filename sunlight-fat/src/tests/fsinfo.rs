@@ -180,10 +180,13 @@ fn failed_directory_publication_rolls_back_allocation_without_restoring_hints() 
     assert!(fs.stat_path(b"/DIR").is_none());
     fs.sync().unwrap();
     assert_unknown(&disk.durable);
-    assert_eq!(
-        disk.durable[FAT as usize * BLOCK_SIZE..],
-        before[FAT as usize * BLOCK_SIZE..]
-    );
+    // The unpublished child sector can retain its initialized dot entries.
+    // The FAT and parent directory must still describe the original tree.
+    let child = (ROOT as usize + 1) * BLOCK_SIZE;
+    assert!(disk.durable[FAT as usize * BLOCK_SIZE..child] == before[FAT as usize * BLOCK_SIZE..child]);
+    assert_eq!(&disk.durable[child..child + 11], b".          ");
+    assert_eq!(&disk.durable[child + 32..child + 43], b"..         ");
+    assert!(disk.durable[child + BLOCK_SIZE..] == before[child + BLOCK_SIZE..]);
 }
 
 #[test]

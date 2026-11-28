@@ -244,6 +244,8 @@ mod native;
 pub use native::qualify_native_fat;
 #[cfg(all(target_os = "none", feature = "vfs-c1e1-test"))]
 pub use native::storage_caller;
+#[cfg(all(target_os = "none", feature = "vfs-c1e12-test"))]
+pub use native::{fat_mapping_byte, FAT_MAPPING_BYTES};
 #[cfg(all(target_os = "none", feature = "vfs-c1e1-test", not(feature = "vfs-c1e2-test")))]
 pub use native::qualify_storage;
 #[cfg(all(target_os = "none", feature = "vfs-c1e2-test"))]

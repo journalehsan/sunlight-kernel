@@ -186,27 +186,83 @@ impl<D: BlockDevice> DirectoryPair<D> {
 }
 
 impl<Device: BlockDevice> DirectoryPair<Device> {
+    #[cfg(feature = "vfs-c1e2-test")]
+    pub(crate) fn mutate(
+        &self,
+        request: sunlight_ipc::vfs_rpc::file_transport::Request<'_>,
+    ) -> Result<(), FsError> {
+        use sunlight_fs::{Credential, FsOperation};
+        use sunlight_ipc::vfs_rpc::file_transport as api;
+        let Backend::Mounted(fs) = &self.filesystem else {
+            return Err(FsError::Unsupported);
+        };
+        let caller = Credential { uid: request.uid, gid: request.gid };
+        let authorize = |fs: &Vfs<Device>, path: &str, op| {
+            authorize_write(fs, path, caller, op, request.arg1 == 1)
+        };
+        let paths = core::str::from_utf8(request.payload).map_err(|_| FsError::InvalidPath)?;
+        let mut fs = fs.lock();
+        match request.op {
+            api::MKDIR => fs.mkdir_beneath(
+                self.root, self.directory, paths, caller, request.arg0 as u16,
+                |fs, path| authorize(fs, path, FsOperation::Mkdir),
+            ),
+            api::UNLINK => fs.unlink_beneath(
+                self.root, self.directory, paths, caller,
+                |fs, path| authorize(fs, path, FsOperation::Delete),
+            ),
+            api::RENAME => {
+                let (old, new) = paths.split_once('\0').ok_or(FsError::InvalidPath)?;
+                fs.rename_beneath(
+                    self.root, self.directory, old, new, caller, request.arg0 != 0,
+                    |fs, old, new| {
+                        authorize(fs, old, FsOperation::Delete)?;
+                        authorize(fs, new, FsOperation::Create)
+                    },
+                )
+            }
+            _ => Err(FsError::Unsupported),
+        }
+    }
+
     pub(crate) fn open_file(
         &self,
         path: &str,
         caller: sunlight_fs::Credential,
-        read: bool,
-        write: bool,
+        options: sunlight_fs::vfs::OpenOptions,
+        storage_admin: bool,
     ) -> Result<crate::open::File<Device>, FsError> {
         match &self.filesystem {
             Backend::Mounted(fs) => {
-                let handle = fs.lock().open_file_beneath(
+                let handle = fs.lock().open_file_options_beneath(
                     self.root,
                     self.directory,
                     path,
                     caller,
-                    read,
-                    write,
+                    options,
+                    |fs, path| authorize_write(fs, path, caller, sunlight_fs::FsOperation::Create, storage_admin),
                 )?;
                 Ok(crate::open::File::new(Arc::clone(fs), handle))
             }
             Backend::Isolated(_) => Err(FsError::Unsupported),
         }
+    }
+}
+
+fn authorize_write<D: BlockDevice>(
+    fs: &Vfs<D>,
+    path: &str,
+    caller: sunlight_fs::Credential,
+    op: sunlight_fs::FsOperation,
+    storage_admin: bool,
+) -> Result<(), FsError> {
+    let decision = sunlight_fs::can_write(
+        sunlight_fs::Actor::User { uid: caller.uid, name: "" }, path, op, None, false,
+    );
+    if decision.allowed || (storage_admin && fs.is_runtime_path(path)) {
+        Ok(())
+    } else {
+        Err(decision.error.unwrap_or(FsError::PermissionDenied))
     }
 }
 

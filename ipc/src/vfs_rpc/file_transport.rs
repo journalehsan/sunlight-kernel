@@ -31,6 +31,17 @@ pub const INVENTORY_STORAGE: u64 = 15;
 pub const UNMOUNT_STORAGE: u64 = 16;
 pub const MOUNTINFO: u64 = 17;
 pub const STATFS: u64 = 18;
+pub const MKDIR: u64 = 19;
+pub const UNLINK: u64 = 20;
+pub const RENAME: u64 = 21;
+
+pub fn namespace_mutation(op: u64) -> bool {
+    matches!(op, MKDIR | UNLINK | RENAME)
+}
+
+pub fn retained_path(op: u64) -> bool {
+    mount_observation(op) || namespace_mutation(op)
+}
 
 pub fn mount_observation(op: u64) -> bool {
     matches!(op, MOUNTINFO | STATFS)
@@ -51,7 +62,7 @@ pub const EMPTY: u64 = 1;
 fn is_file_op(op: u64) -> bool {
     (OPEN..=TRANSFER).contains(&op)
         || matches!(op, PREAD | PREPARE_STORAGE | ABORT_STORAGE | PUBLISH_STORAGE
-            | INVENTORY_STORAGE | UNMOUNT_STORAGE) || mount_observation(op)
+            | INVENTORY_STORAGE | UNMOUNT_STORAGE) || retained_path(op)
 }
 
 pub const HEADER_WORDS: usize = 22;
@@ -61,6 +72,12 @@ pub const FRAME_BYTES: usize = HEADER_BYTES + IO_BYTES;
 
 pub const ACCESS_READ: u64 = 1;
 pub const ACCESS_WRITE: u64 = 2;
+
+pub const OPEN_CREATE: u64 = 4;
+pub const OPEN_EXCLUSIVE: u64 = 8;
+pub const OPEN_TRUNCATE: u64 = 16;
+pub const OPEN_STORAGE_ADMIN: u64 = 32;
+pub const OPEN_ACCESS: u64 = ACCESS_READ | ACCESS_WRITE;
 
 pub const SEEK_START: u64 = 0;
 pub const SEEK_CURRENT: u64 = 1;
@@ -215,6 +232,22 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
                 return Err(ProtocolError::Encoding);
             }
         }
+        MKDIR | UNLINK | RENAME => {
+            let path = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
+            let valid_path = |part: &str| !part.is_empty() && !part.as_bytes().contains(&0);
+            let valid = match request.op {
+                MKDIR => request.arg0 <= 0o777 && valid_path(path),
+                UNLINK => request.arg0 == 0 && valid_path(path),
+                _ => request.arg0 <= 1 && path.split_once('\0')
+                    .is_some_and(|(old, new)| valid_path(old) && valid_path(new)),
+            };
+            if !valid || request.token != 0 || request.arg1 > 1
+                || request.namespace_id == 0 || request.namespace_generation == 0
+                || request.receipt_id == 0 || request.receipt_generation == 0
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
         MOUNTINFO | STATFS => {
             let path = core::str::from_utf8(request.payload).map_err(|_| ProtocolError::Path)?;
             if request.token != 0 || request.arg0 != 0 || request.arg1 != 0
@@ -228,9 +261,12 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
         }
         OPEN => {
             if request.token != 0
-                || request.arg0 & !(ACCESS_READ | ACCESS_WRITE) != 0
-                || request.arg0 == 0
-                || request.arg1 != 0
+                || request.arg0 & !(OPEN_ACCESS | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE | OPEN_STORAGE_ADMIN) != 0
+                || request.arg0 & OPEN_ACCESS == 0
+                || (request.arg0 & OPEN_EXCLUSIVE != 0 && request.arg0 & OPEN_CREATE == 0)
+                || (request.arg0 & OPEN_TRUNCATE != 0 && request.arg0 & ACCESS_WRITE == 0)
+                || request.arg1 > 0o777
+                || (request.arg0 & OPEN_CREATE == 0 && request.arg1 != 0)
                 || request.namespace_id == 0
                 || request.namespace_generation == 0
                 || request.receipt_id == 0
@@ -479,7 +515,18 @@ fn validate_reply(reply: &Reply<'_>) -> Result<(), ProtocolError> {
         STATFS if reply.result0 != 0 && reply.length == 12
             && crate::storage::local_mount_id(reply.registration.epoch, reply.result1).is_some() => {}
         MOUNTINFO | STATFS => return Err(ProtocolError::Encoding),
-        PUBLISH_STORAGE => return Err(ProtocolError::Status),
+        MKDIR | UNLINK | RENAME => {
+            if reply.result0 != 0 || reply.result1 != 0 || reply.length != 0 {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        PUBLISH_STORAGE => {
+            if crate::storage::local_mount_id(reply.registration.epoch, reply.result0).is_none()
+                || reply.result1 == 0 || reply.length != 0
+            {
+                return Err(ProtocolError::Encoding);
+            }
+        }
         INVENTORY_STORAGE => {
             match (reply.result0, reply.length) {
                 (0, 0) if reply.result1 <= 8 => {}
@@ -654,6 +701,26 @@ mod tests {
     }
 
     #[test]
+    fn namespace_rename_requires_two_paths_and_a_retained_receipt() {
+        let mut request = open_request();
+        request.op = RENAME;
+        request.arg0 = 1;
+        request.payload = b"old\0/new";
+        request.length = request.payload.len();
+        let bytes = request.encode().unwrap();
+        assert_eq!(Request::decode(&bytes).unwrap(), request);
+        request.arg0 = 2;
+        assert!(request.encode().is_err());
+        request.arg0 = 0;
+        request.receipt_id = 0;
+        assert!(request.encode().is_err());
+        request.receipt_id = 1;
+        request.payload = b"old\0/new\0extra";
+        request.length = request.payload.len();
+        assert!(request.encode().is_err());
+    }
+
+    #[test]
     fn storage_prepare_requires_an_exact_reservation_and_lease_receipt() {
         let request = Request {
             op: PREPARE_STORAGE,
@@ -720,6 +787,15 @@ mod tests {
         };
         assert_eq!(Reply::decode(&refusal.encode().unwrap()), Ok(refusal));
         assert!(Reply { errno: 0, ..refusal }.encode().is_err());
+        let committed = Reply {
+            errno: 0,
+            result0: crate::storage::service_mount_id(publish.registration.epoch, 2).unwrap(),
+            result1: 17,
+            ..refusal
+        };
+        assert_eq!(Reply::decode(&committed.encode().unwrap()), Ok(committed));
+        assert!(Reply { result1: 0, ..committed }.encode().is_err());
+        assert!(Reply { result0: 2, ..committed }.encode().is_err());
     }
 
     #[test]
@@ -736,6 +812,25 @@ mod tests {
         altered[15 * 8] = 1;
         assert!(Request::decode(&altered).is_err());
         assert!(Request::decode(&bytes[..FRAME_BYTES - 1]).is_err());
+    }
+
+    #[test]
+    fn open_creation_validates_access_and_permissions() {
+        let mut request = open_request();
+        request.arg0 = ACCESS_WRITE | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE;
+        request.arg1 = 0o600;
+        assert_eq!(Request::decode(&request.encode().unwrap()), Ok(request));
+        for (flags, mode) in [
+            (ACCESS_READ | OPEN_TRUNCATE, 0),
+            (ACCESS_WRITE | OPEN_EXCLUSIVE, 0),
+            (ACCESS_READ, 0o600),
+            (ACCESS_READ | OPEN_CREATE, 0o1000),
+            (OPEN_CREATE, 0),
+        ] {
+            request.arg0 = flags;
+            request.arg1 = mode;
+            assert!(request.encode().is_err());
+        }
     }
 
     #[test]

@@ -1,0 +1,51 @@
+{
+  "stage": "VFS-C1E9",
+  "status": "PARTIAL",
+  "ordinary_service_tmpfs_mutations": {
+    "status": "PASS",
+    "native": "mkdir/stat/chdir, relative mkdir, no-replace collision, file and directory rename, retained cwd, unlink and read through the original open description",
+    "linux": "mkdir, mkdirat, stat, chdir, rename, renameat and unlinkat; duplicate mkdir and unsupported unlinkat flags leave the tested entries unchanged",
+    "service_unavailability": "PASS: Linux mkdir returns EIO after the registered service exits",
+    "historical_mkdir_chdir_sequence": "PASS on the new route; no fresh pre-change run",
+    "log": "target/vfs-c1e9/native-loss.log",
+    "serial": "target/vfs-n1o-qemu-cevn0m8h/serial.log",
+    "vcpus": 1,
+    "memory_mib": 2048
+  },
+  "retirement": {
+    "status": "PASS",
+    "native": {"pid": 39000, "user_frames": 22302, "page_tables": 50, "swap_blocks": 0, "ipc_entries": 0},
+    "linux": {"pid": 39002, "user_frames": 22302, "page_tables": 50, "swap_blocks": 0, "ipc_entries": 0},
+    "storage_regression": "Five releases, exact service retirement, fixed 20 KiB retained DMA, closed FAT image byte-identical with read-only fsck and KEEP.TXT recovery"
+  },
+  "builds": {
+    "production_kernel_release": {"status": "PASS", "log": "target/vfs-c1e9/production.log"},
+    "vfs_release": {"status": "PASS", "log": "target/vfs-c1e9/release-vfs.log"},
+    "candidate_kernel": {"status": "PASS", "log": "target/vfs-c1e9/candidate-loss.log"},
+    "embedded_service": {"status": "PASS", "log": "target/vfs-c1e9/service-loss.log"}
+  },
+  "host": {
+    "anchored": {"status": "PASS", "tests": 13, "log": "target/vfs-c1e9/anchored-retry.log"},
+    "codec": {"status": "PASS", "tests": 9, "log": "target/vfs-c1e9/codec.log"},
+    "attachment": {"status": "PASS", "tests": 11, "log": "target/vfs-c1e9/storage.log"},
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e9/registration-final.log"}
+  },
+  "failed_attempts": {
+    "fixture_build": {"status": "FAIL", "log": "target/vfs-c1e9/service.log", "reason": "Fixture write omitted the offset"},
+    "host_anchor_fixture": {"status": "FAIL", "log": "target/vfs-c1e9/anchored.log", "reason": "Test attempted to recreate a seeded filename"},
+    "decoder": {"status": "FAIL", "log": "target/vfs-c1e9/native.log", "reason": "Decoder did not recognize the new operation IDs"},
+    "linux_timeout": {"status": "FAIL", "log": "target/vfs-c1e9/native-retry.log", "reason": "Linux assertion was invisible to native-only panic logging"},
+    "linux_chdir": {"status": "FAIL", "log": "target/vfs-c1e9/native-probe.log", "reason": "Linux stat normalization did not restore input registers on terminal return"},
+    "premature_loss_probe": {"status": "FAIL", "log": "target/vfs-c1e9/native-qualified.log", "reason": "An observation error could precede service exit"}
+  },
+  "ownership_guard": {"status": "FAIL", "references": 71, "unmatched": 4, "log": "target/vfs-c1e9/guard.log"},
+  "fat_publication": {"status": "BLOCKED", "committed_mounts": 0, "committed_mount_mutations": "BLOCKED"},
+  "relative_explicit_dirfd": {"status": "BLOCKED", "reason": "No authenticated directory description exists in the candidate file channel"},
+  "not_run": ["guarded ordinary boot", "guest cross-mount rename", "mutation interrupted after service dispatch", "native mutation after service loss", "Linux legacy unlink syscall"],
+  "historical_host_limits": {
+    "direct_kernel_host": {"status": "BLOCKED", "reason": "Private ProcessState imports and duplicate language items"},
+    "workspace_library": {"status": "FAIL", "reason": "Duplicate panic_impl in sunlight-ui-wayland"},
+    "earlier_results": "vfs-runtime-fat-ownership-cutover-results.json",
+    "rerun": "NOT_RUN"
+  }
+}

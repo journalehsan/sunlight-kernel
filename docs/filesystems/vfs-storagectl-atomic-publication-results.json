@@ -1,0 +1,39 @@
+{
+  "stage": "VFS-C1E10",
+  "status": "PARTIAL",
+  "native": {
+    "status": "PARTIAL",
+    "serial": "target/vfs-n1o-qemu-4wh4hlda/serial.log",
+    "harness": {"status": "PASS", "log": "target/vfs-c1e10/native-topology-retry.log"},
+    "memory_mib": 2048,
+    "vcpus": 1,
+    "committed_incarnations": 2,
+    "maximum_simultaneous_attachments": 1,
+    "committed_attachments_after_withdrawal": 0,
+    "passed": ["ordinary prepare and authenticated publication", "repeated publish and consumed-cookie abort refused", "exactly one service row in both StorageCtl inventories", "committed stat and chdir", "relative open, read, seek and dup with a shared cursor", "ordinary withdrawal and reattachment", "exact seed payload"],
+    "retirement": {"status": "PASS", "pids": [39000, 39001, 39002, 3], "caller_frames_each": 22310, "caller_page_tables_each": 50, "service_frames": 22314, "service_page_tables": 53, "swap_blocks": 0, "ipc_entries": 0},
+    "settlement": {"status": "PASS", "releases": 7, "retained_dma_bytes": 20480, "queue": "0x10bd000", "bounce": "0x10c1000", "commands": 0, "mapping_users": 0, "retained_command_data": 0, "pending_flush": false},
+    "closed_image": {"status": "PASS", "fat_bytes_match_initial": true, "fsck_read_only": true, "keep_payload": "untouched", "new_payload_written": false},
+    "controls": {"status": "PARTIAL", "prepare_failure_and_caller_retirement": "PASS", "service_retirement_before_prepare_reply": "PASS", "post_insertion_ack_loss": "NOT_RUN"}
+  },
+  "gates": {
+    "fat_mkdir": "FAIL",
+    "fat_creation": "BLOCKED",
+    "native_fat_private_mmap": "FAIL",
+    "committed_mountinfo_and_statfs_agreement": "NOT_RUN",
+    "fat_rename_identity_and_pinned_busy": "NOT_RUN",
+    "new_write_persistence": "NOT_RUN",
+    "guarded_ordinary_boot": "NOT_RUN"
+  },
+  "failed_attempts": [
+    {"log": "target/vfs-c1e10/native.log", "status": "FAIL", "reason": "Stale unmount timed out after another poller took its frame"},
+    {"log": "target/vfs-c1e10/native-trace.log", "status": "FAIL", "reason": "Single-dispatch wrong-cookie publication was pulled without a reply"},
+    {"log": "target/vfs-c1e10/native-final.log", "status": "FAIL", "reason": "Committed FAT mkdir failed"},
+    {"log": "target/vfs-c1e10/native-settlement-retry.log", "status": "FAIL", "reason": "Committed FAT native mmap failed"},
+    {"log": "target/vfs-c1e10/native-readback.log", "status": "PARTIAL", "reason": "Two commits and withdrawals passed; Linux fixture exited before attesting service loss"}
+  ],
+  "host": {"codec": {"status": "PASS", "tests": 9}, "registration": {"status": "PASS", "tests": 112}, "filesystem_storage": {"status": "PASS", "tests": 12}},
+  "builds": {"production_release": "PASS", "vfs_release": "PASS", "candidate_kernel": "PASS", "embedded_service": "PASS"},
+  "ownership_guard": {"status": "FAIL", "references": 71, "unmatched": ["storage::mount", "linux_procfs::mountinfo_snapshot", "sys_linux_statfs", "process::mmap::sys_mmap"], "log": "target/vfs-c1e10/guard.log"},
+  "historical_limits": {"direct_kernel_host": "BLOCKED", "workspace_library_duplicate_panic_impl": "FAIL", "rerun": "NOT_RUN", "prior_results": "vfs-ordinary-namespace-mutation-routing-results.json"}
+}

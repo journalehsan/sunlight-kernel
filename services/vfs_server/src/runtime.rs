@@ -267,6 +267,29 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         access: crate::open::Access,
         revalidate: impl FnOnce() -> bool,
     ) -> Result<u64, Error> {
+        self.open_file_with_options(authenticated, receipt, path, caller, access, None, revalidate)
+    }
+
+    fn open_file_with_options(
+        &mut self,
+        authenticated: Registration,
+        receipt: Receipt,
+        path: &str,
+        caller: sunlight_fs::Credential,
+        access: crate::open::Access,
+        request: Option<(u64, u16)>,
+        revalidate: impl FnOnce() -> bool,
+    ) -> Result<u64, Error> {
+        use sunlight_fs::vfs::OpenOptions;
+        use sunlight_ipc::vfs_rpc::file_transport as api;
+        let (flags, mode) = request.unwrap_or_default();
+        let options = OpenOptions {
+            read: access.read(),
+            write: access.write(),
+            create_mode: (flags & api::OPEN_CREATE != 0).then_some(mode),
+            exclusive: flags & api::OPEN_EXCLUSIVE != 0,
+            truncate: flags & api::OPEN_TRUNCATE != 0,
+        };
         let entry = self.file_entry_mut(authenticated)?;
         entry.files.capacity().map_err(Error::Filesystem)?;
         let file = entry.policy.open_file(
@@ -274,8 +297,8 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             receipt,
             path,
             caller,
-            access.read(),
-            access.write(),
+            options,
+            flags & api::OPEN_STORAGE_ADMIN != 0,
         )?;
         if !revalidate() {
             return Err(Error::Identity);
@@ -521,6 +544,25 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         let failed = |error: &Error| reply(errno_for(error), 0, 0, &[]);
         match request.op {
             #[cfg(feature = "vfs-c1e2-test")]
+            api::MKDIR | api::UNLINK | api::RENAME => {
+                let receipt = Receipt::from_parts(
+                    authenticated,
+                    Scope {
+                        caller: request.caller,
+                        namespace_id: request.namespace_id,
+                        namespace_generation: request.namespace_generation,
+                    },
+                    request.receipt_id,
+                    request.receipt_generation,
+                )?;
+                let entry = self.file_entry_mut(authenticated).ok()?;
+                match entry.policy.mutate_namespace(authenticated, receipt, request) {
+                    Ok(()) => reply(0, 0, 0, &[]),
+                    Err(Error::Filesystem(FsError::Unsupported)) => reply(38, 0, 0, &[]),
+                    Err(error) => failed(&error),
+                }
+            }
+            #[cfg(feature = "vfs-c1e2-test")]
             api::MOUNTINFO | api::STATFS => {
                 use crate::directory::attachment::Error as ObservationError;
                 let Some(receipt) = Receipt::from_parts(
@@ -563,7 +605,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
                 ) else {
                     return reply(22, 0, 0, &[]);
                 };
-                let access = match request.arg0 {
+                let access = match request.arg0 & api::OPEN_ACCESS {
                     api::ACCESS_READ => Access::Read,
                     api::ACCESS_WRITE => Access::Write,
                     _ => Access::ReadWrite,
@@ -576,7 +618,8 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
                 // before publication. The finish path checks lifecycle again.
                 let path = core::str::from_utf8(request.payload).ok()?;
                 let result =
-                    self.open_file(authenticated, receipt, path, credential, access, || {
+                    self.open_file_with_options(authenticated, receipt, path, credential, access,
+                        Some((request.arg0, request.arg1 as u16)), || {
                         control
                             .file_next(authenticated.epoch)
                             .ok()
@@ -769,12 +812,15 @@ pub(crate) fn errno_for(error: &Error) -> u64 {
         Error::Filesystem(FsError::NotFound) => 2,
         Error::Filesystem(FsError::BadHandle) => 9,
         Error::Filesystem(FsError::NoMemory) => 12,
+        Error::Filesystem(FsError::Busy) => 16,
+        Error::Filesystem(FsError::AlreadyExists) => 17,
         Error::Filesystem(FsError::PermissionDenied | FsError::OperationNotPermitted) => 13,
         Error::Filesystem(FsError::NotDir) => 20,
         Error::Filesystem(FsError::IsDir) => 21,
         Error::Filesystem(FsError::InvalidPath) => 22,
         Error::Filesystem(FsError::TooManyOpenFiles) => 24,
         Error::Filesystem(FsError::NoSpace) => 28,
+        Error::Filesystem(FsError::ReadOnlyFilesystem) => 30,
         Error::Filesystem(FsError::Unsupported) => 95,
         _ => 5,
     }

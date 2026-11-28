@@ -254,7 +254,8 @@ fn open_requires_a_retained_receipt_and_carries_exact_correlation() {
             identity,
             FileOperation::Open {
                 path: "data",
-                access: api::ACCESS_READ
+                access: api::ACCESS_READ,
+                mode: 0,
             },
             None,
             &mut sched
@@ -278,6 +279,7 @@ fn open_requires_a_retained_receipt_and_carries_exact_correlation() {
             FileOperation::Open {
                 path: "data",
                 access: api::ACCESS_READ,
+                mode: 0,
             },
             Some(receipt),
             &mut sched,
@@ -324,6 +326,7 @@ fn complete_open(runtime: &mut Runtime, sched: &mut Scheduler, identity: Admissi
             FileOperation::Open {
                 path: "data",
                 access: api::ACCESS_READ,
+                mode: 0,
             },
             Some(receipt),
             sched,

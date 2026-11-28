@@ -93,6 +93,9 @@ pub fn set_from_errno(e: Errno) {
         Errno::BrokenPipe => EPIPE,
         Errno::NoSpace => ENOSPC,
         Errno::NoMemory => ENOMEM,
+        Errno::Busy => 16,
+        Errno::Exists => 17,
+        Errno::Unsupported => 95,
         Errno::NotConnected => ENOTCONN,
     };
     set_errno(code);

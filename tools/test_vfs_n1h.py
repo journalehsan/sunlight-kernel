@@ -27,11 +27,19 @@ def main():
     parser.add_argument("--c1e6", action="store_true", help="verify Linux mountinfo and statfs routing")
     parser.add_argument("--c1e6b", action="store_true", help="require descriptor retirement qualification")
     parser.add_argument("--c1e7", action="store_true", help="require the ordinary Linux private mmap probe")
+    parser.add_argument("--c1e9", action="store_true", help="require native and Linux namespace mutation probes")
+    parser.add_argument("--c1e10", action="store_true", help="verify committed StorageCtl FAT attachments")
+    parser.add_argument("--c1e11", action="store_true", help="verify persistent ordinary FAT writes")
+    parser.add_argument("--c1e12", action="store_true", help="verify ordinary private mappings on committed FAT")
     parser.add_argument("--fsinfo", choices=("populated", "unknown"), default="unknown",
                         help="initial FSInfo hints for the native FAT32 probe")
     parser.add_argument("--check-n1o-artifacts", type=pathlib.Path,
                         help="verify a previously closed native FAT32 probe directory")
     args = parser.parse_args()
+    args.c1e11 = args.c1e11 or args.c1e12
+    args.c1e10 = args.c1e10 or args.c1e11
+    args.c1e9 = args.c1e9 or args.c1e10
+    args.c1e7 = args.c1e7 or args.c1e9
     args.c1e6b = args.c1e6b or args.c1e7
     args.c1e6 = args.c1e6 or args.c1e6b
     args.c1e5 = args.c1e5 or args.c1e6
@@ -128,7 +136,8 @@ def main():
                         and (not args.c1e6 or (
                             b"[VFS-C1E6] ordinary Linux mountinfo and statfs fail closed after service loss" in output
                             and b"[SCHED] process_reaped pid=39002 " in output
-                        ))):
+                        ))
+                        and (not args.c1e10 or b"[SCHED] process_reaped pid=39000 " in output)):
                         if args.n1m and b"[VFS-N1M] ring3 readback and release cycles complete" not in output:
                             raise RuntimeError(f"missing native service attestation: {serial}")
                         break
@@ -147,12 +156,23 @@ def main():
                     guest.wait()
     if args.c1e1 or args.c1e2:
         output = serial.read_bytes()
+        if args.c1e9:
+            for marker in (
+                b"[VFS-C1E9] native namespace mutations passed",
+                b"[VFS-C1E9] Linux namespace mutations passed",
+                b"[VFS-C1E9] Linux mutation failed closed after service loss",
+            ):
+                assert output.count(marker) == 1, (marker, serial)
         if args.c1e2:
-            assert output.count(b"[VFS-C1E2] retained reservations=1 backends=1 lease=active descriptors=0") == 4
+            assert output.count(b"[VFS-C1E2] retained reservations=1 backends=1 lease=active descriptors=0") == (6 if args.c1e10 else 4)
             assert output.count(b"[VFS-C1E2] aborted reservations=0 backends=0 lease=vacant descriptors=0") == 4
             assert output.count(b"[VFS-C1E2] compensated reservations=0 backends=0 lease=vacant descriptors=0") == 1
             assert b"[VFS-C1E2] parked caller retired; late reply rejected" in output
-        if args.c1e3:
+        if args.c1e10:
+            assert output.count(b"[VFS-C1E10] exactly one attachment committed and withdrawn; payload verified") == 2
+            assert b"[SCHED] process_reaped pid=3 name='vfs_server'" in output
+            assert b"[SCHED] process_reaped pid=39001 " in output
+        if args.c1e3 and not args.c1e10:
             assert output.count(b"[VFS-C1E3] PASS wrong cookies rejected; publish blocked and preparation retryable") == 1
             if args.c1e4:
                 assert output.count(b"[VFS-C1E4] ordinary STAT sees target directory and cannot see prepared FAT file") == 3
@@ -191,9 +211,9 @@ def main():
                     assert reap in output
                     if not args.c1e7:
                         assert output.index(reap) < output.index(attestation)
-        else:
+        elif not args.c1e2:
             assert output.count(b"[VFS-C1E1] authenticated reply accepted; lease vacant; no publication") == 2
-        releases = 5 if args.c1e2 else 2
+        releases = 7 if args.c1e10 else 5 if args.c1e2 else 2
         dma = re.findall(rb"\[VFS-N1O\] settled lease=\d+ pending=0 mapping_users=0 (queue=\S+ bounce=\S+) retained_bytes=20480", output)
         assert len(dma) == releases and len(set(dma)) == 1
         if args.c1e2:
@@ -203,14 +223,65 @@ def main():
         with disk.open("rb") as image:
             assert image.read(2048 * 512) == prefix
             closed_bytes = image.read()
-            assert closed_bytes == volume.read_bytes()
+            if args.c1e11:
+                assert output.count(b"[VFS-C1E11] ordinary committed FAT mutations passed") == 1
+                assert output.count(b"[VFS-C1E11] reattached payload and directory verified") == 1
+                assert output.count(b"[VFS-C1E11] Linux openat creation flags passed") == 1
+                for pid in (39000, 39001, 39002, 3):
+                    retired = rb"\[SCHED\] process_reaped pid=%d [^\n]+ swap_blocks=0 ipc_cleared=0" % pid
+                    assert len(re.findall(retired, output)) == 1, (pid, serial)
+                if args.c1e12:
+                    assert output.count(b"[VFS-C1E6B] descriptor retirement verified") == 1
+                    assert b"[VFS-C1E6B] stale descriptor alias consumed" not in output
+                    for marker in (
+                        b"[VFS-C1E12] ordinary native FAT private mmap and busy withdrawal passed",
+                        b"[VFS-C1E12] ordinary Linux FAT private mmap passed",
+                        b"[VFS-C1E12] reattached original mmap payload verified",
+                        b"[VFS-C1E12] StorageCtl and Linux mountinfo identity and source agree",
+                        b"[VFS-C1E12] Linux statfs FAT capacity passed blocks=127006 free=126984 unit=512",
+                        b"[VFS-C1E12] Linux mountinfo and statfs confirm FAT withdrawal",
+                    ):
+                        assert output.count(marker) == 1, (marker, serial)
+                    for pid, expected in (
+                        (39000, [(12288, 4105, 4096, 3)] * 3 + [(4096, 4096, 0, 1)]),
+                        (39002, [(12288, 4105, 4096, 3)] * 2 + [(12288, 8201, 0, 3)]),
+                    ):
+                        commits = re.findall(
+                            rb"\[VFS-D2A\] committed pid=%d .* span=(\d+) bytes=(\d+) offset=(\d+) prot=(0x\w+)" % pid,
+                            output,
+                        )
+                        assert [tuple(int(field, 0) for field in row) for row in commits][-len(expected):] == expected
+                    for pid, descriptions in (
+                        (39000, [(0, 0)] + [(1, 2)] * 4 + [(0, 0)]),
+                        (39002, [(1, 2)] + [(2, 3)] * 3 + [(1, 2)]),
+                    ):
+                        samples = re.findall(
+                            rb"\[VFS-C1E12\] accounting pid=%d frames=(\d+) regions=(\d+) page_tables=(\d+) rows=(\d+) refs=(\d+)" % pid,
+                            output,
+                        )
+                        samples = [tuple(map(int, row)) for row in samples]
+                        assert [row[3:] for row in samples] == descriptions, (pid, samples)
+                        assert len({row[:3] for row in samples}) == 1, (pid, samples)
+                check_c1e11_sectors(volume.read_bytes(), closed_bytes, args.c1e12)
+            else:
+                assert closed_bytes == volume.read_bytes()
         closed = work / "closed.fat"
         closed.write_bytes(closed_bytes)
         subprocess.run(["fsck.fat", "-n", str(closed)], check=True)
         recovered = work / "recovered-keep.txt"
         subprocess.run(["mcopy", "-i", str(closed), "::KEEP.TXT", str(recovered)], check=True)
         assert recovered.read_bytes() == b"untouched"
-        print("PASS: StorageCtl settlement and byte-identical disposable image")
+        if args.c1e11:
+            assert subprocess.check_output(["mtype", "-i", str(closed), "::LIVE/MOVED.TXT"]) == b"persistent FAT data"
+            subprocess.run(["mdir", "-i", str(closed), "::LIVE/CHILD"], check=True)
+            print("PASS: StorageCtl commit, persistence, settlement and closed-image checks")
+            if args.c1e12:
+                assert subprocess.check_output(["mtype", "-i", str(closed), "::MMAP.BIN"]) == c1e12_payload()
+                print("PASS: native and Linux committed FAT private mmap and exact closed-image payload")
+        elif args.c1e10:
+            print("PASS: StorageCtl commit, settlement, closed-image fsck and exact KEEP.TXT payload")
+        else:
+            print("PASS: StorageCtl settlement and byte-identical disposable image")
         return
     if args.n1o:
         check_n1o(work, args.fsinfo, args.c1c, args.c1d)
@@ -221,6 +292,46 @@ def main():
     if disk.read_bytes() != expected:
         raise RuntimeError(f"backing image differs from expected full image: {disk}")
     print("PASS: guest settlement and full backing image")
+
+
+def c1e12_payload():
+    return bytes((offset * 29 + offset // 512 * 17) % 251 for offset in range(8201))
+
+
+def check_c1e11_sectors(before, after, c1e12=False):
+    assert len(before) == len(after)
+    reserved = int.from_bytes(before[14:16], "little")
+    fat_size = int.from_bytes(before[36:40], "little")
+    info = int.from_bytes(before[48:50], "little")
+    backup = int.from_bytes(before[50:52], "little")
+    root = reserved + 2 * fat_size
+    assert before[13] == 1 and before[16] == 2
+    changed = {pos // 512 for pos in range(0, len(before), 512)
+               if before[pos:pos + 512] != after[pos:pos + 512]}
+    expected = {reserved, reserved + fat_size, root, root + 2, root + 3, root + 4, root + 5}
+    expected |= {lba for lba in (info, backup + info)
+                 if before[lba * 512 + 488:lba * 512 + 496] != b"\xff" * 8}
+    if c1e12:
+        expected.update(range(root + 5, root + 22))
+    assert changed == expected, (sorted(changed), sorted(expected))
+    for lba in (info, backup + info):
+        assert after[lba * 512 + 488:lba * 512 + 496] == b"\xff" * 8
+    for lba in (reserved, reserved + fat_size):
+        fat = after[lba * 512:(lba + 1) * 512]
+        for cluster in (4, 5, 6):
+            assert int.from_bytes(fat[cluster * 4:cluster * 4 + 4], "little") & 0xfffffff >= 0xffffff8
+        if c1e12:
+            for cluster in range(7, 23):
+                assert int.from_bytes(fat[cluster * 4:cluster * 4 + 4], "little") == cluster + 1
+            assert int.from_bytes(fat[92:96], "little") & 0xfffffff >= 0xffffff8
+        else:
+            assert fat[28:32] == bytes(4)
+    assert after[(root + 4) * 512:(root + 5) * 512] == b"persistent FAT data".ljust(512, b"\0")
+    if c1e12:
+        assert after[(root + 5) * 512:(root + 22) * 512] == c1e12_payload().ljust(17 * 512, b"\0")
+    else:
+        assert after[(root + 5) * 512:(root + 6) * 512] == b"\0" * 8 + b"!" + b"\0" * 503
+    print(f"Changed FAT volume sectors {sorted(changed)}")
 
 
 def fat_prefix(c1c):

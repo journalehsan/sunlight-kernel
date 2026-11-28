@@ -41,6 +41,11 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     {
         debug_log("[VFS-N1O] ring3 panic");
         debug_log(&alloc::format!("{_info}"));
+        #[cfg(feature = "vfs-c1e7-test")]
+        for message in ["[VFS-N1O] ring3 panic", &alloc::format!("{_info}")] {
+            linux_fixture_call(sunlight_ipc::NATIVE_SYSCALL_TAG | 99,
+                message.as_ptr() as u64, message.len() as u64, 0);
+        }
     }
     loop {}
 }
@@ -225,6 +230,10 @@ pub extern "C" fn _start() -> ! {
         || (cfg!(feature = "vfs-c1e2-test")
             && sunlight_ipc::getpid() == sunlight_ipc::storage::FIXTURE_RETIRING_PID)
     {
+        #[cfg(feature = "vfs-c1e7-test")]
+        if sunlight_ipc::getpid() == sunlight_ipc::storage::FIXTURE_CALLER_PID {
+            native_mutation_fixture();
+        }
         sunlight_vfs_server::directory::attachment::storage_caller(debug_log);
     }
     debug_log("[VFS]  VFS server started");
@@ -272,6 +281,12 @@ pub extern "C" fn _start() -> ! {
         if matches!(vfs.stat(path), Err(FsError::NotFound)) {
             vfs.mkdir(path, 0, 0, 0o755).expect("storage fixture target");
         }
+    }
+    #[cfg(feature = "vfs-c1e7-test")]
+    for path in ["/tmp/c1e9-native-file", "/tmp/c1e9-linux-file"] {
+        let handle = vfs.create_file_exclusive(path, 0, 0, 0o600).expect("mutation fixture file");
+        assert_eq!(vfs.write(handle, 0, b"held").unwrap(), 4);
+        vfs.close(handle).unwrap();
     }
 
     let namespace = sunlight_vfs_server::directory::DirectoryNamespace::mount_owner(vfs)
@@ -396,6 +411,61 @@ fn linux_fixture_call6(number: u64, args: [u64; 6]) -> i64 {
 }
 
 #[cfg(feature = "vfs-c1e7-test")]
+fn native_mutation_fixture() {
+    use sunlight_libc::{chdir, close, mkdir, open, read, rename, rename_no_replace, stat, unlink};
+    let file = b"/tmp/c1e9-native-file";
+    while stat(file).is_err() {
+        sunlight_ipc::process_yield();
+    }
+    let fd = open(file).unwrap();
+    mkdir(b"/tmp/c1e9-native", 0o700).unwrap();
+    stat(b"/tmp/c1e9-native").unwrap();
+    chdir(b"/tmp/c1e9-native").unwrap();
+    mkdir(b"child", 0o700).unwrap();
+    assert!(rename_no_replace(file, b"child").is_err());
+    stat(file).unwrap();
+    rename(file, b"payload").unwrap();
+    rename(b"/tmp/c1e9-native", b"/tmp/c1e9-native-moved").unwrap();
+    stat(b"child").unwrap();
+    stat(b"payload").unwrap();
+    unlink(b"payload").unwrap();
+    assert!(stat(b"payload").is_err());
+    let mut bytes = [0; 4];
+    assert_eq!(read(fd, &mut bytes).unwrap(), 4);
+    assert_eq!(&bytes, b"held");
+    close(fd).unwrap();
+    chdir(b"/").unwrap();
+    debug_log("[VFS-C1E9] native namespace mutations passed");
+}
+
+#[cfg(feature = "vfs-c1e7-test")]
+fn linux_mutation_fixture() {
+    let ptr = |path: &[u8]| path.as_ptr() as u64;
+    let dir = ptr(b"/tmp/c1e9-linux\0");
+    let moved = ptr(b"/tmp/c1e9-linux-moved\0");
+    let file = ptr(b"/tmp/c1e9-linux-file\0");
+    let payload = ptr(b"payload\0");
+    let child = ptr(b"child\0");
+    let cwd = (-100i64) as u64;
+    let mut record = [0u8; 144];
+    let mut stat = |path| linux_fixture_call(4, path, record.as_mut_ptr() as u64, 0);
+    assert_eq!(linux_fixture_call(83, dir, 0o700, 0), 0);
+    assert_eq!(stat(dir), 0);
+    assert_eq!(linux_fixture_call(80, dir, 0, 0), 0);
+    assert_eq!(linux_fixture_call(258, cwd, child, 0o700), 0);
+    assert_eq!(linux_fixture_call(258, cwd, child, 0o700), -17);
+    assert_eq!(linux_fixture_call(82, dir, moved, 0), 0);
+    assert_eq!(stat(dir), -2);
+    assert_eq!(stat(child), 0);
+    assert_eq!(linux_fixture_call6(264, [cwd, file, cwd, payload, 0, 0]), 0);
+    assert_eq!(linux_fixture_call(263, cwd, payload, 0x200), -38);
+    assert_eq!(stat(payload), 0);
+    assert_eq!(linux_fixture_call(263, cwd, payload, 0), 0);
+    assert_eq!(stat(payload), -2);
+    assert_eq!(linux_fixture_call(80, ptr(b"/\0"), 0, 0), 0);
+}
+
+#[cfg(feature = "vfs-c1e7-test")]
 fn linux_private_mmap_fixture() {
     const PAGE: u64 = 4096;
     const SPAN: u64 = 2 * PAGE;
@@ -436,6 +506,140 @@ fn linux_private_mmap_fixture() {
     assert_eq!(linux_fixture_call(11, address as u64, PAGE, 0), 0);
 }
 
+#[cfg(feature = "vfs-c1e11-test")]
+fn linux_create_fixture() {
+    let cwd = (-100i64) as u64;
+    let directory = b"/tmp\0".as_ptr() as u64;
+    let name = b"c1e11-linux-create\0".as_ptr() as u64;
+    let chdir = |path| linux_fixture_call(80, path, 0, 0);
+    let open = |flags, mode| linux_fixture_call6(257, [cwd, name, flags, mode, 0, 0]);
+    let close = |fd| linux_fixture_call(3, fd as u64, 0, 0);
+    assert_eq!(chdir(directory), 0);
+    let fd = open(0x42 | 0x80, 0o600); // O_RDWR | O_CREAT | O_EXCL
+    assert!(fd >= 0);
+    assert_eq!(open(0x42 | 0x80, 0o600), -17);
+    assert_eq!(linux_fixture_call(1, fd as u64, b"x".as_ptr() as u64, 1), 1);
+    assert_eq!(close(fd), 0);
+    let fd = open(0x40, 0); // O_RDONLY | O_CREAT preserves the existing data.
+    assert!(fd >= 0);
+    let mut byte = 0u8;
+    assert_eq!(linux_fixture_call(0, fd as u64, &mut byte as *mut u8 as u64, 1), 1);
+    assert_eq!(byte, b'x');
+    assert_eq!(close(fd), 0);
+    assert_eq!(open(0x200, 0), -22); // Read-only O_TRUNC is unsupported.
+    let fd = open(0x201, 0); // O_WRONLY | O_TRUNC
+    assert!(fd >= 0);
+    assert_eq!(close(fd), 0);
+    let fd = open(0, 0);
+    assert!(fd >= 0);
+    assert_eq!(linux_fixture_call(0, fd as u64, &mut byte as *mut u8 as u64, 1), 0);
+    assert_eq!(close(fd), 0);
+    assert_eq!(linux_fixture_call(87, name, 0, 0), 0);
+    assert_eq!(chdir(b"/\0".as_ptr() as u64), 0);
+}
+
+#[cfg(feature = "vfs-c1e12-test")]
+fn linux_committed_mapping(log: impl Fn(&str)) -> bool {
+    use sunlight_vfs_server::directory::attachment::{fat_mapping_byte, FAT_MAPPING_BYTES};
+    const PAGE: usize = 4096;
+    const FILE: &[u8] = b"/mnt/volume/MMAP.BIN\0";
+    let open = |path: &[u8]| linux_fixture_call(2, path.as_ptr() as u64, 0, 0);
+    let ready = open(b"/tmp/c1e12-native-ready\0");
+    if ready < 0 {
+        return false;
+    }
+    assert_eq!(linux_fixture_call(3, ready as u64, 0, 0), 0);
+    let sample = |address| linux_fixture_call(sunlight_ipc::NATIVE_SYSCALL_TAG | 0xf1c7, address, 0, 0) as u64;
+    const USER_RO_NX: u64 = (1 << 63) | 5;
+    assert_eq!(sample(0), 0);
+    let fd = open(FILE);
+    assert!(fd >= 0);
+    let fd = fd as u64;
+    assert_eq!(linux_fixture_call(8, fd, 23, 0), 23);
+    let map = |offset| linux_fixture_call6(9, [0, (3 * PAGE) as u64, 3, 2, fd, offset]);
+    assert_eq!(map(1), -22);
+    assert_eq!(sample(0), 0);
+    for _ in 0..2 {
+        let address = map(PAGE as u64);
+        assert!(address > 0);
+        let mapped = address as *mut u8;
+        for page in 0..3 {
+            assert_eq!(sample(address as u64 + (page * PAGE) as u64), USER_RO_NX | 2);
+        }
+        for i in 0..3 * PAGE {
+            let expected = if PAGE + i < FAT_MAPPING_BYTES { fat_mapping_byte(PAGE + i) } else { 0 };
+            assert_eq!(unsafe { mapped.add(i).read_volatile() }, expected);
+        }
+        unsafe { mapped.write_volatile(0xff) };
+        assert_eq!(linux_fixture_call(10, address as u64, PAGE as u64, 1), 0);
+        assert_eq!(sample(address as u64), USER_RO_NX);
+        assert_eq!(linux_fixture_call(11, address as u64, (3 * PAGE) as u64, 0), 0);
+        for page in 0..3 {
+            assert_eq!(sample(address as u64 + (page * PAGE) as u64), 0);
+        }
+        assert_eq!(sample(0), 0);
+    }
+    assert_eq!(linux_fixture_call(8, fd, 0, 1), 23);
+    let mut byte = 0u8;
+    assert_eq!(linux_fixture_call(8, fd, PAGE as u64, 0), PAGE as i64);
+    assert_eq!(linux_fixture_call(0, fd, &mut byte as *mut u8 as u64, 1), 1);
+    assert_eq!(byte, fat_mapping_byte(PAGE));
+    let address = map(0);
+    assert!(address > 0);
+    assert_eq!(linux_fixture_call(3, fd, 0, 0), 0);
+    assert_eq!(unsafe { (address as *const u8).read_volatile() }, fat_mapping_byte(0));
+    assert_eq!(linux_fixture_call(11, address as u64, (3 * PAGE) as u64, 0), 0);
+    assert_eq!(sample(address as u64), 0);
+    assert_eq!(sample(0), 0);
+    log("[VFS-C1E12] ordinary Linux FAT private mmap passed");
+
+    let fd = open(b"/proc/self/mountinfo\0");
+    let mut observed = [0u8; 16];
+    if fd >= 0 {
+        let mut bytes = [0u8; PAGE];
+        let count = linux_fixture_call(0, fd as u64, bytes.as_mut_ptr() as u64, PAGE as u64);
+        assert_eq!(linux_fixture_call(3, fd as u64, 0, 0), 0);
+        if (1..=PAGE as i64).contains(&count) {
+            if let Ok(text) = core::str::from_utf8(&bytes[..count as usize]) {
+                let mut rows = text.lines().filter(|line| line.contains(" /mnt/volume "));
+                if let Some(row) = rows.next() {
+                    let mut fields = row.split_ascii_whitespace();
+                    let id = fields.next().and_then(|id| id.parse::<u64>().ok());
+                    let device = fields.nth(1).and_then(|dev| dev.strip_prefix("240:"));
+                    let source = device.and_then(|dev| dev.parse::<u64>().ok());
+                    let tail = fields.collect::<alloc::vec::Vec<_>>();
+                    if let (Some(id), Some(source), Some(device)) = (id, source, device) {
+                        if rows.next().is_none()
+                            && tail.len() == 7
+                            && tail[..5] == ["/", "/mnt/volume", "rw", "-", "vfat"]
+                            && tail[5].strip_prefix("helios-block:") == Some(device)
+                            && tail[6] == "rw"
+                        {
+                            observed[..8].copy_from_slice(&id.to_le_bytes());
+                            observed[8..].copy_from_slice(&source.to_le_bytes());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut capacity = [0u64; 15];
+    let status = linux_fixture_call(137, FILE.as_ptr() as u64, capacity.as_mut_ptr() as u64, 0);
+    if status == 0 && capacity[..5] == [0x4d44, 512, 127006, 126984, 126984] && capacity[9] == 512 {
+        log("[VFS-C1E12] Linux statfs FAT capacity passed blocks=127006 free=126984 unit=512");
+    } else {
+        log("[VFS-C1E12] Linux statfs FAT capacity mismatch");
+    }
+    let staging = b"/tmp/c1e12-linux-staging\0";
+    let done = b"/tmp/c1e12-linux-done\0";
+    let fd = linux_fixture_call(2, staging.as_ptr() as u64, 0x41, 0o600);
+    assert!(fd >= 0);
+    assert_eq!(linux_fixture_call(1, fd as u64, observed.as_ptr() as u64, observed.len() as u64), observed.len() as i64);
+    assert_eq!(linux_fixture_call(3, fd as u64, 0, 0), 0);
+    assert_eq!(linux_fixture_call(82, staging.as_ptr() as u64, done.as_ptr() as u64, 0), 0);
+    true
+}
+
 #[cfg(feature = "vfs-c1e2-test")]
 fn linux_mount_fixture() -> ! {
     let open = || linux_fixture_call(2, b"/proc/self/mountinfo\0".as_ptr() as u64, 0, 0);
@@ -445,7 +649,15 @@ fn linux_mount_fixture() -> ! {
     };
     let mut passed = false;
     let mut unavailable = false;
+    #[cfg(feature = "vfs-c1e12-test")]
+    let mut committed = false;
+    #[cfg(feature = "vfs-c1e12-test")]
+    let mut withdrawal_seen = false;
     for _ in 0..200_000 {
+        #[cfg(feature = "vfs-c1e12-test")]
+        if passed && !committed {
+            committed = linux_committed_mapping(log);
+        }
         let fd = open();
         if fd >= 0 {
             let mut bytes = core::mem::MaybeUninit::<[u8; 4096]>::uninit();
@@ -459,20 +671,37 @@ fn linux_mount_fixture() -> ! {
                 let contains = |pattern: &[u8]| bytes.windows(pattern.len()).any(|window| {
                     window.iter().zip(pattern).all(|(left, right)| left == right)
                 });
+                if cfg!(feature = "vfs-c1e10-test") && contains(b"/mnt/volume ") {
+                    linux_fixture_call(24, 0, 0, 0);
+                    continue;
+                }
                 if !contains(b" / / rw - tmpfs tmpfs rw\n") || contains(b"/mnt/volume ") {
                     break;
+                }
+                #[cfg(feature = "vfs-c1e12-test")]
+                if committed && !withdrawal_seen {
+                    withdrawal_seen = true;
+                    log("[VFS-C1E12] Linux mountinfo and statfs confirm FAT withdrawal");
                 }
                 if !passed {
                     #[cfg(feature = "vfs-c1e7-test")]
                     {
                         linux_private_mmap_fixture();
                         log("[VFS-C1E7] Linux private mmap checks passed");
+                        linux_mutation_fixture();
+                        log("[VFS-C1E9] Linux namespace mutations passed");
+                        #[cfg(feature = "vfs-c1e11-test")]
+                        {
+                            linux_create_fixture();
+                            log("[VFS-C1E11] Linux openat creation flags passed");
+                        }
                     }
                     log("[VFS-C1E6] ordinary Linux open/read/close and statfs reached retained view");
                 }
                 passed = true;
             }
         } else if passed && fd == -5
+            && linux_fixture_call(sunlight_ipc::NATIVE_SYSCALL_TAG | 25, 3, 0, 0) == 0
             && linux_fixture_call(137, b"/\0".as_ptr() as u64, 0, 0) == -5
         {
             unavailable = true;
@@ -481,6 +710,11 @@ fn linux_mount_fixture() -> ! {
         linux_fixture_call(24, 0, 0, 0);
     }
     if unavailable {
+        #[cfg(feature = "vfs-c1e7-test")]
+        {
+            assert_eq!(linux_fixture_call(83, b"/tmp/c1e9-unavailable\0".as_ptr() as u64, 0o700, 0), -5);
+            log("[VFS-C1E9] Linux mutation failed closed after service loss");
+        }
         log("[VFS-C1E6] ordinary Linux mountinfo and statfs fail closed after service loss");
     }
     linux_fixture_call(60, u64::from(!unavailable), 0, 0);
@@ -532,7 +766,13 @@ fn qualify_native_block() -> ! {
 fn drain_retention(state: &mut State) {
     #[cfg(feature = "vfs-d1b-test")]
     let before = state.vfs.lock().open_handle_count();
+    #[cfg(not(feature = "vfs-c1e10-test"))]
     state.retention.poll_root_control(
+        &mut sunlight_vfs_server::runtime::control::CopiedControl,
+        &state.namespace,
+    );
+    #[cfg(feature = "vfs-c1e10-test")]
+    state.retention.poll_root_control_without_files(
         &mut sunlight_vfs_server::runtime::control::CopiedControl,
         &state.namespace,
     );

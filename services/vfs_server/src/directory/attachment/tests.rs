@@ -165,7 +165,10 @@ fn withdrawal_waits_for_retained_root_and_last_description() {
     let token = files
         .insert(
             CALLER,
-            retained.pair.open_file("/data", USER, true, false).unwrap(),
+            retained.pair.open_file("/data", USER, sunlight_fs::vfs::OpenOptions {
+                read: true,
+                ..Default::default()
+            }, false).unwrap(),
             Access::Read,
         )
         .unwrap();

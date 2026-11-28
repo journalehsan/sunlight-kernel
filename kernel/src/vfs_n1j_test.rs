@@ -253,15 +253,16 @@ pub(crate) fn validate_storage_publication(
     registration: Registration,
     caller: Caller,
     cookie: u64,
+    commit_generation: Option<u64>,
 ) -> bool {
-    let slot = TEST.lock();
-    let Some(test) = slot.as_ref().filter(|test| !test.done) else { return false };
-    let Some(binding) = test.binding.as_ref().filter(|binding| {
+    let mut slot = TEST.lock();
+    let Some(test) = slot.as_mut().filter(|test| !test.done) else { return false };
+    let Some(binding) = test.binding.as_mut().filter(|binding| {
         binding.registration == registration && binding.retirement.is_none()
     }) else { return false };
     let Some(entry) = binding.storage.as_ref() else { return false };
     let snapshot = test.probe.authority.snapshot();
-    entry.caller == caller && entry.request == cookie && entry.received && entry.ready
+    let valid = entry.caller == caller && entry.request == cookie && entry.received && entry.ready
         && !entry.cancelled && entry.media == test.media && entry.source == test.source.id
         && binding.settled.is_none()
         && binding.active.as_ref().is_some_and(|lease| {
@@ -272,7 +273,14 @@ pub(crate) fn validate_storage_publication(
         && test.probe.device.mapping_users() == Some(0)
         && test.probe.device.outstanding().is_none()
         && crate::storage::DEVICES.lock().resolve_extent(entry.source)
-            == Some((test.physical, test.source))
+            == Some((test.physical, test.source));
+    if let Some(generation) = commit_generation {
+        if !cfg!(feature = "vfs_c1e10_test") || !valid || entry.generation != generation {
+            return false;
+        }
+        binding.storage = None;
+    }
+    valid
 }
 
 #[cfg(not(feature = "vfs-n1m-test"))]
@@ -493,7 +501,13 @@ pub(crate) fn native_block(
             probe
                 .authority
                 .finish(binding.settled.as_ref().ok_or(Error::Stale)?)?;
-            assert_eq!(probe.authority.snapshot().status, Status::Vacant);
+            let snapshot = probe.authority.snapshot();
+            assert_eq!(
+                (snapshot.status, snapshot.outstanding, snapshot.retained_data, snapshot.flush_pending),
+                (Status::Vacant, 0, 0, false)
+            );
+            assert_eq!(probe.device.outstanding(), None);
+            assert_eq!(probe.device.mapping_users(), Some(0));
             binding.settled = None;
             binding.active = None;
             #[cfg(feature = "vfs_c1e1_test")]

@@ -21,11 +21,7 @@ const PAGE_SIZE: usize = 4096;
 const SUPPORTED_PROT: u32 = PROT_READ | PROT_WRITE | PROT_EXEC;
 const SUPPORTED_FLAGS: u32 = MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS | MAP_NATIVE_THREAD;
 
-/// Validate the deliberately narrow native mapping contract before entering
-/// the kernel.  Native SunlightOS currently implements only private,
-/// anonymous mappings; accepting a descriptor, offset, shared flag, or an
-/// ordinary address hint here would falsely imply backed/shared or hint
-/// semantics that the kernel does not provide.
+/// Validate anonymous mappings and the opt-in eager private file mapping ABI.
 fn validate_mmap_request(
     addr: *mut u8,
     length: usize,
@@ -42,9 +38,19 @@ fn validate_mmap_request(
         || prot & PROT_READ == 0
         || prot & PROT_WRITE != 0 && prot & PROT_EXEC != 0
         || flags & !SUPPORTED_FLAGS != 0
-        || flags & (MAP_PRIVATE | MAP_ANONYMOUS) != (MAP_PRIVATE | MAP_ANONYMOUS)
-        || fd != -1
-        || offset != 0
+        || flags & MAP_PRIVATE == 0
+    {
+        return Err(Errno::Inval);
+    }
+
+    if flags & MAP_ANONYMOUS != 0 {
+        if fd != -1 || offset != 0 {
+            return Err(Errno::Inval);
+        }
+    } else if !cfg!(feature = "private-file-mmap")
+        || fd < 0
+        || flags & MAP_NATIVE_THREAD != 0
+        || offset & (PAGE_SIZE as u64 - 1) != 0
     {
         return Err(Errno::Inval);
     }
@@ -62,10 +68,16 @@ fn validate_mmap_request(
         return Err(Errno::Inval);
     }
 
-    length
+    let span = length
         .checked_add(PAGE_SIZE - 1)
         .map(|rounded| rounded & !(PAGE_SIZE - 1))
-        .ok_or(Errno::Inval)
+        .ok_or(Errno::Inval)?;
+    if flags & MAP_ANONYMOUS == 0
+        && offset.checked_add(span as u64).is_none_or(|end| end > i64::MAX as u64)
+    {
+        return Err(Errno::Inval);
+    }
+    Ok(span)
 }
 
 pub fn mmap(
@@ -144,6 +156,23 @@ pub unsafe extern "C" fn c_mmap(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn private_file_requests_require_opt_in_and_valid_descriptor_and_offset() {
+        let validate = |flags, fd, offset| {
+            validate_mmap_request(core::ptr::null_mut(), PAGE_SIZE + 1, PROT_READ, flags, fd, offset)
+        };
+        let expected = if cfg!(feature = "private-file-mmap") {
+            Ok(2 * PAGE_SIZE)
+        } else {
+            Err(Errno::Inval)
+        };
+        assert_eq!(validate(MAP_PRIVATE, 3, PAGE_SIZE as u64), expected);
+        assert_eq!(validate(MAP_PRIVATE, -1, 0), Err(Errno::Inval));
+        assert_eq!(validate(MAP_PRIVATE, 3, 1), Err(Errno::Inval));
+        assert_eq!(validate(MAP_PRIVATE, 3, 1 << 63), Err(Errno::Inval));
+        assert_eq!(validate(MAP_PRIVATE | MAP_NATIVE_THREAD, 3, 0), Err(Errno::Inval));
+    }
 
     #[test]
     fn thread_storage_keeps_boundaries_and_rejects_fixed_address_combinations() {

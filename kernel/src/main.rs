@@ -1003,6 +1003,13 @@ pub extern "C" fn _start() -> ! {
         caller.system_allocation = true;
         caller.service_lookup_restrictions =
             Some(ipc::ServiceCapability::StorageAdmin.bit() | ipc::ServiceCapability::Vfs.bit());
+        #[cfg(feature = "vfs_c1e7_test")]
+        if fixture_pid == ::sunlight_ipc::storage::FIXTURE_CALLER_PID {
+            caller.vfs_root_metadata = true;
+            caller.vfs_boot_root = true;
+            caller.vfs_stat_routed = true;
+            caller.vfs_file_routed = true;
+        }
         if fixture_pid == ::sunlight_ipc::storage::FIXTURE_LINUX_PID {
             caller.personality = process::ProcessPersonality::Linux(process::LinuxProcessState::new());
             caller.linux_tgid = Some(fixture_pid as usize);

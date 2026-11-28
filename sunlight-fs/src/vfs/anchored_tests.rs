@@ -4,10 +4,50 @@ const OWNER: Credential = Credential { uid: 42, gid: 42 };
 const OTHER: Credential = Credential { uid: 43, gid: 43 };
 
 #[test]
+fn mutations_keep_retained_directory_and_unlinked_file_identity() {
+    let (mut fs, root, cwd) = fixture();
+    let file = fs
+        .create_file_exclusive("/jail/cwd/held", OWNER.uid, OWNER.gid, 0o600)
+        .unwrap();
+    assert_eq!(fs.write(file, 0, b"held"), Ok(4));
+    let old = fs.stat_beneath(root, cwd, ".", OWNER).unwrap();
+    assert_eq!(
+        fs.rename_beneath(root, cwd, "/cwd", "/moved", OWNER, false, |_, _, _| {
+            Err(FsError::PermissionDenied)
+        }),
+        Err(FsError::PermissionDenied)
+    );
+    assert_eq!(fs.stat_beneath(root, cwd, "/moved", OWNER), Err(FsError::NotFound));
+    fs.rename_beneath(root, cwd, "/cwd", "/moved", OWNER, false, |_, _, _| Ok(()))
+        .unwrap();
+    assert_eq!(fs.stat_beneath(root, cwd, ".", OWNER).unwrap().object_id, old.object_id);
+    fs.mkdir_beneath(root, cwd, "child", OWNER, 0o700, |_, _| Ok(())).unwrap();
+    assert_eq!(
+        fs.rename_beneath(root, cwd, "held", "child", OWNER, true, |_, _, _| Ok(())),
+        Err(FsError::AlreadyExists)
+    );
+    fs.rename_beneath(root, cwd, "held", "renamed", OWNER, false, |_, _, _| Ok(()))
+        .unwrap();
+    assert_eq!(
+        fs.unlink_beneath(root, cwd, "renamed/", OWNER, |_, _| Ok(())),
+        Err(FsError::NotDir)
+    );
+    fs.unlink_beneath(root, cwd, "renamed", OWNER, |_, _| Ok(())).unwrap();
+    assert_eq!(fs.stat_beneath(root, cwd, "renamed", OWNER), Err(FsError::NotFound));
+    let mut bytes = [0; 4];
+    assert_eq!(fs.read(file, 0, &mut bytes), Ok(4));
+    assert_eq!(&bytes, b"held");
+    for handle in [file, cwd, root] {
+        fs.close(handle).unwrap();
+    }
+    assert_eq!(fs.open_handle_count(), 0);
+}
+
+#[test]
 fn mkdir_publishes_under_retained_anchors_and_preserves_permissions() {
     let (mut fs, root, cwd) = fixture();
     let observer = fs.open("/jail").unwrap();
-    let allow = |_: &str| Ok(());
+    let allow = |_: &Vfs<_>, _: &str| Ok(());
     assert_eq!(
         fs.mkdir_beneath(root, cwd, "new/child", OWNER, 0o750, allow),
         Err(FsError::NotFound)
@@ -17,13 +57,13 @@ fn mkdir_publishes_under_retained_anchors_and_preserves_permissions() {
         Err(FsError::PermissionDenied)
     );
     assert_eq!(
-        fs.mkdir_beneath(root, cwd, "new", OWNER, 0o755, |_| Err(
+        fs.mkdir_beneath(root, cwd, "new", OWNER, 0o755, |_, _| Err(
             FsError::ReadOnlyFilesystem
         )),
         Err(FsError::ReadOnlyFilesystem)
     );
     assert_eq!(fs.stat("/jail/cwd/new"), Err(FsError::NotFound));
-    fs.mkdir_beneath(root, cwd, "new/", OWNER, 0o755, |path| {
+    fs.mkdir_beneath(root, cwd, "new/", OWNER, 0o755, |_, path| {
         assert_eq!(path, "/jail/cwd/new");
         Ok(())
     })
@@ -398,4 +438,33 @@ fn regular_open_is_confined_after_anchor_rename_and_keeps_unlinked_inode() {
         fs.open_file_beneath(root, cwd, "data", OWNER, true, false),
         Err(FsError::NotFound)
     );
+}
+
+#[test]
+fn anchored_create_applies_mode_and_checks_existing_file_access() {
+    let (mut fs, root, cwd) = fixture();
+    let options = OpenOptions {
+        read: true,
+        create_mode: Some(0o000),
+        ..OpenOptions::default()
+    };
+    assert_eq!(
+        fs.open_file_options_beneath(root, cwd, "created", OWNER, options, |_, _| {
+            Err(FsError::ReadOnlyFilesystem)
+        }),
+        Err(FsError::ReadOnlyFilesystem)
+    );
+    let handle = fs.open_file_options_beneath(root, cwd, "created", OWNER, options, |_, path| {
+        assert_eq!(path, "/jail/cwd/created");
+        Ok(())
+    }).unwrap();
+    let stat = fs.fstat_handle(handle).unwrap();
+    assert_eq!((stat.uid, stat.gid, stat.mode & 0o777), (OWNER.uid, OWNER.gid, 0));
+    fs.close(handle).unwrap();
+    assert_eq!(
+        fs.open_file_options_beneath(root, cwd, "created", OWNER, options, |_, _| Ok(())),
+        Err(FsError::PermissionDenied)
+    );
+    fs.close(cwd).unwrap();
+    fs.close(root).unwrap();
 }

@@ -399,6 +399,72 @@ fn step(args: [u64; 6], sched: &mut Scheduler) -> Result<Option<u64>, MmapError>
     result
 }
 
+/// Sample the disposable StorageCtl callers without modifying their mappings.
+#[cfg(feature = "vfs_c1e12_test")]
+pub(crate) fn fat_checkpoint(address: u64) -> u64 {
+    use crate::process::fd_table::FdTable;
+    use sunlight_ipc::storage::{FIXTURE_CALLER_PID, FIXTURE_LINUX_PID};
+    use x86_64::structures::paging::PageTable;
+
+    let sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_process();
+    let pid = process.pid as u64;
+    if !matches!(pid, FIXTURE_CALLER_PID | FIXTURE_LINUX_PID) || !process.vfs_file_routed {
+        return u64::MAX;
+    }
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().unwrap().offset);
+    if address == 0 {
+        // Walk only the private lower-half tree. System-wide page-table counts
+        // also reflect unrelated early boot services starting and retiring.
+        fn count_tables(table: &PageTable, limit: usize, depth: usize, hhdm: VirtAddr) -> usize {
+            if depth == 0 {
+                return 0;
+            }
+            table
+                .iter()
+                .take(limit)
+                .filter(|entry| {
+                    let flags = entry.flags();
+                    flags.contains(PageTableFlags::PRESENT)
+                        && !flags.contains(PageTableFlags::HUGE_PAGE)
+                })
+                .map(|entry| {
+                    // The scheduler serializes this caller's private address space.
+                    let child = unsafe { &*(hhdm + entry.addr().as_u64()).as_ptr::<PageTable>() };
+                    1 + count_tables(child, 512, depth - 1, hhdm)
+                })
+                .sum()
+        }
+
+        let root = unsafe {
+            &*(hhdm + process.address_space.pml4_phys.as_u64()).as_ptr::<PageTable>()
+        };
+        let tables = 1 + count_tables(root, 256, 3, hhdm);
+        let frames = crate::PMM.lock().owned_frame_count(pid as u32);
+        let (rows, refs) = FdTable::service_description_counts();
+        crate::serial_println!(
+            "[VFS-C1E12] accounting pid={} frames={} regions={} page_tables={} rows={} refs={}",
+            pid,
+            frames,
+            process.address_space.region_count(),
+            tables,
+            rows,
+            refs
+        );
+        return 0;
+    }
+    let Ok(address) = VirtAddr::try_new(address) else {
+        return u64::MAX;
+    };
+    let page = Page::<Size4KiB>::containing_address(address);
+    let mask = PageTableFlags::PRESENT
+        | PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::NO_EXECUTE;
+    unsafe { process.address_space.lookup_entry(page, hhdm) }
+        .map_or(0, |(_, flags)| (flags & mask).bits())
+}
+
 /// Ring-3 fixture checkpoints. The syscall path remains the only installer.
 #[cfg(feature = "vfs_d2a_test")]
 pub(crate) fn checkpoint(mode: u64, arg: u64) -> u64 {

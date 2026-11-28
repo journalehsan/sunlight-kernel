@@ -14,6 +14,15 @@ pub struct ObjectMetadata {
     pub object_generation: u64,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct OpenOptions {
+    pub read: bool,
+    pub write: bool,
+    pub create_mode: Option<u16>,
+    pub exclusive: bool,
+    pub truncate: bool,
+}
+
 const LOOKUP_PATH_MAX: usize = crate::tmpfs::TMPFS_PATH_MAX;
 
 /// Fixed backing matters for services whose allocator cannot reclaim temporary
@@ -73,8 +82,77 @@ impl<D: BlockDevice> Vfs<D> {
         path: &str,
         caller: Credential,
         mode: u16,
-        authorize: impl FnOnce(&str) -> Result<(), FsError>,
+        authorize: impl FnOnce(&Self, &str) -> Result<(), FsError>,
     ) -> Result<(), FsError> {
+        let resolved = self.mutation_leaf(root, cwd, path, caller)?;
+        authorize(self, resolved.as_str())?;
+        self.mkdir(resolved.as_str(), caller.uid, caller.gid, mode & 0o777)
+    }
+
+    pub fn unlink_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+        authorize: impl FnOnce(&Self, &str) -> Result<(), FsError>,
+    ) -> Result<(), FsError> {
+        let resolved = self.mutation_leaf(root, cwd, path, caller)?;
+        authorize(self, resolved.as_str())?;
+        let metadata = self.lookup_metadata(resolved.as_str())?;
+        if metadata.stat.file_type == FileType::Directory {
+            return Err(FsError::IsDir);
+        }
+        if path.ends_with('/') {
+            return Err(FsError::NotDir);
+        }
+        self.unlink(resolved.as_str())
+    }
+
+    pub fn rename_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        old: &str,
+        new: &str,
+        caller: Credential,
+        no_replace: bool,
+        authorize: impl FnOnce(&Self, &str, &str) -> Result<(), FsError>,
+    ) -> Result<(), FsError> {
+        let source = self.mutation_leaf(root, cwd, old, caller)?;
+        let target = self.mutation_leaf(root, cwd, new, caller)?;
+        let source = source.as_str();
+        let target = target.as_str();
+        authorize(self, source, target)?;
+        let metadata = self.lookup_metadata(source)?;
+        if (old.ends_with('/') || new.ends_with('/'))
+            && metadata.stat.file_type != FileType::Directory
+        {
+            return Err(FsError::NotDir);
+        }
+        if new.ends_with('/') {
+            match self.lookup_metadata(target) {
+                Ok(entry) if entry.stat.file_type != FileType::Directory => {
+                    return Err(FsError::NotDir);
+                }
+                Ok(_) | Err(FsError::NotFound) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        if no_replace {
+            self.rename_no_replace(source, target)
+        } else {
+            self.rename(source, target)
+        }
+    }
+
+    fn mutation_leaf(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+    ) -> Result<LookupPath, FsError> {
         if path.is_empty() || path.len() > LOOKUP_PATH_MAX || path.as_bytes().contains(&0) {
             return Err(FsError::InvalidPath);
         }
@@ -105,8 +183,7 @@ impl<D: BlockDevice> Vfs<D> {
             resolved.append("/")?;
         }
         resolved.append(leaf)?;
-        authorize(resolved.as_str())?;
-        self.mkdir(resolved.as_str(), caller.uid, caller.gid, mode & 0o777)
+        Ok(resolved)
     }
 
     /// Open an existing regular file under retained anchors. Search, access
@@ -121,19 +198,67 @@ impl<D: BlockDevice> Vfs<D> {
         read: bool,
         write: bool,
     ) -> Result<FileHandle, FsError> {
-        if !read && !write {
+        self.open_file_options_beneath(
+            root, cwd, path, caller,
+            OpenOptions { read, write, ..OpenOptions::default() },
+            |_, _| Ok(()),
+        )
+    }
+
+    /// Resolve, optionally create, and truncate under the namespace owner's
+    /// exclusive borrow. A created name survives later descriptor failures.
+    pub fn open_file_options_beneath(
+        &mut self,
+        root: FileHandle,
+        cwd: FileHandle,
+        path: &str,
+        caller: Credential,
+        options: OpenOptions,
+        authorize: impl FnOnce(&Self, &str) -> Result<(), FsError>,
+    ) -> Result<FileHandle, FsError> {
+        if !options.read && !options.write
+            || options.exclusive && options.create_mode.is_none()
+            || options.truncate && !options.write
+        {
             return Err(FsError::InvalidPath);
         }
-        let (resolved, metadata) = self.resolve_beneath(root, cwd, path, caller)?;
-        if metadata.stat.file_type != FileType::File {
-            return Err(FsError::IsDir);
+        let handle = match self.resolve_beneath(root, cwd, path, caller) {
+            Ok((resolved, metadata)) => {
+                if options.exclusive {
+                    return Err(FsError::AlreadyExists);
+                }
+                if metadata.stat.file_type != FileType::File {
+                    return Err(FsError::IsDir);
+                }
+                if (options.read && !check_permission(&metadata.stat, &caller, PermCheck::Read))
+                    || (options.write && !check_permission(&metadata.stat, &caller, PermCheck::Write))
+                {
+                    return Err(FsError::PermissionDenied);
+                }
+                if options.truncate {
+                    authorize(self, resolved.as_str())?;
+                }
+                self.open(resolved.as_str())?
+            }
+            Err(FsError::NotFound) if options.create_mode.is_some() && !path.ends_with('/') => {
+                let resolved = self.mutation_leaf(root, cwd, path, caller)?;
+                authorize(self, resolved.as_str())?;
+                self.create_file_exclusive(
+                    resolved.as_str(),
+                    caller.uid,
+                    caller.gid,
+                    options.create_mode.unwrap() & 0o777,
+                )?
+            }
+            Err(error) => return Err(error),
+        };
+        if options.truncate {
+            if let Err(error) = self.truncate(handle) {
+                self.close(handle)?;
+                return Err(error);
+            }
         }
-        if (read && !check_permission(&metadata.stat, &caller, PermCheck::Read))
-            || (write && !check_permission(&metadata.stat, &caller, PermCheck::Write))
-        {
-            return Err(FsError::PermissionDenied);
-        }
-        self.open(resolved.as_str())
+        Ok(handle)
     }
 
     /// Acquire an independently owned root/cwd pair for a cwd transition.

@@ -398,8 +398,27 @@ impl<D: BlockDevice> Fat32<D> {
     }
 
     pub fn mkdir_path(&mut self, path: &[u8]) -> Result<(), FatError> {
+        let (parent_path, _) = Self::split_parent(path)?;
+        let parent = self.stat_path(parent_path).ok_or(FatError::NotFound)?;
+        if !parent.is_dir {
+            return Err(FatError::NotDirectory);
+        }
         let cluster = self.allocate_cluster()?;
-        match self.create_link(path, ATTR_DIRECTORY, cluster, 0) {
+        let parent_cluster = if parent.first_cluster == self.rc { 0 } else { parent.first_cluster };
+        let mut sector = [0u8; BLOCK_SIZE];
+        for (entry, name, target) in [
+            (0, b".          ", cluster),
+            (32, b"..         ", parent_cluster),
+        ] {
+            sector[entry..entry + 11].copy_from_slice(name);
+            sector[entry + 11] = ATTR_DIRECTORY;
+            sector[entry + 20..entry + 22].copy_from_slice(&((target >> 16) as u16).to_le_bytes());
+            sector[entry + 26..entry + 28].copy_from_slice(&(target as u16).to_le_bytes());
+        }
+        // Initialize the child before publishing its name in the parent.
+        let initialized = self.dev.write_block(self.cluster_lba(cluster), &sector)
+            .map_err(|_| FatError::Io);
+        match initialized.and_then(|()| self.create_link(path, ATTR_DIRECTORY, cluster, 0)) {
             Ok(_) => Ok(()),
             Err(error) => {
                 let _ = self.free_chain(cluster);

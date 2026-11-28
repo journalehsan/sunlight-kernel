@@ -134,7 +134,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
     /// Every retained epoch gets 16 attempts, preventing a retrying old release
     /// from starving a replacement. Missing status proves no retirement/drain.
     pub fn poll_control(&mut self, control: &mut impl Control) {
-        self.poll_control_inner(control, None);
+        self.poll_control_inner(control, None, true);
     }
 
     /// Production initial-cwd policy handoff uses the same namespace as legacy
@@ -144,13 +144,23 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         control: &mut impl Control,
         namespace: &crate::directory::DirectoryNamespace<Device>,
     ) {
-        self.poll_control_inner(control, Some(namespace));
+        self.poll_control_inner(control, Some(namespace), true);
+    }
+
+    #[cfg(feature = "vfs-c1e10-test")]
+    pub fn poll_root_control_without_files(
+        &mut self,
+        control: &mut impl Control,
+        namespace: &crate::directory::DirectoryNamespace<Device>,
+    ) {
+        self.poll_control_inner(control, Some(namespace), false);
     }
 
     fn poll_control_inner(
         &mut self,
         control: &mut impl Control,
         namespace: Option<&crate::directory::DirectoryNamespace<Device>>,
+        drain_files: bool,
     ) {
         if let Some(registration) = control.snapshot() {
             let _ = self.observe_active(registration);
@@ -189,6 +199,9 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
                 if !control.reply(registration.epoch, &bytes) {
                     break;
                 }
+            }
+            if !drain_files {
+                continue;
             }
             for _ in 0..8 {
                 let Ok(Some(bytes)) = control.file_next(registration.epoch) else {

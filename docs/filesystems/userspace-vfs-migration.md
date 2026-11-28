@@ -3422,9 +3422,53 @@ VFS-C1E8 adds a whole-device fence at legacy FAT construction, includes
 publication in the mount observation fence, and lets N1D take a retained
 FAT backend only after fallible insertion checks. Ordinary publication
 remains blocked on receipt consumption ordered with namespace commit and
-retirement, and on ordinary namespace mutation routing. See the
+retirement. See the
 [C1E8 report](vfs-runtime-fat-ownership-cutover.md) and
 [results](vfs-runtime-fat-ownership-cutover-results.json).
+
+VFS-C1E9 connects ordinary mkdir, unlink and rename for selected callers to
+the existing authenticated retained view. Its [report](vfs-ordinary-namespace-mutation-routing.md)
+and [results](vfs-ordinary-namespace-mutation-routing-results.json) separate
+service-owned tmpfs qualification from the blocked committed FAT matrix.
+
+VFS-C1E10 connects authorized StorageCtl publication to N1D behind a
+separate opt-in candidate. A single runtime dispatcher carries insertion
+through receipt consumption or withdrawal on rejected acknowledgement.
+The first FAT mount and its reattachment were observed through ordinary
+StorageCtl and retained file access. That milestone left write, topology agreement and
+private mmap qualification open. See the
+[C1E10 report](vfs-storagectl-atomic-publication.md) and
+[results](vfs-storagectl-atomic-publication-results.json).
+
+VFS-C1E11 carries kernel-authenticated StorageAdmin authority to service
+pathname mutation. The service applies the runtime-mount exception only
+after resolving the path under the retained root and cwd. Copied OPEN
+resolves existing files and creates missing files under the same VFS lock,
+using the existing descriptor installation and compensation path. Relative
+OPEN uses the retained directory object after rename. A successful creation
+survives a later descriptor installation failure. FAT32 retains its existing
+synthetic ownership and mode, while tmpfs stores the supplied creation mode.
+The 1-vCPU, 2-GiB disposable run committed and withdrew two incarnations,
+verified relative file access through a renamed directory, and recovered
+the exact new payload after reattachment. Independent `fsck.fat -n` passed.
+The populated-FSInfo run changed FAT volume sectors 1, 7, 32, 1025, 2018,
+2020, 2021, 2022 and 2023. Seven releases preserved the same 20 KiB DMA
+footprint, and the four fixture processes retired without swap or IPC
+entries. The ownership guard still reports the four C1E10 findings.
+
+VFS-C1E12 qualifies ordinary native and Linux eager private mmap on a newly
+created file on the same committed service-owned FAT32 mount. The opt-in
+native libc adapter now admits file descriptors and page-aligned offsets
+to the existing D2A/D2B transaction. The disposable guest verified bytes,
+EOF padding, permissions, cursor preservation, source close and repeated
+unmap. StorageCtl refused withdrawal while the retained description was
+live. After cleanup, it withdrew and released the lease, and reattachment
+and independent read-only fsck verified the original file. StorageCtl
+inventory, ProcFS mountinfo and Linux statfs agreed for the committed view.
+The four legacy ownership sites still block production cutover. D3 and
+broader sharing and deployment qualification remain separate gates. See
+the [C1E12 report](vfs-committed-fat-private-mmap.md) and
+[results](vfs-committed-fat-private-mmap-results.json).
 
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact

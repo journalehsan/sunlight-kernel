@@ -1,0 +1,172 @@
+{
+  "stage": "VFS-C1E12",
+  "date": "2026-11-28",
+  "status": "PASS",
+  "scope": "Opt-in committed service-owned FAT32 ordinary private mmap in the disposable StorageCtl fixture",
+  "production_cutover": "BLOCKED",
+  "historical_failure": {
+    "status": "FAIL",
+    "original_harness": "target/vfs-c1e10/native-settlement-retry.log",
+    "original_serial": "target/vfs-n1o-qemu-mp5h6jtu/serial.log",
+    "replay_harness": "target/vfs-c1e12/historical-replay.log",
+    "replay_serial": "target/vfs-n1o-qemu-3920jpcg/serial.log",
+    "replay_executable": "target/vfs-c1e10/candidate-settlement-retry.elf",
+    "callsite_disassembly": "target/vfs-c1e12/historical-mmap-callsite.disassembly",
+    "result": "Errno::Inval at services/vfs_server/src/directory/attachment/native.rs:264:46 after committed FAT open, seek and read",
+    "root_cause": "sunlight-libc/src/mman.rs::validate_mmap_request required anonymous private flags, fd -1 and offset zero, rejecting the file request before syscall 50",
+    "earlier_mkdir_attempt": {
+      "status": "FAIL",
+      "original_serial": "target/vfs-n1o-qemu-8_09ou92/serial.log",
+      "replay_harness": "target/vfs-c1e12/historical-final-replay.log",
+      "replay_serial": "target/vfs-n1o-qemu-ancyerc0/serial.log",
+      "result": "Errno::Failed at native.rs:253:47"
+    }
+  },
+  "implementation": {
+    "native_abi": "sunlight-libc/private-file-mmap",
+    "candidate_service": "vfs-c1e12-test",
+    "candidate_kernel": "vfs_c1e12_test",
+    "mapping_population": "Existing C1E7/D2A/D2B retained-description transaction, zero-padded bounded PREAD and eager install",
+    "fixture_checkpoints": "PTE flags, per-caller owned frames and lower-half page tables, VM regions and service description references"
+  },
+  "native": {
+    "status": "PASS",
+    "syscall": 50,
+    "offset_commits": {"count": 3, "offset": 4096, "span": 12288, "staged_file_bytes": 4105},
+    "source_close_commit": {"count": 1, "offset": 0, "span": 4096, "staged_file_bytes": 4096},
+    "verified": ["ordinary OPEN and WRITE of 8201 bytes", "FSTAT size", "exact mapped bytes", "partial final page and whole-page EOF zero fill", "RW/NX, RX and RO/NX PTEs", "private writes and unchanged backing bytes", "dup cursor preservation", "mapping survives final source close", "repeated unmap and absent leaves", "complete process retirement"]
+  },
+  "linux": {
+    "status": "PASS",
+    "syscall": 9,
+    "offset_commits": {"count": 2, "offset": 4096, "span": 12288, "staged_file_bytes": 4105},
+    "source_close_commit": {"count": 1, "offset": 0, "span": 12288, "staged_file_bytes": 8201},
+    "verified": ["same committed FAT file", "unaligned offset EINVAL", "exact mapped bytes", "partial final page and whole-page EOF zero fill", "RW/NX and RO/NX PTEs", "private writes and unchanged backing bytes", "cursor preservation", "mapping survives source close", "repeated unmap and absent leaves", "complete process retirement"],
+    "parked_mount_withdrawal": "NOT_RUN",
+    "smp_committed_fat": "NOT_RUN"
+  },
+  "withdrawal": {
+    "status": "PASS",
+    "first_attempt": "EBUSY with an eager mapping and a retained duplicated FAT description",
+    "retained_read_after_busy": "PASS",
+    "mapped_read_after_final_close": "PASS",
+    "withdraw_after_final_unmap": "PASS",
+    "synchronize_then_drain_and_release": "PASS",
+    "successor_mount_identity": "PASS",
+    "same_boot_reattach_exact_payload": "PASS"
+  },
+  "integrated_metadata": {
+    "status": "PASS",
+    "mount_id": 9223372041149743106,
+    "mount_id_hex": "0x8000000100000002",
+    "source": 2,
+    "mountpoint": "/mnt/volume",
+    "storagectl_list": "PASS",
+    "storagectl_inventory": "PASS",
+    "procfs_mountinfo": {"status": "PASS", "type": "vfat", "device": "240:2", "source": "helios-block:2", "visibility_after_withdrawal": "absent"},
+    "linux_statfs": {"status": "PASS", "type": "0x4d44", "block_size": 512, "fragment_size": 512, "blocks": 127006, "free": 126984, "available": 126984, "after_withdrawal": "ENOENT"},
+    "distinct_routing_defect_discovered": false
+  },
+  "accounting": {
+    "status": "PASS",
+    "caller_baseline_each": {"owned_frames": 22320, "regions": 4, "page_tables": 50},
+    "mapping_frame_delta_after_unmap": 0,
+    "page_table_delta_after_unmap": 0,
+    "final_service_description_rows": 0,
+    "final_service_description_references": 0,
+    "reaped_pids": [39000, 39001, 39002, 3],
+    "service_reap": {"user_frames": 22324, "page_tables": 53},
+    "swap_blocks": 0,
+    "queued_ipc_entries": 0,
+    "lease_releases_per_run": 7,
+    "settlement": {"outstanding_commands": 0, "mapping_users": 0, "retained_command_data": 0, "pending_flush": false, "retained_dma_bytes": 20480, "queue": "0x10bd000", "bounce": "0x10c1000"}
+  },
+  "independent_filesystem": {
+    "status": "PASS",
+    "fsck": "fsck.fat -n",
+    "mtools": "PASS",
+    "partition_prefix_byte_identical": true,
+    "fat_copies_and_cluster_chain": "PASS",
+    "file": "MMAP.BIN",
+    "file_bytes": 8201,
+    "file_sha256": "0097162c275f7f260e438eee17d45f946a5d97e1a0533d9b27145b7619487fc0",
+    "total_clusters": 127006,
+    "allocated_clusters": 22,
+    "runs": [
+      {
+        "status": "PASS",
+        "initial_fsinfo": "populated",
+        "final_fsinfo": "unknown primary and backup hints",
+        "memory_mib": 2048,
+        "vcpus": 1,
+        "harness": "target/vfs-c1e12/native-qualified-populated.log",
+        "serial": "target/vfs-n1o-qemu-2sr4tx9a/serial.log",
+        "closed_fat": "target/vfs-n1o-qemu-2sr4tx9a/closed.fat",
+        "closed_sha256": "f24f29a335b60e08874a8782dd813eec6a14e44ef13f09f5bcb04af3c855cfda",
+        "changed_sectors": [1, 7, 32, 1025, 2018, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039]
+      },
+      {
+        "status": "PASS",
+        "initial_fsinfo": "unknown",
+        "final_fsinfo": "unknown primary and backup hints",
+        "memory_mib": 2048,
+        "vcpus": 1,
+        "harness": "target/vfs-c1e12/native-qualified-unknown.log",
+        "serial": "target/vfs-n1o-qemu-7bywsu9e/serial.log",
+        "closed_fat": "target/vfs-n1o-qemu-7bywsu9e/closed.fat",
+        "closed_sha256": "b85dcb6dd87bf4a9810a0628b66d35867a85ff20d66ffb7f2b8f865da75dca2a",
+        "changed_sectors": [32, 1025, 2018, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039]
+      }
+    ]
+  },
+  "regressions": {
+    "c1e11_writable_fat": {"status": "PASS", "historical": "target/vfs-c1e11/native-final.log", "fresh": "Both C1E12 guest runs"},
+    "c1e6a_and_c1e6b": {"status": "PASS", "retirement_regression_emitted": true, "stale_descriptor_alias_consumed": false, "kernel_stack_bytes": 32768, "production_execution": "NOT_RUN"},
+    "c1e7": {"status": "PASS", "ordinary_linux_control": "Both C1E12 guest runs"},
+    "d1a_host": {"status": "PASS", "evidence": ["target/vfs-c1e12/registration.log", "target/vfs-c1e12/host.log"]},
+    "d1b_d2a_d2b": {
+      "status": "PASS",
+      "scope": "Fresh diskless control on one, two and four vCPUs",
+      "verification": "target/vfs-c1e12/d2b-verification.log",
+      "results": ["target/vfs-c1e12/d2b-1.json", "target/vfs-c1e12/d2b-2.json", "target/vfs-c1e12/d2b-4.json"],
+      "service_reap": {"user_frames": 22266, "page_tables": 53},
+      "verifier_adjustment": "Fresh service ELF uses 22266 user frames. The archived verifier hardcodes 22264 for its previous ELF."
+    },
+    "historical_fd_host_binary_replay": {"status": "PASS", "tests": 20, "log": "target/vfs-c1e12/fd-host-archived.log"},
+    "exec_while_mmap_parked": "BLOCKED",
+    "d3_reclaim_and_real_fault_restoration": "NOT_RUN",
+    "guarded_ordinary_production_boot": {"status": "NOT_RUN", "gate": "BLOCKED"},
+    "workspace_library_suite": "NOT_RUN"
+  },
+  "host": {
+    "registration": {"status": "PASS", "tests": 112, "log": "target/vfs-c1e12/registration.log"},
+    "libc_default": {"status": "PASS", "tests": 5, "log": "target/vfs-c1e12/libc-default.log"},
+    "libc_opt_in": {"status": "PASS", "tests": 5, "log": "target/vfs-c1e12/libc-candidate.log"},
+    "fat_filesystem_service_libraries": {"status": "PASS", "tests": 228, "log": "target/vfs-c1e12/host.log"},
+    "copied_file_transport": {"status": "PASS", "tests": 10, "log": "target/vfs-c1e12/codec.log"},
+    "mmap_read_progress": {"status": "PASS", "tests": 3, "log": "target/vfs-c1e12/read-progress-final.log"}
+  },
+  "builds": {
+    "production_release_kernel": {"status": "PASS", "log": "target/vfs-c1e12/production-final.log"},
+    "release_vfs": {"status": "PASS", "log": "target/vfs-c1e12/release-vfs.log"},
+    "candidate_kernel": {"status": "PASS", "log": "target/vfs-c1e12/kernel-qualified.log", "sha256": "0257c3dd71e453e0cb10feff333b3d25eade584b3b44e378ecda1b11c9d08055"},
+    "embedded_candidate_service": {"status": "PASS", "log": "target/vfs-c1e12/service-qualified.log", "sha256": "65b49da2276d6b7cabfa6346b94eb959f153e4d88377f0f250868712409a3fef"}
+  },
+  "intermediate_runs": [
+    {"status": "PARTIAL", "log": "target/vfs-c1e12/native-initial.log", "reason": "Both ordinary FAT mmap routes and the independent image passed before explicit PTE and per-caller VM samples were added."},
+    {"status": "FAIL", "log": "target/vfs-c1e12/native-populated.log", "reason": "Host verifier compared system-wide page tables across unrelated process startup. Guest FAT mmap and withdrawal completed. Final gate counts each caller's page tables."},
+    {"status": "FAIL", "log": "target/vfs-c1e12/native-populated-retry.log", "reason": "Reproduced the system-wide page-table sampling defect."}
+  ],
+  "ownership_guard": {
+    "status": "FAIL",
+    "references": 71,
+    "check": {"status": "FAIL", "log": "target/vfs-c1e12/guard-final.log"},
+    "no_growth": {"status": "FAIL", "log": "target/vfs-c1e12/guard-no-growth.log"},
+    "unmatched": {
+      "process::mmap::sys_mmap": "Legacy kernel-owned file mapping",
+      "linux_procfs::mountinfo_snapshot": "Legacy kernel topology snapshot",
+      "sys_linux_statfs": "Legacy kernel FAT capacity lookup",
+      "storage::mount": "Legacy runtime FAT construction"
+    }
+  }
+}

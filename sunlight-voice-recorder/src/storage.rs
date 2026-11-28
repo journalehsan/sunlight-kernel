@@ -206,6 +206,9 @@ pub mod native {
             Errno::BrokenPipe => 32,
             Errno::NoSpace => 28,
             Errno::NoMemory => 12,
+            Errno::Busy => 16,
+            Errno::Exists => 17,
+            Errno::Unsupported => 95,
             Errno::NotConnected => 107,
         })
     }

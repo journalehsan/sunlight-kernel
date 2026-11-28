@@ -673,7 +673,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
             let native = num & !::sunlight_ipc::NATIVE_SYSCALL_TAG;
             let capture_control =
                 cfg!(all(debug_assertions, feature = "helios_wayland_test")) && native == 0x574c;
-            num = if capture_control
+            let fat_mapping_checkpoint =
+                cfg!(all(debug_assertions, feature = "vfs_c1e12_test")) && native == 0xf1c7;
+            num = if capture_control || fat_mapping_checkpoint
                 || matches!(native, 1..=8 | 10..=18 | 21 | 25 | 32 | 33 | 39 | 72 | 86 | 92..=94 | 99)
             {
                 native
@@ -688,6 +690,13 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
             match sunlight_compat_linux::translate_syscall(linux_num) {
                 native_num if native_num >= 0 => {
                     num = native_num as u64;
+                    #[cfg(feature = "vfs_c1e2_test")]
+                    if (sched.current_process().vfs_stat_routed
+                        || sched.current_shared_process().vfs_stat_routed)
+                        && matches!(linux_num, 82 | 87)
+                    {
+                        num = if linux_num == 82 { 1066 } else { 1067 };
+                    }
                 }
                 -2 => {
                     if linux_num == 12 {
@@ -1275,6 +1284,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         0xf1c5 if !linux_compat => descriptor_probe_pread(frame),
         #[cfg(all(debug_assertions, feature = "vfs_c1a_test"))]
         0xf1c6 if !linux_compat => ordinary::checkpoint(frame.rdi),
+        #[cfg(all(debug_assertions, feature = "vfs_c1e12_test"))]
+        0xf1c7 if !linux_compat => crate::process::mmap::service::fat_checkpoint(frame.rdi),
         181 => sys_vfs_stat(frame),
         182 => sys_service_directory_transition(frame, true),
         // Hardware identity + thermal sensors (read-only; gated by process name).
@@ -1324,11 +1335,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         1024 => sys_linux_socketpair(frame),
         1025 => sys_linux_unlinkat(frame),
         1026 => {
-            let resume = frame.rcx;
             let result = sys_linux_newfstatat(frame);
-            if linux_compat && frame.rcx != resume {
-                // stat/lstat normalization changed these registers. Replay must
-                // enter translation with the original Linux argument layout.
+            if linux_compat {
                 [
                     frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9,
                 ] = original_args;
@@ -1344,7 +1352,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         1033 => sys_linux_pwrite64(frame),
         1034 => sys_linux_getdents64(frame),
         1035 => sys_linux_faccessat(frame),
-        1036 => sys_linux_mkdirat(frame),
+        1036 => {
+            let result = sys_linux_mkdirat(frame);
+            [frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9] = original_args;
+            result
+        }
         1037 => sys_linux_readlinkat(frame),
         1038 => sys_linux_eventfd2(frame),
         1039 => sys_linux_sched_getaffinity(frame),
@@ -1377,6 +1389,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
         1063 if linux_compat => sys_linux_ftruncate_memfd(frame),
         1064 if linux_compat => sys_linux_memfd_create(frame),
         1065 if linux_compat => sys_linux_recvmsg(frame),
+        #[cfg(feature = "vfs_c1e2_test")]
+        1066 if linux_compat => sys_rename(frame, false),
+        #[cfg(feature = "vfs_c1e2_test")]
+        1067 if linux_compat => sys_unlink(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         #[cfg(all(debug_assertions, feature = "helios_wayland_test"))]
         0x574c if !linux_compat => {
@@ -1570,6 +1586,9 @@ const ERR_EPIPE: u64 = u64::MAX - 10;
 const ERR_ENOSPC: u64 = u64::MAX - 11;
 const ERR_ENOMEM: u64 = u64::MAX - 12;
 const ERR_ENOTCONN: u64 = u64::MAX - 13;
+const ERR_EBUSY: u64 = u64::MAX - 14;
+const ERR_EEXIST: u64 = u64::MAX - 15;
+const ERR_EOPNOTSUPP: u64 = u64::MAX - 16;
 
 fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
     match error {
@@ -5990,10 +6009,8 @@ fn validate_secret_parent<D: sunlight_block::BlockDevice>(vfs: &mut sunlight_fs:
     )
 }
 
-/// Syscall: open (40) — kernel-VFS backed.
-/// rdi = pathname (user-space pointer)
-/// rsi = flags (reserved)
-/// rdx = mode (reserved)
+/// Syscall: open (40).
+/// rdi = pathname (user-space pointer), rsi = flags, rdx = creation mode
 fn sys_open(frame: &mut SyscallFrame) -> u64 {
     let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
         Ok(bytes) => bytes,
@@ -6003,9 +6020,16 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         Ok(s) => s,
         Err(_) => return ERR_EINVAL,
     };
-    let path = resolve_current_path(raw);
     let (flags, mode) = (frame.rsi, frame.rdx);
+    if file_open_routed() {
+        return open_resolved_path(frame, raw, flags, mode);
+    }
+    let path = resolve_current_path(raw);
     open_resolved_path(frame, &path, flags, mode)
+}
+
+fn file_open_routed() -> bool {
+    crate::sched::with_scheduler(|sched| sched.current_process().vfs_file_routed)
 }
 
 fn open_resolved_path(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64) -> u64 {
@@ -6036,9 +6060,9 @@ fn open_resolved_path(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u6
         return procfs::native_result(procfs::open(frame, path, flags));
     }
     // An explicitly selected caller never recovers kernel traversal. The copied
-    // route supports existing files only; unsupported flags fail closed.
-    if crate::sched::with_scheduler(|s| s.current_process().vfs_file_routed) {
-        return service_open(frame, path, flags, current_is_linux());
+    // route admits supported regular-file opens.
+    if file_open_routed() {
+        return service_open(frame, path, flags, mode, current_is_linux());
     }
     if path == "/var/lib/sunlight-kv/broker.store"
         && !crate::sched::with_scheduler(|s| s.current_process().trusted_kv_service)
@@ -6944,6 +6968,9 @@ fn service_errno_raw(errno: u64, is_linux: bool) -> u64 {
         2 => ERR_NOENT,
         9 => ERR_EBADF,
         13 => ERR_EACCES,
+        16 => ERR_EBUSY,
+        17 => ERR_EEXIST,
+        95 => ERR_EOPNOTSUPP,
         20 => ERR_ENOTDIR,
         21 => ERR_EISDIR,
         22 => ERR_EINVAL,
@@ -6980,48 +7007,51 @@ fn install_service_fd(
     }
 }
 
-/// Admission and descriptor installation for a copied native/Linux open. Only
-/// existing regular files with read/write access are supported; create,
-/// truncate, exclusive and directory opens stay on the kernel path.
-fn service_open(frame: &mut SyscallFrame, path: &str, flags: u64, is_linux: bool) -> u64 {
+/// Admission and descriptor installation for a copied native/Linux open.
+fn service_open(frame: &mut SyscallFrame, path: &str, flags: u64, mode: u64, is_linux: bool) -> u64 {
     use ::sunlight_ipc::vfs_rpc::file_transport as api;
-    let linux_flags = if is_linux {
-        match sunlight_compat_linux::open_flags::parse(flags) {
-            Ok(parsed) => Some(parsed),
-            Err(()) => return service_errno_raw(22, is_linux),
-        }
+    let parsed = if is_linux {
+        sunlight_compat_linux::open_flags::parse(flags)
+    } else if flags & !(O_ACCMODE | O_CREAT | O_EXCL | O_TRUNC | O_DIRECTORY | O_CLOEXEC) == 0 {
+        sunlight_compat_linux::open_flags::parse(flags)
     } else {
-        None
+        return service_errno_raw(95, is_linux);
     };
-    let (read, write, unsupported, descriptor_flags) = if let Some(parsed) = linux_flags {
-        (
-            parsed.read,
-            parsed.write,
-            parsed.create || parsed.exclusive || parsed.directory || parsed.truncate,
-            parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 },
-        )
-    } else {
-        let accmode = flags & O_ACCMODE;
-        let read = accmode == 0 || accmode == 2;
-        let write = accmode == 1 || accmode == 2;
-        (
-            read,
-            write,
-            flags & (O_CREAT | O_EXCL | O_TRUNC | O_DIRECTORY) != 0,
-            flags as u32,
-        )
+    let Ok(parsed) = parsed else {
+        return service_errno_raw(22, is_linux);
     };
-    if unsupported || (!read && !write) {
+    if parsed.directory || parsed.status & sunlight_compat_linux::abi::O_APPEND as u32 != 0 {
         return service_errno_raw(95, is_linux);
     }
+    let descriptor_flags = parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 };
+    let (read, write) = (parsed.read, parsed.write);
     let access = match (read, write) {
         (true, true) => api::ACCESS_READ | api::ACCESS_WRITE,
         (true, false) => api::ACCESS_READ,
         _ => api::ACCESS_WRITE,
     };
+    let mut options = access;
+    if parsed.create {
+        options |= api::OPEN_CREATE;
+    }
+    if parsed.exclusive {
+        options |= api::OPEN_EXCLUSIVE;
+    }
+    if parsed.truncate {
+        options |= api::OPEN_TRUNCATE;
+    }
+    if (parsed.create || parsed.truncate) && has_storage_admin() {
+        options |= api::OPEN_STORAGE_ADMIN;
+    }
+    let mode = if parsed.create {
+        let permissions = mode & 0o777;
+        if permissions == 0 && !is_linux { 0o644 } else { permissions }
+    } else {
+        0
+    };
     service_file(
         frame,
-        crate::ipc::FileOperation::Open { path, access },
+        crate::ipc::FileOperation::Open { path, access: options, mode },
         None,
         Some((access, descriptor_flags)),
         move |_frame, completion| {
@@ -7956,7 +7986,7 @@ fn sys_linux_sendto(frame: &mut SyscallFrame) -> u64 {
 
 fn sys_linux_openat(frame: &mut SyscallFrame) -> u64 {
     let dirfd = frame.rdi as i32;
-    let path = match linux_resolve_at(dirfd, frame.rsi) {
+    let path = match linux_at_path(dirfd, frame.rsi, file_open_routed()) {
         Ok(path) => path,
         Err(error) => return error,
     };
@@ -8067,6 +8097,14 @@ fn vfs_handle_path(handle: sunlight_fs::vfs::FileHandle) -> Result<alloc::string
 /// directory may fail. `.` and `..` segments are rejected to match native VFS
 /// path policy.
 fn linux_resolve_at(dirfd: i32, path_ptr: u64) -> Result<alloc::string::String, u64> {
+    linux_at_path(dirfd, path_ptr, false)
+}
+
+fn linux_at_path(
+    dirfd: i32,
+    path_ptr: u64,
+    retained_open: bool,
+) -> Result<alloc::string::String, u64> {
     let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
         Ok(bytes) => bytes,
         Err(error) => return Err(user_memory_failure(error)),
@@ -8078,6 +8116,9 @@ fn linux_resolve_at(dirfd: i32, path_ptr: u64) -> Result<alloc::string::String, 
     if raw.is_empty() {
         return Err(linux_errno(sunlight_compat_linux::abi::ENOENT as u64));
     }
+    if retained_open && (raw.starts_with('/') || dirfd == sunlight_compat_linux::abi::AT_FDCWD) {
+        return Ok(alloc::string::String::from(raw));
+    }
     let joined = if raw.starts_with('/') {
         alloc::string::String::from(raw)
     } else if dirfd == sunlight_compat_linux::abi::AT_FDCWD {
@@ -8085,6 +8126,9 @@ fn linux_resolve_at(dirfd: i32, path_ptr: u64) -> Result<alloc::string::String, 
     } else if let Some(path) = procfs::relative(dirfd, raw) {
         path?
     } else {
+        if retained_open {
+            return Err(linux_errno(95));
+        }
         let vfs_handle = {
             let sched = crate::sched::SCHEDULER.lock();
             match sched.current_shared_process().fd_table.get(dirfd) {
@@ -8576,7 +8620,91 @@ fn sys_linux_faccessat(frame: &mut SyscallFrame) -> u64 {
     0
 }
 
+#[cfg(feature = "vfs_c1e2_test")]
+fn namespace_mutation_routed() -> bool {
+    crate::sched::with_scheduler(|sched| {
+        sched.current_process().vfs_stat_routed || sched.current_shared_process().vfs_stat_routed
+    })
+}
+
+#[cfg(feature = "vfs_c1e2_test")]
+fn service_namespace_mutation(
+    frame: &mut SyscallFrame,
+    op: u64,
+    flags: u64,
+    first: (i32, u64),
+    second: Option<(i32, u64)>,
+) -> u64 {
+    use ::sunlight_ipc::vfs_rpc::file_transport as api;
+    let linux = current_is_linux();
+    let error = |errno| {
+        if linux || op == api::MKDIR || errno == 16 {
+            service_errno_raw(errno, linux)
+        } else {
+            u64::MAX
+        }
+    };
+    let read = |(dirfd, ptr)| {
+        let bytes = read_user_cstr(ptr, USER_PATH_MAX).map_err(user_memory_failure)?;
+        let path = core::str::from_utf8(&bytes).map_err(|_| error(22))?;
+        if path.is_empty() {
+            return Err(error(2));
+        }
+        if !path.starts_with('/') && dirfd != sunlight_compat_linux::abi::AT_FDCWD {
+            return Err(error(95));
+        }
+        if linux && procfs::owns(path) {
+            return Err(error(30));
+        }
+        Ok(bytes)
+    };
+    let mut paths = match read(first) {
+        Ok(bytes) => bytes,
+        Err(error) => return error,
+    };
+    if let Some(second) = second {
+        let target = match read(second) {
+            Ok(bytes) => bytes,
+            Err(error) => return error,
+        };
+        if paths.try_reserve_exact(1 + target.len()).is_err() {
+            return error(12);
+        }
+        paths.push(0);
+        paths.extend_from_slice(&target);
+    }
+    let paths = core::str::from_utf8(&paths).expect("validated mutation paths");
+    let storage_admin = has_storage_admin();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let pid = sched.current_pid();
+    match crate::ipc::vfs_file_call(
+        pid, crate::ipc::FileOperation::MutateNamespace { op, flags, paths, storage_admin },
+        None, &mut sched, &caps, |_, _, _| Err(5),
+    ) {
+        Ok(crate::ipc::FileCall::Pending) => {
+            sched.account_and_apply_churn_penalty();
+            let tick = sched.global_tick;
+            if let Some(index) = sched.current_process_index() {
+                sched.processes[index].block_start_tick = tick;
+                sched.remove_from_ready_queues(index);
+            }
+            frame.rcx = frame.rcx.saturating_sub(2);
+            crate::sched::request_reschedule();
+            frame.rax
+        }
+        Ok(crate::ipc::FileCall::Complete(completion)) if completion.errno == 0 => 0,
+        Ok(crate::ipc::FileCall::Complete(completion)) => error(completion.errno),
+        Err(_) => error(5),
+    }
+}
+
 fn sys_linux_mkdirat(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(feature = "vfs_c1e2_test")]
+    if namespace_mutation_routed() {
+        return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
+            frame.rdx & 0o777, (frame.rdi as i32, frame.rsi), None);
+    }
     let dirfd = frame.rdi as i32;
     let path = match linux_resolve_at(dirfd, frame.rsi) {
         Ok(path) => path,
@@ -10501,6 +10629,11 @@ fn sys_native_recv(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(feature = "vfs_c1e2_test")]
+    if namespace_mutation_routed() {
+        return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
+            0, (frame.rdi as i32, frame.rsi), Some((frame.rdx as i32, frame.r10)));
+    }
     let old = match linux_resolve_at(frame.rdi as i32, frame.rsi) {
         Ok(path) => path,
         Err(error) => return error,
@@ -10534,6 +10667,11 @@ fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
     let flags = frame.rdx;
     if flags != 0 {
         return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
+    }
+    #[cfg(feature = "vfs_c1e2_test")]
+    if namespace_mutation_routed() {
+        return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
+            0, (frame.rdi as i32, frame.rsi), None);
     }
     let path = match linux_resolve_at(frame.rdi as i32, frame.rsi) {
         Ok(path) => path,
@@ -11604,6 +11742,11 @@ fn sys_service_stat(frame: &mut SyscallFrame, path: &str, linux: bool) -> u64 {
 /// rdi = pathname (user-space pointer)
 /// rsi = mode bits
 fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(feature = "vfs_c1e2_test")]
+    if namespace_mutation_routed() {
+        return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::MKDIR,
+            frame.rsi & 0o777, (-100, frame.rdi), None);
+    }
     let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),
@@ -11653,6 +11796,11 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: unlink (65) — remove a file.
 /// rdi = NUL-terminated path
 fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(feature = "vfs_c1e2_test")]
+    if namespace_mutation_routed() {
+        return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::UNLINK,
+            0, (-100, frame.rdi), None);
+    }
     let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),
@@ -11684,6 +11832,11 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: rename (66), or RenameNoReplace (149) for atomic collision checking.
 /// rdi = NUL-terminated old path, rsi = NUL-terminated new path
 fn sys_rename(frame: &mut SyscallFrame, no_replace: bool) -> u64 {
+    #[cfg(feature = "vfs_c1e2_test")]
+    if namespace_mutation_routed() {
+        return service_namespace_mutation(frame, ::sunlight_ipc::vfs_rpc::file_transport::RENAME,
+            u64::from(no_replace), (-100, frame.rdi), Some((-100, frame.rsi)));
+    }
     let old_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),

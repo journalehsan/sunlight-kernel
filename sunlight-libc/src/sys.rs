@@ -88,6 +88,9 @@ pub const EPIPE_RAW: u64 = u64::MAX - 10;
 pub const ENOSPC_RAW: u64 = u64::MAX - 11;
 pub const ENOMEM_RAW: u64 = u64::MAX - 12;
 pub const ENOTCONN_RAW: u64 = u64::MAX - 13;
+pub const EBUSY_RAW: u64 = u64::MAX - 14;
+pub const EEXIST_RAW: u64 = u64::MAX - 15;
+pub const EOPNOTSUPP_RAW: u64 = u64::MAX - 16;
 
 /// Largest count that can be represented by the public `ssize_t` result.
 /// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
@@ -130,6 +133,9 @@ pub enum Errno {
     NoSpace,
     NoMemory,
     NotConnected,
+    Busy,
+    Exists,
+    Unsupported,
 }
 
 pub fn check(ret: u64) -> Result<u64, Errno> {
@@ -148,6 +154,9 @@ pub fn check(ret: u64) -> Result<u64, Errno> {
         ENOSPC_RAW => Err(Errno::NoSpace),
         ENOMEM_RAW => Err(Errno::NoMemory),
         ENOTCONN_RAW => Err(Errno::NotConnected),
+        EBUSY_RAW => Err(Errno::Busy),
+        EEXIST_RAW => Err(Errno::Exists),
+        EOPNOTSUPP_RAW => Err(Errno::Unsupported),
         n => Ok(n),
     }
 }

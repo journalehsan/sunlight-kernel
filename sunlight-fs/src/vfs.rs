@@ -2051,4 +2051,4 @@ mod anchored;
 mod attachment;
 #[cfg(any(not(target_os = "none"), feature = "attachment-transactions"))]
 pub use attachment::{AttachmentCapacity, AttachmentRow, DeviceWithdrawal};
-pub use anchored::ObjectMetadata;
+pub use anchored::{ObjectMetadata, OpenOptions};
