@@ -2318,6 +2318,13 @@ struct CwdChannel<'a> {
     file: Option<[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES]>,
 }
 impl sunlight_vfs_server::runtime::control::Control for CwdChannel<'_> {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    fn file_reply(&mut self, epoch: u64, bytes: &[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES]) -> bool {
+        authenticate(self.kernel, 3, epoch, self.sched, self.caps).is_ok_and(|registration| {
+            self.kernel.reply_file(registration, bytes, self.sched).is_ok()
+        })
+    }
+
     fn file_next(&mut self, _: u64) -> Result<Option<[u8; sunlight_ipc::vfs_rpc::file_transport::FRAME_BYTES]>, ()> {
         Ok(self.file)
     }
@@ -3907,4 +3914,201 @@ fn generic_downloads_caller_retirement_drains_active_epoch() {
     assert!(channel.kernel.chdirs.iter().all(Option::is_none));
     assert_eq!(namespace.shared().lock().open_handle_count(), 0);
     assert!(channel.kernel.remote.iter().flatten().all(|remote| remote.ownership.outstanding() == 0));
+}
+
+#[cfg(feature = "vfs_c2e_candidate")]
+#[test]
+fn executable_source_selection_and_loader_input_through_copied_channel() {
+    use super::super::{chdir, executable, file};
+    use sunlight_elf::{classify_personality, parse_elf_header, plan_segments, Personality};
+    use sunlight_ipc::vfs_rpc::{chdir_transport::Kind, file_transport as wire};
+
+    let _serial = crate::ipc::vfs_resources::TEST_LEDGER_LOCK.lock();
+    let (mut kernel, mut sched, caps, mut identity) = setup();
+    sched.processes[1].uid = 0;
+    sched.processes[1].gid = 0;
+    identity.uid = 0;
+    identity.gid = 0;
+    let (mut legacy, namespace) = crate::downloads_namespaces();
+    let mut service = Service::<1, 8, 1>::new();
+    let registration = identity.registration;
+    let mut channel = CwdChannel {
+        kernel: &mut kernel, sched: &mut sched, caps: &caps, reject_commit: false,
+        legacy: Some(&mut legacy), file: None,
+    };
+    assert_eq!(
+        chdir::transition_call_runtime(channel.kernel, 10, "/root/Downloads", Kind::EnterDownloads,
+            channel.sched, channel.caps),
+        Ok(None)
+    );
+    service.poll_root_control(&mut channel, &namespace);
+    assert_eq!(chdir::resume_runtime(channel.kernel, 10, (0, 0), Kind::Directory, channel.sched),
+        Ok(Some(Some(0))));
+    let receipt = channel.kernel.caller_receipt(identity).unwrap();
+    let baseline = namespace.shared().lock().open_handle_count();
+
+    let advance = |channel: &mut CwdChannel<'_>, source: &mut executable::Source| {
+        channel.sched.processes[1].state = crate::process::ProcessState::Running;
+        let mut first = true;
+        source.step(|operation, _| {
+            if first {
+                first = false;
+                if let Some(slot) = channel.kernel.caller_publication(identity.caller) {
+                    let op = channel.kernel.file_publications[slot].as_ref().unwrap().op;
+                    let reply = if op == wire::OPEN {
+                        channel.kernel.finish_open(slot, |token, _| Ok(token))?
+                    } else {
+                        channel.kernel.take_file(identity.caller, op).expect("reply delivered")
+                    };
+                    return Ok(file::FileCall::Complete(reply));
+                }
+            }
+            channel.kernel.publish_file(identity, operation, Some(receipt), channel.sched)?;
+            Ok(file::FileCall::Pending)
+        })
+    };
+    let exchange = |channel: &mut CwdChannel<'_>, service: &mut Service<1, 8, 1>, op: u64| {
+        let mut packet = [0; wire::FRAME_BYTES];
+        assert!(channel.kernel.next_file(registration, &mut packet).unwrap().is_some());
+        assert_eq!(wire::Request::decode(&packet).unwrap().op, op);
+        channel.file = Some(packet);
+        assert!(service.dispatch_file(channel, registration, &packet));
+        channel.file = None;
+    };
+    let assert_clean = |channel: &mut CwdChannel<'_>| {
+        assert_eq!(namespace.shared().lock().open_handle_count(), baseline);
+        assert!(channel.kernel.file_publications.iter().all(Option::is_none));
+        assert_eq!(channel.legacy.as_ref().unwrap().open_handle_count(), 0);
+    };
+    assert_eq!(sunlight_compat_linux::translate_syscall(sunlight_compat_linux::abi::SYS_EXECVE), 31);
+    assert!(executable::route("/bin/sshl", "/", false).is_none());
+
+    for (path, osabi, mode, expected) in [
+        ("native", 0, 0o700, Some(Personality::Native)),
+        ("linux", 3, 0o700, Some(Personality::Linux)),
+        ("truncated", 0, 0o700, None),
+        ("readable", 0, 0o600, None),
+        ("short", 0, 0o700, None),
+        ("read-error", 0, 0o700, None),
+        ("abandoned-open", 0, 0o700, None),
+        ("cancel", 0, 0o700, None),
+        ("withdrawn", 0, 0o700, None),
+    ] {
+        let mut bytes = vec![0u8; wire::IO_BYTES + 64];
+        bytes[..5].copy_from_slice(b"\x7fELF\x02");
+        bytes[7] = osabi;
+        bytes[16..20].copy_from_slice(&[2, 0, 0x3e, 0]);
+        bytes[24..32].copy_from_slice(&0x400080u64.to_le_bytes());
+        bytes[128] = 0xc3;
+        bytes[32..40].copy_from_slice(&64u64.to_le_bytes());
+        bytes[54..58].copy_from_slice(&[56, 0, 1, 0]);
+        bytes[64..72].copy_from_slice(&[1, 0, 0, 0, 5, 0, 0, 0]);
+        bytes[80..88].copy_from_slice(&0x400000u64.to_le_bytes());
+        let image_len = bytes.len() as u64;
+        bytes[96..104].copy_from_slice(&image_len.to_le_bytes());
+        bytes[104..112].copy_from_slice(&image_len.to_le_bytes());
+        bytes[112..120].copy_from_slice(&4096u64.to_le_bytes());
+        if path == "truncated" {
+            bytes.truncate(32);
+        }
+        let absolute = format!("/root/Downloads/{path}");
+        {
+            let shared = namespace.shared();
+            let mut fs = shared.lock();
+            let h = fs.create_file_exclusive(&absolute, 0, 0, mode).unwrap();
+            fs.write(h, 0, &bytes).unwrap();
+            fs.close(h).unwrap();
+        }
+        assert!(channel.legacy.as_mut().unwrap().open(&absolute).is_err());
+        let selected = if path == "linux" {
+            executable::route("Downloads/linux", "/root", false).unwrap()
+        } else {
+            executable::route(path, "/root/Downloads", true).unwrap()
+        };
+        let mut source = executable::Source::new(selected.into_owned(), (identity, receipt));
+        assert_eq!(advance(&mut channel, &mut source), Ok(None));
+        exchange(&mut channel, &mut service, wire::OPEN);
+        if path == "abandoned-open" {
+            assert_eq!(namespace.shared().lock().open_handle_count(), baseline + 1);
+            channel.kernel.settle_executable(identity.caller);
+            exchange(&mut channel, &mut service, wire::CLOSE);
+            assert_clean(&mut channel);
+            continue;
+        }
+        let result = advance(&mut channel, &mut source);
+        if path == "readable" {
+            assert_eq!(result, Err(file::Error::Protocol));
+            assert_clean(&mut channel);
+            continue;
+        }
+        assert_eq!(result, Ok(None));
+        assert_eq!(namespace.shared().lock().open_handle_count(), baseline + 1);
+        if path == "cancel" {
+            channel.kernel.settle_executable(identity.caller);
+            exchange(&mut channel, &mut service, wire::CLOSE);
+            assert_clean(&mut channel);
+            continue;
+        }
+        if path == "withdrawn" {
+            channel.kernel.retire_registration(registration);
+            assert_eq!(advance(&mut channel, &mut source), Err(file::Error::Protocol));
+            assert!(executable::route(&absolute, "/", false).is_some());
+            service.poll_root_control(&mut channel, &namespace);
+            assert_eq!(namespace.shared().lock().open_handle_count(), 0);
+            break;
+        }
+        if matches!(path, "short" | "read-error") {
+            let mut packet = [0; wire::FRAME_BYTES];
+            channel.kernel.next_file(registration, &mut packet).unwrap().unwrap();
+            let request = wire::Request::decode(&packet).unwrap();
+            let reply = wire::Reply {
+                registration, caller: identity.caller, request_id: request.request_id,
+                op: wire::PREAD, errno: if path == "short" { 0 } else { 5 },
+                result0: 0, result1: 0, length: 0, payload: &[],
+            }.encode().unwrap();
+            channel.kernel.reply_file(registration, &reply, channel.sched).unwrap();
+            assert_eq!(advance(&mut channel, &mut source), Err(file::Error::Protocol));
+            channel.kernel.settle_executable(identity.caller);
+            exchange(&mut channel, &mut service, wire::CLOSE);
+            assert_clean(&mut channel);
+            continue;
+        }
+        exchange(&mut channel, &mut service, wire::PREAD);
+        let mut result = advance(&mut channel, &mut source).unwrap();
+        if expected.is_some() {
+            assert!(result.is_none());
+            // The second read occurs after the source is renamed, overwritten,
+            // truncated and replaced at its old name.
+            let shared = namespace.shared();
+            let mut fs = shared.lock();
+            let moved = format!("{absolute}.moved");
+            fs.rename(&absolute, &moved).unwrap();
+            let old = fs.open(&moved).unwrap();
+            fs.truncate(old).unwrap();
+            fs.write(old, 0, b"mutated").unwrap();
+            fs.close(old).unwrap();
+            let replacement = fs.create_file_exclusive(&absolute, 0, 0, mode).unwrap();
+            fs.write(replacement, 0, b"replacement").unwrap();
+            fs.close(replacement).unwrap();
+            drop(fs);
+            exchange(&mut channel, &mut service, wire::PREAD);
+            result = advance(&mut channel, &mut source).unwrap();
+        }
+        let input = result.expect("complete loader input");
+        assert_eq!(input, bytes);
+        channel.kernel.settle_executable(identity.caller);
+        exchange(&mut channel, &mut service, wire::CLOSE);
+        assert_clean(&mut channel);
+        if let Some(personality) = expected {
+            assert_eq!(classify_personality(&input), personality);
+            let header = parse_elf_header(&input).unwrap();
+            let mut plans = Vec::new();
+            plan_segments(&input, &header, 0x1000, 0x8000_0000_0000, &mut |plan| plans.push(*plan))
+                .unwrap();
+            assert_eq!(plans.len(), 1);
+            assert_eq!(plans[0].prot, sunlight_elf::SegmentProt::ReadExec);
+        } else {
+            assert!(parse_elf_header(&input).is_err());
+        }
+    }
 }

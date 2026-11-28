@@ -268,6 +268,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         revalidate: impl FnOnce() -> bool,
     ) -> Result<u64, Error> {
         self.open_file_with_options(authenticated, receipt, path, caller, access, None, revalidate)
+            .map(|(token, _)| token)
     }
 
     fn open_file_with_options(
@@ -279,7 +280,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
         access: crate::open::Access,
         request: Option<(u64, u16, u64)>,
         revalidate: impl FnOnce() -> bool,
-    ) -> Result<u64, Error> {
+    ) -> Result<(u64, usize), Error> {
         use sunlight_fs::vfs::OpenOptions;
         use sunlight_ipc::vfs_rpc::file_transport as api;
         let (flags, mode, token) = request.unwrap_or_default();
@@ -305,15 +306,16 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             options,
             flags & api::OPEN_STORAGE_ADMIN != 0,
             flags & api::OPEN_DIRECTORY != 0,
+            flags & api::OPEN_EXECUTABLE != 0,
             anchor,
         )?;
         if !revalidate() {
             return Err(Error::Identity);
         }
-        entry
-            .files
-            .insert(receipt.scope().caller, file, access)
-            .map_err(Error::Filesystem)
+        let size = file.executable_size();
+        let token = entry.files.insert(receipt.scope().caller, file, access)
+            .map_err(Error::Filesystem)?;
+        Ok((token, size))
     }
 
     fn file_entry_mut(
@@ -622,7 +624,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
             }
             api::OPEN => {
                 if !cfg!(feature = "vfs-c2e-candidate")
-                    && (request.token != 0 || request.arg0 & api::OPEN_DIRECTORY != 0)
+                    && (request.token != 0 || request.arg0 & (api::OPEN_DIRECTORY | api::OPEN_EXECUTABLE) != 0)
                 {
                     return reply(95, 0, 0, &[]);
                 }
@@ -661,7 +663,7 @@ impl<const P: usize, const L: usize, const R: usize, Device: BlockDevice> Runtim
                             == Some(bytes)
                     });
                 match result {
-                    Ok(token) => reply(0, token, 0, &[]),
+                    Ok((token, size)) => reply(0, token, size as u64, &[]),
                     Err(error) => failed(&error),
                 }
             }

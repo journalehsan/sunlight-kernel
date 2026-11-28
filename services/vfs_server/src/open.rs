@@ -32,15 +32,26 @@ pub(crate) struct File<Device: BlockDevice> {
     filesystem: Arc<Mutex<Vfs<Device>>>,
     handle: FileHandle,
     directory: bool,
+    executable: Option<alloc::vec::Vec<u8>>,
 }
 impl<Device: BlockDevice> File<Device> {
     pub(crate) fn new(filesystem: Arc<Mutex<Vfs<Device>>>, handle: FileHandle) -> Self {
-        Self { filesystem, handle, directory: false }
+        Self { filesystem, handle, directory: false, executable: None }
     }
 }
 impl<Device: BlockDevice> File<Device> {
     pub(crate) fn directory(filesystem: Arc<Mutex<Vfs<Device>>>, handle: FileHandle) -> Self {
-        Self { filesystem, handle, directory: true }
+        Self { filesystem, handle, directory: true, executable: None }
+    }
+}
+impl<Device: BlockDevice> File<Device> {
+    pub(crate) fn executable(mut self, bytes: alloc::vec::Vec<u8>) -> Self {
+        self.executable = Some(bytes);
+        self
+    }
+
+    pub(crate) fn executable_size(&self) -> usize {
+        self.executable.as_ref().map_or(0, |bytes| bytes.len())
     }
 }
 impl<Device: BlockDevice> Drop for File<Device> {
@@ -231,11 +242,13 @@ impl<const N: usize, Device: BlockDevice> Table<N, Device> {
         offset
             .checked_add(output.len())
             .ok_or(FsError::InvalidPath)?;
-        let count = d
-            .file
-            .filesystem
-            .lock()
-            .read(d.file.handle, offset, output)?;
+        if let Some(bytes) = &d.file.executable {
+            let remaining = bytes.get(offset..).unwrap_or_default();
+            let count = remaining.len().min(output.len());
+            output[..count].copy_from_slice(&remaining[..count]);
+            return Ok(count);
+        }
+        let count = d.file.filesystem.lock().read(d.file.handle, offset, output)?;
         // The shared cursor is deliberately not updated: the caller asked for
         // an independent positional read on this description.
         Ok(count)

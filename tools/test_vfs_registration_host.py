@@ -309,6 +309,7 @@ def main():
             '[package]\nname = "vfs-registration-host"\nversion = "0.0.0"\n'
             'edition = "2021"\n[workspace]\n[features]\nvfs_c2e_candidate = []\n[dependencies]\nspin = "0.9"\n'
             f'sunlight-ipc = {{ path = "{ROOT / "ipc"}" }}\n'
+            f'sunlight-elf = {{ path = "{ROOT / "sunlight-elf"}" }}\n'
             f'sunlight-fs = {{ path = "{ROOT / "sunlight-fs"}" }}\n'
             f'sunlight-mm = {{ path = "{ROOT / "sunlight-mm"}", features = ["testutil"] }}\n'
             f'sunlight-vfs-server = {{ path = "{ROOT / "services/vfs_server"}", features = ["vfs-c2e-candidate"] }}\n'

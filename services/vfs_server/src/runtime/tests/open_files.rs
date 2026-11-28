@@ -441,7 +441,7 @@ fn downloads_directory_description_survives_rename_until_final_close() {
     let directory = rt.open_file_with_options(
         r, receipt, "/root/Downloads/old", root, Access::Read,
         Some((api::ACCESS_READ | api::OPEN_DIRECTORY, 0, 0)), || true,
-    ).unwrap();
+    ).unwrap().0;
     let duplicate = rt.duplicate_file(r, caller, directory).unwrap();
     assert_eq!(ns.shared().lock().open_handle_count(), baseline + 1);
     assert_eq!(rt.stat_file(r, caller, directory).unwrap().file_type, sunlight_fs::FileType::Directory);
@@ -467,7 +467,7 @@ fn downloads_directory_description_survives_rename_until_final_close() {
     ), Err(Error::Filesystem(FsError::Unsupported)));
     let file = rt.open_file_with_options(
         r, receipt, "data", root, Access::Write, Some((create, 0o600, duplicate)), || true,
-    ).unwrap();
+    ).unwrap().0;
     rt.write_file(r, caller, file, b"retained").unwrap();
     rt.close_file(r, caller, file).unwrap();
     assert_eq!(ns.shared().lock().stat("/root/Downloads/new/data").unwrap().size, 8);
@@ -477,7 +477,7 @@ fn downloads_directory_description_survives_rename_until_final_close() {
     let directory = rt.open_file_with_options(
         r, receipt, "/root/Downloads/new", root, Access::Read,
         Some((api::ACCESS_READ | api::OPEN_DIRECTORY, 0, 0)), || true,
-    ).unwrap();
+    ).unwrap().0;
     rt.retire_registration(r).unwrap();
     assert_eq!(rt.stat_file(r, caller, directory), Err(Error::Identity));
     assert!(ns.shared().lock().open_handle_count() < baseline + 1);

@@ -1,0 +1,200 @@
+{
+  "milestone": "VFS-C2G",
+  "status": "PARTIAL",
+  "feature": "vfs_c2e_candidate",
+  "subtree": "/root/Downloads",
+  "source": {
+    "kernel_entry_points": [
+      "native spawn",
+      "native exec",
+      "Helios Linux execve"
+    ],
+    "maximum_snapshot_bytes": 1048576,
+    "concurrent_acquisitions": 1,
+    "requires_existing_authenticated_caller_scope": true,
+    "open_reference_count_while_reading": 1,
+    "open_reference_count_after_close": 0,
+    "user_fd_count_added": 0,
+    "service_authority_has_kernel_fallback": false,
+    "kernel_filesystem_copy": false,
+    "legacy_reader_invocations_in_source_before": 2,
+    "legacy_reader_invocations_in_source_after": 1,
+    "remaining_legacy_executable_source": "vfs_read_file for ordinary mutable paths outside migrated authority",
+    "remaining_generic_legacy_descriptor_producers": [
+      "native open via open_resolved_path",
+      "Linux open/openat via open_resolved_path"
+    ],
+    "other_legacy_descriptor_producers": [
+      "private secret staging",
+      "opt-in native C guest fixture"
+    ]
+  },
+  "host_executable_integration": {
+    "status": "PASS",
+    "test": "executable_source_selection_and_loader_input_through_copied_channel",
+    "qualification_level": "candidate routing and source reader, authenticated copied kernel file publication and real service dispatcher, existing ELF personality and segment planning",
+    "cases": {
+      "native_elf": "PASS",
+      "linux_elf": "PASS",
+      "truncated_elf_rejected_by_loader_header_validation": "PASS",
+      "readable_nonexecutable_denied": "PASS",
+      "retained_rename_and_replacement": "PASS",
+      "write_and_truncate_between_chunks": "PASS",
+      "abandoned_open_compensation": "PASS",
+      "cancel_pending_pread": "PASS",
+      "short_pread": "PASS",
+      "failed_pread": "PASS",
+      "service_epoch_retirement": "PASS",
+      "exact_source_cleanup": "PASS"
+    },
+    "guest_address_space_build_and_dispatch": "NOT_RUN"
+  },
+  "qualification": {
+    "filesystem_host": {
+      "status": "PASS",
+      "command": "cargo test --offline -p sunlight-fs --lib --target x86_64-unknown-linux-gnu",
+      "log": "target/vfs-c2g/filesystem.log",
+      "tests": 126
+    },
+    "service_host": {
+      "status": "PASS",
+      "command": "cargo test --offline -p sunlight-vfs-server --lib --features vfs-c2e-candidate --target x86_64-unknown-linux-gnu",
+      "log": "target/vfs-c2g/service.log",
+      "tests": 94
+    },
+    "service_fat_host": {
+      "status": "PASS",
+      "command": "cargo test --offline -p sunlight-vfs-server --lib --features vfs-c2e-candidate,vfs-c1e12-test --target x86_64-unknown-linux-gnu",
+      "log": "target/vfs-c2g/service-fat.log",
+      "tests": 95
+    },
+    "registration_and_lifecycle_host": {
+      "status": "PASS",
+      "command": "python3 tools/test_vfs_registration_host.py",
+      "log": "target/vfs-c2g/registration.log",
+      "tests": 116
+    },
+    "descriptor_parallel": {
+      "status": "FAIL",
+      "passed": 19,
+      "failed": 1,
+      "failure": "exit_cleanup_consumes_stale_descriptor_alias_without_double_release",
+      "log": "target/vfs-c2g/descriptor.log"
+    },
+    "descriptor_serial": {
+      "status": "PASS",
+      "command": "cargo test --offline --manifest-path tools/tests/fd-description/Cargo.toml --target x86_64-unknown-linux-gnu -- --test-threads=1",
+      "log": "target/vfs-c2g/descriptor-serial.log",
+      "tests": 20
+    },
+    "vfs_transport_host": {
+      "status": "PASS",
+      "command": "cargo test --offline -p sunlight-ipc --lib --target x86_64-unknown-linux-gnu vfs_rpc",
+      "log": "target/vfs-c2g/ipc.log",
+      "tests": 76
+    },
+    "loader_host": {
+      "status": "PASS",
+      "command": "cargo test --offline -p sunlight-elf --target x86_64-unknown-linux-gnu",
+      "log": "target/vfs-c2g/loader.log",
+      "tests": 14
+    },
+    "production_release": {
+      "status": "PASS",
+      "command": "cargo build --offline -p sunlight-kernel --release",
+      "log": "target/vfs-c2g/production.log"
+    },
+    "candidate_debug": {
+      "status": "PASS",
+      "command": "cargo build --offline -p sunlight-kernel --features vfs_c2e_candidate",
+      "log": "target/vfs-c2g/candidate.log"
+    },
+    "candidate_release": {
+      "status": "PASS",
+      "command": "cargo build --offline -p sunlight-kernel --release --features vfs_c2e_candidate",
+      "log": "target/vfs-c2g/candidate-release.log"
+    },
+    "ordinary_boot": {
+      "status": "BLOCKED",
+      "command": "bash tools/test.sh",
+      "reason": "unchanged no-growth guard fails before QEMU launch",
+      "log": "target/vfs-c2g/boot.log"
+    },
+    "native_guest": {
+      "status": "NOT_RUN"
+    },
+    "linux_guest": {
+      "status": "NOT_RUN"
+    },
+    "source_coupled_spawn_and_exec_rollback": {
+      "status": "PARTIAL",
+      "host": "existing private spawn publication and image-retirement tests passed",
+      "guest_address_space_fault_and_failed_publication": "NOT_RUN",
+      "failed_exec_old_image_continuation": "NOT_RUN"
+    },
+    "guest_regressions": {
+      "status": "NOT_RUN",
+      "coverage": [
+        "C2E",
+        "C2F",
+        "C2F1",
+        "C2F2",
+        "C1A",
+        "C1E10",
+        "C1E11",
+        "C1E12",
+        "C2B",
+        "C1E6A",
+        "C1E6B"
+      ]
+    },
+    "c2c_gpt_fixture": {
+      "status": "PASS",
+      "command": "sha256sum -c target/vfs-c2e/c2c-fixture.sha256",
+      "log": "target/vfs-c2g/fixture.log"
+    }
+  },
+  "guard": {
+    "inventory": {
+      "status": "PASS",
+      "before": 71,
+      "after": 71,
+      "added": 0,
+      "removed": 0,
+      "relocated": 0
+    },
+    "no_growth": {
+      "status": "FAIL",
+      "before_unmatched": 4,
+      "after_unmatched": 4
+    },
+    "final_removal": {
+      "status": "FAIL",
+      "before": 71,
+      "after": 71
+    },
+    "historical_findings": {
+      "storage::mount": {
+        "commit": "dd00fa775",
+        "disposition": "remains",
+        "consumer": "legacy FAT constructor"
+      },
+      "linux_procfs::mountinfo_snapshot": {
+        "commit": "dd00fa775",
+        "disposition": "remains",
+        "consumer": "legacy mount topology"
+      },
+      "sys_linux_statfs": {
+        "commit": "dd00fa775",
+        "disposition": "remains",
+        "consumer": "legacy capacity"
+      },
+      "process::mmap::sys_mmap": {
+        "commit": "5b8579f1d",
+        "disposition": "remains",
+        "consumer": "legacy private file mmap"
+      }
+    },
+    "logs": "target/vfs-c2g/guard-{before,after}-{inventory,no-growth,final}.log"
+  }
+}

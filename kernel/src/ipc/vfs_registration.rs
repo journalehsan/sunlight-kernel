@@ -676,6 +676,9 @@ pub(crate) fn complete_private_exec(proof: PrivateVfsExecRetired) {
 mod chdir;
 #[path = "vfs_registration/spawn.rs"]
 pub(crate) mod spawn;
+#[cfg(feature = "vfs_c2e_candidate")]
+#[path = "vfs_registration/executable.rs"]
+pub(crate) mod executable;
 #[path = "vfs_registration/file.rs"]
 mod file;
 #[cfg(feature = "vfs_c1e1_test")]
@@ -736,6 +739,8 @@ pub(crate) fn process_identity(process: &crate::process::Process) -> Caller {
 /// preparation. Remote ownership survives retirement. No synchronous IPC,
 /// remote drain or VM cleanup occurs here.
 pub(crate) fn retire_process(expected: Caller) {
+    #[cfg(all(feature = "vfs_c2e_candidate", not(test)))]
+    crate::arch::x86_64::syscall::retire_executable_source(expected);
     #[cfg(all(not(test), debug_assertions, feature = "vfs_service_private_mmap"))]
     crate::process::mmap::service::retire(expected);
     RUNTIME.lock().retire_process(expected);
@@ -819,7 +824,7 @@ pub(crate) fn retire_endpoint(endpoint: u32, owner: Caller) {
 /// Adding them requires extending this snapshot before enabling dispatch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)] // Dispatch admission is the next integration consumer.
-pub(super) struct AdmissionIdentity {
+pub(crate) struct AdmissionIdentity {
     pub caller: Caller,
     pub uid: u32,
     pub gid: u32,

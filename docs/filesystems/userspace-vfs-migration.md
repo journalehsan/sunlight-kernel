@@ -3551,6 +3551,23 @@ retirement matrix after the ordinary ownership gate passes.
 See the [C2F2 report](vfs-generic-cross-authority-cwd.md) and
 [results](vfs-generic-cross-authority-cwd-results.json).
 
+VFS-C2G is **PARTIAL**. The opt-in Downloads authority supplies a
+retained executable snapshot through the authenticated copied OPEN and
+bounded positional reads. Ordinary native spawn and native or Helios
+exec feed those bytes into the existing loader without a kernel filesystem
+lookup for the migrated source. The host matrix covers authorization,
+native and Linux ELF planning, mutation across reads, errors and exact
+source settlement. One legacy reader remains for mutable paths outside the
+candidate. Embedded bootstrap and debug interpreter sources preserve
+their original provenance. Ordinary boot remains **BLOCKED** by the
+same four historical findings and guest execution is **NOT_RUN**.
+After the ordinary gate passes, exercise service-backed native and Linux
+launches, failed address-space and publication stages, and image rollback
+in the guest before widening executable authority or migrating runtime
+interpreter and library opens. See the
+[C2G report](vfs-service-backed-executable-sources.md) and
+[results](vfs-service-backed-executable-sources-results.json).
+
 1. Preserve the candidate publication gate and extend qualification to
    session and manager workflows, service replacement policy and exact
    launch from a shared namespace owner. Complete explicit service

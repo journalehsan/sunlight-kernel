@@ -287,13 +287,14 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
         options: sunlight_fs::vfs::OpenOptions,
         storage_admin: bool,
         directory_open: bool,
+        executable: bool,
         anchor: Option<FileHandle>,
     ) -> Result<crate::open::File<Device>, FsError> {
         match &self.filesystem {
             Backend::Mounted(fs) => {
                 let cwd = anchor.unwrap_or(self.directory);
                 let mut namespace = fs.lock();
-                if self.downloads_cwd || directory_open || anchor.is_some() {
+                if self.downloads_cwd || directory_open || executable || anchor.is_some() {
                     namespace.check_downloads_beneath(self.root, cwd, path, caller)?;
                 }
                 if directory_open {
@@ -308,7 +309,47 @@ impl<Device: BlockDevice> DirectoryPair<Device> {
                     options,
                     |fs, path| authorize_write(fs, path, caller, sunlight_fs::FsOperation::Create, storage_admin),
                 )?;
-                Ok(crate::open::File::new(Arc::clone(fs), handle))
+                let snapshot = if executable {
+                    let result = (|| {
+                        let stat = namespace.fstat_handle(handle)?;
+                        if stat.mode & 0o111 == 0
+                            || !sunlight_fs::check_permission(&stat, &caller, sunlight_fs::PermCheck::Execute)
+                        {
+                            return Err(FsError::PermissionDenied);
+                        }
+                        if stat.size > sunlight_ipc::vfs_rpc::file_transport::MAX_EXECUTABLE_BYTES {
+                            return Err(FsError::NoMemory);
+                        }
+                        let mut bytes = alloc::vec::Vec::new();
+                        bytes.try_reserve_exact(stat.size).map_err(|_| FsError::NoMemory)?;
+                        bytes.resize(stat.size, 0);
+                        let mut filled = 0;
+                        while filled < bytes.len() {
+                            let end = (filled + sunlight_ipc::vfs_rpc::file_transport::IO_BYTES)
+                                .min(bytes.len());
+                            let count = namespace.read(handle, filled, &mut bytes[filled..end])?;
+                            if count == 0 || count > end - filled {
+                                return Err(FsError::Io);
+                            }
+                            filled += count;
+                        }
+                        Ok(bytes)
+                    })();
+                    match result {
+                        Ok(bytes) => Some(bytes),
+                        Err(error) => {
+                            namespace.close(handle)?;
+                            return Err(error);
+                        }
+                    }
+                } else {
+                    None
+                };
+                let file = crate::open::File::new(Arc::clone(fs), handle);
+                Ok(match snapshot {
+                    Some(bytes) => file.executable(bytes),
+                    None => file,
+                })
             }
             Backend::Isolated(_) => Err(FsError::Unsupported),
         }

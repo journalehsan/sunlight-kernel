@@ -28,6 +28,7 @@ pub(super) struct Publication {
     started_tick: u64,
     token: u64,
     compensation: bool,
+    executable: bool,
     buffer: alloc::vec::Vec<u8>,
     #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
     observation: Option<(Receipt, alloc::vec::Vec<u8>, u64)>,
@@ -61,7 +62,7 @@ pub(crate) enum FileOperation<'a> {
         token: u64,
         length: usize,
     },
-    #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
+    #[cfg(any(test, feature = "vfs_c2e_candidate", all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
     Pread { token: u64, offset: u64, length: usize },
     Write {
         token: u64,
@@ -103,7 +104,7 @@ impl FileOperation<'_> {
             #[cfg(feature = "vfs_c1e2_test")]
             Self::InventoryStorage { index } => index,
             Self::Open { anchor, .. } => anchor,
-            #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
+            #[cfg(any(test, feature = "vfs_c2e_candidate", all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             Self::Pread { token, .. } => token,
             #[cfg(feature = "vfs_c2e_candidate")]
             Self::StatAt { token, .. } => token,
@@ -137,7 +138,7 @@ impl FileOperation<'_> {
             Self::UnmountStorage { .. } => api::UNMOUNT_STORAGE,
             Self::Open { .. } => api::OPEN,
             Self::Read { .. } => api::READ,
-            #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
+            #[cfg(any(test, feature = "vfs_c2e_candidate", all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             Self::Pread { .. } => api::PREAD,
             Self::Write { .. } => api::WRITE,
             Self::Seek { .. } => api::SEEK,
@@ -247,13 +248,14 @@ impl Runtime {
         for slot in &mut self.file_publications {
             if slot.as_ref().is_some_and(|publication| {
                 matches!(publication.op, api::TRANSFER | api::CLOSE) && publication.replied
+                    && !publication.executable
             }) {
                 *slot = None;
             }
         }
     }
 
-    fn caller_publication(&self, caller: Caller) -> Option<usize> {
+    pub(super) fn caller_publication(&self, caller: Caller) -> Option<usize> {
         self.file_publications
             .iter()
             // A fire-and-forget close names the live caller but does not own
@@ -267,7 +269,7 @@ impl Runtime {
 
     /// A late PREAD has no cursor side effect and its reply no longer names
     /// a publication. Keep this narrower than whole-image retirement.
-    #[cfg(any(test, all(debug_assertions, feature = "vfs_service_private_mmap")))]
+    #[cfg(any(test, feature = "vfs_c2e_candidate", all(debug_assertions, feature = "vfs_service_private_mmap")))]
     fn cancel_mapping_read(&mut self, caller: Caller, epoch: u64, token: u64) {
         if let Some(slot) = self.caller_publication(caller) {
             let publication = self.file_publications[slot].as_ref().unwrap();
@@ -277,6 +279,28 @@ impl Runtime {
             {
                 self.file_publications[slot] = None;
             }
+        }
+    }
+
+    #[cfg(feature = "vfs_c2e_candidate")]
+    pub(super) fn settle_executable(&mut self, caller: Caller) {
+        if let Some(slot) = self.caller_publication(caller) {
+            let pending = self.file_publications[slot].as_ref().unwrap();
+            if pending.op == api::OPEN && pending.executable {
+                if pending.replied && !pending.failed {
+                    let _ = self.finish_open(slot, |_, _| Err(125));
+                } else {
+                    self.file_publications[slot] = None;
+                }
+            }
+        }
+        if let Some(close) = self.file_publications.iter_mut().flatten().find(|p| {
+            p.identity.caller == caller && p.op == api::CLOSE && p.executable
+        }) {
+            let (epoch, token) = (close.identity.registration.epoch, close.token);
+            close.executable = false;
+            close.replied = false;
+            self.cancel_mapping_read(caller, epoch, token);
         }
     }
 
@@ -298,7 +322,7 @@ impl Runtime {
             .max_by_key(|receipt| receipt.request_id())
     }
 
-    fn publish_file(
+    pub(super) fn publish_file(
         &mut self,
         identity: AdmissionIdentity,
         operation: FileOperation<'_>,
@@ -383,7 +407,7 @@ impl Runtime {
             FileOperation::Read { token, length } => {
                 (api::READ, *token, 0, *length as u64, &[][..], None)
             }
-            #[cfg(any(test, all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
+            #[cfg(any(test, feature = "vfs_c2e_candidate", all(debug_assertions, any(feature = "vfs_d1b_test", feature = "vfs_service_private_mmap"))))]
             FileOperation::Pread { token, offset, length } => {
                 (api::PREAD, *token, *offset, *length as u64, &[][..], None)
             }
@@ -463,6 +487,7 @@ impl Runtime {
             started_tick: sched.global_tick,
             token: operation.token(),
             compensation: false,
+            executable: op == api::OPEN && arg0 & api::OPEN_EXECUTABLE != 0,
             buffer,
             #[cfg(any(feature = "vfs_c1e2_test", feature = "vfs_c2d_candidate", feature = "vfs_c2e_candidate"))]
             observation,
@@ -521,6 +546,7 @@ impl Runtime {
             started_tick: now_tick,
             token,
             compensation: false,
+            executable: false,
             buffer,
         });
         Ok(())
@@ -840,12 +866,13 @@ impl Runtime {
             started_tick: now_tick,
             token,
             compensation: false,
+            executable: false,
             buffer,
         });
         Ok(())
     }
 
-    fn take_file(&mut self, caller: Caller, op: u64) -> Option<FileCompletion> {
+    pub(super) fn take_file(&mut self, caller: Caller, op: u64) -> Option<FileCompletion> {
         let slot = self.file_publications.iter().position(|p| {
             p.as_ref()
                 .is_some_and(|p| p.identity.caller == caller && p.op == op && p.replied)
@@ -872,7 +899,7 @@ impl Runtime {
         })
     }
 
-    fn finish_open(
+    pub(super) fn finish_open(
         &mut self,
         slot: usize,
         install: impl FnOnce(u64, u64) -> Result<u64, u64>,
@@ -887,35 +914,49 @@ impl Runtime {
             return self.take_file(caller, api::OPEN).ok_or(Error::Protocol);
         }
         let token = reply.result0;
+        let size = reply.result1;
         let registration = publication.identity.registration;
-        let (errno, result0) = match install(token, registration.epoch) {
-            Ok(fd) => {
+        let result = if !publication.executable && size != 0 {
+            Err(5)
+        } else {
+            install(token, registration.epoch)
+        };
+        let (errno, result0) = match result {
+            Ok(value) if !publication.executable => {
                 self.file_publications[slot] = None;
-                (0, fd)
+                (0, value)
             }
-            Err(errno) => {
+            result => {
                 #[cfg(all(not(test), debug_assertions, feature = "vfs_d1b_test"))]
-                crate::serial_println!(
-                    "[VFS-D1B] failed install pid={} incarnation={} image={} epoch={} id={} token={} errno={}",
-                    caller.pid, caller.incarnation, caller.address_space_generation,
-                    registration.epoch, publication.id, token, errno,
-                );
+                if let Err(errno) = result {
+                    crate::serial_println!(
+                        "[VFS-D1B] failed install pid={} incarnation={} image={} epoch={} id={} token={} errno={}",
+                        caller.pid, caller.incarnation, caller.address_space_generation,
+                        registration.epoch, publication.id, token, errno,
+                    );
+                }
+                // Reuse the authenticated OPEN slot and frame allocation for
+                // CLOSE, including when the rest of the channel is full.
                 let bytes = Self::file_close_frame(registration, caller, token, publication.id)
                     .expect("validated OPEN reply supplies a valid close identity");
                 publication.buffer.copy_from_slice(&bytes);
                 publication.op = api::CLOSE;
                 publication.token = token;
                 publication.compensation = true;
-                publication.replied = false;
+                publication.executable = result.is_ok();
+                publication.replied = result.is_ok(); // Held until the executable reader settles.
                 publication.woken = true;
-                (errno, 0)
+                match result {
+                    Ok(value) => (0, value),
+                    Err(errno) => (errno, 0),
+                }
             }
         };
         Ok(FileCompletion {
             op: api::OPEN,
             errno,
             result0,
-            result1: 0,
+            result1: if errno == 0 { size } else { 0 },
             registration_epoch: registration.epoch,
             payload: alloc::vec::Vec::new(),
         })
@@ -930,6 +971,11 @@ impl Runtime {
                 continue;
             };
             if publication.compensation {
+                if publication.executable {
+                    let publication = self.file_publications[slot].as_mut().unwrap();
+                    publication.executable = false;
+                    publication.replied = false;
+                }
                 continue;
             }
             #[cfg(feature = "vfs_c1e1_test")]

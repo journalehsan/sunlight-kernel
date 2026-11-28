@@ -1065,6 +1065,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame, user_rsp: u64) -> u
     }
     let linux_special = linux_compat && num >= 1000;
 
+    #[cfg(feature = "vfs_c2e_candidate")]
+    executable_source::abandon_if_different_syscall(num);
+
     let result = match num {
         _ if diagnostic_manager
             && !::sunlight_ipc::supervision::diagnostic_syscall_allowed(num) =>
@@ -3870,6 +3873,13 @@ fn sys_linux_exit_group(code: i32) -> ! {
     process_exit(code)
 }
 
+#[cfg(feature = "vfs_c2e_candidate")]
+#[path = "syscall_executable.rs"]
+mod executable_source;
+
+#[cfg(feature = "vfs_c2e_candidate")]
+pub(crate) use executable_source::retire as retire_executable_source;
+
 /// Syscall: Exec (31)
 /// rdi = path pointer (C string)
 /// rsi = argv pointer (array of *const u8, NULL-terminated)
@@ -3917,6 +3927,8 @@ extern "C" fn enter_exec_image() -> ! {
 }
 
 extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    let mut source = executable_source::Acquisition::new(false);
     if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) {
         return u64::MAX;
     }
@@ -4014,22 +4026,20 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         envp_bytes.len()
     );
 
-    // Resolve the binary: embedded images first (boot servers, /bin/sshl,
-    // the multi-call utils), then the kernel VFS (Phase 6.5 Step 3).
-    let vfs_bytes;
-    let bytes: &[u8] = match crate::process::spawn::embedded_bytes_for_path(path_str) {
-        Ok(b) => b,
-        Err(_) => match vfs_read_file(path_str) {
-            Some(v) => {
-                vfs_bytes = v;
-                &vfs_bytes
-            }
-            None => {
-                crate::serial_println!("[SYSCALL] exec: path not found: {}", path_str);
-                return u64::MAX;
-            }
-        },
+    let source_bytes = match executable_bytes(
+        path_str,
+        #[cfg(feature = "vfs_c2e_candidate")]
+        (frame, &mut source),
+    ) {
+        Ok(bytes) => bytes,
+        Err(ExecutableSourceError::LegacyNotFound) => {
+            crate::serial_println!("[SYSCALL] exec: path not found: {}", path_str);
+            return u64::MAX;
+        }
+        #[cfg(feature = "vfs_c2e_candidate")]
+        Err(ExecutableSourceError::Service(result)) => return result,
     };
+    let bytes = source_bytes.as_ref();
 
     // Validate before exec_into_process tears down the current image, so a
     // non-ELF file (e.g. `exec /etc/passwd`) fails cleanly.
@@ -4039,6 +4049,10 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if !source.live(&sched) {
+        return u64::MAX;
+    }
     if sched.current_process().is_exiting() {
         return u64::MAX;
     }
@@ -4297,6 +4311,34 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
     EAGAIN
 }
 
+enum ExecutableSourceError {
+    LegacyNotFound,
+    #[cfg(feature = "vfs_c2e_candidate")]
+    Service(u64),
+}
+
+fn executable_bytes(
+    path: &str,
+    #[cfg(feature = "vfs_c2e_candidate")] (frame, source): (
+        &mut SyscallFrame,
+        &mut executable_source::Acquisition,
+    ),
+) -> Result<alloc::borrow::Cow<'static, [u8]>, ExecutableSourceError> {
+    use alloc::borrow::Cow;
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if let Some(result) = source.step(path) {
+        return match result {
+            Ok(Some(bytes)) => Ok(Cow::Owned(bytes)),
+            Ok(None) => Err(ExecutableSourceError::Service(source.park(frame))),
+            Err(()) => Err(ExecutableSourceError::Service(u64::MAX)),
+        };
+    }
+    if let Ok(bytes) = crate::process::spawn::embedded_bytes_for_path(path) {
+        return Ok(Cow::Borrowed(bytes));
+    }
+    vfs_read_file(path).map(Cow::Owned).ok_or(ExecutableSourceError::LegacyNotFound)
+}
+
 /// Read a whole file out of the kernel VFS into a heap buffer.
 /// Returns None when the VFS is absent, the path does not resolve, or the
 /// path is not a regular file.
@@ -4335,6 +4377,8 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 /// rdx = stdout fd, r10 = stdin fd, r8 = stderr fd (u64::MAX keeps TTY default)
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(feature = "vfs_c2e_candidate")]
+    let mut source = executable_source::Acquisition::new(true);
     #[cfg(feature = "vfs_c1a_candidate")]
     {
         let mut sched = sched::SCHEDULER.lock();
@@ -4470,24 +4514,21 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
-    // Resolve the binary before touching scheduler state: embedded images
-    // first, then the kernel VFS. (KERNEL_VFS must not be held across the
-    // SCHEDULER/PMM locks below.)
-    let vfs_bytes;
-    let bytes: &[u8] = match crate::process::spawn::embedded_bytes_for_path(path_str) {
-        Ok(b) => b,
-        Err(_) => match vfs_read_file(path_str) {
-            Some(v) => {
-                vfs_bytes = v;
-                &vfs_bytes
-            }
-            None => {
-                crate::serial_println!("[SYSCALL] spawn: path not found: {}", path_str);
-                trace.emit(path_str, path_str, None, "failed:not_found");
-                return u64::MAX;
-            }
-        },
+    let source_bytes = match executable_bytes(
+        path_str,
+        #[cfg(feature = "vfs_c2e_candidate")]
+        (frame, &mut source),
+    ) {
+        Ok(bytes) => bytes,
+        Err(ExecutableSourceError::LegacyNotFound) => {
+            crate::serial_println!("[SYSCALL] spawn: path not found: {}", path_str);
+            trace.emit(path_str, path_str, None, "failed:not_found");
+            return u64::MAX;
+        }
+        #[cfg(feature = "vfs_c2e_candidate")]
+        Err(ExecutableSourceError::Service(result)) => return result,
     };
+    let bytes = source_bytes.as_ref();
 
     // [LAUNCH-TRACE] Point 3: app resolution finished
     trace.resolve_finished_ns = now_ns();
@@ -4498,6 +4539,10 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         0
     };
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(feature = "vfs_c2e_candidate")]
+    if !source.live(&sched) {
+        return u64::MAX;
+    }
     let _pty_lock_acquired = if pty_lock_start != 0 { now_ns() } else { 0 };
     sched.reap_finished_processes();
     if sched.reserve_task_storage().is_err() {

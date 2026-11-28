@@ -81,6 +81,8 @@ pub const OPEN_EXCLUSIVE: u64 = 8;
 pub const OPEN_TRUNCATE: u64 = 16;
 pub const OPEN_STORAGE_ADMIN: u64 = 32;
 pub const OPEN_DIRECTORY: u64 = 64;
+pub const OPEN_EXECUTABLE: u64 = 128;
+pub const MAX_EXECUTABLE_BYTES: usize = 1024 * 1024;
 pub const OPEN_ACCESS: u64 = ACCESS_READ | ACCESS_WRITE;
 
 pub const SEEK_START: u64 = 0;
@@ -275,7 +277,8 @@ fn validate(request: &Request<'_>) -> Result<(), ProtocolError> {
             }
         }
         OPEN => {
-            if request.arg0 & !(OPEN_ACCESS | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE | OPEN_STORAGE_ADMIN | OPEN_DIRECTORY) != 0
+            if request.arg0 & !(OPEN_ACCESS | OPEN_CREATE | OPEN_EXCLUSIVE | OPEN_TRUNCATE | OPEN_STORAGE_ADMIN | OPEN_DIRECTORY | OPEN_EXECUTABLE) != 0
+                || (request.arg0 & OPEN_EXECUTABLE != 0 && (request.arg0 != ACCESS_READ | OPEN_EXECUTABLE || request.token != 0))
                 || (request.arg0 & OPEN_DIRECTORY != 0 && request.arg0 != ACCESS_READ | OPEN_DIRECTORY)
                 || (request.token != 0 && (request.payload.is_empty() || request.payload.starts_with(b"/")))
                 || request.arg0 & OPEN_ACCESS == 0
@@ -560,7 +563,12 @@ fn validate_reply(reply: &Reply<'_>) -> Result<(), ProtocolError> {
                 return Err(ProtocolError::Encoding);
             }
         }
-        OPEN | DUP | TRANSFER => {
+        OPEN => {
+            if reply.result0 == 0 || reply.result1 > MAX_EXECUTABLE_BYTES as u64 || reply.length != 0 {
+                return Err(ProtocolError::Encoding);
+            }
+        }
+        DUP | TRANSFER => {
             if reply.result0 == 0 || reply.result1 != 0 || reply.length != 0 {
                 return Err(ProtocolError::Encoding);
             }

@@ -513,6 +513,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         options: sunlight_fs::vfs::OpenOptions,
         storage_admin: bool,
         directory_open: bool,
+        executable: bool,
         anchor: Option<sunlight_fs::FileHandle>,
     ) -> Result<crate::open::File<Device>, Error> {
         if self.retired || authenticated != self.registration {
@@ -530,7 +531,7 @@ impl<const P: usize, const L: usize, Device: BlockDevice> Policy<P, L, Device> {
         {
             return Err(Error::Scope);
         }
-        pair.open_file(path, caller, options, storage_admin, directory_open, anchor)
+        pair.open_file(path, caller, options, storage_admin, directory_open, executable, anchor)
             .map_err(Error::Filesystem)
     }
 
